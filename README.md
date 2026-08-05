@@ -75,12 +75,12 @@ Server = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo
 One way to append it:
 
 ```bash
-sudo tee -a /etc/pacman.conf >/dev/null <<'EOF_REPO'
-
-[bc250-cachyos]
-SigLevel = Optional TrustAll
-Server = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo
-EOF_REPO
+printf '%s\n' \
+  '' \
+  '[bc250-cachyos]' \
+  'SigLevel = Optional TrustAll' \
+  'Server = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo' \
+  | sudo tee -a /etc/pacman.conf >/dev/null
 ```
 
 Refresh the databases and verify the repository:
