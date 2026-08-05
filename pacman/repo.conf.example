@@ -1,0 +1,3 @@
+[bc250-cachyos]
+SigLevel = Optional TrustAll
+Server = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo

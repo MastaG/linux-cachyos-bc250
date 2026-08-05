@@ -2,25 +2,20 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-CACHYOS_VARIANT="${CACHYOS_VARIANT:-linux-cachyos-rc}"
+CACHYOS_SOURCE_VARIANT="${CACHYOS_SOURCE_VARIANT:-linux-cachyos-rc}"
 BC250_PKGREL="${BC250_PKGREL:-1}"
-BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build/${CACHYOS_VARIANT}}"
+CUSTOM_SUFFIX="${CUSTOM_SUFFIX:-cachyos-bc250}"
+BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build/${CACHYOS_SOURCE_VARIANT}}"
+REPO_NAME="bc250-cachyos"
+RELEASE_TAG="repo"
+OUT_CHANNEL="repo"
+PROCESSOR_OPT="generic_v3"
+CPU_TUNE="znver2"
 
-case "$CACHYOS_VARIANT" in
-    linux-cachyos)
-        CUSTOM_SUFFIX="${CUSTOM_SUFFIX:-cachyos-bc250}"
-        CHANNEL="stable"
-        REPO_NAME="bc250-cachyos-v3"
-        RELEASE_TAG="repo-stable"
-        ;;
-    linux-cachyos-rc)
-        CUSTOM_SUFFIX="${CUSTOM_SUFFIX:-cachyos-rc-bc250}"
-        CHANNEL="rc"
-        REPO_NAME="bc250-cachyos-v3-rc"
-        RELEASE_TAG="repo-rc"
-        ;;
+case "$CACHYOS_SOURCE_VARIANT" in
+    linux-cachyos|linux-cachyos-rc) ;;
     *)
-        printf 'ERROR: unsupported CACHYOS_VARIANT: %s\n' "$CACHYOS_VARIANT" >&2
+        printf 'ERROR: unsupported CACHYOS_SOURCE_VARIANT: %s\n' "$CACHYOS_SOURCE_VARIANT" >&2
         exit 1
         ;;
 esac
@@ -41,7 +36,7 @@ for cmd in curl b2sum python3; do
     }
 done
 
-UPSTREAM_BASE="https://raw.githubusercontent.com/CachyOS/linux-cachyos/master/${CACHYOS_VARIANT}"
+UPSTREAM_BASE="https://raw.githubusercontent.com/CachyOS/linux-cachyos/master/${CACHYOS_SOURCE_VARIANT}"
 TELEMETRY_PATCH="${ROOT_DIR}/patches/0001-bc250-8core-telemetry-gpu-activity.patch"
 AUDIO_PATCH="${ROOT_DIR}/patches/0002-bc250-audio.patch"
 
@@ -55,7 +50,7 @@ done
 rm -rf -- "$BUILD_DIR"
 mkdir -p -- "$BUILD_DIR"
 
-printf '==> Downloading upstream %s PKGBUILD and config\n' "$CACHYOS_VARIANT"
+printf '==> Downloading upstream %s PKGBUILD and config\n' "$CACHYOS_SOURCE_VARIANT"
 curl -fL --retry 5 --retry-all-errors -o "$BUILD_DIR/PKGBUILD" "${UPSTREAM_BASE}/PKGBUILD"
 curl -fL --retry 5 --retry-all-errors -o "$BUILD_DIR/config"   "${UPSTREAM_BASE}/config"
 
@@ -94,6 +89,8 @@ if text.count('source=(\n') != 1:
 if text.count('b2sums=(') != 1:
     raise SystemExit('ERROR: expected b2sums=( exactly once')
 
+# Keep the package name stable regardless of whether the source is the RC or
+# stable CachyOS PKGBUILD.
 text = re.sub(
     pkgbase_pattern,
     f'_pkgsuffix="{custom_suffix}"\npkgbase="linux-$_pkgsuffix"',
@@ -123,18 +120,20 @@ path.write_text(text, encoding="utf-8", newline="\n")
 PY
 
 cat > "$BUILD_DIR/bc250-build.env" <<EOF_META
-CACHYOS_VARIANT=${CACHYOS_VARIANT}
+CACHYOS_SOURCE_VARIANT=${CACHYOS_SOURCE_VARIANT}
 CUSTOM_SUFFIX=${CUSTOM_SUFFIX}
-CHANNEL=${CHANNEL}
 REPO_NAME=${REPO_NAME}
 RELEASE_TAG=${RELEASE_TAG}
-ARCH_LEVEL=x86-64-v3
+OUT_CHANNEL=${OUT_CHANNEL}
+PROCESSOR_OPT=${PROCESSOR_OPT}
+CPU_TUNE=${CPU_TUNE}
 BC250_PKGREL=${BC250_PKGREL}
 EOF_META
 
 printf '==> Prepared %s\n' "$BUILD_DIR"
-printf '    variant:       %s\n' "$CACHYOS_VARIANT"
+printf '    source:        %s\n' "$CACHYOS_SOURCE_VARIANT"
 printf '    package base:  linux-%s\n' "$CUSTOM_SUFFIX"
-printf '    target:        x86-64-v3 (generic_v3)\n'
+printf '    ISA baseline:  x86-64-v3 (%s)\n' "$PROCESSOR_OPT"
+printf '    CPU tuning:    %s (-mtune=%s)\n' "$CPU_TUNE" "$CPU_TUNE"
 printf '    repository:    %s\n' "$REPO_NAME"
 printf '    release tag:   %s\n' "$RELEASE_TAG"

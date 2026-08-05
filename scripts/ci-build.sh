@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-: "${CACHYOS_VARIANT:?CACHYOS_VARIANT is required}"
+: "${CACHYOS_SOURCE_VARIANT:?CACHYOS_SOURCE_VARIANT is required}"
 : "${BC250_PKGREL:?BC250_PKGREL is required}"
 : "${SOURCE_FINGERPRINT:?SOURCE_FINGERPRINT is required}"
 
@@ -20,7 +20,7 @@ chown -R builder:builder /workspace
 runuser -u builder -- env \
     HOME=/home/builder \
     PATH="$PATH" \
-    CACHYOS_VARIANT="$CACHYOS_VARIANT" \
+    CACHYOS_SOURCE_VARIANT="$CACHYOS_SOURCE_VARIANT" \
     BC250_PKGREL="$BC250_PKGREL" \
     SOURCE_FINGERPRINT="$SOURCE_FINGERPRINT" \
     GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-unknown/unknown}" \
