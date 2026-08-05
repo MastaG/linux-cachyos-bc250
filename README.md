@@ -103,33 +103,6 @@ pacman -Qi linux-cachyos-bc250
 uname -r
 ```
 
-## Migrating from the first `repo-rc` release
-
-Remove or replace the old section:
-
-```ini
-[bc250-cachyos-v3-rc]
-Server = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo-rc
-```
-
-with the new `[bc250-cachyos]` configuration shown above. Then install the
-stable-name package:
-
-```bash
-sudo pacman -Syy
-sudo pacman -Syu linux-cachyos-bc250 linux-cachyos-bc250-headers
-```
-
-The old `linux-cachyos-rc-bc250` package may coexist temporarily. Remove it only
-after booting and validating the new kernel:
-
-```bash
-sudo pacman -Rns linux-cachyos-rc-bc250 linux-cachyos-rc-bc250-headers
-```
-
-The obsolete GitHub release/tag `repo-rc` can be deleted after the new `repo`
-release has been tested successfully.
-
 ## Selecting the upstream source
 
 Scheduled and push builds use the GitHub repository variable:
