@@ -1,0 +1,176 @@
+name: Build and publish BC-250 CachyOS kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: Kernel channel to build
+        required: true
+        default: rc
+        type: choice
+        options:
+          - rc
+          - stable
+          - both
+      force:
+        description: Rebuild even when the upstream fingerprint is unchanged
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: '23 3 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-release.yml'
+      - 'patches/**'
+      - 'scripts/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bc250-kernel-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          selection='${{ vars.SCHEDULE_VARIANT }}'
+          [[ -n "$selection" ]] || selection='rc'
+          if [[ '${{ github.event_name }}' == 'workflow_dispatch' ]]; then
+            selection='${{ inputs.variant }}'
+          fi
+
+          case "$selection" in
+            stable)
+              value='{"include":[{"variant":"linux-cachyos","channel":"stable","release_tag":"repo-stable"}]}'
+              ;;
+            rc)
+              value='{"include":[{"variant":"linux-cachyos-rc","channel":"rc","release_tag":"repo-rc"}]}'
+              ;;
+            both)
+              value='{"include":[{"variant":"linux-cachyos","channel":"stable","release_tag":"repo-stable"},{"variant":"linux-cachyos-rc","channel":"rc","release_tag":"repo-rc"}]}'
+              ;;
+            *)
+              echo "Unsupported selection: $selection" >&2
+              exit 1
+              ;;
+          esac
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: select
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Calculate source fingerprint
+        id: fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          fingerprint="$(./scripts/source-fingerprint.sh '${{ matrix.variant }}')"
+          echo "value=$fingerprint" >> "$GITHUB_OUTPUT"
+          echo "Source fingerprint: $fingerprint"
+
+      - name: Check published channel
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          build=true
+          mkdir -p previous
+
+          if gh release download '${{ matrix.release_tag }}' \
+              --pattern build-info.env --dir previous >/dev/null 2>&1; then
+            previous_fingerprint="$(sed -n 's/^SOURCE_FINGERPRINT=//p' previous/build-info.env | head -n1)"
+            if [[ "$previous_fingerprint" == "$SOURCE_FINGERPRINT" ]]; then
+              build=false
+            fi
+          fi
+
+          if [[ '${{ github.event_name }}' == 'workflow_dispatch' && '${{ inputs.force }}' == 'true' ]]; then
+            build=true
+          fi
+          if [[ '${{ github.event_name }}' == 'push' ]]; then
+            build=true
+          fi
+
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "Build required: $build"
+
+      - name: Free runner disk space
+        if: steps.existing.outputs.build == 'true'
+        shell: bash
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          docker system prune --all --force || true
+          df -h /
+
+      - name: Build x86-64-v3 packages and repository
+        if: steps.existing.outputs.build == 'true'
+        env:
+          SOURCE_FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            -e CACHYOS_VARIANT='${{ matrix.variant }}' \
+            -e BC250_PKGREL='${{ github.run_number }}' \
+            -e SOURCE_FINGERPRINT \
+            -e GITHUB_REPOSITORY='${{ github.repository }}' \
+            -e GITHUB_SHA='${{ github.sha }}' \
+            archlinux:base-devel \
+            bash /workspace/scripts/ci-build.sh
+
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+
+      - name: Preserve workflow artifact
+        if: steps.existing.outputs.build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bc250-${{ matrix.channel }}-${{ github.run_number }}
+          path: out/${{ matrix.channel }}/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish channel release
+        if: steps.existing.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          out='out/${{ matrix.channel }}'
+          title="$(cat "$out/release-title.txt")"
+
+          if gh release view '${{ matrix.release_tag }}' >/dev/null 2>&1; then
+            gh release delete '${{ matrix.release_tag }}' --yes --cleanup-tag
+            sleep 2
+          fi
+
+          gh release create '${{ matrix.release_tag }}' \
+            --target '${{ github.sha }}' \
+            --title "$title" \
+            --notes-file "$out/RELEASE_NOTES.md" \
+            --latest=false \
+            "$out"/* "$out"/.SRCINFO

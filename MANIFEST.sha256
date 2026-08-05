@@ -1,0 +1,12 @@
+bd5689361899047bcb4d994a7d1bff2a60cac8e65c00a9f276983c3f5cb3976a  /mnt/data/bc250-cachyos-kernel-repo/.github/workflows/build-release.yml
+f73400982c1d738d5e332a0e01e401842604b65580efeba89e1dba7cb5b76f62  /mnt/data/bc250-cachyos-kernel-repo/.gitignore
+edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  /mnt/data/bc250-cachyos-kernel-repo/LICENSE
+f4ccf22b7744d21c57bfb5ceaabd8f9b76f3c7530b802479d2c29c4b93e325d8  /mnt/data/bc250-cachyos-kernel-repo/README.md
+a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  /mnt/data/bc250-cachyos-kernel-repo/pacman/rc.conf.example
+0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  /mnt/data/bc250-cachyos-kernel-repo/pacman/stable.conf.example
+3f43433e45d16ce19cb2bf59c17fe9172e1541fdac9c2f51b28cb2397973d16d  /mnt/data/bc250-cachyos-kernel-repo/patches/0001-bc250-8core-telemetry-gpu-activity.patch
+90ad509255dcb3ff681262cb564e443ca731e36612ad37636850c865ec88ecb9  /mnt/data/bc250-cachyos-kernel-repo/patches/0002-bc250-audio.patch
+bdf7b04791e008912c35e4dc2834e65630dc0432c11b785078c820f7bb74ccc0  /mnt/data/bc250-cachyos-kernel-repo/scripts/build-package.sh
+e50e3f6843e37465095c48fd34ff91975608995239e409962fc4e29899a477a7  /mnt/data/bc250-cachyos-kernel-repo/scripts/ci-build.sh
+010c31aa506b3498c5b9deb25e063ae48593eaf71c2d51247b8c6504f3ec6133  /mnt/data/bc250-cachyos-kernel-repo/scripts/prepare-pkgbuild.sh
+55f76f08c9d5ee55733f9314ebf6c85cc85a090343bb6c80af2c0cd4423693bd  /mnt/data/bc250-cachyos-kernel-repo/scripts/source-fingerprint.sh

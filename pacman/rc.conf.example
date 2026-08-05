@@ -1,0 +1,3 @@
+[bc250-cachyos-v3-rc]
+SigLevel = Optional TrustAll
+Server = https://github.com/OWNER/REPOSITORY/releases/download/repo-rc
