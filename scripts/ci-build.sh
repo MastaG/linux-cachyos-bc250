@@ -4,9 +4,10 @@ set -Eeuo pipefail
 : "${CACHYOS_SOURCE_VARIANT:?CACHYOS_SOURCE_VARIANT is required}"
 : "${BC250_PKGREL:?BC250_PKGREL is required}"
 : "${SOURCE_FINGERPRINT:?SOURCE_FINGERPRINT is required}"
+: "${NCT6687D_COMMIT:?NCT6687D_COMMIT is required}"
 
 pacman -Sy --noconfirm archlinux-keyring
-pacman -Syu --noconfirm --needed base-devel curl git sudo
+pacman -Syu --noconfirm --needed base-devel curl git libarchive sudo
 
 if ! id builder >/dev/null 2>&1; then
     useradd --create-home --shell /bin/bash builder
@@ -23,6 +24,7 @@ runuser -u builder -- env \
     CACHYOS_SOURCE_VARIANT="$CACHYOS_SOURCE_VARIANT" \
     BC250_PKGREL="$BC250_PKGREL" \
     SOURCE_FINGERPRINT="$SOURCE_FINGERPRINT" \
+    NCT6687D_COMMIT="$NCT6687D_COMMIT" \
     GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-unknown/unknown}" \
     GITHUB_SHA="${GITHUB_SHA:-unknown}" \
     bash /workspace/scripts/build-package.sh

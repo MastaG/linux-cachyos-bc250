@@ -42,6 +42,52 @@ numeric release, so `7.2.0` upgrades the installed `7.2.rcX` package normally.
 - Safe GFX clock fallback: the 8-core layout never interprets
   `C0Residency[6]` as `GfxclkFrequency`
 - Cyan Skillfish DisplayPort audio quirk through `ignore_dpref_ss`
+- Extended `nct6687` hwmon/PWM driver, built as a normal kernel module
+
+## NCT6687D hardware-monitoring module
+
+The kernel package also includes the external
+[`Fred78290/nct6687d`](https://github.com/Fred78290/nct6687d) driver as a normal
+in-tree-built module:
+
+```text
+nct6687.ko.zst
+```
+
+Each workflow run resolves the latest commit on the driver's `main` branch,
+downloads `nct6687.c` from that immutable commit, and records the exact commit in
+`build-info.env` and the release notes. A driver update changes the source
+fingerprint and therefore triggers a kernel rebuild. To temporarily pin a known
+working revision, set the GitHub repository variable `NCT6687D_REF` to its full
+40-character commit hash; when unset, `refs/heads/main` is used.
+
+The upstream kernel's `nct6683` module recognizes the same NCT6683/NCT6686/NCT6687
+Super-I/O IDs. This BC-250 kernel disables `CONFIG_SENSORS_NCT6683` and builds:
+
+```text
+CONFIG_SENSORS_NCT6687=m
+```
+
+Load the driver for the current session:
+
+```bash
+sudo modprobe nct6687
+```
+
+Set optional module parameters in `/etc/modprobe.d/nct6687.conf`, for example:
+
+```ini
+options nct6687 fan_mask=0x3f temp_mask=0x0f
+```
+
+Load it automatically during boot only when desired:
+
+```bash
+printf '%s\n' 'nct6687' | sudo tee /etc/modules-load.d/nct6687.conf >/dev/null
+```
+
+Because it remains a module, parameters can be changed without rebuilding the
+kernel and a problematic driver can be unloaded with `sudo modprobe -r nct6687`.
 
 ## CPU optimization
 
@@ -148,8 +194,9 @@ containers.
 ## Automatic updates
 
 A scheduled workflow checks the selected upstream PKGBUILD and config daily.
-The fingerprint also includes the BC-250 patches, package name, CPU target, and
-build scripts. An unchanged source is skipped.
+The fingerprint also includes the BC-250 patches, package name, CPU target,
+build scripts, and the exact `nct6687d` source commit. An unchanged source is
+skipped.
 
 New builds replace the assets under the fixed `repo` tag, so normal updates are
 enough:
@@ -170,6 +217,7 @@ Each successful build publishes:
 - `bc250-cachyos.db` and `bc250-cachyos.files`
 - compressed repository databases
 - `PKGBUILD`, `config`, and `.SRCINFO`
+- the exact fetched `nct6687.c` and its Kconfig/Makefile integration patch
 - `SHA256SUMS` and `build-info.env`
 
 The release title and notes read `pkgbase`, `pkgver`, and `pkgrel` from

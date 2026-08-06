@@ -35,6 +35,17 @@ packages=("$BUILD_DIR"/*.pkg.tar.zst)
     printf 'ERROR: makepkg produced no .pkg.tar.zst files\n' >&2
     exit 1
 }
+
+module_listing="$(for package in "${packages[@]}"; do bsdtar -tf "$package"; done)"
+if ! grep -Eq '(^|/)nct6687\.ko(\.(zst|xz|gz))?$' <<<"$module_listing"; then
+    printf 'ERROR: nct6687 kernel module is missing from generated packages\n' >&2
+    exit 1
+fi
+if grep -Eq '(^|/)nct6683\.ko(\.(zst|xz|gz))?$' <<<"$module_listing"; then
+    printf 'ERROR: conflicting nct6683 kernel module is present in generated packages\n' >&2
+    exit 1
+fi
+
 cp -- "${packages[@]}" "$OUT_DIR/"
 
 cd -- "$OUT_DIR"
@@ -46,8 +57,9 @@ cp -L --remove-destination "${REPO_NAME}.db.tar.zst" "${REPO_NAME}.db"
 cp -L --remove-destination "${REPO_NAME}.files.tar.zst" "${REPO_NAME}.files"
 
 cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/PKGBUILD"
-cp -- "$BUILD_DIR/config" "$OUT_DIR/config"
 cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/.SRCINFO"
+cp -- "$BUILD_DIR/nct6687.c" "$OUT_DIR/nct6687.c"
+cp -- "$BUILD_DIR/0003-nct6687d-hwmon.patch" "$OUT_DIR/0003-nct6687d-hwmon.patch"
 
 srcinfo_value() {
     local key="$1"
@@ -83,6 +95,22 @@ if [[ "$pkgbase" != "linux-cachyos-bc250" ]]; then
     exit 1
 fi
 
+final_config="$BUILD_DIR/config-${pkgver}-${pkgrel}${pkgbase#linux}"
+if [[ ! -f "$final_config" ]]; then
+    printf 'ERROR: final generated kernel config not found: %s\n' "$final_config" >&2
+    find "$BUILD_DIR" -maxdepth 1 -type f -name 'config-*' -print >&2
+    exit 1
+fi
+grep -qx 'CONFIG_SENSORS_NCT6687=m' "$final_config" || {
+    printf 'ERROR: final config does not build CONFIG_SENSORS_NCT6687=m\n' >&2
+    exit 1
+}
+grep -qx '# CONFIG_SENSORS_NCT6683 is not set' "$final_config" || {
+    printf 'ERROR: final config did not disable CONFIG_SENSORS_NCT6683\n' >&2
+    exit 1
+}
+cp -- "$final_config" "$OUT_DIR/config"
+
 cat > "$OUT_DIR/build-info.env" <<EOF_INFO
 SOURCE_FINGERPRINT=${SOURCE_FINGERPRINT}
 CACHYOS_SOURCE_VARIANT=${CACHYOS_SOURCE_VARIANT}
@@ -92,6 +120,8 @@ ISA_BASELINE=x86-64-v3
 PROCESSOR_OPT=${PROCESSOR_OPT}
 CPU_TUNE=${CPU_TUNE}
 KCFLAGS=-mtune=${CPU_TUNE}
+NCT6687D_COMMIT=${NCT6687D_COMMIT}
+NCT6687D_SOURCE_URL=${NCT6687D_SOURCE_URL}
 PKGBASE=${pkgbase}
 PKGVER=${pkgver}
 PKGREL=${pkgrel}
@@ -108,6 +138,8 @@ cat > "$OUT_DIR/RELEASE_NOTES.md" <<EOF_NOTES
 - ISA baseline: **x86-64-v3** (CachyOS \`${PROCESSOR_OPT}\`)
 - CPU tuning: **Zen 2** (\`KCFLAGS=-mtune=${CPU_TUNE}\`)
 - Patches: BC-250 6/8-core telemetry, GPU activity, safe GFXCLK fallback, and Cyan Skillfish DP audio quirk
+- Extra hwmon module: \`nct6687.ko\` from Fred78290/nct6687d commit \`${NCT6687D_COMMIT}\`
+- Conflicting upstream module: \`nct6683\` disabled in this kernel configuration
 
 The package and repository names stay unchanged when the upstream source is
 switched from \`linux-cachyos-rc\` to \`linux-cachyos\`.
@@ -115,7 +147,8 @@ EOF_NOTES
 
 printf '%s — %s-%s' "$pkgbase" "$pkgver" "$pkgrel" > "$OUT_DIR/release-title.txt"
 sha256sum ./*.pkg.tar.zst ./*.db ./*.db.tar.zst ./*.files ./*.files.tar.zst \
-    PKGBUILD config .SRCINFO build-info.env > SHA256SUMS
+    PKGBUILD config .SRCINFO build-info.env nct6687.c \
+    0003-nct6687d-hwmon.patch > SHA256SUMS
 
 printf '==> Repository generated in %s\n' "$OUT_DIR"
 ls -lh "$OUT_DIR"

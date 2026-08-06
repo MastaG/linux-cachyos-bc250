@@ -76,9 +76,22 @@ jobs:
           echo "variant=$variant" >> "$GITHUB_OUTPUT"
           echo "Using upstream source package: $variant"
 
+      - name: Resolve nct6687d source
+        id: nct6687d
+        shell: bash
+        env:
+          NCT6687D_REF: ${{ vars.NCT6687D_REF }}
+        run: |
+          set -euo pipefail
+          commit="$(./scripts/resolve-nct6687d.sh)"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "Using nct6687d commit: $commit"
+
       - name: Calculate source fingerprint
         id: fingerprint
         shell: bash
+        env:
+          NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
         run: |
           set -euo pipefail
           fingerprint="$(./scripts/source-fingerprint.sh '${{ steps.source.outputs.variant }}')"
@@ -118,6 +131,7 @@ jobs:
         if: steps.existing.outputs.build == 'true'
         env:
           SOURCE_FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
+          NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
         shell: bash
         run: |
           set -euo pipefail
@@ -128,6 +142,7 @@ jobs:
             -e CACHYOS_SOURCE_VARIANT='${{ steps.source.outputs.variant }}' \
             -e BC250_PKGREL='${{ github.run_number }}' \
             -e SOURCE_FINGERPRINT \
+            -e NCT6687D_COMMIT \
             -e GITHUB_REPOSITORY='${{ github.repository }}' \
             -e GITHUB_SHA='${{ github.sha }}' \
             archlinux:base-devel \
