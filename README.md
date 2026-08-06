@@ -260,3 +260,10 @@ The generated repository is written to `out/repo/`.
 Patch application is deliberately strict. When a future CachyOS source update
 makes a hunk incompatible, `makepkg` stops during `prepare()` instead of
 silently publishing an unverified kernel.
+
+## Credits
+
+keyboardspecialist / bombers - For his reverse engineering efforts for telemetry on 8 cores and the original patches for linux 6.18. See: https://github.com/keyboardspecialist/bc250-steamos/tree/master/bc250-audio-fix  
+higorprado / higorevop - For porting the telemetry patches to linux 7.x. See: https://github.com/higorprado/bc250-8core-telemetry-report  
+Trov - For the proper DP audio fix
+
