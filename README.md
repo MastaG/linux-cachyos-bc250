@@ -62,7 +62,8 @@ working revision, set the GitHub repository variable `NCT6687D_REF` to its full
 40-character commit hash; when unset, `refs/heads/main` is used.
 
 The upstream kernel's `nct6683` module recognizes the same NCT6683/NCT6686/NCT6687
-Super-I/O IDs. This BC-250 kernel disables `CONFIG_SENSORS_NCT6683` and builds:
+Super-I/O IDs.  
+This BC-250 kernel disables `CONFIG_SENSORS_NCT6683` and builds:
 
 ```text
 CONFIG_SENSORS_NCT6687=m
@@ -263,7 +264,9 @@ silently publishing an unverified kernel.
 
 ## Credits
 
-keyboardspecialist / bombers - For his reverse engineering efforts for telemetry on 8 cores and the original patches for linux 6.18. See: https://github.com/keyboardspecialist/bc250-steamos/tree/master/bc250-audio-fix  
-higorprado / higorevop - For porting the telemetry patches to linux 7.x. See: https://github.com/higorprado/bc250-8core-telemetry-report  
-Trov - For the proper DP audio fix
+- keyboardspecialist / bombers: For his reverse engineering efforts for telemetry on 8 cores and the original patches for linux 6.18.  
+  See: https://github.com/keyboardspecialist/bc250-steamos/tree/master/bc250-audio-fix
+- higorprado / higorevop - For porting the telemetry patches to linux 7.x.  
+  See: https://github.com/higorprado/bc250-8core-telemetry-report
+- Trov - For the proper DP audio fix (posted on Discord and sent to LKML)
 
