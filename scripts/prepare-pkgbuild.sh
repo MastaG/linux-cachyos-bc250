@@ -50,8 +50,9 @@ NCT6687D_SOURCE_URL="https://raw.githubusercontent.com/Fred78290/nct6687d/${NCT6
 TELEMETRY_PATCH="${ROOT_DIR}/patches/0001-bc250-8core-telemetry-gpu-activity.patch"
 AUDIO_PATCH="${ROOT_DIR}/patches/0002-bc250-audio.patch"
 NCT6687D_PATCH="${ROOT_DIR}/patches/0003-nct6687d-hwmon.patch"
+GFXCLK_CACHE_PATCH="${ROOT_DIR}/patches/0004-bc250-cached-gfxclk-activity.patch"
 
-for file in "$TELEMETRY_PATCH" "$AUDIO_PATCH" "$NCT6687D_PATCH"; do
+for file in "$TELEMETRY_PATCH" "$AUDIO_PATCH" "$NCT6687D_PATCH" "$GFXCLK_CACHE_PATCH"; do
     [[ -f "$file" ]] || {
         printf 'ERROR: missing patch: %s\n' "$file" >&2
         exit 1
@@ -71,6 +72,7 @@ curl -fL --retry 5 --retry-all-errors -o "$BUILD_DIR/nct6687.c" "$NCT6687D_SOURC
 cp -- "$TELEMETRY_PATCH" "$BUILD_DIR/$(basename "$TELEMETRY_PATCH")"
 cp -- "$AUDIO_PATCH"     "$BUILD_DIR/$(basename "$AUDIO_PATCH")"
 cp -- "$NCT6687D_PATCH"  "$BUILD_DIR/$(basename "$NCT6687D_PATCH")"
+cp -- "$GFXCLK_CACHE_PATCH" "$BUILD_DIR/$(basename "$GFXCLK_CACHE_PATCH")"
 
 TELEMETRY_NAME="$(basename "$TELEMETRY_PATCH")"
 AUDIO_NAME="$(basename "$AUDIO_PATCH")"
@@ -79,13 +81,16 @@ NCT6687D_SOURCE_NAME="nct6687.c"
 TELEMETRY_B2SUM="$(b2sum "$TELEMETRY_PATCH" | awk '{print $1}')"
 AUDIO_B2SUM="$(b2sum "$AUDIO_PATCH" | awk '{print $1}')"
 NCT6687D_PATCH_B2SUM="$(b2sum "$NCT6687D_PATCH" | awk '{print $1}')"
+GFXCLK_CACHE_NAME="$(basename "$GFXCLK_CACHE_PATCH")"
+GFXCLK_CACHE_B2SUM="$(b2sum "$GFXCLK_CACHE_PATCH" | awk '{print $1}')"
 NCT6687D_SOURCE_B2SUM="$(b2sum "$BUILD_DIR/nct6687.c" | awk '{print $1}')"
 
 python3 - "$BUILD_DIR/PKGBUILD" "$CUSTOM_SUFFIX" "$BC250_PKGREL" \
     "$TELEMETRY_NAME" "$TELEMETRY_B2SUM" \
     "$AUDIO_NAME" "$AUDIO_B2SUM" \
     "$NCT6687D_PATCH_NAME" "$NCT6687D_PATCH_B2SUM" \
-    "$NCT6687D_SOURCE_NAME" "$NCT6687D_SOURCE_B2SUM" <<'PY'
+    "$NCT6687D_SOURCE_NAME" "$NCT6687D_SOURCE_B2SUM" \
+    "$GFXCLK_CACHE_NAME" "$GFXCLK_CACHE_B2SUM" <<'PY'
 from pathlib import Path
 import re
 import sys

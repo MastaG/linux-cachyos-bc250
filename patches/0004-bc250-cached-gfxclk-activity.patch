@@ -1,0 +1,176 @@
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c	2026-08-07 08:44:27.629476420 -0300
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c	2026-08-07 08:44:27.630476428 -0300
+@@ -75,6 +75,34 @@
+ MODULE_PARM_DESC(cs_eight_core_map,
+ 		 "Force 8-core hybrid SMU metrics layout");
+ 
++/*
++ * Short-lived caches for the two read-path queries the MastaG telemetry
++ * patch added: the GetGfxclkFrequency mailbox message and the GPU-activity
++ * GRBM busy-wait. Capping the refresh rate removes the extra mailbox
++ * message from each gpu_metrics read (it serializes on the SMU mailbox
++ * mutex with TransferTableSmu2Dram) and cuts the ~1.55ms MMIO busy-wait.
++ * Single BC-250 GPU per system, so file-scope state is sufficient.
++ * Set a window to 0 to disable caching (original behaviour).
++ */
++static DEFINE_MUTEX(cs_cache_lock);
++static uint cs_gfxclk_cache_ms = 200;
++module_param(cs_gfxclk_cache_ms, uint, 0644);
++MODULE_PARM_DESC(cs_gfxclk_cache_ms,
++		 "GetGfxclkFrequency mailbox cache window in ms (0 = off)");
++static uint cs_activity_cache_ms = 200;
++module_param(cs_activity_cache_ms, uint, 0644);
++MODULE_PARM_DESC(cs_activity_cache_ms,
++		 "GPU activity GRBM sample cache window in ms (0 = off)");
++
++static struct {
++	uint32_t gfxclk;
++	unsigned long gfxclk_refresh;
++	bool gfxclk_valid;
++	uint16_t activity;		/* centipercent, 0..10000 */
++	unsigned long activity_refresh;
++	bool activity_valid;
++} cs_cache;
++
+ static uint16_t cyan_skillfish_core_count(void)
+ {
+ 	unsigned int cpu;
+@@ -112,6 +140,84 @@
+ 	return DIV_ROUND_CLOSEST(busy * 10000, 32);
+ }
+ 
++/*
++ * Cached GetGfxclkFrequency. Avoids sending a mailbox message on every
++ * read; on success the value is served from cs_cache until the window
++ * expires. Mirrors the per-site hybrid fallback of the original code.
++ */
++static int cs_get_current_gfxclk(struct smu_context *smu, uint32_t *value,
++				 uint32_t fallback)
++{
++	int ret;
++
++	if (!cs_gfxclk_cache_ms) {
++		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetGfxclkFrequency,
++					   value);
++		if (ret && !cyan_skillfish_use_hybrid_metrics()) {
++			*value = fallback;
++			ret = 0;
++		}
++		return ret;
++	}
++
++	mutex_lock(&cs_cache_lock);
++	if (cs_cache.gfxclk_valid &&
++	    !time_after(jiffies, cs_cache.gfxclk_refresh)) {
++		*value = cs_cache.gfxclk;
++		mutex_unlock(&cs_cache_lock);
++		return 0;
++	}
++	mutex_unlock(&cs_cache_lock);
++
++	ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetGfxclkFrequency, value);
++	if (ret && !cyan_skillfish_use_hybrid_metrics()) {
++		*value = fallback;
++		ret = 0;
++	}
++	if (!ret) {
++		mutex_lock(&cs_cache_lock);
++		cs_cache.gfxclk = *value;
++		cs_cache.gfxclk_refresh = jiffies +
++			msecs_to_jiffies(cs_gfxclk_cache_ms);
++		cs_cache.gfxclk_valid = true;
++		mutex_unlock(&cs_cache_lock);
++	}
++	return ret;
++}
++
++/*
++ * Cached GPU activity. Shares one GRBM sample between gpu_metrics and
++ * gpu_busy_percent instead of recomputing the ~1.55ms busy-wait per call.
++ */
++static uint16_t cs_get_gpu_activity(struct smu_context *smu)
++{
++	uint16_t activity;
++	unsigned long refresh;
++
++	if (!cs_activity_cache_ms)
++		return cyan_skillfish_get_gpu_activity(smu);
++
++	mutex_lock(&cs_cache_lock);
++	if (cs_cache.activity_valid &&
++	    !time_after(jiffies, cs_cache.activity_refresh)) {
++		activity = cs_cache.activity;
++		mutex_unlock(&cs_cache_lock);
++		return activity;
++	}
++	mutex_unlock(&cs_cache_lock);
++
++	activity = cyan_skillfish_get_gpu_activity(smu);
++	refresh = jiffies + msecs_to_jiffies(cs_activity_cache_ms);
++
++	mutex_lock(&cs_cache_lock);
++	cs_cache.activity = activity;
++	cs_cache.activity_refresh = refresh;
++	cs_cache.activity_valid = true;
++	mutex_unlock(&cs_cache_lock);
++
++	return activity;
++}
++
+ static const struct smu_feature_bits cyan_skillfish_dpm_features = {
+ 	.bits = {
+ 		SMU_FEATURE_BIT_INIT(FEATURE_FCLK_DPM_BIT),
+@@ -195,18 +301,14 @@
+ 		return ret;
+ 
+ 	switch (member) {
+-	case METRICS_CURR_GFXCLK:
+-		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetGfxclkFrequency,
+-					       value);
++		case METRICS_CURR_GFXCLK:
+ 		/*
+-		 * In the 8-core hybrid layout offset 0x44 is C0Residency[6],
+-		 * not GfxclkFrequency. Only the stock six-core layout has a
+-		 * valid table value to fall back to.
++		 * Query current gfxclk via the cached helper. On 8-core hybrid
++		 * the table slot is C0Residency[6] (invalid), so only the
++		 * six-core layout can fall back to the table value.
+ 		 */
+-		if (ret && !cyan_skillfish_use_hybrid_metrics()) {
+-			*value = metrics->Current.GfxclkFrequency;
+-			ret = 0;
+-		}
++		ret = cs_get_current_gfxclk(smu, value,
++					    metrics->Current.GfxclkFrequency);
+ 		break;
+ 	case METRICS_CURR_SOCCLK:
+ 		*value = metrics->Current.SocclkFrequency;
+@@ -316,7 +418,7 @@
+ 		*size = 4;
+ 		break;
+ 	case AMDGPU_PP_SENSOR_GPU_LOAD:
+-		*(uint32_t *)data = cyan_skillfish_get_gpu_activity(smu) / 100;
++		*(uint32_t *)data = cs_get_gpu_activity(smu) / 100;
+ 		*size = 4;
+ 		break;
+ 	default:
+@@ -469,16 +571,11 @@
+ 		return ret;
+ 
+ 	hybrid = cyan_skillfish_use_hybrid_metrics();
+-	gfxclk_ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetGfxclkFrequency,
+-						&gfxclk);
+-	if (gfxclk_ret && !hybrid) {
+-		gfxclk = metrics.Current.GfxclkFrequency;
+-		gfxclk_ret = 0;
+-	}
++	gfxclk_ret = cs_get_current_gfxclk(smu, &gfxclk,
++				   metrics.Current.GfxclkFrequency);
+ 
+ 	smu_cmn_init_soft_gpu_metrics(gpu_metrics, 2, 2);
+-	gpu_metrics->average_gfx_activity =
+-		cyan_skillfish_get_gpu_activity(smu);
++	gpu_metrics->average_gfx_activity = cs_get_gpu_activity(smu);
+ 
+ 	gpu_metrics->temperature_gfx = metrics.Current.GfxTemperature;
+ 	gpu_metrics->temperature_soc = metrics.Current.SocTemperature;
