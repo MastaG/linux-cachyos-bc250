@@ -28,6 +28,47 @@ mesa_packages=("$MESA_BUILD_DIR"/*.pkg.tar.zst)
 
 mkdir -p -- "$OUT_DIR"
 cp -- "${mesa_packages[@]}" "$OUT_DIR/"
+
+# Pacman/makepkg may include the package epoch in the archive filename, e.g.
+# mesa-3:26.1.6-1.10-x86_64.pkg.tar.zst.  The epoch must remain in the
+# package metadata for version comparison, but ':' is unsuitable for GitHub
+# Actions artifacts and GitHub Releases may sanitize special asset names.
+# Normalize only the repository filename before the final repo-add; .PKGINFO
+# inside the package remains untouched.
+normalize_repo_package_filenames() {
+    local package pkginfo package_name package_version package_arch
+    local filename_version target
+
+    shopt -s nullglob
+    for package in "$OUT_DIR"/*.pkg.tar.zst; do
+        [[ "$(basename -- "$package")" == *:* ]] || continue
+
+        pkginfo="$(bsdtar -xOf "$package" .PKGINFO)"
+        package_name="$(awk -F ' = ' '$1 == "pkgname" { print $2; exit }' <<<"$pkginfo")"
+        package_version="$(awk -F ' = ' '$1 == "pkgver" { print $2; exit }' <<<"$pkginfo")"
+        package_arch="$(awk -F ' = ' '$1 == "arch" { print $2; exit }' <<<"$pkginfo")"
+
+        if [[ -z "$package_name" || -z "$package_version" || -z "$package_arch" ]]; then
+            printf 'ERROR: could not read package metadata from %s\n' "$package" >&2
+            exit 1
+        fi
+
+        filename_version="${package_version#*:}"
+        target="$OUT_DIR/${package_name}-${filename_version}-${package_arch}.pkg.tar.zst"
+
+        if [[ -e "$target" && "$target" != "$package" ]]; then
+            printf 'ERROR: normalized package filename already exists: %s\n' "$target" >&2
+            exit 1
+        fi
+
+        printf '==> Normalizing package filename: %s -> %s\n' \
+            "$(basename -- "$package")" "$(basename -- "$target")"
+        mv -- "$package" "$target"
+    done
+}
+
+normalize_repo_package_filenames
+
 cp -- "$MESA_BUILD_DIR/PKGBUILD" "$OUT_DIR/mesa-PKGBUILD"
 cp -- "$MESA_BUILD_DIR/.SRCINFO" "$OUT_DIR/mesa.SRCINFO"
 cp -- "$MESA_BUILD_DIR/0001-gfx1013-compute-queue-fix.patch" "$OUT_DIR/0001-gfx1013-compute-queue-fix.patch"

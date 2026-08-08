@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Select upstream source package
         id: source
@@ -166,7 +166,7 @@ jobs:
 
       - name: Preserve workflow artifact
         if: steps.existing.outputs.build == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bc250-cachyos-repo-${{ github.run_number }}
           path: out/repo/
