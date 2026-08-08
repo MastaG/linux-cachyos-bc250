@@ -6,6 +6,8 @@ MESA_PKGREL="${MESA_PKGREL:-${BC250_PKGREL:-1}}"
 MESA_BUILD_DIR="${MESA_BUILD_DIR:-${ROOT_DIR}/build/mesa}"
 CACHYOS_MESA_COMMIT="${CACHYOS_MESA_COMMIT:-}"
 MESA_PATCH="${ROOT_DIR}/patches/mesa/0001-gfx1013-compute-queue-fix.patch"
+MESA_MARCH="x86-64-v3"
+MESA_MTUNE="znver2"
 
 [[ "$MESA_PKGREL" =~ ^[0-9]+$ ]] || {
     printf 'ERROR: MESA_PKGREL must be numeric: %s\n' "$MESA_PKGREL" >&2
@@ -48,7 +50,7 @@ PATCH_NAME="$(basename "$MESA_PATCH")"
 PATCH_SHA256="$(sha256sum "$MESA_PATCH" | awk '{print $1}')"
 PATCH_B2SUM="$(b2sum "$MESA_PATCH" | awk '{print $1}')"
 
-python3 - "$MESA_BUILD_DIR/PKGBUILD" "$MESA_PKGREL" "$PATCH_NAME" "$PATCH_SHA256" "$PATCH_B2SUM" <<'PY'
+python3 - "$MESA_BUILD_DIR/PKGBUILD" "$MESA_PKGREL" "$PATCH_NAME" "$PATCH_SHA256" "$PATCH_B2SUM" "$MESA_MARCH" "$MESA_MTUNE" <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -58,6 +60,8 @@ patch_rel = sys.argv[2]
 patch_name = sys.argv[3]
 patch_sha256 = sys.argv[4]
 patch_b2sum = sys.argv[5]
+mesa_march = sys.argv[6]
+mesa_mtune = sys.argv[7]
 text = path.read_text(encoding="utf-8")
 
 pkgrel_pattern = r'^pkgrel=([0-9]+(?:\.[0-9]+)*)$'
@@ -68,7 +72,7 @@ if len(matches) != 1:
 if patch_name in text:
     raise SystemExit(f'ERROR: Mesa PKGBUILD already references {patch_name}')
 
-for token in ('sha256sums=(', 'b2sums=(', 'prepare() {'):
+for token in ('sha256sums=(', 'b2sums=(', 'prepare() {', 'build() {'):
     if text.count(token) != 1:
         raise SystemExit(f'ERROR: expected {token!r} exactly once in Mesa PKGBUILD')
 
@@ -90,6 +94,17 @@ text = re.sub(
 inject = f'''# BC-250 / GFX1013 compute-queue support.\nsource+=("{patch_name}")\nsha256sums+=(\'{patch_sha256}\')\nb2sums+=(\'{patch_b2sum}\')\n\n'''
 text = text.replace('prepare() {', inject + 'prepare() {', 1)
 
+# Force Mesa's C/C++ compilation target to the BC-250 rather than inheriting
+# whatever CPU the CI runner happens to use. Appending the flags makes these
+# values take precedence over any earlier -march/-mtune from makepkg.conf while
+# preserving the rest of CachyOS/Arch's hardening and optimization flags.
+cpu_tuning = (
+    f'  # BC-250 CPU target: x86-64-v3 baseline, tuned for Zen 2.\n'
+    f'  export CFLAGS="${{CFLAGS:-}} -march={mesa_march} -mtune={mesa_mtune}"\n'
+    f'  export CXXFLAGS="${{CXXFLAGS:-}} -march={mesa_march} -mtune={mesa_mtune}"\n\n'
+)
+text = text.replace('build() {\n', 'build() {\n' + cpu_tuning, 1)
+
 path.write_text(text, encoding="utf-8", newline="\n")
 PY
 
@@ -98,9 +113,12 @@ CACHYOS_MESA_COMMIT=${CACHYOS_MESA_COMMIT}
 CACHYOS_MESA_PKGBUILD_URL=${UPSTREAM_BASE}/PKGBUILD
 MESA_PKGREL=${MESA_PKGREL}
 MESA_APPLIED_PATCH=${PATCH_NAME}
+MESA_MARCH=${MESA_MARCH}
+MESA_MTUNE=${MESA_MTUNE}
 EOF_META
 
 printf '==> Prepared Mesa build in %s\n' "$MESA_BUILD_DIR"
 printf '    CachyOS Mesa commit: %s\n' "$CACHYOS_MESA_COMMIT"
 printf '    applied patch:       %s\n' "$PATCH_NAME"
 printf '    pkgrel suffix:       %s\n' "$MESA_PKGREL"
+printf '    Mesa CPU target:     -march=%s -mtune=%s\n' "$MESA_MARCH" "$MESA_MTUNE"

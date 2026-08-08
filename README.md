@@ -10,6 +10,73 @@ Project: <https://github.com/MastaG/linux-cachyos-bc250>
 
 Packages and repository assets: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 
+## Quick start for BC-250 users
+
+If you only want to install this repository, the BC-250 kernel, and the patched
+Mesa packages on CachyOS or Arch Linux, these are the basic steps.
+
+### 1. Add the BC-250 package repository
+
+On CachyOS, run this one-liner once:
+
+```bash
+sudo sed -i -e '/^\[bc250-cachyos\]$/,/^Server = https:\/\/github\.com\/MastaG\/linux-cachyos-bc250\/releases\/download\/repo$/d' -e '/^\[cachyos-v3\]$/i [bc250-cachyos]\nSigLevel = Optional TrustAll\nServer = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo\n' /etc/pacman.conf
+```
+
+The command is safe to use if you previously added this repository with the old
+README instructions: it first removes the existing `[bc250-cachyos]` block and
+then inserts it directly **above `[cachyos-v3]`**. This priority is important
+because the normal CachyOS repositories also contain packages such as `mesa`
+and `vulkan-radeon`. With the BC-250 repository above them, normal
+`sudo pacman -Syu` upgrades keep using the patched Mesa packages automatically.
+
+If you use plain Arch Linux rather than CachyOS, add the same repository block
+manually above `[core]` instead.
+
+### 2. Enable the BC-250 fan/sensor driver at boot
+
+Run this before installing the kernel:
+
+```bash
+printf '%s\n' 'nct6687' | sudo tee /etc/modules-load.d/nct6687.conf >/dev/null
+```
+
+This tells systemd to load the `nct6687` fan/sensor driver automatically at
+boot. The kernel package contains the driver as `nct6687.ko`.
+
+### 3. Install/update the kernel and patched Mesa
+
+Install the BC-250 kernel and headers while doing a normal full system update:
+
+```bash
+sudo pacman -Syu linux-cachyos-bc250 linux-cachyos-bc250-headers
+```
+
+Because step 1 gives `[bc250-cachyos]` repository priority, pacman will also
+select this repository's newer patched `mesa`, `vulkan-radeon`, and other Mesa
+split packages automatically.
+
+### 4. Reboot
+
+```bash
+sudo reboot
+```
+
+After rebooting, you can verify the running kernel and the fan/sensor module:
+
+```bash
+uname -r
+lsmod | grep nct6687
+```
+
+For later updates, a normal full system upgrade is enough when the
+`[bc250-cachyos]` repository has priority over the repositories that also
+provide Mesa:
+
+```bash
+sudo pacman -Syu
+```
+
 ## Stable package name across RC and stable kernels
 
 The upstream source package can be either:
@@ -101,8 +168,10 @@ The same workflow also resolves the latest commit of
 [`CachyOS/CachyOS-PKGBUILDS`](https://github.com/CachyOS/CachyOS-PKGBUILDS)
 `master`, downloads `mesa/mesa/PKGBUILD` plus its local
 `gamescope-fps-limiter.patch`, and pins both to that exact commit for the build.
-The upstream Mesa `pkgver` and `epoch` are left unchanged; the GitHub Actions run
-number is appended to `pkgrel`, for example:
+The upstream Mesa `pkgver` and `epoch` are left unchanged. The generated PKGBUILD
+is additionally given the fixed BC-250 CPU target
+`-march=x86-64-v3 -mtune=znver2`, and the GitHub Actions run number is appended
+to `pkgrel`, for example:
 
 ```text
 26.1.6-1 -> 26.1.6-1.42
@@ -144,11 +213,15 @@ sudo pacman -S bc250-cachyos/mesa bc250-cachyos/vulkan-radeon
 
 ## CPU optimization
 
-The BC-250 uses Zen 2 CPU cores. The current CachyOS PKGBUILD directly exposes
-`generic_v1` through `generic_v4`, `zen4`, and `native`, but not a dedicated
-Zen 2 selector.
+The BC-250 uses Zen 2 CPU cores. Both the kernel and Mesa builds are therefore
+targeted explicitly at the BC-250 instead of the CPU used by the GitHub Actions
+runner. In particular, the Mesa build never relies on `-march=native`.
 
-This repository therefore uses the safe combination:
+### Kernel
+
+The current CachyOS kernel PKGBUILD directly exposes `generic_v1` through
+`generic_v4`, `zen4`, and `native`, but not a dedicated Zen 2 selector. This
+repository therefore uses:
 
 ```bash
 _processor_opt=generic_v3
@@ -157,13 +230,29 @@ KCFLAGS=-mtune=znver2
 
 `generic_v3` keeps the kernel's supported x86-64-v3 ISA baseline and kernel
 configuration. `-mtune=znver2` asks Clang to tune instruction scheduling and
-code generation for Zen 2 without enabling instructions outside that baseline.
-This is deliberately safer than forcing `-march=znver2` through an unsupported
-PKGBUILD path.
+code generation for Zen 2 without changing that ISA baseline.
 
-## Install on CachyOS or Arch Linux
+### Mesa
 
-Add this repository to `/etc/pacman.conf`:
+The downloaded CachyOS Mesa PKGBUILD is adjusted during the build so its C and
+C++ compiler flags end with:
+
+```text
+-march=x86-64-v3 -mtune=znver2
+```
+
+These flags are appended to the existing `CFLAGS` and `CXXFLAGS`, preserving the
+normal CachyOS/Arch optimization and hardening flags while making the final CPU
+target explicit. Because the BC-250 target is set inside the generated PKGBUILD
+before `arch-meson` runs, a newer CPU on the GitHub Actions runner cannot cause
+Mesa to be built with `-march=native` for that host.
+
+## Detailed installation on CachyOS or Arch Linux
+
+Add this repository to `/etc/pacman.conf`. Because this repository intentionally
+overrides the normal `mesa` and `vulkan-radeon` packages, place it above the
+regular CachyOS/Arch repositories if you want ordinary `pacman -Syu` upgrades
+to keep using the patched Mesa packages:
 
 ```ini
 [bc250-cachyos]
@@ -171,15 +260,11 @@ SigLevel = Optional TrustAll
 Server = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo
 ```
 
-One way to append it:
+On CachyOS, this one-liner removes an older copy of the block if present and
+reinserts it immediately above `[cachyos-v3]`:
 
 ```bash
-printf '%s\n' \
-  '' \
-  '[bc250-cachyos]' \
-  'SigLevel = Optional TrustAll' \
-  'Server = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo' \
-  | sudo tee -a /etc/pacman.conf >/dev/null
+sudo sed -i -e '/^\[bc250-cachyos\]$/,/^Server = https:\/\/github\.com\/MastaG\/linux-cachyos-bc250\/releases\/download\/repo$/d' -e '/^\[cachyos-v3\]$/i [bc250-cachyos]\nSigLevel = Optional TrustAll\nServer = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo\n' /etc/pacman.conf
 ```
 
 Refresh the databases and verify the repository:
@@ -217,15 +302,21 @@ linux-cachyos-rc
 linux-cachyos
 ```
 
-When unset, it defaults to `linux-cachyos-rc`. Once Linux 7.2 is available from
-the stable package, change the variable to:
+When unset, it defaults to `linux-cachyos-rc`. The workflow has a safety guard
+for the RC-to-stable transition: as soon as the upstream `linux-cachyos-rc`
+PKGBUILD reports kernel series **7.3 or newer**, it stops rebuilding the kernel.
+The last published 7.2 BC-250 kernel and headers are retained in the fixed repo,
+while Mesa can continue to build and update normally.
+
+At that point, change the repository variable to the stable source:
 
 ```text
 linux-cachyos
 ```
 
-A manual workflow run can temporarily select `rc` or `stable` without changing
-the repository variable.
+This resumes kernel builds from the stable CachyOS package, which should then be
+the Linux 7.2 series. A manual workflow run can temporarily select `rc` or
+`stable` without changing the repository variable.
 
 ## Self-hosted runner
 
@@ -247,10 +338,18 @@ containers.
 ## Automatic updates
 
 A scheduled workflow checks the selected kernel PKGBUILD/config and the CachyOS
-Mesa packaging source daily. The fingerprint also includes the BC-250 kernel and
-Mesa patches, package name, CPU target, build scripts, the exact `nct6687d`
-source commit, and the exact CachyOS Mesa packaging commit. An unchanged source
-is skipped.
+Mesa packaging source daily. While kernel building is enabled, the fingerprint
+also includes the BC-250 kernel patches, package name, CPU target, build scripts,
+and exact `nct6687d` source commit. Mesa sources, Mesa patches, its BC-250 CPU
+target, and the exact CachyOS Mesa packaging commit are always tracked. An
+unchanged source is skipped.
+
+When the `linux-cachyos-rc` guard detects 7.3 or newer, kernel inputs are removed
+from the active fingerprint so later 7.3 RC changes do not cause pointless
+BC-250 kernel rebuilds. Mesa changes can still trigger a Mesa-only publication;
+the workflow downloads the previous fixed release first, keeps its 7.2 kernel
+packages, replaces the old Mesa split packages, and regenerates the pacman
+repository database.
 
 New builds replace the assets under the fixed `repo` tag, so normal updates are
 enough:
@@ -318,9 +417,11 @@ unreviewed forward-port.
 
 ## Credits
 
-- keyboardspecialist / bombers: For his reverse engineering efforts for telemetry on 8 cores and the original patches for linux 6.18.  
+- keyboardspecialist / bombers -  For his reverse engineering efforts for telemetry on 8 cores and the original patches for linux 6.18.  
   See: https://github.com/keyboardspecialist/bc250-steamos/tree/master/bc250-audio-fix
 - higorprado / higorevop - For porting the telemetry patches to linux 7.x.  
   See: https://github.com/higorprado/bc250-8core-telemetry-report
 - Trov - For the proper DP audio fix (posted on Discord and sent to LKML)
+- DryhoppedIPA - For his fixes for the amdgpu kernel and mesa drivers
+  See: https://github.com/DryhoppedIPA/bc250-gfx1013-fix
 

@@ -4,7 +4,16 @@ set -Eeuo pipefail
 : "${CACHYOS_SOURCE_VARIANT:?CACHYOS_SOURCE_VARIANT is required}"
 : "${BC250_PKGREL:?BC250_PKGREL is required}"
 : "${SOURCE_FINGERPRINT:?SOURCE_FINGERPRINT is required}"
-: "${NCT6687D_COMMIT:?NCT6687D_COMMIT is required}"
+BUILD_KERNEL="${BUILD_KERNEL:-true}"
+KERNEL_GUARD_REASON="${KERNEL_GUARD_REASON:-none}"
+NCT6687D_COMMIT="${NCT6687D_COMMIT:-}"
+
+if [[ "$BUILD_KERNEL" == true ]]; then
+    : "${NCT6687D_COMMIT:?NCT6687D_COMMIT is required when BUILD_KERNEL=true}"
+elif [[ "$BUILD_KERNEL" != false ]]; then
+    printf 'ERROR: BUILD_KERNEL must be true or false: %s\n' "$BUILD_KERNEL" >&2
+    exit 1
+fi
 : "${CACHYOS_MESA_COMMIT:?CACHYOS_MESA_COMMIT is required}"
 
 pacman -Sy --noconfirm archlinux-keyring
@@ -23,6 +32,8 @@ runuser -u builder -- env \
     HOME=/home/builder \
     PATH="$PATH" \
     CACHYOS_SOURCE_VARIANT="$CACHYOS_SOURCE_VARIANT" \
+    BUILD_KERNEL="$BUILD_KERNEL" \
+    KERNEL_GUARD_REASON="$KERNEL_GUARD_REASON" \
     BC250_PKGREL="$BC250_PKGREL" \
     MESA_PKGREL="$BC250_PKGREL" \
     SOURCE_FINGERPRINT="$SOURCE_FINGERPRINT" \
@@ -30,4 +41,4 @@ runuser -u builder -- env \
     CACHYOS_MESA_COMMIT="$CACHYOS_MESA_COMMIT" \
     GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-unknown/unknown}" \
     GITHUB_SHA="${GITHUB_SHA:-unknown}" \
-    bash -c 'set -Eeuo pipefail; /workspace/scripts/build-package.sh; /workspace/scripts/build-mesa-package.sh'
+    bash -c 'set -Eeuo pipefail; if [[ "$BUILD_KERNEL" == true ]]; then /workspace/scripts/build-package.sh; else echo "==> Kernel build skipped: $KERNEL_GUARD_REASON"; fi; /workspace/scripts/build-mesa-package.sh'

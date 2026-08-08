@@ -76,7 +76,41 @@ jobs:
           echo "variant=$variant" >> "$GITHUB_OUTPUT"
           echo "Using upstream source package: $variant"
 
+      - name: Guard RC kernel generation
+        id: kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          variant='${{ steps.source.outputs.variant }}'
+          build=true
+          reason=none
+
+          if [[ "$variant" == linux-cachyos-rc ]]; then
+            pkgbuild_url="https://raw.githubusercontent.com/CachyOS/linux-cachyos/master/linux-cachyos-rc/PKGBUILD"
+            pkgbuild="$(curl -fsSL --retry 5 --retry-all-errors "$pkgbuild_url")"
+            rc_major="$(sed -nE 's/^_major=([0-9]+\.[0-9]+).*$/\1/p' <<<"$pkgbuild" | head -n1)"
+
+            if [[ -z "$rc_major" ]]; then
+              echo "ERROR: could not determine _major from linux-cachyos-rc/PKGBUILD" >&2
+              exit 1
+            fi
+
+            echo "linux-cachyos-rc _major: $rc_major"
+
+            if [[ "$(printf '%s\n' '7.3' "$rc_major" | sort -V | head -n1)" == '7.3' ]]; then
+              build=false
+              reason="linux-cachyos-rc is ${rc_major} (7.3 or newer)"
+              echo "::warning title=BC-250 kernel build paused::${reason}. Keep the last 7.2 kernel packages and switch CACHYOS_SOURCE_VARIANT to linux-cachyos before building the kernel again."
+            fi
+          fi
+
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "Kernel build enabled: $build"
+
       - name: Resolve nct6687d source
+        if: steps.kernel.outputs.build == 'true'
         id: nct6687d
         shell: bash
         env:
@@ -106,7 +140,7 @@ jobs:
           CACHYOS_MESA_COMMIT: ${{ steps.mesa.outputs.commit }}
         run: |
           set -euo pipefail
-          fingerprint="$(./scripts/source-fingerprint.sh '${{ steps.source.outputs.variant }}')"
+          fingerprint="$(./scripts/source-fingerprint.sh '${{ steps.source.outputs.variant }}' '${{ steps.kernel.outputs.build }}')"
           echo "value=$fingerprint" >> "$GITHUB_OUTPUT"
           echo "Source fingerprint: $fingerprint"
 
@@ -139,12 +173,44 @@ jobs:
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "Build required: $build"
 
+      - name: Seed previous repository for Mesa-only build
+        if: steps.existing.outputs.build == 'true' && steps.kernel.outputs.build != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf out/repo
+          mkdir -p out/repo
+
+          if ! gh release download repo --dir out/repo; then
+            echo "::error title=Cannot preserve kernel packages::The RC kernel guard is active, but no previous repo release could be downloaded. Switch CACHYOS_SOURCE_VARIANT to linux-cachyos and run the workflow again."
+            exit 1
+          fi
+
+          kernel_pkg="$(find out/repo -maxdepth 1 -type f \
+            -name 'linux-cachyos-bc250-*.pkg.tar.zst' \
+            ! -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' \
+            -print -quit)"
+          headers_pkg="$(find out/repo -maxdepth 1 -type f \
+            -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' \
+            -print -quit)"
+
+          if [[ -z "$kernel_pkg" || -z "$headers_pkg" || ! -f out/repo/build-info.env || ! -f out/repo/RELEASE_NOTES.md ]]; then
+            echo "::error title=Incomplete previous release::Cannot do a Mesa-only publication without retaining the previous kernel, headers, and metadata."
+            exit 1
+          fi
+
+          echo "Kernel build is paused; retaining $(basename "$kernel_pkg") and $(basename "$headers_pkg")."
+
       - name: Build Zen 2-tuned packages and repository
         if: steps.existing.outputs.build == 'true'
         env:
           SOURCE_FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
           CACHYOS_MESA_COMMIT: ${{ steps.mesa.outputs.commit }}
+          BUILD_KERNEL: ${{ steps.kernel.outputs.build }}
+          KERNEL_GUARD_REASON: ${{ steps.kernel.outputs.reason }}
         shell: bash
         run: |
           set -euo pipefail
@@ -153,6 +219,8 @@ jobs:
             -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace \
             -e CACHYOS_SOURCE_VARIANT='${{ steps.source.outputs.variant }}' \
+            -e BUILD_KERNEL \
+            -e KERNEL_GUARD_REASON \
             -e BC250_PKGREL='${{ github.run_number }}' \
             -e SOURCE_FINGERPRINT \
             -e NCT6687D_COMMIT \
