@@ -5,6 +5,7 @@ set -Eeuo pipefail
 : "${BC250_PKGREL:?BC250_PKGREL is required}"
 : "${SOURCE_FINGERPRINT:?SOURCE_FINGERPRINT is required}"
 : "${NCT6687D_COMMIT:?NCT6687D_COMMIT is required}"
+: "${CACHYOS_MESA_COMMIT:?CACHYOS_MESA_COMMIT is required}"
 
 pacman -Sy --noconfirm archlinux-keyring
 pacman -Syu --noconfirm --needed base-devel curl git libarchive sudo
@@ -17,14 +18,16 @@ chmod 0440 /etc/sudoers.d/builder
 chown -R builder:builder /workspace
 
 # Do not pass CI or GITHUB_RUN_ID to makepkg. CachyOS otherwise intentionally
-# switches to a smaller CI config instead of its normal performance config.
+# switches to smaller CI configurations instead of its normal package config.
 runuser -u builder -- env \
     HOME=/home/builder \
     PATH="$PATH" \
     CACHYOS_SOURCE_VARIANT="$CACHYOS_SOURCE_VARIANT" \
     BC250_PKGREL="$BC250_PKGREL" \
+    MESA_PKGREL="$BC250_PKGREL" \
     SOURCE_FINGERPRINT="$SOURCE_FINGERPRINT" \
     NCT6687D_COMMIT="$NCT6687D_COMMIT" \
+    CACHYOS_MESA_COMMIT="$CACHYOS_MESA_COMMIT" \
     GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-unknown/unknown}" \
     GITHUB_SHA="${GITHUB_SHA:-unknown}" \
-    bash /workspace/scripts/build-package.sh
+    bash -c 'set -Eeuo pipefail; /workspace/scripts/build-package.sh; /workspace/scripts/build-mesa-package.sh'

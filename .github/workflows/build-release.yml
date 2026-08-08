@@ -1,4 +1,4 @@
-name: Build and publish BC-250 CachyOS kernel
+name: Build and publish BC-250 CachyOS kernel and Mesa
 
 on:
   workflow_dispatch:
@@ -87,11 +87,23 @@ jobs:
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "Using nct6687d commit: $commit"
 
+      - name: Resolve CachyOS Mesa source
+        id: mesa
+        shell: bash
+        env:
+          CACHYOS_MESA_REF: ${{ vars.CACHYOS_MESA_REF }}
+        run: |
+          set -euo pipefail
+          commit="$(./scripts/resolve-cachyos-mesa.sh)"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "Using CachyOS Mesa commit: $commit"
+
       - name: Calculate source fingerprint
         id: fingerprint
         shell: bash
         env:
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
+          CACHYOS_MESA_COMMIT: ${{ steps.mesa.outputs.commit }}
         run: |
           set -euo pipefail
           fingerprint="$(./scripts/source-fingerprint.sh '${{ steps.source.outputs.variant }}')"
@@ -132,6 +144,7 @@ jobs:
         env:
           SOURCE_FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
+          CACHYOS_MESA_COMMIT: ${{ steps.mesa.outputs.commit }}
         shell: bash
         run: |
           set -euo pipefail
@@ -143,6 +156,7 @@ jobs:
             -e BC250_PKGREL='${{ github.run_number }}' \
             -e SOURCE_FINGERPRINT \
             -e NCT6687D_COMMIT \
+            -e CACHYOS_MESA_COMMIT \
             -e GITHUB_REPOSITORY='${{ github.repository }}' \
             -e GITHUB_SHA='${{ github.sha }}' \
             archlinux:base-devel \
@@ -154,7 +168,7 @@ jobs:
         if: steps.existing.outputs.build == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: linux-cachyos-bc250-${{ github.run_number }}
+          name: bc250-cachyos-repo-${{ github.run_number }}
           path: out/repo/
           if-no-files-found: error
           retention-days: 14

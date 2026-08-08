@@ -60,6 +60,9 @@ cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/PKGBUILD"
 cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/.SRCINFO"
 cp -- "$BUILD_DIR/nct6687.c" "$OUT_DIR/nct6687.c"
 cp -- "$BUILD_DIR/0003-nct6687d-hwmon.patch" "$OUT_DIR/0003-nct6687d-hwmon.patch"
+cp -- "$BUILD_DIR/0004-gfx1013-mmio-pasid-route.patch" "$OUT_DIR/0004-gfx1013-mmio-pasid-route.patch"
+cp -- "$BUILD_DIR/0005-gfx1013-compute-gfxoff-guard.patch" "$OUT_DIR/0005-gfx1013-compute-gfxoff-guard.patch"
+cp -- "$BUILD_DIR/0006-gfx1013-scoped-pasid-type0.patch" "$OUT_DIR/0006-gfx1013-scoped-pasid-type0.patch"
 
 srcinfo_value() {
     local key="$1"
@@ -137,7 +140,8 @@ cat > "$OUT_DIR/RELEASE_NOTES.md" <<EOF_NOTES
 - Version: \`${pkgver}-${pkgrel}\`
 - ISA baseline: **x86-64-v3** (CachyOS \`${PROCESSOR_OPT}\`)
 - CPU tuning: **Zen 2** (\`KCFLAGS=-mtune=${CPU_TUNE}\`)
-- Patches: BC-250 6/8-core telemetry, GPU activity, safe GFXCLK fallback, and Cyan Skillfish DP audio quirk
+- Patches: BC-250 6/8-core telemetry, GPU activity, safe GFXCLK fallback, Cyan Skillfish DP audio quirk, and GFX1013 compute/PASID stability fixes
+- GFX1013 fixes: MMIO PASID TLB routing, compute GFXOFF guard, and scoped PASID type-0 invalidation
 - Extra hwmon module: \`nct6687.ko\` from Fred78290/nct6687d commit \`${NCT6687D_COMMIT}\`
 - Conflicting upstream module: \`nct6683\` disabled in this kernel configuration
 
@@ -148,7 +152,10 @@ EOF_NOTES
 printf '%s — %s-%s' "$pkgbase" "$pkgver" "$pkgrel" > "$OUT_DIR/release-title.txt"
 sha256sum ./*.pkg.tar.zst ./*.db ./*.db.tar.zst ./*.files ./*.files.tar.zst \
     PKGBUILD config .SRCINFO build-info.env nct6687.c \
-    0003-nct6687d-hwmon.patch > SHA256SUMS
+    0003-nct6687d-hwmon.patch \
+    0004-gfx1013-mmio-pasid-route.patch \
+    0005-gfx1013-compute-gfxoff-guard.patch \
+    0006-gfx1013-scoped-pasid-type0.patch > SHA256SUMS
 
 printf '==> Repository generated in %s\n' "$OUT_DIR"
 ls -lh "$OUT_DIR"

@@ -1,9 +1,10 @@
-# BC-250 CachyOS kernel repository
+# BC-250 CachyOS kernel + Mesa repository
 
-[![Build and publish BC-250 CachyOS kernel](https://github.com/MastaG/linux-cachyos-bc250/actions/workflows/build-release.yml/badge.svg)](https://github.com/MastaG/linux-cachyos-bc250/actions/workflows/build-release.yml)
+[![Build and publish BC-250 CachyOS kernel and Mesa](https://github.com/MastaG/linux-cachyos-bc250/actions/workflows/build-release.yml/badge.svg)](https://github.com/MastaG/linux-cachyos-bc250/actions/workflows/build-release.yml)
 
-This repository builds a BC-250-specific CachyOS kernel and publishes it as a
-fixed GitHub Release that also acts as a pacman repository.
+This repository builds a BC-250-specific CachyOS kernel plus a patched CachyOS
+Mesa package set and publishes both through the same fixed GitHub Release / pacman
+repository.
 
 Project: <https://github.com/MastaG/linux-cachyos-bc250>
 
@@ -42,7 +43,11 @@ numeric release, so `7.2.0` upgrades the installed `7.2.rcX` package normally.
 - Safe GFX clock fallback: the 8-core layout never interprets
   `C0Residency[6]` as `GfxclkFrequency`
 - Cyan Skillfish DisplayPort audio quirk through `ignore_dpref_ss`
+- GFX1013/BC-250 PASID TLB flush routing through MMIO for sustained KFD workloads
+- GFX1013/BC-250 compute GFXOFF guard while KFD compute is active
+- GFX1013/BC-250 scoped PASID type-0 invalidation path
 - Extended `nct6687` hwmon/PWM driver, built as a normal kernel module
+- Mesa/RADV GFX1013 compute-queue enablement and ACE dispatch workaround
 
 ## NCT6687D hardware-monitoring module
 
@@ -89,6 +94,53 @@ printf '%s\n' 'nct6687' | sudo tee /etc/modules-load.d/nct6687.conf >/dev/null
 
 Because it remains a module, parameters can be changed without rebuilding the
 kernel and a problematic driver can be unloaded with `sudo modprobe -r nct6687`.
+
+## Patched CachyOS Mesa
+
+The same workflow also resolves the latest commit of
+[`CachyOS/CachyOS-PKGBUILDS`](https://github.com/CachyOS/CachyOS-PKGBUILDS)
+`master`, downloads `mesa/mesa/PKGBUILD` plus its local
+`gamescope-fps-limiter.patch`, and pins both to that exact commit for the build.
+The upstream Mesa `pkgver` and `epoch` are left unchanged; the GitHub Actions run
+number is appended to `pkgrel`, for example:
+
+```text
+26.1.6-1 -> 26.1.6-1.42
+```
+
+Only this Mesa patch is currently added to the downloaded PKGBUILD and built:
+
+```text
+patches/mesa/0001-gfx1013-compute-queue-fix.patch
+```
+
+It exposes the GFX1013 ACE compute queue, fixes the reported GFX10.1 IP minor
+version, and enables the async-compute threadgroup workaround. It is intended to
+be used together with the GFX1013 kernel compute/PASID patches shipped by this
+repository.
+
+These two patches are already rebased and kept in the repository, but are
+**not applied to the Mesa package yet**:
+
+```text
+patches/mesa/0002-gfx1013-mesh-task-shaders.patch
+patches/mesa/0003-gfx1013-taskmesh-queries.patch
+```
+
+They remain disabled until the mesh/task-shader work is ready to be enabled.
+The workflow still publishes them as release assets for review and testing.
+
+To pin the Mesa packaging source temporarily, set the GitHub repository variable
+`CACHYOS_MESA_REF` to a full 40-character commit hash. When unset, the workflow
+resolves `refs/heads/master` at the start of each run.
+
+The Mesa split packages are added to the same `bc250-cachyos` pacman repository
+as the kernel. To explicitly select the patched RADV packages from this
+repository, use for example:
+
+```bash
+sudo pacman -S bc250-cachyos/mesa bc250-cachyos/vulkan-radeon
+```
 
 ## CPU optimization
 
@@ -194,10 +246,11 @@ containers.
 
 ## Automatic updates
 
-A scheduled workflow checks the selected upstream PKGBUILD and config daily.
-The fingerprint also includes the BC-250 patches, package name, CPU target,
-build scripts, and the exact `nct6687d` source commit. An unchanged source is
-skipped.
+A scheduled workflow checks the selected kernel PKGBUILD/config and the CachyOS
+Mesa packaging source daily. The fingerprint also includes the BC-250 kernel and
+Mesa patches, package name, CPU target, build scripts, the exact `nct6687d`
+source commit, and the exact CachyOS Mesa packaging commit. An unchanged source
+is skipped.
 
 New builds replace the assets under the fixed `repo` tag, so normal updates are
 enough:
@@ -215,10 +268,14 @@ Each successful build publishes:
 
 - `linux-cachyos-bc250-*.pkg.tar.zst`
 - `linux-cachyos-bc250-headers-*.pkg.tar.zst`
+- all split packages produced by the CachyOS Mesa PKGBUILD, including `mesa` and `vulkan-radeon`
 - `bc250-cachyos.db` and `bc250-cachyos.files`
 - compressed repository databases
-- `PKGBUILD`, `config`, and `.SRCINFO`
+- kernel `PKGBUILD`, `config`, and `.SRCINFO`
+- `mesa-PKGBUILD` and `mesa.SRCINFO`
 - the exact fetched `nct6687.c` and its Kconfig/Makefile integration patch
+- the three GFX1013 compute/PASID kernel patches
+- all three rebased GFX1013 Mesa patches (only Mesa patch 0001 is applied)
 - `SHA256SUMS` and `build-info.env`
 
 The release title and notes read `pkgbase`, `pkgver`, and `pkgrel` from
@@ -238,29 +295,26 @@ workflow.
 
 ## Local build
 
-On an Arch/CachyOS system with the normal build dependencies:
+On an Arch/CachyOS system with the normal build dependencies, build the kernel
+first and then add Mesa to the same repository directory:
 
 ```bash
-CACHYOS_SOURCE_VARIANT=linux-cachyos-rc \
-BC250_PKGREL=1 \
-./scripts/build-package.sh
+CACHYOS_SOURCE_VARIANT=linux-cachyos-rc BC250_PKGREL=1 ./scripts/build-package.sh
+MESA_PKGREL=1 ./scripts/build-mesa-package.sh
 ```
 
-To build from the stable source later:
-
-```bash
-CACHYOS_SOURCE_VARIANT=linux-cachyos \
-BC250_PKGREL=1 \
-./scripts/build-package.sh
-```
+To build the kernel from the stable source later, replace `linux-cachyos-rc` with
+`linux-cachyos`. Both preparation scripts resolve their moving upstream sources
+to exact commits before building.
 
 The generated repository is written to `out/repo/`.
 
 ## Patch behavior
 
-Patch application is deliberately strict. When a future CachyOS source update
-makes a hunk incompatible, `makepkg` stops during `prepare()` instead of
-silently publishing an unverified kernel.
+The rebased kernel and Mesa patches are verified against their supplied source
+snapshots with `patch --fuzz=0`. If a future upstream update makes a hunk
+incompatible, the build should stop during `prepare()` instead of publishing an
+unreviewed forward-port.
 
 ## Credits
 
