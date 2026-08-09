@@ -20,7 +20,10 @@ Mesa packages on CachyOS or Arch Linux, these are the basic steps.
 On CachyOS, run this one-liner once:
 
 ```bash
-sudo sed -i -e '/^\[bc250-cachyos\]$/,/^Server = https:\/\/github\.com\/MastaG\/linux-cachyos-bc250\/releases\/download\/repo$/d' -e '/^\[cachyos-v3\]$/i [bc250-cachyos]\nSigLevel = Optional TrustAll\nServer = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo\n' /etc/pacman.conf
+sudo sed -i \
+  -e '/^[[:space:]]*\[bc250-cachyos\][[:space:]]*$/,/^[[:space:]]*Server[[:space:]]*=[[:space:]]*https:\/\/github\.com\/MastaG\/linux-cachyos-bc250\/releases\/download\/repo[[:space:]]*$/d' \
+  -e '/^[[:space:]]*\[cachyos-v3\][[:space:]]*$/i [bc250-cachyos]\nSigLevel = Optional TrustAll\nServer = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo\n' \
+  /etc/pacman.conf
 ```
 
 The command is safe to use if you previously added this repository with the old
