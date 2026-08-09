@@ -267,7 +267,10 @@ On CachyOS, this one-liner removes an older copy of the block if present and
 reinserts it immediately above `[cachyos-v3]`:
 
 ```bash
-sudo sed -i -e '/^\[bc250-cachyos\]$/,/^Server = https:\/\/github\.com\/MastaG\/linux-cachyos-bc250\/releases\/download\/repo$/d' -e '/^\[cachyos-v3\]$/i [bc250-cachyos]\nSigLevel = Optional TrustAll\nServer = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo\n' /etc/pacman.conf
+sudo sed -i \
+  -e '/^[[:space:]]*\[bc250-cachyos\][[:space:]]*$/,/^[[:space:]]*Server[[:space:]]*=[[:space:]]*https:\/\/github\.com\/MastaG\/linux-cachyos-bc250\/releases\/download\/repo[[:space:]]*$/d' \
+  -e '/^[[:space:]]*\[cachyos-v3\][[:space:]]*$/i [bc250-cachyos]\nSigLevel = Optional TrustAll\nServer = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo\n' \
+  /etc/pacman.conf
 ```
 
 Refresh the databases and verify the repository:
