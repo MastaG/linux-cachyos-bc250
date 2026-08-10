@@ -131,7 +131,6 @@ Pacman's version comparison treats an `rc` version as older than the final numer
 - GPU activity reporting through `gpu_busy_percent` and GPU Metrics
 - Safe GFX clock fallback: the 8-core layout never interprets
   `C0Residency[6]` as `GfxclkFrequency`
-- Cyan Skillfish DisplayPort audio quirk through `ignore_dpref_ss`
 - GFX1013/BC-250 PASID TLB invalidation fix: MMIO routing plus the scoped PASID type-0 path, merged into one v33 patch
 - GFX1013/BC-250 compute GFXOFF guard while KFD compute is active
 - Extended `nct6687` hwmon/PWM driver, built as a normal kernel module
@@ -503,7 +502,6 @@ If future upstream Mesa changes make the active patch incompatible, `makepkg` st
   See: https://github.com/keyboardspecialist/bc250-steamos/tree/master/bc250-audio-fix
 - higorprado / higorevop - For porting the telemetry patches to linux 7.x.  
   See: https://github.com/higorprado/bc250-8core-telemetry-report
-- Trov - For the proper DP audio fix (posted on Discord and sent to LKML)
 - DryhoppedIPA - For his fixes for the amdgpu kernel and mesa drivers
   See: https://github.com/DryhoppedIPA/bc250-gfx1013-fix
 

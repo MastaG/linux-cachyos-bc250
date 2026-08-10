@@ -153,7 +153,7 @@ cat > "$OUT_DIR/RELEASE_NOTES.md" <<EOF_NOTES
 - Version: \`${pkgver}-${pkgrel}\`
 - ISA baseline: **x86-64-v3** (CachyOS \`${PROCESSOR_OPT}\`)
 - CPU tuning: **Zen 2** (\`KCFLAGS=-mtune=${CPU_TUNE}\`)
-- Patches: BC-250 6/8-core telemetry, GPU activity, safe GFXCLK fallback, Cyan Skillfish DP audio quirk, and GFX1013 compute/PASID stability fixes
+- Patches: BC-250 6/8-core telemetry, GPU activity, safe GFXCLK fallback, and GFX1013 compute/PASID stability fixes
 - GFX1013 fixes: merged PASID TLB invalidation handling (MMIO routing + scoped type-0 path) and compute GFXOFF guard
 - Extra hwmon module: \`nct6687.ko\` from Fred78290/nct6687d commit \`${NCT6687D_COMMIT}\`
 - Conflicting upstream module: \`nct6683\` disabled in this kernel configuration
