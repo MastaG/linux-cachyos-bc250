@@ -27,12 +27,6 @@ done
 
 if [[ "$BUILD_KERNEL" == true ]]; then
     : "${NCT6687D_COMMIT:?NCT6687D_COMMIT is required when BUILD_KERNEL=true}"
-    # build-package.sh starts a fresh out/repo. Never allow that to discard
-    # unchanged Mesa components: a kernel rebuild must repopulate all of them.
-    [[ "$BUILD_MESA" == true && "$BUILD_LIB32_MESA" == true && "$BUILD_MESA_GIT" == true ]] || {
-        printf 'ERROR: kernel rebuild requires all Mesa components to rebuild too\n' >&2
-        exit 1
-    }
 fi
 
 # Stable lib32-mesa and mesa-git's lib32-mesa-git output need Arch's
@@ -60,7 +54,7 @@ if ! pacman -Si lib32-clang >/dev/null 2>&1; then
 fi
 
 pacman -S --noconfirm --needed archlinux-keyring
-pacman -Syu --noconfirm --needed base-devel curl git libarchive sudo
+pacman -Syu --noconfirm --needed base-devel ccache curl git libarchive sudo
 
 if ! id builder >/dev/null 2>&1; then
     useradd --create-home --shell /bin/bash builder
@@ -69,11 +63,29 @@ printf 'builder ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/builder
 chmod 0440 /etc/sudoers.d/builder
 chown -R builder:builder /workspace
 
+# Enable makepkg's native ccache integration. The cache itself lives in the
+# persistent Podman named volume mounted at /ccache, so clean build containers
+# and makepkg --cleanbuild do not discard compiled objects.
+: "${CCACHE_DIR:=/ccache}"
+: "${CCACHE_MAXSIZE:=30G}"
+: "${CCACHE_COMPILERCHECK:=content}"
+mkdir -p -- "$CCACHE_DIR"
+chown -R builder:builder "$CCACHE_DIR"
+sed -i 's/!ccache/ccache/g' /etc/makepkg.conf
+if ! grep -Eq '^[[:space:]]*BUILDENV=.*[([:space:]]ccache([[:space:]]|\))' /etc/makepkg.conf; then
+    printf 'ERROR: failed to enable ccache in /etc/makepkg.conf BUILDENV\n' >&2
+    grep -n '^[[:space:]]*BUILDENV=' /etc/makepkg.conf >&2 || true
+    exit 1
+fi
+
 # Do not pass CI or GITHUB_RUN_ID to makepkg. CachyOS otherwise intentionally
 # switches to smaller CI configurations instead of its normal package config.
 runuser -u builder -- env \
     HOME=/home/builder \
     PATH="$PATH" \
+    CCACHE_DIR="$CCACHE_DIR" \
+    CCACHE_MAXSIZE="$CCACHE_MAXSIZE" \
+    CCACHE_COMPILERCHECK="$CCACHE_COMPILERCHECK" \
     CACHYOS_SOURCE_VARIANT="$CACHYOS_SOURCE_VARIANT" \
     BUILD_KERNEL="$BUILD_KERNEL" \
     BUILD_MESA="$BUILD_MESA" \
@@ -96,6 +108,10 @@ runuser -u builder -- env \
     GITHUB_SHA="${GITHUB_SHA:-unknown}" \
     bash -c '
         set -Eeuo pipefail
+        ccache -M "$CCACHE_MAXSIZE" >/dev/null
+        echo "==> ccache: persistent cache at $CCACHE_DIR (max $CCACHE_MAXSIZE)"
+        ccache -z >/dev/null
+        trap '''echo "==> ccache statistics for this build"; ccache -s || true''' EXIT
         if [[ "$BUILD_KERNEL" == true ]]; then
             /workspace/scripts/build-package.sh
         else

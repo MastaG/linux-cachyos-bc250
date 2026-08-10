@@ -10,6 +10,8 @@ BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build/${CACHYOS_SOURCE_VARIANT}}"
 "${ROOT_DIR}/scripts/prepare-pkgbuild.sh"
 # shellcheck disable=SC1091
 source "$BUILD_DIR/bc250-build.env"
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/scripts/repo-package-helpers.sh"
 
 cd -- "$BUILD_DIR"
 
@@ -26,8 +28,12 @@ makepkg --syncdeps --noconfirm --cleanbuild --clean --skippgpcheck
 makepkg --printsrcinfo > .SRCINFO
 
 OUT_DIR="${ROOT_DIR}/out/${OUT_CHANNEL}"
-rm -rf -- "$OUT_DIR"
 mkdir -p -- "$OUT_DIR"
+
+# The workflow seeds out/repo from the previous fixed release before any build.
+# Replace only the kernel component and preserve Mesa packages that did not
+# change. Both the kernel and headers share this pkgbase.
+remove_pkgbase_from_repo "$OUT_DIR" linux-cachyos-bc250
 
 shopt -s nullglob
 packages=("$BUILD_DIR"/*.pkg.tar.zst)

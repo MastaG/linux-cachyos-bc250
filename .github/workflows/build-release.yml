@@ -209,14 +209,6 @@ jobs:
             build_mesa_git=true
           fi
 
-          # build-package.sh creates a fresh out/repo. If the kernel changes,
-          # repopulate every Mesa component in that fresh repository.
-          if [[ "$build_kernel" == true ]]; then
-            build_mesa=true
-            build_lib32_mesa=true
-            build_mesa_git=true
-          fi
-
           any=false
           if [[ "$build_kernel" == true || "$build_mesa" == true || "$build_lib32_mesa" == true || "$build_mesa_git" == true ]]; then
             any=true
@@ -233,73 +225,83 @@ jobs:
           echo "Build lib32-mesa: $build_lib32_mesa"
           echo "Build mesa-git:   $build_mesa_git"
 
-      - name: Seed previous repository for partial build
-        if: steps.build.outputs.any == 'true' && steps.build.outputs.kernel != 'true'
+      - name: Seed previous repository
+        if: steps.build.outputs.any == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          BUILD_KERNEL: ${{ steps.build.outputs.kernel }}
         shell: bash
         run: |
           set -euo pipefail
           rm -rf out/repo
           mkdir -p out/repo
 
-          if ! gh release download repo --dir out/repo; then
-            echo "::error title=Cannot preserve existing packages::A partial build needs the previous fixed repo release, but it could not be downloaded."
-            exit 1
+          if gh release view repo >/dev/null 2>&1; then
+            if ! gh release download repo --dir out/repo; then
+              echo "::error title=Cannot preserve existing packages::The previous fixed repo release exists, but it could not be downloaded."
+              exit 1
+            fi
+            echo "Seeded out/repo from the previous fixed release."
+          else
+            echo "No previous fixed release exists; starting a new repository."
           fi
 
-          kernel_pkg="$(find out/repo -maxdepth 1 -type f -name 'linux-cachyos-bc250-*.pkg.tar.zst' ! -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' -print -quit)"
-          headers_pkg="$(find out/repo -maxdepth 1 -type f -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' -print -quit)"
-          if [[ -z "$kernel_pkg" || -z "$headers_pkg" ]]; then
-            echo "::error title=Incomplete previous release::Cannot do a partial publication without the previous kernel and headers."
-            exit 1
-          fi
-
-          # Releases created by the pre-componentized workflow do not have
-          # kernel-info.env yet.  Its old build-info.env contains the same
-          # kernel metadata, so migrate it in-place on the first partial run.
-          if [[ ! -f out/repo/kernel-info.env ]]; then
-            legacy=out/repo/build-info.env
-            if [[ ! -f "$legacy" ]]; then
-              echo "::error title=Missing kernel metadata::Previous release has neither kernel-info.env nor legacy build-info.env."
+          # If the kernel is not being rebuilt, a previous kernel + headers are
+          # mandatory because they must survive this partial publication.
+          if [[ "$BUILD_KERNEL" != true ]]; then
+            kernel_pkg="$(find out/repo -maxdepth 1 -type f -name 'linux-cachyos-bc250-*.pkg.tar.zst' ! -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' -print -quit)"
+            headers_pkg="$(find out/repo -maxdepth 1 -type f -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' -print -quit)"
+            if [[ -z "$kernel_pkg" || -z "$headers_pkg" ]]; then
+              echo "::error title=Incomplete previous release::Cannot do a partial publication without the previous kernel and headers."
               exit 1
             fi
 
-            legacy_value() {
-              sed -n "s/^$1=//p" "$legacy" | head -n1
-            }
+            # Releases created by the pre-componentized workflow do not have
+            # kernel-info.env yet. Its old build-info.env contains the same
+            # kernel metadata, so migrate it in-place on the first partial run.
+            if [[ ! -f out/repo/kernel-info.env ]]; then
+              legacy=out/repo/build-info.env
+              if [[ ! -f "$legacy" ]]; then
+                echo "::error title=Missing kernel metadata::Previous release has neither kernel-info.env nor legacy build-info.env."
+                exit 1
+              fi
 
-            source_variant="$(legacy_value CACHYOS_SOURCE_VARIANT)"
-            pkgbase="$(legacy_value PKGBASE)"
-            pkgver="$(legacy_value PKGVER)"
-            pkgrel="$(legacy_value PKGREL)"
-            processor_opt="$(legacy_value PROCESSOR_OPT)"
-            cpu_tune="$(legacy_value CPU_TUNE)"
-            nct_commit="$(legacy_value NCT6687D_COMMIT)"
-            nct_url="$(legacy_value NCT6687D_SOURCE_URL)"
+              legacy_value() {
+                sed -n "s/^$1=//p" "$legacy" | head -n1
+              }
 
-            if [[ -z "$source_variant" || -z "$pkgbase" || -z "$pkgver" || -z "$pkgrel" || -z "$processor_opt" || -z "$cpu_tune" || -z "$nct_commit" ]]; then
-              echo "::error title=Incomplete legacy kernel metadata::Cannot migrate the previous release to component metadata. Run a full kernel build after selecting a buildable kernel source."
-              exit 1
+              source_variant="$(legacy_value CACHYOS_SOURCE_VARIANT)"
+              pkgbase="$(legacy_value PKGBASE)"
+              pkgver="$(legacy_value PKGVER)"
+              pkgrel="$(legacy_value PKGREL)"
+              processor_opt="$(legacy_value PROCESSOR_OPT)"
+              cpu_tune="$(legacy_value CPU_TUNE)"
+              nct_commit="$(legacy_value NCT6687D_COMMIT)"
+              nct_url="$(legacy_value NCT6687D_SOURCE_URL)"
+
+              if [[ -z "$source_variant" || -z "$pkgbase" || -z "$pkgver" || -z "$pkgrel" || -z "$processor_opt" || -z "$cpu_tune" || -z "$nct_commit" ]]; then
+                echo "::error title=Incomplete legacy kernel metadata::Cannot migrate the previous release to component metadata. Run a full kernel build after selecting a buildable kernel source."
+                exit 1
+              fi
+
+              {
+                printf 'KERNEL_FINGERPRINT=legacy\n'
+                printf 'CACHYOS_SOURCE_VARIANT=%s\n' "$source_variant"
+                printf 'KERNEL_PKGBASE=%s\n' "$pkgbase"
+                printf 'KERNEL_PKGVER=%s\n' "$pkgver"
+                printf 'KERNEL_PKGREL=%s\n' "$pkgrel"
+                printf 'ISA_BASELINE=x86-64-v3\n'
+                printf 'PROCESSOR_OPT=%s\n' "$processor_opt"
+                printf 'CPU_TUNE=%s\n' "$cpu_tune"
+                printf 'KCFLAGS=-mtune=%s\n' "$cpu_tune"
+                printf 'NCT6687D_COMMIT=%s\n' "$nct_commit"
+                printf 'NCT6687D_SOURCE_URL=%s\n' "$nct_url"
+              } > out/repo/kernel-info.env
+              echo "Migrated legacy build-info.env to kernel-info.env for this partial publication."
             fi
-
-            {
-              printf 'KERNEL_FINGERPRINT=legacy\n'
-              printf 'CACHYOS_SOURCE_VARIANT=%s\n' "$source_variant"
-              printf 'KERNEL_PKGBASE=%s\n' "$pkgbase"
-              printf 'KERNEL_PKGVER=%s\n' "$pkgver"
-              printf 'KERNEL_PKGREL=%s\n' "$pkgrel"
-              printf 'ISA_BASELINE=x86-64-v3\n'
-              printf 'PROCESSOR_OPT=%s\n' "$processor_opt"
-              printf 'CPU_TUNE=%s\n' "$cpu_tune"
-              printf 'KCFLAGS=-mtune=%s\n' "$cpu_tune"
-              printf 'NCT6687D_COMMIT=%s\n' "$nct_commit"
-              printf 'NCT6687D_SOURCE_URL=%s\n' "$nct_url"
-            } > out/repo/kernel-info.env
-            echo "Migrated legacy build-info.env to kernel-info.env for this partial publication."
           fi
 
-          echo "Preserving previous packages for components that did not change."
+          echo "Existing package artifacts will be preserved unless their pkgbase is rebuilt."
 
       - name: Build changed Zen 2-tuned packages
         if: steps.build.outputs.any == 'true'
@@ -323,7 +325,11 @@ jobs:
           docker run --rm \
             --security-opt label=disable \
             -v "$GITHUB_WORKSPACE:/workspace" \
+            -v bc250-ccache:/ccache \
             -w /workspace \
+            -e CCACHE_DIR=/ccache \
+            -e CCACHE_MAXSIZE=30G \
+            -e CCACHE_COMPILERCHECK=content \
             -e CACHYOS_SOURCE_VARIANT='${{ steps.source.outputs.variant }}' \
             -e BUILD_KERNEL \
             -e BUILD_MESA \
