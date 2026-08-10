@@ -35,12 +35,31 @@ if [[ "$BUILD_KERNEL" == true ]]; then
     }
 fi
 
-# Stable lib32-mesa and mesa-git's lib32-mesa-git output need Arch's multilib repository inside the clean build container.
-if grep -q '^#\[multilib\][[:space:]]*$' /etc/pacman.conf; then
-    sed -i '/^#\[multilib\][[:space:]]*$/,/^#Include[[:space:]]*=[[:space:]]*\/etc\/pacman\.d\/mirrorlist[[:space:]]*$/s/^#//' /etc/pacman.conf
+# Stable lib32-mesa and mesa-git's lib32-mesa-git output need Arch's
+# multilib repository inside the clean build container.  Do not depend on
+# the image shipping a particular commented-out [multilib] template: current
+# and future archlinux:base-devel images may omit or reformat that block.
+if ! grep -Eq '^[[:space:]]*\[multilib\][[:space:]]*$' /etc/pacman.conf; then
+    cat >> /etc/pacman.conf <<'EOF_MULTILIB'
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+EOF_MULTILIB
 fi
 
-pacman -Sy --noconfirm archlinux-keyring
+# Refresh after enabling multilib and fail early with a useful error instead
+# of letting makepkg report dozens of unresolved lib32-* dependencies.
+pacman -Syy --noconfirm
+if ! pacman-conf --repo-list | grep -qx multilib; then
+    printf 'ERROR: Arch multilib repository is not enabled in /etc/pacman.conf\n' >&2
+    exit 1
+fi
+if ! pacman -Si lib32-clang >/dev/null 2>&1; then
+    printf 'ERROR: multilib is enabled but lib32-clang cannot be resolved\n' >&2
+    exit 1
+fi
+
+pacman -S --noconfirm --needed archlinux-keyring
 pacman -Syu --noconfirm --needed base-devel curl git libarchive sudo
 
 if ! id builder >/dev/null 2>&1; then

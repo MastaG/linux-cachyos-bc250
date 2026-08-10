@@ -1,7 +1,7 @@
 b917164015e4c27f8b2434ace3893506ad6835be835d34e7d2365ee236155b7d  ./.github/workflows/build-release.yml
 f73400982c1d738d5e332a0e01e401842604b65580efeba89e1dba7cb5b76f62  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-ef9e5fa9b0d3e98cb5e6b2bb11c5b04fc0f731a12252e0dad32b4c72336b8635  ./README.md
+9f86a78f6fdf8d71cae2134b0fb9a6389e93fb48d2b0adfd7f8c7b825f957186  ./README.md
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
 0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  ./pacman/stable.conf.example
@@ -20,7 +20,7 @@ d1c2b174f7f2c926ed3d3c80652e05e97bfc42931d455e6a41f3ef2e05ceade0  ./patches/mesa
 da2b8c0f94c769d4544001bd322e70f98421f778541bdf7fb067733b8fe86cb2  ./scripts/build-mesa-git-package.sh
 65f80b1e529d6b8838fc1cd9e3c0db7cdfbc568a5cfe9c4748c6e39338949e05  ./scripts/build-mesa-package.sh
 e56c737c9c78cebe1ad0b7044ec88d9cc2eaa03a4b3923bb87343ca8b4a4e49c  ./scripts/build-package.sh
-3a8c0030ae7b6de458b8e37bb04f7c7a4eefbe1b57ffd14e2be43d834e292909  ./scripts/ci-build.sh
+14938575b86288b2add6c3504b67dfeec8816b2b77d538645a81ac23947ee7f3  ./scripts/ci-build.sh
 c772b3a0b4029569d158e48690b9697f4d5fa5aa1cd5cbf827f71ea3d4d68f0e  ./scripts/finalize-repository.sh
 523eb8c5c897b7e50fe147180f3f2a8f4c0c8c7370af62ba3ae58ca4b212ee2a  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 38e3d529744cacccf77f8f08abfd0748780735f3f55fd1b93a6d8841d05d0ae6  ./scripts/prepare-mesa-git-pkgbuild.sh

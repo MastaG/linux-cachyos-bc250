@@ -410,6 +410,7 @@ bc250
 
 It expects a Docker-compatible CLI/API.  
 The tested arrangement is a GitHub runner in Podman with the rootful Podman socket mounted as `/var/run/docker.sock`.  
+The clean Arch build container enables the official `[multilib]` repository explicitly before building `lib32-mesa` or the 32-bit half of `mesa-git`.  
 The workflow intentionally contains no global `docker system prune`, so it will not remove unrelated host images or containers.
 
 ## Automatic updates
