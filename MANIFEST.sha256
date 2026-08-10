@@ -20,7 +20,7 @@ d1c2b174f7f2c926ed3d3c80652e05e97bfc42931d455e6a41f3ef2e05ceade0  ./patches/mesa
 da2b8c0f94c769d4544001bd322e70f98421f778541bdf7fb067733b8fe86cb2  ./scripts/build-mesa-git-package.sh
 65f80b1e529d6b8838fc1cd9e3c0db7cdfbc568a5cfe9c4748c6e39338949e05  ./scripts/build-mesa-package.sh
 fcd0ec464dab29ad56e46ba2639df547cbcee8d7086fbf1ac443fa4f5bc187e6  ./scripts/build-package.sh
-6cfd3c2e806f955dcbde3bfa716aa1e01f9380c01cf0f16554abb149a12536c7  ./scripts/ci-build.sh
+14adf1c217e802590545784e944300b6b9bda3d87f0420b9bd659eaf7f239e40  ./scripts/ci-build.sh
 c772b3a0b4029569d158e48690b9697f4d5fa5aa1cd5cbf827f71ea3d4d68f0e  ./scripts/finalize-repository.sh
 523eb8c5c897b7e50fe147180f3f2a8f4c0c8c7370af62ba3ae58ca4b212ee2a  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 38e3d529744cacccf77f8f08abfd0748780735f3f55fd1b93a6d8841d05d0ae6  ./scripts/prepare-mesa-git-pkgbuild.sh

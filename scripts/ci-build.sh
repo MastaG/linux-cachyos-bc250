@@ -111,7 +111,11 @@ runuser -u builder -- env \
         ccache -M "$CCACHE_MAXSIZE" >/dev/null
         echo "==> ccache: persistent cache at $CCACHE_DIR (max $CCACHE_MAXSIZE)"
         ccache -z >/dev/null
-        trap '''echo "==> ccache statistics for this build"; ccache -s || true''' EXIT
+        _ccache_stats() {
+            echo "==> ccache statistics for this build"
+            ccache -s || true
+        }
+        trap _ccache_stats EXIT
         if [[ "$BUILD_KERNEL" == true ]]; then
             /workspace/scripts/build-package.sh
         else
