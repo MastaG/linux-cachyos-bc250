@@ -50,13 +50,11 @@ NCT6687D_SOURCE_URL="https://raw.githubusercontent.com/Fred78290/nct6687d/${NCT6
 TELEMETRY_PATCH="${ROOT_DIR}/patches/0001-bc250-8core-telemetry-gpu-activity.patch"
 AUDIO_PATCH="${ROOT_DIR}/patches/0002-bc250-audio.patch"
 NCT6687D_PATCH="${ROOT_DIR}/patches/0003-nct6687d-hwmon.patch"
-GFX1013_MMIO_PASID_PATCH="${ROOT_DIR}/patches/0004-gfx1013-mmio-pasid-route.patch"
+GFX1013_PASID_TLB_PATCH="${ROOT_DIR}/patches/0004-gfx1013-pasid-tlb-invalidation.patch"
 GFX1013_GFXOFF_GUARD_PATCH="${ROOT_DIR}/patches/0005-gfx1013-compute-gfxoff-guard.patch"
-GFX1013_SCOPED_PASID_PATCH="${ROOT_DIR}/patches/0006-gfx1013-scoped-pasid-type0.patch"
 
 for file in "$TELEMETRY_PATCH" "$AUDIO_PATCH" "$NCT6687D_PATCH" \
-    "$GFX1013_MMIO_PASID_PATCH" "$GFX1013_GFXOFF_GUARD_PATCH" \
-    "$GFX1013_SCOPED_PASID_PATCH"; do
+    "$GFX1013_PASID_TLB_PATCH" "$GFX1013_GFXOFF_GUARD_PATCH"; do
     [[ -f "$file" ]] || {
         printf 'ERROR: missing patch: %s\n' "$file" >&2
         exit 1
@@ -76,32 +74,28 @@ curl -fL --retry 5 --retry-all-errors -o "$BUILD_DIR/nct6687.c" "$NCT6687D_SOURC
 cp -- "$TELEMETRY_PATCH"              "$BUILD_DIR/$(basename "$TELEMETRY_PATCH")"
 cp -- "$AUDIO_PATCH"                  "$BUILD_DIR/$(basename "$AUDIO_PATCH")"
 cp -- "$NCT6687D_PATCH"               "$BUILD_DIR/$(basename "$NCT6687D_PATCH")"
-cp -- "$GFX1013_MMIO_PASID_PATCH"     "$BUILD_DIR/$(basename "$GFX1013_MMIO_PASID_PATCH")"
+cp -- "$GFX1013_PASID_TLB_PATCH"      "$BUILD_DIR/$(basename "$GFX1013_PASID_TLB_PATCH")"
 cp -- "$GFX1013_GFXOFF_GUARD_PATCH"   "$BUILD_DIR/$(basename "$GFX1013_GFXOFF_GUARD_PATCH")"
-cp -- "$GFX1013_SCOPED_PASID_PATCH"   "$BUILD_DIR/$(basename "$GFX1013_SCOPED_PASID_PATCH")"
 
 TELEMETRY_NAME="$(basename "$TELEMETRY_PATCH")"
 AUDIO_NAME="$(basename "$AUDIO_PATCH")"
 NCT6687D_PATCH_NAME="$(basename "$NCT6687D_PATCH")"
-GFX1013_MMIO_PASID_NAME="$(basename "$GFX1013_MMIO_PASID_PATCH")"
+GFX1013_PASID_TLB_NAME="$(basename "$GFX1013_PASID_TLB_PATCH")"
 GFX1013_GFXOFF_GUARD_NAME="$(basename "$GFX1013_GFXOFF_GUARD_PATCH")"
-GFX1013_SCOPED_PASID_NAME="$(basename "$GFX1013_SCOPED_PASID_PATCH")"
 NCT6687D_SOURCE_NAME="nct6687.c"
 TELEMETRY_B2SUM="$(b2sum "$TELEMETRY_PATCH" | awk '{print $1}')"
 AUDIO_B2SUM="$(b2sum "$AUDIO_PATCH" | awk '{print $1}')"
 NCT6687D_PATCH_B2SUM="$(b2sum "$NCT6687D_PATCH" | awk '{print $1}')"
-GFX1013_MMIO_PASID_B2SUM="$(b2sum "$GFX1013_MMIO_PASID_PATCH" | awk '{print $1}')"
+GFX1013_PASID_TLB_B2SUM="$(b2sum "$GFX1013_PASID_TLB_PATCH" | awk '{print $1}')"
 GFX1013_GFXOFF_GUARD_B2SUM="$(b2sum "$GFX1013_GFXOFF_GUARD_PATCH" | awk '{print $1}')"
-GFX1013_SCOPED_PASID_B2SUM="$(b2sum "$GFX1013_SCOPED_PASID_PATCH" | awk '{print $1}')"
 NCT6687D_SOURCE_B2SUM="$(b2sum "$BUILD_DIR/nct6687.c" | awk '{print $1}')"
 
 python3 - "$BUILD_DIR/PKGBUILD" "$CUSTOM_SUFFIX" "$BC250_PKGREL" \
     "$TELEMETRY_NAME" "$TELEMETRY_B2SUM" \
     "$AUDIO_NAME" "$AUDIO_B2SUM" \
     "$NCT6687D_PATCH_NAME" "$NCT6687D_PATCH_B2SUM" \
-    "$GFX1013_MMIO_PASID_NAME" "$GFX1013_MMIO_PASID_B2SUM" \
+    "$GFX1013_PASID_TLB_NAME" "$GFX1013_PASID_TLB_B2SUM" \
     "$GFX1013_GFXOFF_GUARD_NAME" "$GFX1013_GFXOFF_GUARD_B2SUM" \
-    "$GFX1013_SCOPED_PASID_NAME" "$GFX1013_SCOPED_PASID_B2SUM" \
     "$NCT6687D_SOURCE_NAME" "$NCT6687D_SOURCE_B2SUM" <<'PY'
 from pathlib import Path
 import re

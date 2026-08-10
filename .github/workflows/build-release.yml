@@ -1,10 +1,10 @@
-name: Build and publish BC-250 CachyOS kernel and Mesa
+name: Build and publish BC-250 CachyOS kernel and Mesa packages
 
 on:
   workflow_dispatch:
     inputs:
       source:
-        description: Upstream CachyOS package used as source
+        description: Upstream CachyOS kernel package used as source
         required: true
         default: auto
         type: choice
@@ -13,7 +13,7 @@ on:
           - rc
           - stable
       force:
-        description: Rebuild even when the source fingerprint is unchanged
+        description: Rebuild all components even when their fingerprints are unchanged
         required: true
         default: false
         type: boolean
@@ -31,7 +31,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: bc250-kernel-release
+  group: bc250-repository-release
   cancel-in-progress: false
 
 jobs:
@@ -46,7 +46,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Select upstream source package
+      - name: Select upstream kernel source package
         id: source
         shell: bash
         env:
@@ -61,12 +61,8 @@ jobs:
           fi
 
           case "$selection" in
-            rc|linux-cachyos-rc)
-              variant=linux-cachyos-rc
-              ;;
-            stable|linux-cachyos)
-              variant=linux-cachyos
-              ;;
+            rc|linux-cachyos-rc) variant=linux-cachyos-rc ;;
+            stable|linux-cachyos) variant=linux-cachyos ;;
             *)
               echo "Unsupported source selection: $selection" >&2
               exit 1
@@ -74,16 +70,16 @@ jobs:
           esac
 
           echo "variant=$variant" >> "$GITHUB_OUTPUT"
-          echo "Using upstream source package: $variant"
+          echo "Using upstream kernel source package: $variant"
 
       - name: Guard RC kernel generation
-        id: kernel
+        id: kernel_guard
         shell: bash
         run: |
           set -euo pipefail
 
           variant='${{ steps.source.outputs.variant }}'
-          build=true
+          allowed=true
           reason=none
 
           if [[ "$variant" == linux-cachyos-rc ]]; then
@@ -97,20 +93,18 @@ jobs:
             fi
 
             echo "linux-cachyos-rc _major: $rc_major"
-
             if [[ "$(printf '%s\n' '7.3' "$rc_major" | sort -V | head -n1)" == '7.3' ]]; then
-              build=false
+              allowed=false
               reason="linux-cachyos-rc is ${rc_major} (7.3 or newer)"
               echo "::warning title=BC-250 kernel build paused::${reason}. Keep the last 7.2 kernel packages and switch CACHYOS_SOURCE_VARIANT to linux-cachyos before building the kernel again."
             fi
           fi
 
-          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
           echo "reason=$reason" >> "$GITHUB_OUTPUT"
-          echo "Kernel build enabled: $build"
 
       - name: Resolve nct6687d source
-        if: steps.kernel.outputs.build == 'true'
+        if: steps.kernel_guard.outputs.allowed == 'true'
         id: nct6687d
         shell: bash
         env:
@@ -121,8 +115,8 @@ jobs:
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "Using nct6687d commit: $commit"
 
-      - name: Resolve CachyOS Mesa source
-        id: mesa
+      - name: Resolve CachyOS Mesa packaging source
+        id: mesa_packaging
         shell: bash
         env:
           CACHYOS_MESA_REF: ${{ vars.CACHYOS_MESA_REF }}
@@ -130,51 +124,117 @@ jobs:
           set -euo pipefail
           commit="$(./scripts/resolve-cachyos-mesa.sh)"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
-          echo "Using CachyOS Mesa commit: $commit"
+          echo "Using CachyOS-PKGBUILDS commit: $commit"
 
-      - name: Calculate source fingerprint
-        id: fingerprint
+      - name: Resolve Mesa Git source
+        id: mesa_git
+        shell: bash
+        env:
+          MESA_GIT_REF: ${{ vars.MESA_GIT_REF }}
+        run: |
+          set -euo pipefail
+          commit="$(./scripts/resolve-mesa-git.sh)"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "Using Mesa main commit: $commit"
+
+      - name: Calculate component fingerprints
+        id: fingerprints
         shell: bash
         env:
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
-          CACHYOS_MESA_COMMIT: ${{ steps.mesa.outputs.commit }}
+          CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
+          MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
         run: |
           set -euo pipefail
-          fingerprint="$(./scripts/source-fingerprint.sh '${{ steps.source.outputs.variant }}' '${{ steps.kernel.outputs.build }}')"
-          echo "value=$fingerprint" >> "$GITHUB_OUTPUT"
-          echo "Source fingerprint: $fingerprint"
 
-      - name: Check published repository
-        id: existing
+          if [[ '${{ steps.kernel_guard.outputs.allowed }}' == true ]]; then
+            kernel="$(./scripts/source-fingerprint.sh kernel '${{ steps.source.outputs.variant }}')"
+          else
+            kernel="$(printf '%s\n' 'guarded' '${{ steps.source.outputs.variant }}' '${{ steps.kernel_guard.outputs.reason }}' | sha256sum | awk '{print $1}')"
+          fi
+          mesa="$(./scripts/source-fingerprint.sh mesa '${{ steps.source.outputs.variant }}')"
+          lib32_mesa="$(./scripts/source-fingerprint.sh lib32-mesa '${{ steps.source.outputs.variant }}')"
+          mesa_git="$(./scripts/source-fingerprint.sh mesa-git '${{ steps.source.outputs.variant }}')"
+          aggregate="$(printf '%s\n' "$kernel" "$mesa" "$lib32_mesa" "$mesa_git" | sha256sum | awk '{print $1}')"
+
+          echo "kernel=$kernel" >> "$GITHUB_OUTPUT"
+          echo "mesa=$mesa" >> "$GITHUB_OUTPUT"
+          echo "lib32_mesa=$lib32_mesa" >> "$GITHUB_OUTPUT"
+          echo "mesa_git=$mesa_git" >> "$GITHUB_OUTPUT"
+          echo "aggregate=$aggregate" >> "$GITHUB_OUTPUT"
+
+          printf 'Kernel fingerprint:     %s\n' "$kernel"
+          printf 'Mesa fingerprint:       %s\n' "$mesa"
+          printf 'lib32-mesa fingerprint: %s\n' "$lib32_mesa"
+          printf 'mesa-git fingerprint:   %s\n' "$mesa_git"
+
+      - name: Determine components to build
+        id: build
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
+          KERNEL_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel }}
+          MESA_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa }}
+          LIB32_MESA_FINGERPRINT: ${{ steps.fingerprints.outputs.lib32_mesa }}
+          MESA_GIT_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa_git }}
         shell: bash
         run: |
           set -euo pipefail
-          build=true
+
           mkdir -p previous
-
-          if gh release download repo \
-              --pattern build-info.env --dir previous >/dev/null 2>&1; then
-            previous_fingerprint="$(sed -n 's/^SOURCE_FINGERPRINT=//p' previous/build-info.env | head -n1)"
-            if [[ "$previous_fingerprint" == "$SOURCE_FINGERPRINT" ]]; then
-              build=false
-            fi
+          info=previous/build-info.env
+          if ! gh release download repo --pattern build-info.env --dir previous >/dev/null 2>&1; then
+            : > "$info"
           fi
 
-          if [[ '${{ github.event_name }}' == 'workflow_dispatch' && '${{ inputs.force }}' == 'true' ]]; then
-            build=true
+          previous_value() {
+            sed -n "s/^$1=//p" "$info" | head -n1
+          }
+
+          build_kernel=false
+          build_mesa=false
+          build_lib32_mesa=false
+          build_mesa_git=false
+
+          if [[ '${{ steps.kernel_guard.outputs.allowed }}' == true && "$(previous_value KERNEL_FINGERPRINT)" != "$KERNEL_FINGERPRINT" ]]; then
+            build_kernel=true
           fi
-          if [[ '${{ github.event_name }}' == 'push' ]]; then
-            build=true
+          [[ "$(previous_value MESA_FINGERPRINT)" == "$MESA_FINGERPRINT" ]] || build_mesa=true
+          [[ "$(previous_value LIB32_MESA_FINGERPRINT)" == "$LIB32_MESA_FINGERPRINT" ]] || build_lib32_mesa=true
+          [[ "$(previous_value MESA_GIT_FINGERPRINT)" == "$MESA_GIT_FINGERPRINT" ]] || build_mesa_git=true
+
+          if [[ '${{ github.event_name }}' == workflow_dispatch && '${{ inputs.force }}' == true ]]; then
+            [[ '${{ steps.kernel_guard.outputs.allowed }}' == true ]] && build_kernel=true
+            build_mesa=true
+            build_lib32_mesa=true
+            build_mesa_git=true
           fi
 
-          echo "build=$build" >> "$GITHUB_OUTPUT"
-          echo "Build required: $build"
+          # build-package.sh creates a fresh out/repo. If the kernel changes,
+          # repopulate every Mesa component in that fresh repository.
+          if [[ "$build_kernel" == true ]]; then
+            build_mesa=true
+            build_lib32_mesa=true
+            build_mesa_git=true
+          fi
 
-      - name: Seed previous repository for Mesa-only build
-        if: steps.existing.outputs.build == 'true' && steps.kernel.outputs.build != 'true'
+          any=false
+          if [[ "$build_kernel" == true || "$build_mesa" == true || "$build_lib32_mesa" == true || "$build_mesa_git" == true ]]; then
+            any=true
+          fi
+
+          echo "kernel=$build_kernel" >> "$GITHUB_OUTPUT"
+          echo "mesa=$build_mesa" >> "$GITHUB_OUTPUT"
+          echo "lib32_mesa=$build_lib32_mesa" >> "$GITHUB_OUTPUT"
+          echo "mesa_git=$build_mesa_git" >> "$GITHUB_OUTPUT"
+          echo "any=$any" >> "$GITHUB_OUTPUT"
+
+          echo "Build kernel:     $build_kernel"
+          echo "Build Mesa:       $build_mesa"
+          echo "Build lib32-mesa: $build_lib32_mesa"
+          echo "Build mesa-git:   $build_mesa_git"
+
+      - name: Seed previous repository for partial build
+        if: steps.build.outputs.any == 'true' && steps.build.outputs.kernel != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -184,33 +244,79 @@ jobs:
           mkdir -p out/repo
 
           if ! gh release download repo --dir out/repo; then
-            echo "::error title=Cannot preserve kernel packages::The RC kernel guard is active, but no previous repo release could be downloaded. Switch CACHYOS_SOURCE_VARIANT to linux-cachyos and run the workflow again."
+            echo "::error title=Cannot preserve existing packages::A partial build needs the previous fixed repo release, but it could not be downloaded."
             exit 1
           fi
 
-          kernel_pkg="$(find out/repo -maxdepth 1 -type f \
-            -name 'linux-cachyos-bc250-*.pkg.tar.zst' \
-            ! -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' \
-            -print -quit)"
-          headers_pkg="$(find out/repo -maxdepth 1 -type f \
-            -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' \
-            -print -quit)"
-
-          if [[ -z "$kernel_pkg" || -z "$headers_pkg" || ! -f out/repo/build-info.env || ! -f out/repo/RELEASE_NOTES.md ]]; then
-            echo "::error title=Incomplete previous release::Cannot do a Mesa-only publication without retaining the previous kernel, headers, and metadata."
+          kernel_pkg="$(find out/repo -maxdepth 1 -type f -name 'linux-cachyos-bc250-*.pkg.tar.zst' ! -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' -print -quit)"
+          headers_pkg="$(find out/repo -maxdepth 1 -type f -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' -print -quit)"
+          if [[ -z "$kernel_pkg" || -z "$headers_pkg" ]]; then
+            echo "::error title=Incomplete previous release::Cannot do a partial publication without the previous kernel and headers."
             exit 1
           fi
 
-          echo "Kernel build is paused; retaining $(basename "$kernel_pkg") and $(basename "$headers_pkg")."
+          # Releases created by the pre-componentized workflow do not have
+          # kernel-info.env yet.  Its old build-info.env contains the same
+          # kernel metadata, so migrate it in-place on the first partial run.
+          if [[ ! -f out/repo/kernel-info.env ]]; then
+            legacy=out/repo/build-info.env
+            if [[ ! -f "$legacy" ]]; then
+              echo "::error title=Missing kernel metadata::Previous release has neither kernel-info.env nor legacy build-info.env."
+              exit 1
+            fi
 
-      - name: Build Zen 2-tuned packages and repository
-        if: steps.existing.outputs.build == 'true'
+            legacy_value() {
+              sed -n "s/^$1=//p" "$legacy" | head -n1
+            }
+
+            source_variant="$(legacy_value CACHYOS_SOURCE_VARIANT)"
+            pkgbase="$(legacy_value PKGBASE)"
+            pkgver="$(legacy_value PKGVER)"
+            pkgrel="$(legacy_value PKGREL)"
+            processor_opt="$(legacy_value PROCESSOR_OPT)"
+            cpu_tune="$(legacy_value CPU_TUNE)"
+            nct_commit="$(legacy_value NCT6687D_COMMIT)"
+            nct_url="$(legacy_value NCT6687D_SOURCE_URL)"
+
+            if [[ -z "$source_variant" || -z "$pkgbase" || -z "$pkgver" || -z "$pkgrel" || -z "$processor_opt" || -z "$cpu_tune" || -z "$nct_commit" ]]; then
+              echo "::error title=Incomplete legacy kernel metadata::Cannot migrate the previous release to component metadata. Run a full kernel build after selecting a buildable kernel source."
+              exit 1
+            fi
+
+            {
+              printf 'KERNEL_FINGERPRINT=legacy\n'
+              printf 'CACHYOS_SOURCE_VARIANT=%s\n' "$source_variant"
+              printf 'KERNEL_PKGBASE=%s\n' "$pkgbase"
+              printf 'KERNEL_PKGVER=%s\n' "$pkgver"
+              printf 'KERNEL_PKGREL=%s\n' "$pkgrel"
+              printf 'ISA_BASELINE=x86-64-v3\n'
+              printf 'PROCESSOR_OPT=%s\n' "$processor_opt"
+              printf 'CPU_TUNE=%s\n' "$cpu_tune"
+              printf 'KCFLAGS=-mtune=%s\n' "$cpu_tune"
+              printf 'NCT6687D_COMMIT=%s\n' "$nct_commit"
+              printf 'NCT6687D_SOURCE_URL=%s\n' "$nct_url"
+            } > out/repo/kernel-info.env
+            echo "Migrated legacy build-info.env to kernel-info.env for this partial publication."
+          fi
+
+          echo "Preserving previous packages for components that did not change."
+
+      - name: Build changed Zen 2-tuned packages
+        if: steps.build.outputs.any == 'true'
         env:
-          SOURCE_FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
+          SOURCE_FINGERPRINT: ${{ steps.fingerprints.outputs.aggregate }}
+          KERNEL_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel }}
+          MESA_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa }}
+          LIB32_MESA_FINGERPRINT: ${{ steps.fingerprints.outputs.lib32_mesa }}
+          MESA_GIT_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa_git }}
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
-          CACHYOS_MESA_COMMIT: ${{ steps.mesa.outputs.commit }}
-          BUILD_KERNEL: ${{ steps.kernel.outputs.build }}
-          KERNEL_GUARD_REASON: ${{ steps.kernel.outputs.reason }}
+          CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
+          MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
+          BUILD_KERNEL: ${{ steps.build.outputs.kernel }}
+          BUILD_MESA: ${{ steps.build.outputs.mesa }}
+          BUILD_LIB32_MESA: ${{ steps.build.outputs.lib32_mesa }}
+          BUILD_MESA_GIT: ${{ steps.build.outputs.mesa_git }}
+          KERNEL_GUARD_REASON: ${{ steps.kernel_guard.outputs.reason }}
         shell: bash
         run: |
           set -euo pipefail
@@ -220,11 +326,19 @@ jobs:
             -w /workspace \
             -e CACHYOS_SOURCE_VARIANT='${{ steps.source.outputs.variant }}' \
             -e BUILD_KERNEL \
+            -e BUILD_MESA \
+            -e BUILD_LIB32_MESA \
+            -e BUILD_MESA_GIT \
             -e KERNEL_GUARD_REASON \
             -e BC250_PKGREL='${{ github.run_number }}' \
             -e SOURCE_FINGERPRINT \
+            -e KERNEL_FINGERPRINT \
+            -e MESA_FINGERPRINT \
+            -e LIB32_MESA_FINGERPRINT \
+            -e MESA_GIT_FINGERPRINT \
             -e NCT6687D_COMMIT \
             -e CACHYOS_MESA_COMMIT \
+            -e MESA_GIT_COMMIT \
             -e GITHUB_REPOSITORY='${{ github.repository }}' \
             -e GITHUB_SHA='${{ github.sha }}' \
             archlinux:base-devel \
@@ -233,7 +347,7 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
 
       - name: Preserve workflow artifact
-        if: steps.existing.outputs.build == 'true'
+        if: steps.build.outputs.any == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: bc250-cachyos-repo-${{ github.run_number }}
@@ -242,7 +356,7 @@ jobs:
           retention-days: 14
 
       - name: Publish pacman repository release
-        if: steps.existing.outputs.build == 'true'
+        if: steps.build.outputs.any == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash

@@ -2,7 +2,8 @@
 
 [![Build and publish BC-250 CachyOS kernel and Mesa](https://github.com/MastaG/linux-cachyos-bc250/actions/workflows/build-release.yml/badge.svg)](https://github.com/MastaG/linux-cachyos-bc250/actions/workflows/build-release.yml)
 
-This repository builds a BC-250-specific CachyOS kernel plus a patched CachyOS Mesa package set and publishes both through the same fixed GitHub Release / pacman repository.
+This repository builds a BC-250-specific CachyOS kernel, patched stable Mesa and lib32-mesa package sets, and an optional patched mesa-git/lib32-mesa-git pair.  
+All packages are published through the same fixed GitHub Release / pacman repository.
 
 Project: <https://github.com/MastaG/linux-cachyos-bc250>
 
@@ -70,7 +71,8 @@ Install the BC-250 kernel and headers while doing a normal full system update:
 sudo pacman -Syu linux-cachyos-bc250 linux-cachyos-bc250-headers
 ```
 
-Because step 1 gives `[bc250-cachyos]` repository priority, pacman will also select this repository's newer patched `mesa`, `vulkan-radeon`, and other Mesa split packages automatically.  
+Because step 1 gives `[bc250-cachyos]` repository priority, pacman will also select this repository's newer patched `mesa`, `vulkan-radeon`, and installed `lib32-mesa` split packages automatically.  
+The optional `mesa-git` and `lib32-mesa-git` packages are **not** installed automatically; users must explicitly choose them instead of stable Mesa.  
 On a normal CachyOS Limine installation, installing the kernel also runs the Limine/mkinitcpio hooks, so the parameter added in step 3 is picked up automatically.
 
 ### 5. Reboot
@@ -130,9 +132,8 @@ Pacman's version comparison treats an `rc` version as older than the final numer
 - Safe GFX clock fallback: the 8-core layout never interprets
   `C0Residency[6]` as `GfxclkFrequency`
 - Cyan Skillfish DisplayPort audio quirk through `ignore_dpref_ss`
-- GFX1013/BC-250 PASID TLB flush routing through MMIO for sustained KFD workloads
+- GFX1013/BC-250 PASID TLB invalidation fix: MMIO routing plus the scoped PASID type-0 path, merged into one v33 patch
 - GFX1013/BC-250 compute GFXOFF guard while KFD compute is active
-- GFX1013/BC-250 scoped PASID type-0 invalidation path
 - Extended `nct6687` hwmon/PWM driver, built as a normal kernel module
 - Mesa/RADV GFX1013 compute-queue enablement and ACE dispatch workaround
 
@@ -204,7 +205,8 @@ patches/mesa/0003-gfx1013-taskmesh-queries.patch
 They remain disabled until the mesh/task-shader work is ready to be enabled.  
 The workflow still publishes them as release assets for review and testing.
 
-To pin the Mesa packaging source temporarily, set the GitHub repository variable `CACHYOS_MESA_REF` to a full 40-character commit hash.  
+To pin the CachyOS Mesa packaging source temporarily, set the GitHub repository variable `CACHYOS_MESA_REF` to a full 40-character commit hash.  
+The same pinned `CachyOS-PKGBUILDS` revision is used for stable Mesa, lib32-mesa, and the mesa-git packaging files.  
 When unset, the workflow resolves `refs/heads/master` at the start of each run.
 
 The Mesa split packages are added to the same `bc250-cachyos` pacman repository as the kernel.  
@@ -214,11 +216,72 @@ To explicitly select the patched RADV packages from this repository, use for exa
 sudo pacman -S bc250-cachyos/mesa bc250-cachyos/vulkan-radeon
 ```
 
+## Patched CachyOS lib32-mesa
+
+The repository also builds CachyOS `mesa/lib32-mesa/PKGBUILD` from the same pinned `CachyOS-PKGBUILDS` revision.  
+`lib32-mesa` uses the same stable Mesa release and the same active `0001-gfx1013-compute-queue-fix.patch` as the 64-bit stable Mesa packages.
+
+The workflow appends the same GitHub Actions run number to `pkgrel` and uses the same fixed BC-250 CPU target:
+
+```text
+-march=x86-64-v3 -mtune=znver2
+```
+
+All split packages produced by the CachyOS `lib32-mesa` PKGBUILD are published, including `lib32-mesa` and `lib32-vulkan-radeon`.  
+If the normal CachyOS versions are already installed, a regular `sudo pacman -Syu` upgrades them to the patched BC-250 builds because this repository has priority.
+
+## Optional patched CachyOS mesa-git
+
+The repository additionally publishes optional `mesa-git` and `lib32-mesa-git` packages based directly on CachyOS `mesa/mesa-git/PKGBUILD`.  
+The downloaded CachyOS `customization.cfg` is kept unchanged.  
+Its current upstream default is `_lib32=true`, so the same build produces both the 64-bit and 32-bit Git variants from the same Mesa source revision.
+
+The workflow resolves the current Mesa `main` commit before the build and pins that revision through the PKGBUILD's supported `mesa-userpatches/user.cfg` override.  
+This keeps `customization.cfg` itself identical to CachyOS while preventing Mesa `main` from moving halfway through a workflow run.
+
+Mesa main has moved since the stable 26.1.x source used by the original patches.  
+The repository therefore carries a separate rebased patch series under `patches/mesa-git/`.
+
+Only this rebased patch is active:
+
+```text
+patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
+```
+
+The GFX1013 IP minor-version correction from the stable patch is already present upstream in current Mesa main, so that hunk is intentionally absent from the Git patch.  
+The remaining ACE compute-queue exposure and async-compute threadgroup workaround are still applied.
+
+These rebased Git patches are published but remain disabled:
+
+```text
+patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
+patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
+```
+
+They remain disabled for the same reason as the stable variants: mesh/task shading can hard-hang GFX1013.  
+`0003` depends on `0002`.
+
+The upstream CachyOS package metadata is intentionally left alone.  
+In particular, this repository does **not** rename or add Mesa split-package aliases in `provides` or `conflicts`; `mesa-git` and `lib32-mesa-git` use the same package relationships as the CachyOS PKGBUILD.
+
+To switch both 64-bit and 32-bit Mesa to the Git build:
+
+```bash
+sudo pacman -S bc250-cachyos/mesa-git bc250-cachyos/lib32-mesa-git
+```
+
+Install both packages together on gaming systems so Steam/Wine 32-bit userspace uses the same Mesa Git revision as 64-bit applications.  
+The Git packages conflict with and provide the corresponding stable Mesa packages, so pacman can replace the installed stable set during the switch.  
+The separately published stable `lib32-mesa` packages remain available for users who stay on stable Mesa; they are not intended to be mixed with `lib32-mesa-git`.
+
+To pin Mesa Git temporarily, set the GitHub repository variable `MESA_GIT_REF` to a full 40-character Mesa commit hash.  
+When unset, the workflow resolves `refs/heads/main` from the upstream Mesa repository.
+
 ## CPU optimization
 
 The BC-250 uses Zen 2 CPU cores.  
-Both the kernel and Mesa builds are therefore targeted explicitly at the BC-250 instead of the CPU used by the GitHub Actions runner.  
-In particular, the Mesa build never relies on `-march=native`.
+The kernel, stable Mesa, lib32-mesa, and mesa-git builds are therefore targeted explicitly at the BC-250 instead of the CPU used by the GitHub Actions runner.  
+None of the Mesa builds relies on `-march=native`.
 
 ### Kernel
 
@@ -233,16 +296,17 @@ KCFLAGS=-mtune=znver2
 `generic_v3` keeps the kernel's supported x86-64-v3 ISA baseline and kernel configuration.  
 `-mtune=znver2` asks Clang to tune instruction scheduling and code generation for Zen 2 without changing that ISA baseline.
 
-### Mesa
+### Mesa, lib32-mesa, and mesa-git
 
-The downloaded CachyOS Mesa PKGBUILD is adjusted during the build so its C and C++ compiler flags end with:
+All three downloaded CachyOS Mesa PKGBUILDs are adjusted during the build so their C and C++ compiler flags end with:
 
 ```text
 -march=x86-64-v3 -mtune=znver2
 ```
 
 These flags are appended to the existing `CFLAGS` and `CXXFLAGS`, preserving the normal CachyOS/Arch optimization and hardening flags while making the final CPU target explicit.  
-Because the BC-250 target is set inside the generated PKGBUILD before `arch-meson` runs, a newer CPU on the GitHub Actions runner cannot cause Mesa to be built with `-march=native` for that host.
+The mesa-git PKGBUILD receives the same flags after its optional custom-optimization block, so both `mesa-git` and `lib32-mesa-git` are built with the BC-250 target.  
+A newer CPU on the GitHub Actions runner therefore cannot cause any of these packages to be built with `-march=native` for that host.
 
 ## Detailed installation on CachyOS or Arch Linux
 
@@ -351,13 +415,19 @@ The workflow intentionally contains no global `docker system prune`, so it will 
 
 ## Automatic updates
 
-A scheduled workflow checks the selected kernel PKGBUILD/config and the CachyOS Mesa packaging source daily.  
-While kernel building is enabled, the fingerprint also includes the BC-250 kernel patches, package name, CPU target, build scripts, and exact `nct6687d` source commit.  
-Mesa sources, Mesa patches, its BC-250 CPU target, and the exact CachyOS Mesa packaging commit are always tracked.  
-An unchanged source is skipped.
+The scheduled workflow checks four components independently: the kernel, stable Mesa, stable lib32-mesa, and mesa-git.  
+Each component has its own source fingerprint, so a new Mesa `main` commit normally rebuilds only the `mesa-git` component (both `mesa-git` and `lib32-mesa-git`) instead of rebuilding the kernel and stable Mesa packages every day.
 
-When the `linux-cachyos-rc` guard detects 7.3 or newer, kernel inputs are removed from the active fingerprint so later 7.3 RC changes do not cause pointless BC-250 kernel rebuilds.  
-Mesa changes can still trigger a Mesa-only publication; the workflow downloads the previous fixed release first, keeps its 7.2 kernel packages, replaces the old Mesa split packages, and regenerates the pacman repository database.
+The kernel fingerprint tracks the selected CachyOS kernel PKGBUILD/config, all BC-250 kernel patches, the CPU target, build scripts, and the exact `nct6687d` source commit.  
+The stable Mesa and lib32-mesa fingerprints track their own CachyOS packaging files plus the stable BC-250 Mesa patch set.  
+The mesa-git fingerprint additionally tracks the resolved upstream Mesa `main` commit and the separately rebased `patches/mesa-git/` series.
+
+For a partial update, the workflow downloads the previous fixed release, replaces only packages belonging to the changed `pkgbase`, keeps all unchanged packages, and then regenerates the pacman repository database.  
+On the first partial run after upgrading from the older single-fingerprint workflow, legacy kernel metadata in `build-info.env` is migrated automatically to the new per-component format.  
+A kernel rebuild starts a fresh repository, so all Mesa components are rebuilt in the same run to repopulate it completely.
+
+When the `linux-cachyos-rc` guard detects 7.3 or newer, kernel generation remains paused and the last 7.2 BC-250 kernel packages are retained.  
+Stable Mesa, lib32-mesa, and mesa-git can continue updating independently while the guard is active.
 
 New builds replace the assets under the fixed `repo` tag, so normal updates are enough:
 
@@ -373,18 +443,22 @@ Each successful build publishes:
 
 - `linux-cachyos-bc250-*.pkg.tar.zst`
 - `linux-cachyos-bc250-headers-*.pkg.tar.zst`
-- all split packages produced by the CachyOS Mesa PKGBUILD, including `mesa` and `vulkan-radeon`
+- all split packages produced by the stable CachyOS Mesa PKGBUILD, including `mesa` and `vulkan-radeon`
+- all split packages produced by the stable CachyOS lib32-mesa PKGBUILD, including `lib32-mesa` and `lib32-vulkan-radeon`
+- the optional `mesa-git-*.pkg.tar.zst` and `lib32-mesa-git-*.pkg.tar.zst` packages
 - `bc250-cachyos.db` and `bc250-cachyos.files`
 - compressed repository databases
 - kernel `PKGBUILD`, `config`, and `.SRCINFO`
-- `mesa-PKGBUILD` and `mesa.SRCINFO`
+- `mesa-PKGBUILD`, `mesa.SRCINFO`, `lib32-mesa-PKGBUILD`, and `lib32-mesa.SRCINFO`
+- `mesa-git-PKGBUILD`, unchanged `mesa-git-customization.cfg`, `mesa-git-user.cfg`, and `mesa-git.SRCINFO`
 - the exact fetched `nct6687.c` and its Kconfig/Makefile integration patch
-- the three GFX1013 compute/PASID kernel patches
-- all three rebased GFX1013 Mesa patches (only Mesa patch 0001 is applied)
-- `SHA256SUMS` and `build-info.env`
+- the two GFX1013 compute/PASID kernel patches (merged PASID TLB invalidation + compute GFXOFF guard)
+- all three stable GFX1013 Mesa patches and all three separately rebased Mesa-Git patches; only each series' `0001` is active
+- per-component metadata files plus `SHA256SUMS` and `build-info.env`
 
-The release title and notes read `pkgbase`, `pkgver`, and `pkgrel` from `.SRCINFO`.  
-Publication fails rather than creating incomplete metadata.
+Each component builder records the package metadata needed by the final repository step.  
+The finalizer rebuilds the pacman database, release notes, aggregate `build-info.env`, and checksums from the staged packages and per-component metadata.  
+Publication fails if required component metadata is missing instead of silently creating an incomplete repository.
 
 ## Package signing
 
@@ -399,22 +473,29 @@ Only use this repository when you trust this project and its workflow.
 
 ## Local build
 
-On an Arch/CachyOS system with the normal build dependencies, build the kernel first and then add Mesa to the same repository directory:
+The CI workflow is the recommended build path because it enables Arch multilib, creates a clean build user, and handles partial repository updates.  
+For manual testing, the component build scripts can also be run directly on an Arch/CachyOS system with their normal build dependencies available.
 
-```bash
-CACHYOS_SOURCE_VARIANT=linux-cachyos-rc BC250_PKGREL=1 ./scripts/build-package.sh
-MESA_PKGREL=1 ./scripts/build-mesa-package.sh
+The four package builders are:
+
+```text
+scripts/build-package.sh
+scripts/build-mesa-package.sh
+scripts/build-lib32-mesa-package.sh
+scripts/build-mesa-git-package.sh
 ```
 
-To build the kernel from the stable source later, replace `linux-cachyos-rc` with `linux-cachyos`.  
-Both preparation scripts resolve their moving upstream sources to exact commits before building.
+The Mesa preparation scripts resolve moving sources to exact commits when the corresponding commit environment variable is not supplied.  
+`mesa-git` is pinned to the resolved Mesa commit through the PKGBUILD-supported `mesa-userpatches/user.cfg` override before `makepkg` starts, while the downloaded CachyOS `customization.cfg` remains unchanged.
 
-The generated repository is written to `out/repo/`.
+After staging the desired components in `out/repo/`, `scripts/finalize-repository.sh` recreates the repository database, release metadata, and checksums.  
+In CI, component fingerprints and previous-release preservation are handled automatically.
 
 ## Patch behavior
 
-The rebased kernel and Mesa patches are verified against their supplied source snapshots with `patch --fuzz=0`.  
-If a future upstream update makes a hunk incompatible, the build should stop during `prepare()` instead of publishing an unreviewed forward-port.
+The stable Mesa and lib32-mesa packages share the stable GFX1013 patch series.  
+Mesa-Git has a separate series rebased against current Mesa main; the supplied snapshot is used to verify that all three Git patches apply cleanly in sequence.  
+If future upstream Mesa changes make the active patch incompatible, `makepkg` stops during `prepare()` instead of publishing an unreviewed forward-port.
 
 ## Credits
 

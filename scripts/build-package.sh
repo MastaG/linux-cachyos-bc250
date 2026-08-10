@@ -60,9 +60,8 @@ cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/PKGBUILD"
 cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/.SRCINFO"
 cp -- "$BUILD_DIR/nct6687.c" "$OUT_DIR/nct6687.c"
 cp -- "$BUILD_DIR/0003-nct6687d-hwmon.patch" "$OUT_DIR/0003-nct6687d-hwmon.patch"
-cp -- "$BUILD_DIR/0004-gfx1013-mmio-pasid-route.patch" "$OUT_DIR/0004-gfx1013-mmio-pasid-route.patch"
+cp -- "$BUILD_DIR/0004-gfx1013-pasid-tlb-invalidation.patch" "$OUT_DIR/0004-gfx1013-pasid-tlb-invalidation.patch"
 cp -- "$BUILD_DIR/0005-gfx1013-compute-gfxoff-guard.patch" "$OUT_DIR/0005-gfx1013-compute-gfxoff-guard.patch"
-cp -- "$BUILD_DIR/0006-gfx1013-scoped-pasid-type0.patch" "$OUT_DIR/0006-gfx1013-scoped-pasid-type0.patch"
 
 srcinfo_value() {
     local key="$1"
@@ -132,6 +131,20 @@ GITHUB_SHA=${GITHUB_SHA:-local}
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF_INFO
 
+cat > "$OUT_DIR/kernel-info.env" <<EOF_KERNEL
+KERNEL_FINGERPRINT=${KERNEL_FINGERPRINT:-unknown}
+CACHYOS_SOURCE_VARIANT=${CACHYOS_SOURCE_VARIANT}
+KERNEL_PKGBASE=${pkgbase}
+KERNEL_PKGVER=${pkgver}
+KERNEL_PKGREL=${pkgrel}
+ISA_BASELINE=x86-64-v3
+PROCESSOR_OPT=${PROCESSOR_OPT}
+CPU_TUNE=${CPU_TUNE}
+KCFLAGS=-mtune=${CPU_TUNE}
+NCT6687D_COMMIT=${NCT6687D_COMMIT}
+NCT6687D_SOURCE_URL=${NCT6687D_SOURCE_URL}
+EOF_KERNEL
+
 cat > "$OUT_DIR/RELEASE_NOTES.md" <<EOF_NOTES
 # BC-250 CachyOS kernel repository
 
@@ -141,7 +154,7 @@ cat > "$OUT_DIR/RELEASE_NOTES.md" <<EOF_NOTES
 - ISA baseline: **x86-64-v3** (CachyOS \`${PROCESSOR_OPT}\`)
 - CPU tuning: **Zen 2** (\`KCFLAGS=-mtune=${CPU_TUNE}\`)
 - Patches: BC-250 6/8-core telemetry, GPU activity, safe GFXCLK fallback, Cyan Skillfish DP audio quirk, and GFX1013 compute/PASID stability fixes
-- GFX1013 fixes: MMIO PASID TLB routing, compute GFXOFF guard, and scoped PASID type-0 invalidation
+- GFX1013 fixes: merged PASID TLB invalidation handling (MMIO routing + scoped type-0 path) and compute GFXOFF guard
 - Extra hwmon module: \`nct6687.ko\` from Fred78290/nct6687d commit \`${NCT6687D_COMMIT}\`
 - Conflicting upstream module: \`nct6683\` disabled in this kernel configuration
 
@@ -153,9 +166,8 @@ printf '%s — %s-%s' "$pkgbase" "$pkgver" "$pkgrel" > "$OUT_DIR/release-title.t
 sha256sum ./*.pkg.tar.zst ./*.db ./*.db.tar.zst ./*.files ./*.files.tar.zst \
     PKGBUILD config .SRCINFO build-info.env nct6687.c \
     0003-nct6687d-hwmon.patch \
-    0004-gfx1013-mmio-pasid-route.patch \
-    0005-gfx1013-compute-gfxoff-guard.patch \
-    0006-gfx1013-scoped-pasid-type0.patch > SHA256SUMS
+    0004-gfx1013-pasid-tlb-invalidation.patch \
+    0005-gfx1013-compute-gfxoff-guard.patch > SHA256SUMS
 
 printf '==> Repository generated in %s\n' "$OUT_DIR"
 ls -lh "$OUT_DIR"
