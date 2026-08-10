@@ -52,8 +52,7 @@ grep -Eq '^[[:space:]]*KERNEL_CMDLINE\[default\].*amdgpu\.sched_policy=2' /etc/d
 ```
 
 The `+=` form appends the parameter to the existing default Limine kernel command line instead of replacing it.  
-On a BC-250 system this means the parameter is also present if you boot another kernel that uses the default Limine command line.  
-You do **not** need to add `bc250.gfx1013_v33=1`; that parameter is only a marker used by the original GFX1013 installer scripts and is not used by this kernel or Mesa package.
+On a BC-250 system this means the parameter is also present if you boot another kernel that uses the default Limine command line.
 
 If you use another bootloader instead of Limine, add `amdgpu.sched_policy=2` to that bootloader's kernel command line instead.
 
@@ -286,8 +285,7 @@ grep -Eq '^[[:space:]]*KERNEL_CMDLINE\[default\].*amdgpu\.sched_policy=2' /etc/d
   sudo tee -a /etc/default/limine >/dev/null
 ```
 
-The `KERNEL_CMDLINE[default]+=` form appends the parameter without replacing the existing default command line.  
-The original project's `bc250.gfx1013_v33=1` marker is not required by this repository.
+The `KERNEL_CMDLINE[default]+=` form appends the parameter without replacing the existing default command line.
 
 Install the kernel and headers during a normal full upgrade:
 
