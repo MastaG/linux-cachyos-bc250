@@ -163,7 +163,7 @@ Both patch sets contain:
 
 - automatic 6-core / hybrid 8-core Cyan Skillfish SMU telemetry handling;
 - correct per-core telemetry for unlocked 8-core BC-250 systems;
-- GPU activity reporting through GPU Metrics;
+- GPU activity reporting through GPU Metrics and `GPU_LOAD`, with a 20 ms per-device cache to coalesce back-to-back polls;
 - safe GFX clock handling for the hybrid metrics layout;
 - the v33 merged GFX1013 PASID TLB invalidation fix;
 - the GFX1013 compute GFXOFF guard;
@@ -206,6 +206,8 @@ patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa/0003-gfx1013-taskmesh-queries.patch
 ```
 
+The build scripts explicitly apply only `0001`; the other two files are kept so forks can enable them for testing.  
+
 Stable Mesa is built with:
 
 ```text
@@ -244,6 +246,8 @@ The rebased mesh/task patches remain disabled because they can hard-hang GFX1013
 patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
 ```
+
+There is deliberately no separate `series` file: the Mesa-Git build script explicitly selects only `0001`, while `0002` and `0003` remain available for fork-based testing.  
 
 To switch explicitly to Git Mesa:
 

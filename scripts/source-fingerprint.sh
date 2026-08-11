@@ -126,7 +126,7 @@ case "$COMPONENT" in
             printf '%s\n' "$MESA_GIT_COMMIT" > "$TMP/mesa-git-commit"
             {
                 (cd "$TMP" && sha256sum *)
-                hash_files "$ROOT_DIR"/patches/mesa-git/*.patch "$ROOT_DIR"/patches/mesa-git/series
+                hash_files "$ROOT_DIR"/patches/mesa-git/*.patch
                 hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
                     "$ROOT_DIR"/scripts/resolve-mesa-git.sh \
                     "$ROOT_DIR"/scripts/prepare-mesa-git-pkgbuild.sh \
