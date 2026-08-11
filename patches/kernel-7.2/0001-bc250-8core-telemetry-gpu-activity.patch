@@ -1,3 +1,53 @@
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h b/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h
+index 4884a4e..bf6e6b2 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h
+@@ -76,4 +76,43 @@ typedef struct SmuMetrics_t {
+ 	uint32_t Accnt;
+ } SmuMetrics_t;
+ 
++/*
++ * PMFW layout of the Current metrics table when all eight physical BC-250
++ * cores are enabled. The table remains 116 bytes: the per-core fields are
++ * redistributed while L3 and the aggregate tail keep their stock offsets.
++ *
++ * Per-core coverage:
++ *   CoreFrequency[8]   -> cores 0-7
++ *   CorePower[7]       -> cores 1-7
++ *   CoreTemperature[2] -> cores 4-5
++ *   C0Residency[7]     -> cores 0-6
++ *
++ * Offset 0x44 is C0Residency[6], so GfxclkFrequency must be queried through
++ * the GetGfxclkFrequency SMU message.
++ */
++typedef struct SmuMetricsTable_hybrid_t {
++	uint16_t CoreFrequency[8];		/* 0x00 cores 0-7 */
++	uint32_t CorePower[7];			/* 0x10 cores 1-7 */
++	uint16_t CoreTemperature[2];		/* 0x2c cores 4-5 */
++	uint16_t L3Frequency[2];		/* 0x30 */
++	uint16_t L3Temperature[2];		/* 0x34 */
++	uint16_t C0Residency[7];		/* 0x38 cores 0-6 */
++	uint16_t GfxTemperature;		/* 0x46 */
++	uint16_t SocclkFrequency;		/* 0x48 */
++	uint16_t VclkFrequency;			/* 0x4a */
++	uint16_t DclkFrequency;			/* 0x4c */
++	uint16_t MemclkFrequency;		/* 0x4e */
++	uint32_t Voltage[2];			/* 0x50 */
++	uint32_t Current[2];			/* 0x58 */
++	uint32_t Power[2];			/* 0x60 */
++	uint32_t CurrentSocketPower;		/* 0x68 */
++	uint16_t SocTemperature;		/* 0x6c */
++	uint16_t EdgeTemperature;		/* 0x6e */
++	uint16_t ThrottlerStatus;		/* 0x70 */
++	uint16_t Spare;				/* 0x72 */
++} SmuMetricsTable_hybrid_t;
++
++static_assert(sizeof(SmuMetricsTable_hybrid_t) == 116,
++	      "hybrid metrics table must remain 116 bytes");
++
+ #endif
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
+index bb96206..bbc74be 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 @@ -23,6 +23,10 @@
@@ -20,7 +70,7 @@
  #include "soc15_common.h"
  
  /*
-@@ -60,6 +66,52 @@
+@@ -60,6 +66,52 @@ static struct gfx_user_settings {
  
  static uint32_t cyan_skillfish_sclk_default;
  
@@ -73,7 +123,7 @@
  static const struct smu_feature_bits cyan_skillfish_dpm_features = {
  	.bits = {
  		SMU_FEATURE_BIT_INIT(FEATURE_FCLK_DPM_BIT),
-@@ -77,6 +129,7 @@
+@@ -77,6 +129,7 @@ static struct cmn2asic_msg_mapping cyan_skillfish_message_map[SMU_MSG_MAX_COUNT]
  	MSG_MAP(TransferTableSmu2Dram,          PPSMC_MSG_TransferTableSmu2Dram,	0),
  	MSG_MAP(TransferTableDram2Smu,          PPSMC_MSG_TransferTableDram2Smu,	0),
  	MSG_MAP(GetEnabledSmuFeatures,          PPSMC_MSG_GetEnabledSmuFeatures,	0),
@@ -81,7 +131,7 @@
  	MSG_MAP(RequestGfxclk,                  PPSMC_MSG_RequestGfxclk,		0),
  	MSG_MAP(ForceGfxVid,                    PPSMC_MSG_ForceGfxVid,			0),
  	MSG_MAP(UnforceGfxVid,                  PPSMC_MSG_UnforceGfxVid,		0),
-@@ -143,7 +196,17 @@
+@@ -143,7 +196,17 @@ cyan_skillfish_get_smu_metrics_data(struct smu_context *smu,
  
  	switch (member) {
  	case METRICS_CURR_GFXCLK:
@@ -100,7 +150,7 @@
  		break;
  	case METRICS_CURR_SOCCLK:
  		*value = metrics->Current.SocclkFrequency;
-@@ -203,7 +266,8 @@
+@@ -203,7 +266,8 @@ static int cyan_skillfish_read_sensor(struct smu_context *smu,
  		ret = cyan_skillfish_get_smu_metrics_data(smu,
  						   METRICS_CURR_GFXCLK,
  						   (uint32_t *)data);
@@ -110,7 +160,7 @@
  		*size = 4;
  		break;
  	case AMDGPU_PP_SENSOR_GFX_MCLK:
-@@ -249,6 +313,10 @@
+@@ -249,6 +313,10 @@ static int cyan_skillfish_read_sensor(struct smu_context *smu,
  						   (uint32_t *)data);
  		*size = 4;
  		break;
@@ -121,7 +171,7 @@
  	default:
  		ret = -EOPNOTSUPP;
  		break;
-@@ -389,13 +457,26 @@
+@@ -389,13 +457,26 @@ static ssize_t cyan_skillfish_get_gpu_metrics(struct smu_context *smu,
  		(struct gpu_metrics_v2_2 *)smu_driver_table_ptr(
  			smu, SMU_DRIVER_TABLE_GPU_METRICS);
  	SmuMetrics_t metrics;
@@ -148,7 +198,7 @@
  
  	gpu_metrics->temperature_gfx = metrics.Current.GfxTemperature;
  	gpu_metrics->temperature_soc = metrics.Current.SocTemperature;
-@@ -411,17 +492,46 @@
+@@ -411,17 +492,46 @@ static ssize_t cyan_skillfish_get_gpu_metrics(struct smu_context *smu,
  	gpu_metrics->average_vclk_frequency = metrics.Average.VclkFrequency;
  	gpu_metrics->average_dclk_frequency = metrics.Average.DclkFrequency;
  
@@ -200,49 +250,3 @@
  	}
  
  	for (i = 0; i < 2; i++) {
---- a/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h
-+++ b/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h
-@@ -76,4 +76,43 @@
- 	uint32_t Accnt;
- } SmuMetrics_t;
- 
-+/*
-+ * PMFW layout of the Current metrics table when all eight physical BC-250
-+ * cores are enabled. The table remains 116 bytes: the per-core fields are
-+ * redistributed while L3 and the aggregate tail keep their stock offsets.
-+ *
-+ * Per-core coverage:
-+ *   CoreFrequency[8]   -> cores 0-7
-+ *   CorePower[7]       -> cores 1-7
-+ *   CoreTemperature[2] -> cores 4-5
-+ *   C0Residency[7]     -> cores 0-6
-+ *
-+ * Offset 0x44 is C0Residency[6], so GfxclkFrequency must be queried through
-+ * the GetGfxclkFrequency SMU message.
-+ */
-+typedef struct SmuMetricsTable_hybrid_t {
-+	uint16_t CoreFrequency[8];		/* 0x00 cores 0-7 */
-+	uint32_t CorePower[7];			/* 0x10 cores 1-7 */
-+	uint16_t CoreTemperature[2];		/* 0x2c cores 4-5 */
-+	uint16_t L3Frequency[2];		/* 0x30 */
-+	uint16_t L3Temperature[2];		/* 0x34 */
-+	uint16_t C0Residency[7];		/* 0x38 cores 0-6 */
-+	uint16_t GfxTemperature;		/* 0x46 */
-+	uint16_t SocclkFrequency;		/* 0x48 */
-+	uint16_t VclkFrequency;			/* 0x4a */
-+	uint16_t DclkFrequency;			/* 0x4c */
-+	uint16_t MemclkFrequency;		/* 0x4e */
-+	uint32_t Voltage[2];			/* 0x50 */
-+	uint32_t Current[2];			/* 0x58 */
-+	uint32_t Power[2];			/* 0x60 */
-+	uint32_t CurrentSocketPower;		/* 0x68 */
-+	uint16_t SocTemperature;		/* 0x6c */
-+	uint16_t EdgeTemperature;		/* 0x6e */
-+	uint16_t ThrottlerStatus;		/* 0x70 */
-+	uint16_t Spare;				/* 0x72 */
-+} SmuMetricsTable_hybrid_t;
-+
-+static_assert(sizeof(SmuMetricsTable_hybrid_t) == 116,
-+	      "hybrid metrics table must remain 116 bytes");
-+
- #endif

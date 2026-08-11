@@ -2,9 +2,8 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-CACHYOS_SOURCE_VARIANT="${CACHYOS_SOURCE_VARIANT:-linux-cachyos-rc}"
+CACHYOS_SOURCE_VARIANT="${CACHYOS_SOURCE_VARIANT:-linux-cachyos}"
 BC250_PKGREL="${BC250_PKGREL:-1}"
-SOURCE_FINGERPRINT="${SOURCE_FINGERPRINT:-local}"
 BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build/${CACHYOS_SOURCE_VARIANT}}"
 
 "${ROOT_DIR}/scripts/prepare-pkgbuild.sh"
@@ -13,16 +12,22 @@ source "$BUILD_DIR/bc250-build.env"
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/scripts/repo-package-helpers.sh"
 
+case "$KERNEL_ID" in
+    stable) COMPONENT_FINGERPRINT="${KERNEL_STABLE_FINGERPRINT:-local}" ;;
+    rc)     COMPONENT_FINGERPRINT="${KERNEL_RC_FINGERPRINT:-local}" ;;
+    bore)   COMPONENT_FINGERPRINT="${KERNEL_BORE_FINGERPRINT:-local}" ;;
+    *) printf 'ERROR: unknown KERNEL_ID: %s\n' "$KERNEL_ID" >&2; exit 1 ;;
+esac
+
 cd -- "$BUILD_DIR"
 
-# CachyOS currently exposes generic x86-64 levels, Zen 4, and native through
-# _processor_opt. Keep the safe x86-64-v3 ISA baseline and tune scheduling/code
-# generation for the BC-250's Zen 2 cores without enabling a wider ISA.
+# Keep an x86-64-v3 ISA baseline and tune scheduling/code generation for Zen 2.
+# makepkg's ccache integration is enabled by ci-build.sh for CI builds.
 export _processor_opt="$PROCESSOR_OPT"
 export KCFLAGS="${KCFLAGS:+${KCFLAGS} }-mtune=${CPU_TUNE}"
 export MAKEFLAGS="${MAKEFLAGS:--j$(nproc)}"
 
-# A fresh CI user has no personal OpenPGP keyring. Source integrity is still
+# A fresh CI user has no personal OpenPGP keyring. Source integrity remains
 # enforced by the upstream PKGBUILD's BLAKE2 checksums.
 makepkg --syncdeps --noconfirm --cleanbuild --clean --skippgpcheck
 makepkg --printsrcinfo > .SRCINFO
@@ -30,10 +35,9 @@ makepkg --printsrcinfo > .SRCINFO
 OUT_DIR="${ROOT_DIR}/out/${OUT_CHANNEL}"
 mkdir -p -- "$OUT_DIR"
 
-# The workflow seeds out/repo from the previous fixed release before any build.
-# Replace only the kernel component and preserve Mesa packages that did not
-# change. Both the kernel and headers share this pkgbase.
-remove_pkgbase_from_repo "$OUT_DIR" linux-cachyos-bc250
+# Replace only this kernel family. The other two kernels and all Mesa packages
+# remain staged from the previous fixed release.
+remove_pkgbase_from_repo "$OUT_DIR" "$EXPECTED_PKGBASE"
 
 shopt -s nullglob
 packages=("$BUILD_DIR"/*.pkg.tar.zst)
@@ -54,24 +58,8 @@ fi
 
 cp -- "${packages[@]}" "$OUT_DIR/"
 
-cd -- "$OUT_DIR"
-repo-add -R "${REPO_NAME}.db.tar.zst" ./*.pkg.tar.zst
-
-# GitHub release assets cannot act as useful symlinks. Publish regular copies
-# with the names pacman requests: <repo>.db and <repo>.files.
-cp -L --remove-destination "${REPO_NAME}.db.tar.zst" "${REPO_NAME}.db"
-cp -L --remove-destination "${REPO_NAME}.files.tar.zst" "${REPO_NAME}.files"
-
-cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/PKGBUILD"
-cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/kernel.SRCINFO"
-cp -- "$BUILD_DIR/nct6687.c" "$OUT_DIR/nct6687.c"
-cp -- "$BUILD_DIR/0003-nct6687d-hwmon.patch" "$OUT_DIR/0003-nct6687d-hwmon.patch"
-cp -- "$BUILD_DIR/0004-gfx1013-pasid-tlb-invalidation.patch" "$OUT_DIR/0004-gfx1013-pasid-tlb-invalidation.patch"
-cp -- "$BUILD_DIR/0005-gfx1013-compute-gfxoff-guard.patch" "$OUT_DIR/0005-gfx1013-compute-gfxoff-guard.patch"
-
 srcinfo_value() {
     local key="$1"
-
     awk -F '=' -v key="$key" '
         {
             lhs = $1
@@ -91,15 +79,15 @@ pkgver="$(srcinfo_value pkgver)"
 pkgrel="$(srcinfo_value pkgrel)"
 
 for field in pkgbase pkgver pkgrel; do
-    if [[ -z "${!field}" ]]; then
+    [[ -n "${!field}" ]] || {
         printf 'ERROR: could not read %s from %s\n' "$field" "$BUILD_DIR/.SRCINFO" >&2
         sed -n '1,80p' "$BUILD_DIR/.SRCINFO" >&2
         exit 1
-    fi
+    }
 done
 
-if [[ "$pkgbase" != "linux-cachyos-bc250" ]]; then
-    printf 'ERROR: unexpected package base: %s\n' "$pkgbase" >&2
+if [[ "$pkgbase" != "$EXPECTED_PKGBASE" ]]; then
+    printf 'ERROR: unexpected package base: %s (expected %s)\n' "$pkgbase" "$EXPECTED_PKGBASE" >&2
     exit 1
 fi
 
@@ -117,29 +105,23 @@ grep -qx '# CONFIG_SENSORS_NCT6683 is not set' "$final_config" || {
     printf 'ERROR: final config did not disable CONFIG_SENSORS_NCT6683\n' >&2
     exit 1
 }
-cp -- "$final_config" "$OUT_DIR/config"
 
-cat > "$OUT_DIR/build-info.env" <<EOF_INFO
-SOURCE_FINGERPRINT=${SOURCE_FINGERPRINT}
-CACHYOS_SOURCE_VARIANT=${CACHYOS_SOURCE_VARIANT}
-REPO_NAME=${REPO_NAME}
-RELEASE_TAG=${RELEASE_TAG}
-ISA_BASELINE=x86-64-v3
-PROCESSOR_OPT=${PROCESSOR_OPT}
-CPU_TUNE=${CPU_TUNE}
-KCFLAGS=-mtune=${CPU_TUNE}
-NCT6687D_COMMIT=${NCT6687D_COMMIT}
-NCT6687D_SOURCE_URL=${NCT6687D_SOURCE_URL}
-PKGBASE=${pkgbase}
-PKGVER=${pkgver}
-PKGREL=${pkgrel}
-GITHUB_SHA=${GITHUB_SHA:-local}
-BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-EOF_INFO
+# Publish unambiguous build inputs for all three kernel families.
+cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/kernel-${KERNEL_ID}-PKGBUILD"
+cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/kernel-${KERNEL_ID}.SRCINFO"
+cp -- "$final_config" "$OUT_DIR/kernel-${KERNEL_ID}-config"
+cp -- "$BUILD_DIR/nct6687.c" "$OUT_DIR/nct6687.c"
 
-cat > "$OUT_DIR/kernel-info.env" <<EOF_KERNEL
-KERNEL_FINGERPRINT=${KERNEL_FINGERPRINT:-unknown}
+for patch in "$ROOT_DIR/patches/$PATCH_SET"/*.patch; do
+    [[ -f "$patch" ]] || continue
+    cp -- "$patch" "$OUT_DIR/${PATCH_SET}-$(basename "$patch")"
+done
+
+cat > "$OUT_DIR/kernel-${KERNEL_ID}-info.env" <<EOF_KERNEL
+KERNEL_ID=${KERNEL_ID}
+KERNEL_FINGERPRINT=${COMPONENT_FINGERPRINT}
 CACHYOS_SOURCE_VARIANT=${CACHYOS_SOURCE_VARIANT}
+PATCH_SET=${PATCH_SET}
 KERNEL_PKGBASE=${pkgbase}
 KERNEL_PKGVER=${pkgver}
 KERNEL_PKGREL=${pkgrel}
@@ -151,29 +133,4 @@ NCT6687D_COMMIT=${NCT6687D_COMMIT}
 NCT6687D_SOURCE_URL=${NCT6687D_SOURCE_URL}
 EOF_KERNEL
 
-cat > "$OUT_DIR/RELEASE_NOTES.md" <<EOF_NOTES
-# BC-250 CachyOS kernel repository
-
-- Upstream source package: \`${CACHYOS_SOURCE_VARIANT}\`
-- Published package: \`${pkgbase}\`
-- Version: \`${pkgver}-${pkgrel}\`
-- ISA baseline: **x86-64-v3** (CachyOS \`${PROCESSOR_OPT}\`)
-- CPU tuning: **Zen 2** (\`KCFLAGS=-mtune=${CPU_TUNE}\`)
-- Patches: BC-250 6/8-core telemetry, GPU activity, safe GFXCLK fallback, and GFX1013 compute/PASID stability fixes
-- GFX1013 fixes: merged PASID TLB invalidation handling (MMIO routing + scoped type-0 path) and compute GFXOFF guard
-- Extra hwmon module: \`nct6687.ko\` from Fred78290/nct6687d commit \`${NCT6687D_COMMIT}\`
-- Conflicting upstream module: \`nct6683\` disabled in this kernel configuration
-
-The package and repository names stay unchanged when the upstream source is
-switched from \`linux-cachyos-rc\` to \`linux-cachyos\`.
-EOF_NOTES
-
-printf '%s — %s-%s' "$pkgbase" "$pkgver" "$pkgrel" > "$OUT_DIR/release-title.txt"
-sha256sum ./*.pkg.tar.zst ./*.db ./*.db.tar.zst ./*.files ./*.files.tar.zst \
-    PKGBUILD config kernel.SRCINFO build-info.env nct6687.c \
-    0003-nct6687d-hwmon.patch \
-    0004-gfx1013-pasid-tlb-invalidation.patch \
-    0005-gfx1013-compute-gfxoff-guard.patch > SHA256SUMS
-
-printf '==> Repository generated in %s\n' "$OUT_DIR"
-ls -lh "$OUT_DIR"
+printf '==> Built %s kernel family: %s %s-%s\n' "$KERNEL_ID" "$pkgbase" "$pkgver" "$pkgrel"

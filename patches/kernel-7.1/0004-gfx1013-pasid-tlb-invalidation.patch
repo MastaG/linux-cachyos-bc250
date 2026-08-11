@@ -1,5 +1,5 @@
 diff --git a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-index df12792..b5af7c5 100644
+index f5bdfea..ea41c75 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
 @@ -232,12 +232,14 @@ static bool gmc_v10_0_get_atc_vmid_pasid_mapping_info(
@@ -96,14 +96,26 @@ index df12792..b5af7c5 100644
  		}
  	}
  }
-@@ -976,6 +1007,10 @@ static int gmc_v10_0_hw_init(struct amdgpu_ip_block *ip_block)
- 		dev_info(adev->dev,
- 			 "GFX1013/BC-250: using MMIO PASID TLB flushes\n");
+@@ -968,7 +999,21 @@ static int gmc_v10_0_hw_init(struct amdgpu_ip_block *ip_block)
+ 	struct amdgpu_device *adev = ip_block->adev;
+ 	int r;
  
+-	adev->gmc.flush_pasid_uses_kiq = !amdgpu_emu_mode;
++	/*
++	 * GFX1013/BC-250: KIQ-routed PASID TLB invalidation can corrupt
++	 * sustained KFD workloads.  Keep the existing behavior for every
++	 * other GMC v10 device and route only GFX1013 through MMIO.
++	 */
++	adev->gmc.flush_pasid_uses_kiq = !amdgpu_emu_mode &&
++		amdgpu_ip_version(adev, GC_HWIP, 0) != IP_VERSION(10, 1, 3);
++	if (!adev->gmc.flush_pasid_uses_kiq &&
++	    amdgpu_ip_version(adev, GC_HWIP, 0) == IP_VERSION(10, 1, 3))
++		dev_info(adev->dev,
++			 "GFX1013/BC-250: using MMIO PASID TLB flushes\n");
++
 +	if (amdgpu_ip_version(adev, GC_HWIP, 0) == IP_VERSION(10, 1, 3))
 +		dev_info(adev->dev,
 +			 "GFX1013/BC-250: PASID-only CPU type-0 invalidation\n");
-+
+ 
  	/* The sequence of these two function calls matters.*/
  	gmc_v10_0_init_golden_registers(adev);
- 

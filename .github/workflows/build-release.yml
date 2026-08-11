@@ -1,19 +1,10 @@
-name: Build and publish BC-250 CachyOS kernel and Mesa packages
+name: Build and publish BC-250 CachyOS kernels and Mesa packages
 
 on:
   workflow_dispatch:
     inputs:
-      source:
-        description: Upstream CachyOS kernel package used as source
-        required: true
-        default: auto
-        type: choice
-        options:
-          - auto
-          - rc
-          - stable
       force:
-        description: Rebuild all components even when their fingerprints are unchanged
+        description: Rebuild all kernels and Mesa components even when fingerprints are unchanged
         required: true
         default: false
         type: boolean
@@ -46,65 +37,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Select upstream kernel source package
-        id: source
-        shell: bash
-        env:
-          CONFIGURED_SOURCE: ${{ vars.CACHYOS_SOURCE_VARIANT }}
-          DISPATCH_SOURCE: ${{ inputs.source }}
-        run: |
-          set -euo pipefail
-
-          selection="${CONFIGURED_SOURCE:-linux-cachyos-rc}"
-          if [[ '${{ github.event_name }}' == 'workflow_dispatch' && "${DISPATCH_SOURCE:-auto}" != auto ]]; then
-            selection="$DISPATCH_SOURCE"
-          fi
-
-          case "$selection" in
-            rc|linux-cachyos-rc) variant=linux-cachyos-rc ;;
-            stable|linux-cachyos) variant=linux-cachyos ;;
-            *)
-              echo "Unsupported source selection: $selection" >&2
-              exit 1
-              ;;
-          esac
-
-          echo "variant=$variant" >> "$GITHUB_OUTPUT"
-          echo "Using upstream kernel source package: $variant"
-
-      - name: Guard RC kernel generation
-        id: kernel_guard
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          variant='${{ steps.source.outputs.variant }}'
-          allowed=true
-          reason=none
-
-          if [[ "$variant" == linux-cachyos-rc ]]; then
-            pkgbuild_url="https://raw.githubusercontent.com/CachyOS/linux-cachyos/master/linux-cachyos-rc/PKGBUILD"
-            pkgbuild="$(curl -fsSL --retry 5 --retry-all-errors "$pkgbuild_url")"
-            rc_major="$(sed -nE 's/^_major=([0-9]+\.[0-9]+).*$/\1/p' <<<"$pkgbuild" | head -n1)"
-
-            if [[ -z "$rc_major" ]]; then
-              echo "ERROR: could not determine _major from linux-cachyos-rc/PKGBUILD" >&2
-              exit 1
-            fi
-
-            echo "linux-cachyos-rc _major: $rc_major"
-            if [[ "$(printf '%s\n' '7.3' "$rc_major" | sort -V | head -n1)" == '7.3' ]]; then
-              allowed=false
-              reason="linux-cachyos-rc is ${rc_major} (7.3 or newer)"
-              echo "::warning title=BC-250 kernel build paused::${reason}. Keep the last 7.2 kernel packages and switch CACHYOS_SOURCE_VARIANT to linux-cachyos before building the kernel again."
-            fi
-          fi
-
-          echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
-          echo "reason=$reason" >> "$GITHUB_OUTPUT"
-
       - name: Resolve nct6687d source
-        if: steps.kernel_guard.outputs.allowed == 'true'
         id: nct6687d
         shell: bash
         env:
@@ -147,32 +80,38 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ '${{ steps.kernel_guard.outputs.allowed }}' == true ]]; then
-            kernel="$(./scripts/source-fingerprint.sh kernel '${{ steps.source.outputs.variant }}')"
-          else
-            kernel="$(printf '%s\n' 'guarded' '${{ steps.source.outputs.variant }}' '${{ steps.kernel_guard.outputs.reason }}' | sha256sum | awk '{print $1}')"
-          fi
-          mesa="$(./scripts/source-fingerprint.sh mesa '${{ steps.source.outputs.variant }}')"
-          lib32_mesa="$(./scripts/source-fingerprint.sh lib32-mesa '${{ steps.source.outputs.variant }}')"
-          mesa_git="$(./scripts/source-fingerprint.sh mesa-git '${{ steps.source.outputs.variant }}')"
-          aggregate="$(printf '%s\n' "$kernel" "$mesa" "$lib32_mesa" "$mesa_git" | sha256sum | awk '{print $1}')"
+          kernel_stable="$(./scripts/source-fingerprint.sh kernel-stable)"
+          kernel_rc="$(./scripts/source-fingerprint.sh kernel-rc)"
+          kernel_bore="$(./scripts/source-fingerprint.sh kernel-bore)"
+          mesa="$(./scripts/source-fingerprint.sh mesa)"
+          lib32_mesa="$(./scripts/source-fingerprint.sh lib32-mesa)"
+          mesa_git="$(./scripts/source-fingerprint.sh mesa-git)"
+          aggregate="$(printf '%s\n' \
+            "$kernel_stable" "$kernel_rc" "$kernel_bore" \
+            "$mesa" "$lib32_mesa" "$mesa_git" | sha256sum | awk '{print $1}')"
 
-          echo "kernel=$kernel" >> "$GITHUB_OUTPUT"
+          echo "kernel_stable=$kernel_stable" >> "$GITHUB_OUTPUT"
+          echo "kernel_rc=$kernel_rc" >> "$GITHUB_OUTPUT"
+          echo "kernel_bore=$kernel_bore" >> "$GITHUB_OUTPUT"
           echo "mesa=$mesa" >> "$GITHUB_OUTPUT"
           echo "lib32_mesa=$lib32_mesa" >> "$GITHUB_OUTPUT"
           echo "mesa_git=$mesa_git" >> "$GITHUB_OUTPUT"
           echo "aggregate=$aggregate" >> "$GITHUB_OUTPUT"
 
-          printf 'Kernel fingerprint:     %s\n' "$kernel"
-          printf 'Mesa fingerprint:       %s\n' "$mesa"
-          printf 'lib32-mesa fingerprint: %s\n' "$lib32_mesa"
-          printf 'mesa-git fingerprint:   %s\n' "$mesa_git"
+          printf 'Stable kernel fingerprint: %s\n' "$kernel_stable"
+          printf 'RC kernel fingerprint:     %s\n' "$kernel_rc"
+          printf 'BORE kernel fingerprint:   %s\n' "$kernel_bore"
+          printf 'Mesa fingerprint:          %s\n' "$mesa"
+          printf 'lib32-mesa fingerprint:    %s\n' "$lib32_mesa"
+          printf 'mesa-git fingerprint:      %s\n' "$mesa_git"
 
       - name: Determine components to build
         id: build
         env:
           GH_TOKEN: ${{ github.token }}
-          KERNEL_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel }}
+          KERNEL_STABLE_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel_stable }}
+          KERNEL_RC_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel_rc }}
+          KERNEL_BORE_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel_bore }}
           MESA_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa }}
           LIB32_MESA_FINGERPRINT: ${{ steps.fingerprints.outputs.lib32_mesa }}
           MESA_GIT_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa_git }}
@@ -180,6 +119,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          rm -rf previous
           mkdir -p previous
           info=previous/build-info.env
           if ! gh release download repo --pattern build-info.env --dir previous >/dev/null 2>&1; then
@@ -190,46 +130,55 @@ jobs:
             sed -n "s/^$1=//p" "$info" | head -n1
           }
 
-          build_kernel=false
+          build_kernel_stable=false
+          build_kernel_rc=false
+          build_kernel_bore=false
           build_mesa=false
           build_lib32_mesa=false
           build_mesa_git=false
 
-          if [[ '${{ steps.kernel_guard.outputs.allowed }}' == true && "$(previous_value KERNEL_FINGERPRINT)" != "$KERNEL_FINGERPRINT" ]]; then
-            build_kernel=true
-          fi
+          [[ "$(previous_value KERNEL_STABLE_FINGERPRINT)" == "$KERNEL_STABLE_FINGERPRINT" ]] || build_kernel_stable=true
+          [[ "$(previous_value KERNEL_RC_FINGERPRINT)" == "$KERNEL_RC_FINGERPRINT" ]] || build_kernel_rc=true
+          [[ "$(previous_value KERNEL_BORE_FINGERPRINT)" == "$KERNEL_BORE_FINGERPRINT" ]] || build_kernel_bore=true
           [[ "$(previous_value MESA_FINGERPRINT)" == "$MESA_FINGERPRINT" ]] || build_mesa=true
           [[ "$(previous_value LIB32_MESA_FINGERPRINT)" == "$LIB32_MESA_FINGERPRINT" ]] || build_lib32_mesa=true
           [[ "$(previous_value MESA_GIT_FINGERPRINT)" == "$MESA_GIT_FINGERPRINT" ]] || build_mesa_git=true
 
           if [[ '${{ github.event_name }}' == workflow_dispatch && '${{ inputs.force }}' == true ]]; then
-            [[ '${{ steps.kernel_guard.outputs.allowed }}' == true ]] && build_kernel=true
+            build_kernel_stable=true
+            build_kernel_rc=true
+            build_kernel_bore=true
             build_mesa=true
             build_lib32_mesa=true
             build_mesa_git=true
           fi
 
           any=false
-          if [[ "$build_kernel" == true || "$build_mesa" == true || "$build_lib32_mesa" == true || "$build_mesa_git" == true ]]; then
+          if [[ "$build_kernel_stable" == true || "$build_kernel_rc" == true || \
+                "$build_kernel_bore" == true || "$build_mesa" == true || \
+                "$build_lib32_mesa" == true || "$build_mesa_git" == true ]]; then
             any=true
           fi
 
-          echo "kernel=$build_kernel" >> "$GITHUB_OUTPUT"
+          echo "kernel_stable=$build_kernel_stable" >> "$GITHUB_OUTPUT"
+          echo "kernel_rc=$build_kernel_rc" >> "$GITHUB_OUTPUT"
+          echo "kernel_bore=$build_kernel_bore" >> "$GITHUB_OUTPUT"
           echo "mesa=$build_mesa" >> "$GITHUB_OUTPUT"
           echo "lib32_mesa=$build_lib32_mesa" >> "$GITHUB_OUTPUT"
           echo "mesa_git=$build_mesa_git" >> "$GITHUB_OUTPUT"
           echo "any=$any" >> "$GITHUB_OUTPUT"
 
-          echo "Build kernel:     $build_kernel"
-          echo "Build Mesa:       $build_mesa"
-          echo "Build lib32-mesa: $build_lib32_mesa"
-          echo "Build mesa-git:   $build_mesa_git"
+          echo "Build stable kernel: $build_kernel_stable"
+          echo "Build RC kernel:     $build_kernel_rc"
+          echo "Build BORE kernel:   $build_kernel_bore"
+          echo "Build Mesa:          $build_mesa"
+          echo "Build lib32-mesa:    $build_lib32_mesa"
+          echo "Build mesa-git:      $build_mesa_git"
 
       - name: Seed previous repository
         if: steps.build.outputs.any == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          BUILD_KERNEL: ${{ steps.build.outputs.kernel }}
         shell: bash
         run: |
           set -euo pipefail
@@ -246,87 +195,39 @@ jobs:
             echo "No previous fixed release exists; starting a new repository."
           fi
 
-          # Older releases used the hidden asset name .SRCINFO for the kernel.
-          # Migrate it to a normal release asset name so GitHub Actions artifact
-          # handling and partial-repository seeding do not depend on dotfiles.
-          if [[ -f out/repo/.SRCINFO && ! -f out/repo/kernel.SRCINFO ]]; then
-            mv -- out/repo/.SRCINFO out/repo/kernel.SRCINFO
-            echo "Migrated legacy .SRCINFO to kernel.SRCINFO."
-          fi
+          # Remove auxiliary assets from the old single-kernel architecture.
+          # Package files themselves are left alone; the stable builder removes
+          # the old linux-cachyos-bc250 pkgbase via .PKGINFO before replacing it.
+          rm -f -- \
+            out/repo/.SRCINFO out/repo/kernel.SRCINFO out/repo/kernel-info.env \
+            out/repo/PKGBUILD out/repo/config \
+            out/repo/0001-bc250-8core-telemetry-gpu-activity.patch \
+            out/repo/0002-bc250-audio.patch \
+            out/repo/0003-nct6687d-hwmon.patch \
+            out/repo/0004-gfx1013-pasid-tlb-invalidation.patch \
+            out/repo/0005-gfx1013-compute-gfxoff-guard.patch
 
-          # If the kernel is not being rebuilt, a previous kernel + headers are
-          # mandatory because they must survive this partial publication.
-          if [[ "$BUILD_KERNEL" != true ]]; then
-            kernel_pkg="$(find out/repo -maxdepth 1 -type f -name 'linux-cachyos-bc250-*.pkg.tar.zst' ! -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' -print -quit)"
-            headers_pkg="$(find out/repo -maxdepth 1 -type f -name 'linux-cachyos-bc250-headers-*.pkg.tar.zst' -print -quit)"
-            if [[ -z "$kernel_pkg" || -z "$headers_pkg" ]]; then
-              echo "::error title=Incomplete previous release::Cannot do a partial publication without the previous kernel and headers."
-              exit 1
-            fi
-
-            # Releases created by the pre-componentized workflow do not have
-            # kernel-info.env yet. Its old build-info.env contains the same
-            # kernel metadata, so migrate it in-place on the first partial run.
-            if [[ ! -f out/repo/kernel-info.env ]]; then
-              legacy=out/repo/build-info.env
-              if [[ ! -f "$legacy" ]]; then
-                echo "::error title=Missing kernel metadata::Previous release has neither kernel-info.env nor legacy build-info.env."
-                exit 1
-              fi
-
-              legacy_value() {
-                sed -n "s/^$1=//p" "$legacy" | head -n1
-              }
-
-              source_variant="$(legacy_value CACHYOS_SOURCE_VARIANT)"
-              pkgbase="$(legacy_value PKGBASE)"
-              pkgver="$(legacy_value PKGVER)"
-              pkgrel="$(legacy_value PKGREL)"
-              processor_opt="$(legacy_value PROCESSOR_OPT)"
-              cpu_tune="$(legacy_value CPU_TUNE)"
-              nct_commit="$(legacy_value NCT6687D_COMMIT)"
-              nct_url="$(legacy_value NCT6687D_SOURCE_URL)"
-
-              if [[ -z "$source_variant" || -z "$pkgbase" || -z "$pkgver" || -z "$pkgrel" || -z "$processor_opt" || -z "$cpu_tune" || -z "$nct_commit" ]]; then
-                echo "::error title=Incomplete legacy kernel metadata::Cannot migrate the previous release to component metadata. Run a full kernel build after selecting a buildable kernel source."
-                exit 1
-              fi
-
-              {
-                printf 'KERNEL_FINGERPRINT=legacy\n'
-                printf 'CACHYOS_SOURCE_VARIANT=%s\n' "$source_variant"
-                printf 'KERNEL_PKGBASE=%s\n' "$pkgbase"
-                printf 'KERNEL_PKGVER=%s\n' "$pkgver"
-                printf 'KERNEL_PKGREL=%s\n' "$pkgrel"
-                printf 'ISA_BASELINE=x86-64-v3\n'
-                printf 'PROCESSOR_OPT=%s\n' "$processor_opt"
-                printf 'CPU_TUNE=%s\n' "$cpu_tune"
-                printf 'KCFLAGS=-mtune=%s\n' "$cpu_tune"
-                printf 'NCT6687D_COMMIT=%s\n' "$nct_commit"
-                printf 'NCT6687D_SOURCE_URL=%s\n' "$nct_url"
-              } > out/repo/kernel-info.env
-              echo "Migrated legacy build-info.env to kernel-info.env for this partial publication."
-            fi
-          fi
-
-          echo "Existing package artifacts will be preserved unless their pkgbase is rebuilt."
+          echo "Existing package artifacts will be preserved unless their .PKGINFO pkgbase is rebuilt."
 
       - name: Build changed Zen 2-tuned packages
         if: steps.build.outputs.any == 'true'
         env:
           SOURCE_FINGERPRINT: ${{ steps.fingerprints.outputs.aggregate }}
-          KERNEL_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel }}
+          KERNEL_STABLE_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel_stable }}
+          KERNEL_RC_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel_rc }}
+          KERNEL_BORE_FINGERPRINT: ${{ steps.fingerprints.outputs.kernel_bore }}
           MESA_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa }}
           LIB32_MESA_FINGERPRINT: ${{ steps.fingerprints.outputs.lib32_mesa }}
           MESA_GIT_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa_git }}
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
           CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
           MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
-          BUILD_KERNEL: ${{ steps.build.outputs.kernel }}
+          BUILD_KERNEL_STABLE: ${{ steps.build.outputs.kernel_stable }}
+          BUILD_KERNEL_RC: ${{ steps.build.outputs.kernel_rc }}
+          BUILD_KERNEL_BORE: ${{ steps.build.outputs.kernel_bore }}
           BUILD_MESA: ${{ steps.build.outputs.mesa }}
           BUILD_LIB32_MESA: ${{ steps.build.outputs.lib32_mesa }}
           BUILD_MESA_GIT: ${{ steps.build.outputs.mesa_git }}
-          KERNEL_GUARD_REASON: ${{ steps.kernel_guard.outputs.reason }}
         shell: bash
         run: |
           set -euo pipefail
@@ -338,15 +239,17 @@ jobs:
             -e CCACHE_DIR=/ccache \
             -e CCACHE_MAXSIZE=30G \
             -e CCACHE_COMPILERCHECK=content \
-            -e CACHYOS_SOURCE_VARIANT='${{ steps.source.outputs.variant }}' \
-            -e BUILD_KERNEL \
+            -e BUILD_KERNEL_STABLE \
+            -e BUILD_KERNEL_RC \
+            -e BUILD_KERNEL_BORE \
             -e BUILD_MESA \
             -e BUILD_LIB32_MESA \
             -e BUILD_MESA_GIT \
-            -e KERNEL_GUARD_REASON \
             -e BC250_PKGREL='${{ github.run_number }}' \
             -e SOURCE_FINGERPRINT \
-            -e KERNEL_FINGERPRINT \
+            -e KERNEL_STABLE_FINGERPRINT \
+            -e KERNEL_RC_FINGERPRINT \
+            -e KERNEL_BORE_FINGERPRINT \
             -e MESA_FINGERPRINT \
             -e LIB32_MESA_FINGERPRINT \
             -e MESA_GIT_FINGERPRINT \
@@ -381,12 +284,14 @@ jobs:
           out=out/repo
           title="$(cat "$out/release-title.txt")"
 
-          # Validate the complete local pacman repository before touching the
-          # fixed release. A bad/missing auxiliary asset must never delete a
-          # known-good repository first.
           required=(
             release-title.txt RELEASE_NOTES.md SHA256SUMS build-info.env
-            kernel-info.env mesa-info.env lib32-mesa-info.env mesa-git-info.env
+            kernel-stable-info.env kernel-rc-info.env kernel-bore-info.env
+            kernel-stable-PKGBUILD kernel-stable.SRCINFO kernel-stable-config
+            kernel-rc-PKGBUILD kernel-rc.SRCINFO kernel-rc-config
+            kernel-bore-PKGBUILD kernel-bore.SRCINFO kernel-bore-config
+            nct6687.c
+            mesa-info.env lib32-mesa-info.env mesa-git-info.env
             bc250-cachyos.db bc250-cachyos.db.tar.zst
             bc250-cachyos.files bc250-cachyos.files.tar.zst
           )
@@ -396,13 +301,6 @@ jobs:
               exit 1
             fi
           done
-
-          # kernel.SRCINFO replaced the historical hidden .SRCINFO asset.
-          # Keep a compatibility migration for a repository seeded from an
-          # older release.
-          if [[ ! -f "$out/kernel.SRCINFO" && -f "$out/.SRCINFO" ]]; then
-            mv -- "$out/.SRCINFO" "$out/kernel.SRCINFO"
-          fi
 
           mapfile -d '' -t assets < <(
             find "$out" -maxdepth 1 -type f -print0 | sort -z
