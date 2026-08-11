@@ -448,7 +448,7 @@ Each successful build publishes:
 - the optional `mesa-git-*.pkg.tar.zst` and `lib32-mesa-git-*.pkg.tar.zst` packages
 - `bc250-cachyos.db` and `bc250-cachyos.files`
 - compressed repository databases
-- kernel `PKGBUILD`, `config`, and `.SRCINFO`
+- kernel `PKGBUILD`, `config`, and `kernel.SRCINFO`
 - `mesa-PKGBUILD`, `mesa.SRCINFO`, `lib32-mesa-PKGBUILD`, and `lib32-mesa.SRCINFO`
 - `mesa-git-PKGBUILD`, unchanged `mesa-git-customization.cfg`, `mesa-git-user.cfg`, and `mesa-git.SRCINFO`
 - the exact fetched `nct6687.c` and its Kconfig/Makefile integration patch

@@ -63,7 +63,7 @@ cp -L --remove-destination "${REPO_NAME}.db.tar.zst" "${REPO_NAME}.db"
 cp -L --remove-destination "${REPO_NAME}.files.tar.zst" "${REPO_NAME}.files"
 
 cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/PKGBUILD"
-cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/.SRCINFO"
+cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/kernel.SRCINFO"
 cp -- "$BUILD_DIR/nct6687.c" "$OUT_DIR/nct6687.c"
 cp -- "$BUILD_DIR/0003-nct6687d-hwmon.patch" "$OUT_DIR/0003-nct6687d-hwmon.patch"
 cp -- "$BUILD_DIR/0004-gfx1013-pasid-tlb-invalidation.patch" "$OUT_DIR/0004-gfx1013-pasid-tlb-invalidation.patch"
@@ -170,7 +170,7 @@ EOF_NOTES
 
 printf '%s — %s-%s' "$pkgbase" "$pkgver" "$pkgrel" > "$OUT_DIR/release-title.txt"
 sha256sum ./*.pkg.tar.zst ./*.db ./*.db.tar.zst ./*.files ./*.files.tar.zst \
-    PKGBUILD config .SRCINFO build-info.env nct6687.c \
+    PKGBUILD config kernel.SRCINFO build-info.env nct6687.c \
     0003-nct6687d-hwmon.patch \
     0004-gfx1013-pasid-tlb-invalidation.patch \
     0005-gfx1013-compute-gfxoff-guard.patch > SHA256SUMS

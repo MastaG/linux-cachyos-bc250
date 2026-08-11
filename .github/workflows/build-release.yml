@@ -246,6 +246,14 @@ jobs:
             echo "No previous fixed release exists; starting a new repository."
           fi
 
+          # Older releases used the hidden asset name .SRCINFO for the kernel.
+          # Migrate it to a normal release asset name so GitHub Actions artifact
+          # handling and partial-repository seeding do not depend on dotfiles.
+          if [[ -f out/repo/.SRCINFO && ! -f out/repo/kernel.SRCINFO ]]; then
+            mv -- out/repo/.SRCINFO out/repo/kernel.SRCINFO
+            echo "Migrated legacy .SRCINFO to kernel.SRCINFO."
+          fi
+
           # If the kernel is not being rebuilt, a previous kernel + headers are
           # mandatory because they must survive this partial publication.
           if [[ "$BUILD_KERNEL" != true ]]; then
@@ -360,6 +368,8 @@ jobs:
           path: out/repo/
           if-no-files-found: error
           retention-days: 14
+          compression-level: 0
+          include-hidden-files: true
 
       - name: Publish pacman repository release
         if: steps.build.outputs.any == 'true'
@@ -371,6 +381,39 @@ jobs:
           out=out/repo
           title="$(cat "$out/release-title.txt")"
 
+          # Validate the complete local pacman repository before touching the
+          # fixed release. A bad/missing auxiliary asset must never delete a
+          # known-good repository first.
+          required=(
+            release-title.txt RELEASE_NOTES.md SHA256SUMS build-info.env
+            kernel-info.env mesa-info.env lib32-mesa-info.env mesa-git-info.env
+            bc250-cachyos.db bc250-cachyos.db.tar.zst
+            bc250-cachyos.files bc250-cachyos.files.tar.zst
+          )
+          for file in "${required[@]}"; do
+            if [[ ! -f "$out/$file" ]]; then
+              echo "::error title=Incomplete release staging::Missing required asset: $out/$file"
+              exit 1
+            fi
+          done
+
+          # kernel.SRCINFO replaced the historical hidden .SRCINFO asset.
+          # Keep a compatibility migration for a repository seeded from an
+          # older release.
+          if [[ ! -f "$out/kernel.SRCINFO" && -f "$out/.SRCINFO" ]]; then
+            mv -- "$out/.SRCINFO" "$out/kernel.SRCINFO"
+          fi
+
+          mapfile -d '' -t assets < <(
+            find "$out" -maxdepth 1 -type f -print0 | sort -z
+          )
+          (( ${#assets[@]} > 0 )) || {
+            echo "::error title=Empty release staging::No release assets found in $out"
+            exit 1
+          }
+
+          printf 'Publishing %d release assets.\n' "${#assets[@]}"
+
           if gh release view repo >/dev/null 2>&1; then
             gh release delete repo --yes --cleanup-tag
             sleep 2
@@ -381,4 +424,4 @@ jobs:
             --title "$title" \
             --notes-file "$out/RELEASE_NOTES.md" \
             --latest=false \
-            "$out"/* "$out"/.SRCINFO
+            "${assets[@]}"
