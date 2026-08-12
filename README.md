@@ -195,20 +195,26 @@ When unset, the resolver follows the configured upstream branch.
 The workflow resolves a single exact commit from `CachyOS/CachyOS-PKGBUILDS` and downloads the current stable Mesa packaging from that revision.  
 The upstream Mesa version and epoch remain unchanged; the GitHub Actions run number is appended to `pkgrel`.
 
-The active stable patch is:
+All four BC-250 Mesa patches are applied at build time, in order:
 
 ```text
 patches/mesa/0001-gfx1013-compute-queue-fix.patch
-```
-
-The mesh/task patches remain stored but disabled:
-
-```text
 patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa/0003-gfx1013-taskmesh-queries.patch
+patches/mesa/0004-radv-gfx103.patch
 ```
 
-The build scripts explicitly apply only `0001`; the other two files are kept so forks can enable them for testing.  
+`0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.  
+`0002` and `0003` contain the experimental mesh/task-shader and mesh-query support. For GFX1013 their user-visible feature path remains disabled unless `0004` sees `RADV_GFX103=1` at runtime.
+
+For an individual Steam game that needs the experimental path, use:
+
+```text
+RADV_GFX103=1 %command%
+```
+
+Without `RADV_GFX103`, GFX1013 keeps its normal GFX10.1 software level and the experimental mesh/task features are not exposed.  
+With the variable enabled, `0004` promotes the RADV software `gfx_level` to GFX10.3 for that process. This is intentionally experimental: the override affects RADV code paths that key off `gfx_level`, not only the mesh/task extension checks.
 
 Stable Mesa is built with:
 
@@ -219,7 +225,7 @@ Stable Mesa is built with:
 ## Patched stable CachyOS lib32-mesa
 
 `lib32-mesa` comes directly from the current CachyOS `mesa/lib32-mesa/PKGBUILD` at the same pinned packaging commit.  
-It receives the same active GFX1013 compute-queue patch and the same BC-250 CPU target as stable 64-bit Mesa.
+It receives the exact same four GFX1013 patches and runtime gating as stable 64-bit Mesa, so 32-bit Wine/Steam workloads see the same driver behavior.
 
 The clean Arch build container explicitly enables `[multilib]` before dependency resolution.
 
@@ -236,20 +242,19 @@ mesa-git
 lib32-mesa-git
 ```
 
-Only this rebased patch is active:
+The Git variant carries a separately rebased copy of the same four-patch series:
 
 ```text
 patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
-```
-
-The rebased mesh/task patches remain disabled because they can hard-hang GFX1013:
-
-```text
 patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
+patches/mesa-git/0004-radv-gfx103.patch
 ```
 
-There is deliberately no separate `series` file: the Mesa-Git build script explicitly selects only `0001`, while `0002` and `0003` remain available for fork-based testing.  
+`0001` remains active regardless of environment variables.  
+The GFX1013 mesh/task path from `0002`/`0003` is opt-in through `RADV_GFX103=1`; `0004` provides that runtime override and defaults to disabled.
+
+There is deliberately no separate `series` file. The build script explicitly applies the four numbered patches in order through CachyOS' `mesa-userpatches` mechanism.
 
 To switch explicitly to Git Mesa:
 

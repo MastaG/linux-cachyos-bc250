@@ -1,40 +1,27 @@
-From d40ba139c03ab041239207f310b9c1d4fa821d20 Mon Sep 17 00:00:00 2001
+From 5822b318716b073185efeccf5340796cd948da4d Mon Sep 17 00:00:00 2001
 From: DryhoppedIPA <DryhoppedIPA@users.noreply.github.com>
-Date: Sat, 8 Aug 2026 22:31:30 +0000
-Subject: [PATCH 2/3] radv,aco: native mesh and task shaders on GFX1013
+Date: Sat, 8 Aug 2026 04:53:11 +0000
+Subject: [PATCH 2/4] radv,aco: native mesh and task shaders on GFX1013
 
-Enable VK_EXT_mesh_shader on GFX1013 without promoting its gfx_level:
-mesh and task shading reuse the GFX10.3 NGG paths behind two dedicated
-radeon_info capability bits, always set for the chip.
-
-Includes the GFX1013-specific pieces the generic paths need:
-
-- GE_CNTL vertex-grouping quirk skipped for mesh shaders on GFX10.1.
-- No FSR dirty state on GFX10.1 (no fragment-shading-rate hardware).
-- Task shaders load the grid size from user SGPRs (PKT3_LOAD_SH_REG_INDEX
-  hangs compute queues before GFX10.3).
-- Zero-count DISPATCH_TASKMESH_INDIRECT_MULTI_ACE workaround: GFX1013
-  firmware also hangs on the zero-dimensional direct-ACE fallback, so
-  predicate the ACE/GFX packet pair on the count instead.
-- multiview/primitiveFragmentShadingRate mesh features stay GFX10.3+.
+Rebase the experimental GFX1013 mesh/task path. Keep the GFX1013 hardware workarounds from the original patch, but require a GFX10.3 software level for exposing mesh/task features so the path stays dormant until RADV_GFX103 is explicitly enabled.
 ---
- src/amd/common/ac_gpu_info.c                  | 11 ++++--
- src/amd/common/ac_gpu_info.h                  |  2 ++
+ src/amd/common/ac_gpu_info.c                  | 11 +++++-
+ src/amd/common/ac_gpu_info.h                  |  2 +
  src/amd/compiler/aco_shader_info.h            |  1 +
- .../instruction_selection/aco_isel_setup.cpp  |  6 ++--
- src/amd/vulkan/radv_cmd_buffer.c              | 32 +++++++++++++----
- src/amd/vulkan/radv_physical_device.c         | 34 +++++++++++++------
- src/amd/vulkan/radv_pipeline.c                |  4 ++-
- src/amd/vulkan/radv_queue.c                   |  4 +--
- src/amd/vulkan/radv_shader.c                  |  2 ++
- src/amd/vulkan/radv_shader_args.c             |  3 +-
- 10 files changed, 73 insertions(+), 26 deletions(-)
+ .../instruction_selection/aco_isel_setup.cpp  |  6 ++-
+ src/amd/vulkan/radv_cmd_buffer.c              | 32 +++++++++++----
+ src/amd/vulkan/radv_physical_device.c         | 39 +++++++++++++------
+ src/amd/vulkan/radv_pipeline.c                |  5 ++-
+ src/amd/vulkan/radv_queue.c                   |  6 ++-
+ src/amd/vulkan/radv_shader.c                  |  3 ++
+ src/amd/vulkan/radv_shader_args.c             |  4 +-
+ 10 files changed, 83 insertions(+), 26 deletions(-)
 
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
-index 541ed5b..ceb20d3 100644
+index 249c2cb..19bbbb7 100644
 --- a/src/amd/common/ac_gpu_info.c
 +++ b/src/amd/common/ac_gpu_info.c
-@@ -972,9 +972,16 @@ void ac_fill_bug_info(struct radeon_info *info)
+@@ -970,9 +970,16 @@ void ac_fill_bug_info(struct radeon_info *info)
  
     /* Firmware bug with DISPATCH_TASKMESH_INDIRECT_MULTI_ACE packets.
      * On old MEC FW versions, it hangs the GPU when indirect count is zero.
@@ -47,7 +34,7 @@ index 541ed5b..ceb20d3 100644
 +      (info->gfx_level == GFX10_3 && info->mec_fw_version < 100) ||
 +      info->family == CHIP_GFX1013;
 +
-+   /* GFX1013 remains a GFX10.1 device; never promote gfx_level. */
++   /* Hardware capabilities used by RADV's opt-in GFX1013 mesh/task path. */
 +   info->has_gfx1013_mesh_shading = info->family == CHIP_GFX1013;
 +   info->has_gfx1013_task_shading = info->has_gfx1013_mesh_shading;
  
@@ -79,7 +66,7 @@ index 56f230b..3c6def8 100644
     uint8_t enable_mrt_output_nan_fixup;
     bool wgp_mode;
 diff --git a/src/amd/compiler/instruction_selection/aco_isel_setup.cpp b/src/amd/compiler/instruction_selection/aco_isel_setup.cpp
-index c4d28a1..46e7697 100644
+index c4d28a1..e18fc03 100644
 --- a/src/amd/compiler/instruction_selection/aco_isel_setup.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_isel_setup.cpp
 @@ -783,9 +783,11 @@ setup_isel_context(Program* program, unsigned shader_count, struct nir_shader* c
@@ -87,8 +74,8 @@ index c4d28a1..46e7697 100644
     assert(program->workgroup_size);
  
 -   /* Mesh shading only works on GFX10.3+. */
-+   /* Mesh shading normally requires GFX10.3+.  GFX1013 is enabled only by a
-+    * separately attested driver capability without changing its gfx_level.
++   /* Mesh shading normally requires GFX10.3+. GFX1013 can use the
++    * experimental path when RADV explicitly enables its mesh capability.
 +    */
     ASSERTED bool mesh_shading = ctx.stage.has(SWStage::TS) || ctx.stage.has(SWStage::MS);
 -   assert(!mesh_shading || ctx.program->gfx_level >= GFX10_3);
@@ -97,7 +84,7 @@ index c4d28a1..46e7697 100644
     setup_tcs_info(&ctx);
  
 diff --git a/src/amd/vulkan/radv_cmd_buffer.c b/src/amd/vulkan/radv_cmd_buffer.c
-index 3a1f98a..0423600 100644
+index 3a1f98a..cfa5b51 100644
 --- a/src/amd/vulkan/radv_cmd_buffer.c
 +++ b/src/amd/vulkan/radv_cmd_buffer.c
 @@ -3145,7 +3145,8 @@ radv_emit_hw_ngg(struct radv_cmd_buffer *cmd_buffer, const struct radv_shader *e
@@ -117,12 +104,12 @@ index 3a1f98a..0423600 100644
 -      /* Re-emit VRS state because the combiner is different (vertex vs primitive). Re-emit
 -       * primitive topology because the mesh shading pipeline clobbered it.
 +      /* Re-emit primitive topology because the mesh shading pipeline clobbered
-+       * it. GFX10.3+ also needs VRS state because the combiner is different,
-+       * but native GFX10.1 has no fragment-shading-rate state to emit.
++       * it. Real GFX10.3+ hardware also needs VRS state; GFX1013 has no FSR
++       * hardware even when RADV_GFX103 promotes its software gfx_level.
         */
 -      cmd_buffer->state.dirty |= RADV_CMD_DIRTY_FSR_STATE | RADV_CMD_DIRTY_VGT_PRIM_STATE;
 +      cmd_buffer->state.dirty |= RADV_CMD_DIRTY_VGT_PRIM_STATE;
-+      if (pdev->info.gfx_level >= GFX10_3)
++      if (pdev->info.gfx_level >= GFX10_3 && pdev->info.family != CHIP_GFX1013)
 +         cmd_buffer->state.dirty |= RADV_CMD_DIRTY_FSR_STATE;
     }
  
@@ -180,10 +167,10 @@ index 3a1f98a..0423600 100644
                             6 * num_views /* Nx DISPATCH_TASKMESH_DIRECT_ACE */);
  
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 3abd949..241b472 100644
+index 3abd949..7c6c823 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -63,14 +63,23 @@ radv_perf_query_supported(const struct radv_physical_device *pdev)
+@@ -63,14 +63,27 @@ radv_perf_query_supported(const struct radv_physical_device *pdev)
  }
  
  static bool
@@ -196,20 +183,24 @@ index 3abd949..241b472 100644
        return false;
  
 -   return pdev->use_ngg && !pdev->use_llvm && pdev->info.gfx_level >= GFX10_3 && radv_compute_queue_enabled(pdev);
-+   return pdev->use_ngg && !pdev->use_llvm &&
-+          (pdev->info.gfx_level >= GFX10_3 || pdev->info.has_gfx1013_mesh_shading);
++   /* For GFX1013, gfx_level reaches GFX10_3 only when RADV_GFX103=1 is
++    * explicitly requested. Keep the hardware capability bit as an additional
++    * guard while leaving native GFX10.3+ devices unchanged.
++    */
++   return pdev->use_ngg && !pdev->use_llvm && pdev->info.gfx_level >= GFX10_3 &&
++          (pdev->info.family != CHIP_GFX1013 || pdev->info.has_gfx1013_mesh_shading);
 +}
 +
 +static bool
 +radv_task_enabled(const struct radv_physical_device *pdev)
 +{
 +   return radv_mesh_enabled(pdev) &&
-+          (pdev->info.gfx_level >= GFX10_3 || pdev->info.has_gfx1013_task_shading) &&
++          (pdev->info.family != CHIP_GFX1013 || pdev->info.has_gfx1013_task_shading) &&
 +          radv_compute_queue_enabled(pdev);
  }
  
  bool
-@@ -812,7 +821,7 @@ radv_physical_device_get_supported_extensions(const struct radv_physical_device
+@@ -812,7 +825,7 @@ radv_physical_device_get_supported_extensions(const struct radv_physical_device
        .EXT_map_memory_placed = true,
        .EXT_memory_budget = true,
        .EXT_memory_priority = true,
@@ -218,18 +209,19 @@ index 3abd949..241b472 100644
        .EXT_multi_draw = true,
        .EXT_mutable_descriptor_type = true, /* Trivial promotion from VALVE. */
        .EXT_nested_command_buffer = true,
-@@ -907,7 +916,9 @@ static void
+@@ -907,7 +920,10 @@ static void
  radv_physical_device_get_features(const struct radv_physical_device *pdev, struct vk_features *features)
  {
     const struct radv_instance *instance = radv_physical_device_instance(pdev);
 -   bool taskmesh_en = radv_taskmesh_enabled(pdev);
 +   bool mesh_en = radv_mesh_enabled(pdev);
 +   bool task_en = radv_task_enabled(pdev);
-+   bool full_mesh_features = mesh_en && pdev->info.gfx_level >= GFX10_3;
++   bool full_mesh_features =
++      mesh_en && pdev->info.gfx_level >= GFX10_3 && pdev->info.family != CHIP_GFX1013;
     bool has_perf_query = radv_perf_query_supported(pdev);
     bool has_shader_image_float_minmax = pdev->info.gfx_level != GFX8 && pdev->info.gfx_level != GFX9 &&
                                          pdev->info.gfx_level != GFX11 && pdev->info.gfx_level != GFX11_5;
-@@ -1259,10 +1270,10 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
+@@ -1259,10 +1275,10 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
        .minLod = true,
  
        /* VK_EXT_mesh_shader */
@@ -244,7 +236,7 @@ index 3abd949..241b472 100644
        .meshShaderQueries = false,
  
        /* VK_EXT_depth_clip_control */
-@@ -1657,8 +1668,9 @@ radv_get_physical_device_properties(struct radv_physical_device *pdev)
+@@ -1657,8 +1673,9 @@ radv_get_physical_device_properties(struct radv_physical_device *pdev)
     const bool has_fp16 = radv_shader_fp16_enabled(pdev);
     const bool enable_sparse = radv_sparse_enabled(pdev);
  
@@ -256,7 +248,7 @@ index 3abd949..241b472 100644
     VkShaderStageFlags rt_stages = radv_enable_rt(pdev) ? RADV_RT_STAGE_BITS : 0;
  
     bool accel_dot = pdev->info.compiler_info.has_accelerated_dot_product;
-@@ -2214,7 +2226,7 @@ radv_get_physical_device_properties(struct radv_physical_device *pdev)
+@@ -2214,7 +2231,7 @@ radv_get_physical_device_properties(struct radv_physical_device *pdev)
        .pipelineBinaryCompressedData = false,
  
        /* VK_KHR_compute_shader_derivatives */
@@ -266,66 +258,71 @@ index 3abd949..241b472 100644
        /* VK_EXT_device_generated_commands */
        .maxIndirectPipelineCount = 4096,
 diff --git a/src/amd/vulkan/radv_pipeline.c b/src/amd/vulkan/radv_pipeline.c
-index de01e10..d577ef4 100644
+index de01e10..9897569 100644
 --- a/src/amd/vulkan/radv_pipeline.c
 +++ b/src/amd/vulkan/radv_pipeline.c
-@@ -513,7 +513,9 @@ radv_postprocess_nir(struct radv_device *device, const struct radv_graphics_stat
+@@ -513,7 +513,10 @@ radv_postprocess_nir(struct radv_device *device, const struct radv_graphics_stat
                 .wave_size = stage->info.wave_size,
                 .workgroup_size = stage->info.workgroup_size,
                 .use_llvm = use_llvm,
 -               .load_grid_size_from_user_sgpr = device->load_grid_size_from_user_sgpr,
 +               .load_grid_size_from_user_sgpr =
 +                  device->load_grid_size_from_user_sgpr ||
-+                  (stage->stage == MESA_SHADER_TASK && pdev->info.has_gfx1013_task_shading),
++                  (stage->stage == MESA_SHADER_TASK && pdev->info.family == CHIP_GFX1013 &&
++                   pdev->info.gfx_level >= GFX10_3 && pdev->info.has_gfx1013_task_shading),
              });
     NIR_PASS(_, stage->nir, radv_nir_lower_abi, gfx_level, stage, gfx_state, pdev->info.address32_hi);
  
 diff --git a/src/amd/vulkan/radv_queue.c b/src/amd/vulkan/radv_queue.c
-index 002f9ef..6661aee 100644
+index 002f9ef..1aca949 100644
 --- a/src/amd/vulkan/radv_queue.c
 +++ b/src/amd/vulkan/radv_queue.c
-@@ -926,7 +926,7 @@ radv_update_preamble_cs(struct radv_queue_state *queue, struct radv_device *devi
+@@ -926,7 +926,8 @@ radv_update_preamble_cs(struct radv_queue_state *queue, struct radv_device *devi
     }
  
     if (!queue->ring_info.task_rings && needs->task_rings) {
 -      assert(pdev->info.gfx_level >= GFX10_3);
-+      assert(pdev->info.gfx_level >= GFX10_3 || pdev->info.has_gfx1013_task_shading);
++      assert(pdev->info.gfx_level >= GFX10_3 ||
++             (pdev->info.family == CHIP_GFX1013 && pdev->info.has_gfx1013_task_shading));
  
        /* We write the control buffer from the CPU, so need to grant CPU access to the BO.
         * The draw ring needs to be zero-initialized otherwise the ready bits will be incorrect.
-@@ -946,7 +946,7 @@ radv_update_preamble_cs(struct radv_queue_state *queue, struct radv_device *devi
+@@ -946,7 +947,8 @@ radv_update_preamble_cs(struct radv_queue_state *queue, struct radv_device *devi
     }
  
     if (!queue->ring_info.mesh_scratch_ring && needs->mesh_scratch_ring) {
 -      assert(pdev->info.gfx_level >= GFX10_3);
-+      assert(pdev->info.gfx_level >= GFX10_3 || pdev->info.has_gfx1013_task_shading);
++      assert(pdev->info.gfx_level >= GFX10_3 ||
++             (pdev->info.family == CHIP_GFX1013 && pdev->info.has_gfx1013_task_shading));
        result =
           radv_bo_create(device, NULL, AC_MESH_SCRATCH_NUM_ENTRIES * AC_MESH_SCRATCH_ENTRY_BYTES, 256,
                          RADEON_DOMAIN_VRAM, ring_bo_flags, RADV_BO_PRIORITY_SCRATCH, 0, true, &mesh_scratch_ring_bo);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 2957e28..fae996d 100644
+index 2957e28..240a3b4 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
-@@ -3383,6 +3383,8 @@ shader_compile(struct radv_device *device, struct nir_shader *const *shaders, in
+@@ -3383,6 +3383,9 @@ shader_compile(struct radv_device *device, struct nir_shader *const *shaders, in
        struct aco_shader_info ac_info;
        struct aco_compiler_options ac_opts;
        radv_aco_convert_opts(&ac_opts, options, args, stage_key);
 +      ac_opts.has_mesh_shading =
-+         pdev->info.gfx_level >= GFX10_3 || pdev->info.has_gfx1013_mesh_shading;
++         pdev->info.gfx_level >= GFX10_3 &&
++         (pdev->info.family != CHIP_GFX1013 || pdev->info.has_gfx1013_mesh_shading);
        radv_aco_convert_shader_info(&ac_info, info, args, &device->cache_key, pdev->info.gfx_level);
        aco_compile_shader(&ac_opts, &ac_info, shader_count, shaders, &args->ac, &radv_aco_build_shader_binary,
                           (void **)&binary);
 diff --git a/src/amd/vulkan/radv_shader_args.c b/src/amd/vulkan/radv_shader_args.c
-index 62baa82..d838b00 100644
+index 62baa82..930c6a7 100644
 --- a/src/amd/vulkan/radv_shader_args.c
 +++ b/src/amd/vulkan/radv_shader_args.c
-@@ -617,7 +617,8 @@ declare_shader_args(struct radv_shader_args_state *state, const struct radv_devi
+@@ -617,7 +617,9 @@ declare_shader_args(struct radv_shader_args_state *state, const struct radv_devi
        declare_global_input_sgprs(state, gfx_level, info, user_sgpr_info);
  
        if (info->cs.uses_grid_size) {
 -         if (device->load_grid_size_from_user_sgpr)
 +         if (device->load_grid_size_from_user_sgpr ||
-+             (stage == MESA_SHADER_TASK && pdev->info.has_gfx1013_task_shading))
++             (stage == MESA_SHADER_TASK && pdev->info.family == CHIP_GFX1013 &&
++              pdev->info.gfx_level >= GFX10_3 && pdev->info.has_gfx1013_task_shading))
              RADV_ADD_UD_ARG(state, 3, AC_ARG_VALUE, ac.num_work_groups, AC_UD_CS_GRID_SIZE);
           else
              RADV_ADD_UD_ARG(state, 2, AC_ARG_CONST_ADDR, ac.num_work_groups, AC_UD_CS_GRID_SIZE);

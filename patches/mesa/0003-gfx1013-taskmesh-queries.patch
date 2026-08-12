@@ -1,24 +1,21 @@
-From aff96b29cbf5435b496c31eefb60dd6f6802c4d4 Mon Sep 17 00:00:00 2001
+From 9cd79f610e441e47394337e4c578e339ef40c229 Mon Sep 17 00:00:00 2001
 From: DryhoppedIPA <DryhoppedIPA@users.noreply.github.com>
-Date: Sat, 8 Aug 2026 22:31:30 +0000
-Subject: [PATCH 3/3] radv: mesh/task pipeline-statistics queries on GFX1013
+Date: Sat, 8 Aug 2026 04:53:11 +0000
+Subject: [PATCH 3/4] radv: mesh/task pipeline-statistics queries on GFX1013
 
-Reuse RADV's existing GFX10.3 mesh-shader query emulation, retaining the
-device's real GFX10.1 identity and the 14-slot result layout required by
-the task and mesh statistic indices.
+Expose GFX1013 mesh-shader queries only through the opt-in GFX10.3 override. Once RADV_GFX103 promotes the software gfx_level, the existing GFX10.3 query emulation and 14-slot result layout are reused automatically; without the override the query path stays disabled.
 ---
  src/amd/common/ac_gpu_info.c          | 1 +
  src/amd/common/ac_gpu_info.h          | 1 +
- src/amd/vulkan/radv_physical_device.c | 4 ++--
- src/amd/vulkan/radv_query.c           | 3 ++-
- 4 files changed, 6 insertions(+), 3 deletions(-)
+ src/amd/vulkan/radv_physical_device.c | 4 +++-
+ 3 files changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
-index ceb20d3..8a3c41b 100644
+index 19bbbb7..6dc19c5 100644
 --- a/src/amd/common/ac_gpu_info.c
 +++ b/src/amd/common/ac_gpu_info.c
-@@ -982,6 +982,7 @@ void ac_fill_bug_info(struct radeon_info *info)
-    /* GFX1013 remains a GFX10.1 device; never promote gfx_level. */
+@@ -980,6 +980,7 @@ void ac_fill_bug_info(struct radeon_info *info)
+    /* Hardware capabilities used by RADV's opt-in GFX1013 mesh/task path. */
     info->has_gfx1013_mesh_shading = info->family == CHIP_GFX1013;
     info->has_gfx1013_task_shading = info->has_gfx1013_mesh_shading;
 +   info->has_gfx1013_mesh_queries = info->has_gfx1013_task_shading;
@@ -38,38 +35,17 @@ index d3d25af..0e7c13a 100644
     bool sdma_supports_compression; /* Whether SDMA supports DCC and HTILE. */
     bool has_set_context_pairs;
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 241b472..be287dc 100644
+index 7c6c823..1c4271c 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -1274,7 +1274,7 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
+@@ -1279,7 +1279,9 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
        .taskShader = task_en,
        .multiviewMeshShader = full_mesh_features,
        .primitiveFragmentShadingRateMeshShader = full_mesh_features,
 -      .meshShaderQueries = false,
-+      .meshShaderQueries = pdev->info.has_gfx1013_mesh_queries,
++      .meshShaderQueries =
++         pdev->info.family == CHIP_GFX1013 && pdev->info.gfx_level >= GFX10_3 &&
++         pdev->info.has_gfx1013_mesh_queries,
  
        /* VK_EXT_depth_clip_control */
        .depthClipControl = true,
-@@ -2577,7 +2577,7 @@ radv_physical_device_try_create(struct radv_instance *instance, drmDevicePtr drm
- 
-    pdev->emulate_ngg_gs_query_pipeline_stat = pdev->use_ngg && pdev->info.gfx_level < GFX11;
- 
--   pdev->emulate_mesh_shader_queries = pdev->info.gfx_level == GFX10_3;
-+   pdev->emulate_mesh_shader_queries = pdev->info.gfx_level == GFX10_3 || pdev->info.has_gfx1013_mesh_queries;
- 
-    /* Determine the number of threads per wave for all stages. */
-    pdev->cs_wave_size = 64;
-diff --git a/src/amd/vulkan/radv_query.c b/src/amd/vulkan/radv_query.c
-index 5308ba8..32262da 100644
---- a/src/amd/vulkan/radv_query.c
-+++ b/src/amd/vulkan/radv_query.c
-@@ -410,7 +410,8 @@ radv_get_pipelinestat_query_size(struct radv_device *device)
-     * invocations, it's easier to use the same size as GFX11.
-     */
-    const struct radv_physical_device *pdev = radv_device_physical(device);
--   unsigned num_results = pdev->info.gfx_level >= GFX10_3 ? 14 : 11;
-+   unsigned num_results =
-+      pdev->info.gfx_level >= GFX10_3 || pdev->info.has_gfx1013_mesh_queries ? 14 : 11;
-    return num_results * 8;
- }
- 

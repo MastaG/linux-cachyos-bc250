@@ -88,9 +88,9 @@ cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/mesa-git-PKGBUILD"
 cp -- "$BUILD_DIR/customization.cfg" "$OUT_DIR/mesa-git-customization.cfg"
 cp -- "$BUILD_DIR/mesa-userpatches/user.cfg" "$OUT_DIR/mesa-git-user.cfg"
 cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/mesa-git.SRCINFO"
-cp -- "$ROOT_DIR/patches/mesa-git/0001-gfx1013-compute-queue-fix.patch" "$OUT_DIR/mesa-git-0001-gfx1013-compute-queue-fix.patch"
-cp -- "$ROOT_DIR/patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch" "$OUT_DIR/mesa-git-0002-gfx1013-mesh-task-shaders.patch"
-cp -- "$ROOT_DIR/patches/mesa-git/0003-gfx1013-taskmesh-queries.patch" "$OUT_DIR/mesa-git-0003-gfx1013-taskmesh-queries.patch"
+for patch in "$ROOT_DIR"/patches/mesa-git/*.patch; do
+    cp -- "$patch" "$OUT_DIR/mesa-git-$(basename "$patch")"
+done
 
 cat > "$OUT_DIR/mesa-git-info.env" <<EOF_INFO
 MESA_GIT_FINGERPRINT=${MESA_GIT_FINGERPRINT:-unknown}
@@ -100,7 +100,7 @@ MESA_GIT_COMMIT=${MESA_GIT_COMMIT}
 MESA_GIT_PKGBASE=mesa-git
 MESA_GIT_PKGVER=${pkgver}
 MESA_GIT_PKGREL=${pkgrel}
-MESA_GIT_APPLIED_PATCH=${MESA_GIT_APPLIED_PATCH}
+MESA_GIT_APPLIED_PATCHES=${MESA_GIT_APPLIED_PATCHES}
 MESA_GIT_MARCH=${MESA_GIT_MARCH}
 MESA_GIT_MTUNE=${MESA_GIT_MTUNE}
 MESA_GIT_LIB32=${MESA_GIT_LIB32}

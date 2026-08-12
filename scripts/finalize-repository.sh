@@ -229,15 +229,15 @@ All three kernels use:
 
 - CachyOS packaging commit: \`${mesa_cachyos_commit}\`
 - Version: \`${mesa_pkgver}-${mesa_pkgrel}\`${mesa_epoch:+ (epoch ${mesa_epoch})}
-- Applied patch: \`0001-gfx1013-compute-queue-fix.patch\`
+- Applied patches: \`0001\` compute-queue fix, \`0002\` mesh/task support, \`0003\` mesh queries, \`0004\` RADV_GFX103 runtime override.
+- \`0001\` is always active; GFX1013 mesh/task feature exposure remains disabled unless \`RADV_GFX103=1\` is set for the application.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
-- Mesh/task patches remain disabled.
 
 ## Patched stable CachyOS lib32-mesa
 
 - CachyOS packaging commit: \`${lib32_cachyos_commit}\`
 - Version: \`${lib32_pkgver}-${lib32_pkgrel}\`${lib32_epoch:+ (epoch ${lib32_epoch})}
-- Uses the same Mesa release and active GFX1013 compute-queue patch as stable 64-bit Mesa.
+- Uses the same four-patch series and runtime gating as stable 64-bit Mesa.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 
 ## Patched CachyOS mesa-git
@@ -246,9 +246,9 @@ All three kernels use:
 - Mesa main commit: \`${mesa_git_commit}\`
 - Package version: \`${mesa_git_pkgver}-${mesa_git_pkgrel}\`
 - Builds both \`mesa-git\` and \`lib32-mesa-git\` from the same pinned Mesa commit.
-- Applied Git-rebased patch: \`mesa-git-0001-gfx1013-compute-queue-fix.patch\`
+- Applies separately rebased \`0001\` through \`0004\` patches in order.
+- \`0001\` is always active; the experimental GFX1013 mesh/task path is opt-in with \`RADV_GFX103=1\`.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
-- Rebased mesh/task patches are published but remain disabled because they can hard-hang GFX1013.
 EOF_NOTES
 
 printf 'BC-250 kernels — stable %s, RC %s, BORE %s' \

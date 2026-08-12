@@ -1,34 +1,19 @@
-From 3fcfc6aa174fbd4eb9505c4a8e7c69757121604c Mon Sep 17 00:00:00 2001
+From 4f9dac1fc39a5cdf22901b9de2e525821c416247 Mon Sep 17 00:00:00 2001
 From: DryhoppedIPA <DryhoppedIPA@users.noreply.github.com>
-Date: Sat, 8 Aug 2026 22:31:30 +0000
-Subject: [PATCH 1/3] radv,ac: GFX1013 compute queue fix (identity, exposure,
+Date: Sat, 8 Aug 2026 04:53:11 +0000
+Subject: [PATCH 1/4] radv,ac: GFX1013 compute queue fix (identity, exposure,
  ACE dispatch WA)
 
-Three changes that together make the GFX1013 (BC-250) dedicated compute
-queues usable:
-
-- Report the correct GFX10.1 IP minor version instead of misclassifying
-  the chip (mirrors upstream !43465).
-- Expose the ACE compute queue family unconditionally. Upstream hides it
-  because stock kernels have a broken compute-queue lifecycle; this driver
-  requires the V33 kernel patches from this repository, which repair it.
-- Route GFX1013 through the existing Iceland/Tonga async-compute
-  threadgroup workaround (thread-dimension dispatch mode). The part
-  mis-executes threadgroup-dimension dispatches with PARTIAL_TG_EN in a
-  state it cold-boots into, corrupting every RADV meta transfer on the
-  ACE queues. Verified: dEQP-VK.synchronization2.* 7034 fail -> 7034
-  pass with the workaround, 0 regressions.
-
-Do not ship the Mesa half without the kernel half.
+Expose the GFX1013 ACE compute queue when paired with the BC-250 kernel fixes and route GFX1013 through the async-compute threadgroup workaround. Keep the GFX10.1 IP correction where it is not already present upstream.
 ---
- src/amd/common/ac_gpu_info.c | 14 ++++++++------
- 1 file changed, 8 insertions(+), 6 deletions(-)
+ src/amd/common/ac_gpu_info.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
 
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
-index 78e4ec4..541ed5b 100644
+index 78e4ec4..249c2cb 100644
 --- a/src/amd/common/ac_gpu_info.c
 +++ b/src/amd/common/ac_gpu_info.c
-@@ -451,10 +451,10 @@ ac_fill_hw_ip_info(struct radeon_info *info, const struct drm_amdgpu_info_device
+@@ -451,11 +451,9 @@ ac_fill_hw_ip_info(struct radeon_info *info, const struct drm_amdgpu_info_device
         */
        info->ip[ip_type].num_queues = 1;
     } else if (ip_info->available_rings) {
@@ -36,14 +21,14 @@ index 78e4ec4..541ed5b 100644
 -      if (ip_type == AMD_IP_COMPUTE && device_info->family == FAMILY_NV &&
 -          ASICREV_IS(device_info->external_rev, GFX1013))
 -         return false;
-+      /* GFX1013: the compute queue is exposed unconditionally.  This driver
-+       * must run only on a kernel carrying the V33 compute-queue lifecycle
-+       * repair; on stock GFX1013 kernels the queue must stay closed.
+-
++      /* GFX1013: expose the dedicated compute queue. This requires the
++       * matching BC-250 kernel compute-queue lifecycle fixes.
 +       */
- 
        info->ip[ip_type].num_queues = util_bitcount(ip_info->available_rings);
     } else {
-@@ -474,7 +474,8 @@ ac_fill_hw_ip_info(struct radeon_info *info, const struct drm_amdgpu_info_device
+       return false;
+@@ -474,7 +472,8 @@ ac_fill_hw_ip_info(struct radeon_info *info, const struct drm_amdgpu_info_device
        if (device_info->family == FAMILY_NV &&
              (ASICREV_IS(device_info->external_rev, NAVI10) ||
              ASICREV_IS(device_info->external_rev, NAVI12) ||
@@ -53,7 +38,7 @@ index 78e4ec4..541ed5b 100644
           info->ip[AMD_IP_GFX].ver_minor = info->ip[AMD_IP_COMPUTE].ver_minor = 1;
        else if (device_info->family == FAMILY_NV ||
                 device_info->family == FAMILY_VGH ||
-@@ -961,7 +962,8 @@ void ac_fill_bug_info(struct radeon_info *info)
+@@ -961,7 +960,8 @@ void ac_fill_bug_info(struct radeon_info *info)
      * dimension mode.
      */
     info->has_async_compute_threadgroup_bug = info->family == CHIP_ICELAND ||

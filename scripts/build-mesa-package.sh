@@ -14,7 +14,6 @@ source "${ROOT_DIR}/scripts/repo-package-helpers.sh"
 cd -- "$MESA_BUILD_DIR"
 export MAKEFLAGS="${MAKEFLAGS:--j$(nproc)}"
 
-# Only 0001 is active. 0002/0003 remain release assets for testing/review.
 makepkg --syncdeps --noconfirm --cleanbuild --clean --skippgpcheck
 makepkg --printsrcinfo > .SRCINFO
 
@@ -32,9 +31,9 @@ normalize_repo_package_filenames "$OUT_DIR"
 
 cp -- "$MESA_BUILD_DIR/PKGBUILD" "$OUT_DIR/mesa-PKGBUILD"
 cp -- "$MESA_BUILD_DIR/.SRCINFO" "$OUT_DIR/mesa.SRCINFO"
-cp -- "$MESA_BUILD_DIR/0001-gfx1013-compute-queue-fix.patch" "$OUT_DIR/0001-gfx1013-compute-queue-fix.patch"
-cp -- "$ROOT_DIR/patches/mesa/0002-gfx1013-mesh-task-shaders.patch" "$OUT_DIR/0002-gfx1013-mesh-task-shaders.patch"
-cp -- "$ROOT_DIR/patches/mesa/0003-gfx1013-taskmesh-queries.patch" "$OUT_DIR/0003-gfx1013-taskmesh-queries.patch"
+for patch in "$ROOT_DIR"/patches/mesa/*.patch; do
+    cp -- "$patch" "$OUT_DIR/$(basename "$patch")"
+done
 
 srcinfo_value() {
     local key="$1"
@@ -71,7 +70,7 @@ MESA_PKGBASE=${mesa_pkgbase}
 MESA_EPOCH=${mesa_epoch}
 MESA_PKGVER=${mesa_pkgver}
 MESA_PKGREL=${mesa_pkgrel}
-MESA_APPLIED_PATCH=${MESA_APPLIED_PATCH}
+MESA_APPLIED_PATCHES=${MESA_APPLIED_PATCHES}
 MESA_MARCH=${MESA_MARCH}
 MESA_MTUNE=${MESA_MTUNE}
 EOF_INFO
