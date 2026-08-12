@@ -140,6 +140,7 @@ Applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`:
 0003-nct6687d-hwmon.patch
 0004-gfx1013-pasid-tlb-invalidation.patch
 0005-gfx1013-compute-gfxoff-guard.patch
+0006-bc250-tunable-gfxclk-activity-cache.patch
 ```
 
 The audio patch disables DP spread spectrum for Cyan Skillfish through `ignore_dpref_ss`.  
@@ -154,6 +155,7 @@ Applied to `linux-cachyos-rc-bc250`:
 0003-nct6687d-hwmon.patch
 0004-gfx1013-pasid-tlb-invalidation.patch
 0005-gfx1013-compute-gfxoff-guard.patch
+0006-bc250-tunable-gfxclk-activity-cache.patch
 ```
 
 There is intentionally no `0002-bc250-audio.patch` here.  
@@ -163,8 +165,8 @@ Both patch sets contain:
 
 - automatic 6-core / hybrid 8-core Cyan Skillfish SMU telemetry handling;
 - correct per-core telemetry for unlocked 8-core BC-250 systems;
-- GPU activity reporting through GPU Metrics and `GPU_LOAD`, with a 20 ms per-device cache to coalesce back-to-back polls;
-- safe GFX clock handling for the hybrid metrics layout;
+- GPU activity reporting through GPU Metrics and `GPU_LOAD`, with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 200 ms, `0` disables it);
+- safe GFX clock handling for the hybrid metrics layout, with tunable `GetGfxclkFrequency` mailbox caching (`amdgpu.cs_gfxclk_cache_ms`, default 200 ms, `0` disables it);
 - the v33 merged GFX1013 PASID TLB invalidation fix;
 - the GFX1013 compute GFXOFF guard;
 - integration of the external `nct6687` hwmon/PWM driver.
