@@ -8,6 +8,17 @@ All packages are published through the same fixed GitHub Release / pacman reposi
 Project: <https://github.com/MastaG/linux-cachyos-bc250>  
 Packages and repository assets: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 
+## Mesa behavior, performance and stability
+
+The patched Mesa packages enable the GFX1013 async-compute path by default; no environment variable is required for normal use.  
+Games that benefit from async compute can see a significant performance improvement. In current BC-250 community testing, Cyberpunk 2077 has shown gains of roughly 10–15 FPS.
+
+Async compute can also increase GPU load and voltage requirements.  
+Some BC-250 systems that were previously stable have shown green-screen or black-screen GPU crashes after enabling the async-compute path. Community reports indicate that some boards need a small GPU-voltage increase to remain stable, with around +25 mV being sufficient in several cases. This is not required on every BC-250: if the GPU is stable, no voltage change is needed.
+
+`RADV_GFX103=1` is separate from async compute and should **not** be enabled globally.  
+Use it only per-game for titles that need the experimental GFX10.3 mesh-shader path. It has been tested successfully with Final Fantasy VII Rebirth, which currently does not start on the BC-250 without the override in community testing. Mesh shaders work for this test case, but **task shaders are still not working correctly**. Games that depend on task shaders may render incorrectly, hang or crash when `RADV_GFX103=1` is enabled.
+
 ## Kernel choices
 
 The repository always builds these three independent kernel families:
@@ -206,16 +217,16 @@ patches/mesa/0004-radv-gfx103.patch
 ```
 
 `0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.  
-`0002` and `0003` contain the experimental mesh/task-shader and mesh-query support. For GFX1013 their user-visible feature path remains disabled unless `0004` sees `RADV_GFX103=1` at runtime.
+`0002` and `0003` contain the experimental mesh/task-shader and mesh-query plumbing. For GFX1013 their user-visible feature path remains disabled unless `0004` sees `RADV_GFX103=1` at runtime.
 
-For an individual Steam game that needs the experimental path, use:
+For an individual Steam game that specifically needs the experimental mesh-shader path, use:
 
 ```text
 RADV_GFX103=1 %command%
 ```
 
 Without `RADV_GFX103`, GFX1013 keeps its normal GFX10.1 software level and the experimental mesh/task features are not exposed.  
-With the variable enabled, `0004` promotes the RADV software `gfx_level` to GFX10.3 for that process. This is intentionally experimental: the override affects RADV code paths that key off `gfx_level`, not only the mesh/task extension checks.
+With the variable enabled, `0004` promotes the RADV software `gfx_level` to GFX10.3 for that process. Final Fantasy VII Rebirth is currently the main tested use case and its mesh-shader path works with this override. **Task shaders are still not working correctly**, so games that rely on task shaders may render incorrectly, hang or crash. Do not export `RADV_GFX103=1` globally; enable it only for games that need it.
 
 Stable Mesa is built with:
 
@@ -253,7 +264,7 @@ patches/mesa-git/0004-radv-gfx103.patch
 ```
 
 `0001` remains active regardless of environment variables.  
-The GFX1013 mesh/task path from `0002`/`0003` is opt-in through `RADV_GFX103=1`; `0004` provides that runtime override and defaults to disabled.
+The experimental GFX1013 mesh/task path from `0002`/`0003` is opt-in through `RADV_GFX103=1`; `0004` provides that runtime override and defaults to disabled. The same limitations as stable Mesa apply: mesh shaders are the currently tested use case, while task shaders are still not working correctly.
 
 There is deliberately no separate `series` file. The build script explicitly applies the four numbered patches in order through CachyOS' `mesa-userpatches` mechanism.
 
