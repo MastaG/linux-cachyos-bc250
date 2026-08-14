@@ -67,24 +67,7 @@ printf '%s\n' 'nct6687' | sudo tee /etc/modules-load.d/nct6687.conf >/dev/null
 
 All three kernels contain the external `nct6687` driver as an in-tree-built module.
 
-### 3. Add the required AMDGPU scheduler parameter
-
-The GFX1013 compute fixes are intended to run with `amdgpu.sched_policy=2`.  
-On CachyOS with Limine:
-
-```bash
-grep -Eq '^[[:space:]]*KERNEL_CMDLINE\[default\].*amdgpu\.sched_policy=2' /etc/default/limine || \
-  printf '%s\n' 'KERNEL_CMDLINE[default]+=amdgpu.sched_policy=2' | \
-  sudo tee -a /etc/default/limine >/dev/null
-```
-
-If `/etc/default/limine` is changed after a kernel is already installed, run:
-
-```bash
-sudo limine-mkinitcpio
-```
-
-### 4. Install a kernel
+### 3. Install a kernel
 
 The stable kernel is the recommended default:
 
@@ -109,7 +92,7 @@ Because the package names are separate, installing the RC or BORE variant does n
 With `[bc250-cachyos]` above the normal CachyOS repositories, installed stable Mesa and lib32-Mesa split packages also update to the patched BC-250 builds during a normal `pacman -Syu`.  
 `mesa-git` and `lib32-mesa-git` remain opt-in alternatives.
 
-### 5. Reboot and verify
+### 4. Reboot and verify
 
 ```bash
 sudo reboot
@@ -120,14 +103,39 @@ After rebooting:
 ```bash
 uname -r
 lsmod | grep nct6687
+```
+
+## Optional AMDGPU scheduler tuning
+
+Do **not** add `amdgpu.sched_policy=2` as a required installation step.  
+Current BC-250 testing shows that scheduler performance is workload-dependent: some systems or games are slightly faster or smoother with the default hardware scheduler (`sched_policy=0`), while others can benefit from the non-HWS path (`sched_policy=2`). Average FPS and frametime behavior can also move in different directions.
+
+The kernel default is `amdgpu.sched_policy=0`. Test both values on your own system if you want to tune gaming performance or frametimes, and keep the setting that works best for your workload.  
+To verify the active value after boot:
+
+```bash
 cat /proc/cmdline | grep -o 'amdgpu.sched_policy=[^ ]*'
 ```
 
-The last command should show:
+If no value is printed, the normal kernel default (`0`) is in use.
 
-```text
-amdgpu.sched_policy=2
+If you previously followed an older version of this README that added `sched_policy=2` as a required setting, remove that dedicated line and rebuild Limine before comparing policies:
+
+```bash
+sudo sed -i '/^[[:space:]]*KERNEL_CMDLINE\[default\]+=[[:space:]]*amdgpu\.sched_policy=2[[:space:]]*$/d' /etc/default/limine
+sudo limine-mkinitcpio
 ```
+
+To test `sched_policy=2` on CachyOS with Limine, add it to `/etc/default/limine` and regenerate the Limine initramfs configuration:
+
+```bash
+printf '%s\n' 'KERNEL_CMDLINE[default]+=amdgpu.sched_policy=2' | \
+  sudo tee -a /etc/default/limine >/dev/null
+sudo limine-mkinitcpio
+```
+
+Remove that line again to return to the default HWS policy.  
+The optional ROCm/KFD runlist-TLB workaround documented below requires hardware scheduling and therefore does **not** operate with `sched_policy=2`.
 
 ## Kernel patch sets
 
@@ -151,6 +159,8 @@ Applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`:
 0003-nct6687d-hwmon.patch
 0004-gfx1013-pasid-tlb-invalidation.patch
 0005-gfx1013-compute-gfxoff-guard.patch
+0006-bc250-kfd-flush-tlb-by-runlist.patch
+0007-amdgpu-ttm-null-page-guard.patch
 ```
 
 The audio patch disables DP spread spectrum for Cyan Skillfish through `ignore_dpref_ss`.  
@@ -165,6 +175,8 @@ Applied to `linux-cachyos-rc-bc250`:
 0003-nct6687d-hwmon.patch
 0004-gfx1013-pasid-tlb-invalidation.patch
 0005-gfx1013-compute-gfxoff-guard.patch
+0006-bc250-kfd-flush-tlb-by-runlist.patch
+0007-amdgpu-ttm-null-page-guard.patch
 ```
 
 There is intentionally no `0002-bc250-audio.patch` here.  
@@ -181,7 +193,36 @@ Both patch sets contain:
 - safe GFX clock handling for the hybrid metrics layout, with tunable `GetGfxclkFrequency` mailbox caching (`amdgpu.cs_gfxclk_cache_ms`, default 25 ms, `0` disables it);
 - the v33 merged GFX1013 PASID TLB invalidation fix;
 - the GFX1013 compute GFXOFF guard;
+- an **opt-in** KFD/HWS runlist rebuild workaround for stale ROCm compute TLB translations (`amdgpu.bc250_flush_by_runlist=1`);
+- a defensive AMDGPU TTM NULL-page guard so partially populated BO cleanup cannot dereference a missing page;
 - integration of the external `nct6687` hwmon/PWM driver.
+
+## Experimental ROCm / KFD kernel support
+
+`0006-bc250-kfd-flush-tlb-by-runlist.patch` is based on the BC-250 ROCm investigation by GabriWar.  
+Under KFD hardware scheduling on GFX1013, the normal gfx10 PASID TLB flush can fail to find a VMID because the HWS path does not populate the `ATC_VMID*_PASID_MAPPING` table used by that flush. Rebuilding an active HWS runlist has been measured to clear the stale translation state and is therefore provided as an experimental workaround.
+
+The workaround is **disabled by default** and restricted to PCI device `0x13FE` with GFX IP `10.1.3`. It also refuses to run under non-HWS scheduling or MES.  
+Enable it at boot only for ROCm/KFD testing:
+
+```text
+amdgpu.bc250_flush_by_runlist=1
+```
+
+Or enable/disable it at runtime while HWS is already active:
+
+```bash
+echo 1 | sudo tee /sys/module/amdgpu/parameters/bc250_flush_by_runlist
+echo 0 | sudo tee /sys/module/amdgpu/parameters/bc250_flush_by_runlist
+```
+
+The helper only rebuilds an already-active runlist, preserving the scheduler state instead of accidentally activating an inactive runlist.  
+Because the mechanism depends on the hardware scheduler, it is a no-op with `amdgpu.sched_policy=2`; use the normal `sched_policy=0` when testing this ROCm workaround.
+
+`0007-amdgpu-ttm-null-page-guard.patch` is separate from the TLB workaround. TTM allocation failures can legitimately leave NULL entries in a partially populated page vector, while AMDGPU's unpopulate path dereferenced every entry before calling `ttm_pool_free()`. The patch skips NULL entries during the `page->mapping` cleanup; the TTM free path in both supplied Linux 7.1 and 7.2 sources already handles those sparse entries.  
+This does not fix the compute fault that caused a partial allocation; it prevents that failure from escalating into a kernel NULL-pointer panic during cleanup.
+
+ROCm userspace still requires additional GFX1013-specific work outside this kernel repository. These kernel patches alone should not be read as complete ROCm support.
 
 ## NCT6687D hardware-monitoring module
 
@@ -435,3 +476,5 @@ Only use this repository when you trust the project and its workflow.
   <https://github.com/higorprado/bc250-8core-telemetry-report>
 - DryhoppedIPA — GFX1013 amdgpu and Mesa fixes.  
   <https://github.com/DryhoppedIPA/bc250-gfx1013-fix>
+- GabriWar — BC-250 ROCm/KFD TLB investigation, runlist invalidation workaround and AMDGPU TTM NULL-page guard.  
+  <https://github.com/GabriWar/bc250-rocm-working>

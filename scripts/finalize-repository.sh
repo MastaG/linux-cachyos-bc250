@@ -222,6 +222,8 @@ All three kernels use:
 - CPU tuning: **Zen 2** (\`KCFLAGS=-mtune=${cpu_tune}\`)
 - BC-250 telemetry/GPU-activity fixes
 - GFX1013 PASID TLB invalidation fix and compute GFXOFF guard
+- Opt-in KFD/HWS runlist TLB workaround (\`amdgpu.bc250_flush_by_runlist=1\`)
+- AMDGPU TTM NULL-page cleanup guard for partially populated BOs
 - \`nct6687.ko\` from Fred78290/nct6687d commit \`${nct_commit}\`
 - upstream \`nct6683\` disabled to avoid claiming the same Super-I/O IDs
 

@@ -1,7 +1,7 @@
 12c22719d10c994da22bf997764e600b32e3649f0b8f578d74a97d7d9cc8edf7  ./.github/workflows/build-release.yml
 f73400982c1d738d5e332a0e01e401842604b65580efeba89e1dba7cb5b76f62  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-89ef0db0b405ed4e6aa3e7d8c7ed7184d49b97356143524cef188233ed368789  ./README.md
+fe4943456232e909d23cdcb47d258f711ff446fc4119cb7d85362fad19eba7c9  ./README.md
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
 0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  ./pacman/stable.conf.example
@@ -10,10 +10,14 @@ cb1c6931450159905501c0836b43c3120dec74535cff537e155ad63bbc040b40  ./patches/kern
 d32e9fa12dc7495f5948904a9136b1c9494d5369da21d3f254a7954f55f969c8  ./patches/kernel-7.1/0003-nct6687d-hwmon.patch
 8ef6433de892abab2d1102dbe4d905ba9c2d0916253e34800ba97c2b6573e5a1  ./patches/kernel-7.1/0004-gfx1013-pasid-tlb-invalidation.patch
 9150a3ee622292f651e1673f64df22239ed115861456f0b00ee860daa388b918  ./patches/kernel-7.1/0005-gfx1013-compute-gfxoff-guard.patch
+260e2d84ed9ec1585b4fc6092f3bb01347ac57a43de428afb0203190974d6099  ./patches/kernel-7.1/0006-bc250-kfd-flush-tlb-by-runlist.patch
+732bde3ae261f0b244375e2ab603d43349dcc4cda834027056f84b3cfd2432c9  ./patches/kernel-7.1/0007-amdgpu-ttm-null-page-guard.patch
 6244d08fab54791c54618c1be3b87fc48489a6b1076dc66ba5eb3cfd680656c9  ./patches/kernel-7.2/0001-bc250-8core-telemetry-gpu-activity.patch
 8d6ae89c7b2c8a081e8bbd52101f4c639bd7bcc53aab0bbc68fd38312ca3e37c  ./patches/kernel-7.2/0003-nct6687d-hwmon.patch
 a73d86157580e0441c18755cd2e9024726fb1465ed96d40a17bb4264e075f88e  ./patches/kernel-7.2/0004-gfx1013-pasid-tlb-invalidation.patch
 faaa05af2f7ce372f5e4a0494e66e64a7021441264d4bcea391014830548279d  ./patches/kernel-7.2/0005-gfx1013-compute-gfxoff-guard.patch
+1a8e4a6a9de06fbc6ea5ee4bc010f3cbc0a4ec57808f6c87abb07990438330fe  ./patches/kernel-7.2/0006-bc250-kfd-flush-tlb-by-runlist.patch
+3ebe3dbdf29211a2b42980c5afdc0141f4bb275ad01d7a756e2118633321580c  ./patches/kernel-7.2/0007-amdgpu-ttm-null-page-guard.patch
 07b90b1ee3ed4c98f8b400c08c2ff2610da1849390d4a0ec55a2df4d5563d0e4  ./patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
 d706e3df80f881991c0de5c141d65b0f311b6fd04d523f4e7ebd6634f31f1958  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 734a9b7bf51eff67b4e49d36c31f7be41ff64971fbfba18a022e66efcfa40298  ./patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
@@ -27,7 +31,7 @@ bd77100ae9adf9a3caa0449ff9431d53b6f8ad7fe042fe4a0e73c07c31bf8f2c  ./scripts/buil
 d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/build-mesa-package.sh
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 1ad2dd4c34649461bfb6c7610e51459f26a88dbaa0699046d952abbddaa6def5  ./scripts/ci-build.sh
-da67dd959f1c9420b09b2fff1705148e4d9966c1c891b7994b243cd7161b0818  ./scripts/finalize-repository.sh
+1a940ae06fa90acbc2fc22497a2cc54d3e372569903366bc6c645086940c20aa  ./scripts/finalize-repository.sh
 28b2271d32d3f1bbc7d4d5d37b51a57943f935e649598bf213db17bd1c8e67aa  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 e26b0047956239f24e049b5e7c24c51ed1d2f0c553d4a9558f477baf0b2a6029  ./scripts/prepare-mesa-git-pkgbuild.sh
 50b0ca3a1eb5264265bba316cd53adbe551bc8f4800534df5cad2ffad9ba480d  ./scripts/prepare-mesa-pkgbuild.sh
