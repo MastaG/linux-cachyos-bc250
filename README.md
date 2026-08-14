@@ -226,11 +226,43 @@ Both patch sets contain:
 - correct per-core telemetry for unlocked 8-core BC-250 systems;
 - GPU activity reporting through GPU Metrics and `GPU_LOAD`, with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it);
 - safe GFX clock handling for the hybrid metrics layout, with tunable `GetGfxclkFrequency` mailbox caching (`amdgpu.cs_gfxclk_cache_ms`, default 25 ms, `0` disables it);
+- corrected `gpu_metrics` CPU-power reporting and overflow-safe 16-bit power export;
+- optional full BC-250 APU telemetry through `pp_dpm_socclk` (`amdgpu.cs_full_telemetry=1`), disabled by default so the normal sysfs clock ABI is preserved;
 - the v33 merged GFX1013 PASID TLB invalidation fix;
 - the GFX1013 compute GFXOFF guard;
 - an **opt-in** KFD/HWS runlist rebuild workaround for stale ROCm compute TLB translations (`amdgpu.bc250_flush_by_runlist=1`);
 - a defensive AMDGPU TTM NULL-page guard so partially populated BO cleanup cannot dereference a missing page;
 - integration of the external `nct6687` hwmon/PWM driver.
+
+## BC-250 APU telemetry
+
+The main telemetry patch now includes the additional Cyan Skillfish metrics work while keeping the normal interfaces safe by default.  
+The existing automatic 6-core / hybrid 8-core mapping, GPU activity sampling and 25 ms activity/GFXCLK caches remain unchanged.
+
+The `gpu_metrics` export now places the VDDCR_VDD rail in `average_cpu_power` instead of incorrectly exposing it as SoC power. The VDDCR_GFX rail continues to feed `average_gfx_power`, while `average_soc_power` remains at the unsupported sentinel because this firmware table has no separate SoC-rail power value.  
+The GPU Metrics v2.2 power fields are only 16-bit milliwatt values, so values above their usable range are saturated instead of silently wrapping to a much lower number. `0xffff` remains reserved as the kernel's unsupported-value sentinel.
+
+A more detailed human-readable APU telemetry view is also available, but is **opt-in** because replacing the normal `pp_dpm_socclk` contents unconditionally would break the standard sysfs clock interface. Enable it at runtime with:
+
+```bash
+echo 1 | sudo tee /sys/module/amdgpu/parameters/cs_full_telemetry
+cat /sys/bus/pci/devices/0000:01:00.0/pp_dpm_socclk
+```
+
+Or enable it at boot with:
+
+```text
+amdgpu.cs_full_telemetry=1
+```
+
+The diagnostic view reports the detected layout, per-core clocks/power/temperature/C0 residency, L3 clocks and temperatures, GFX/SOC/VCLK/DCLK/memory clocks, edge temperature, CPU and GPU rail voltage/current/power, socket power and throttler status.  
+On the discovered 8-core hybrid firmware layout there is no table slot for core 0 power or core 7 C0 residency, and only cores 4 and 5 have per-core temperature slots; these unavailable values are shown as `n/a` rather than interpreting unrelated fields as telemetry.
+
+While `cs_full_telemetry=1` is active, `pp_dpm_socclk` is intentionally used as the diagnostic output instead of its normal single-clock listing. Return to the standard behavior at runtime with:
+
+```bash
+echo 0 | sudo tee /sys/module/amdgpu/parameters/cs_full_telemetry
+```
 
 ## NCT6687D hardware-monitoring module
 
@@ -486,3 +518,4 @@ Only use this repository when you trust the project and its workflow.
   <https://github.com/DryhoppedIPA/bc250-gfx1013-fix>
 - GabriWar — BC-250 ROCm/KFD TLB investigation, runlist invalidation workaround and AMDGPU TTM NULL-page guard.  
   <https://github.com/GabriWar/bc250-rocm-working>
+- punsh — additional BC-250 APU telemetry and GPU Metrics power-field fixes.
