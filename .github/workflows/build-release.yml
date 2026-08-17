@@ -261,7 +261,12 @@ jobs:
             archlinux:base-devel \
             bash /workspace/scripts/ci-build.sh
 
-          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+      - name: Restore workspace ownership
+        # Always runs, even if the build above failed, so a container-root-owned
+        # workspace never gets left behind to break the next run's checkout.
+        if: always() && steps.build.outputs.any == 'true'
+        shell: bash
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
 
       - name: Preserve workflow artifact
         if: steps.build.outputs.any == 'true'
