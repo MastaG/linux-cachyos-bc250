@@ -2,3 +2,4 @@
 /out/
 /previous/
 *.pkg.tar.zst
+/rebase/
