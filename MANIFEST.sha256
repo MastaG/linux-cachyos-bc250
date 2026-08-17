@@ -1,7 +1,7 @@
 12c22719d10c994da22bf997764e600b32e3649f0b8f578d74a97d7d9cc8edf7  ./.github/workflows/build-release.yml
 58e5221a3e56e9bafacb83b069e11943a47af51761ceb7fa39d73aa481674ced  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-51586fa806062e8cb169c72892f37b2f8a9624e4b496effdc409a5695e4dc40d  ./README.md
+0b2f8210ee5dbe5ba2ecf1c9febe5e92667e371c0d0781f5dfd20c1fda1e373f  ./README.md
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
 0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  ./pacman/stable.conf.example
@@ -12,12 +12,14 @@ d32e9fa12dc7495f5948904a9136b1c9494d5369da21d3f254a7954f55f969c8  ./patches/kern
 9150a3ee622292f651e1673f64df22239ed115861456f0b00ee860daa388b918  ./patches/kernel-7.1/0005-gfx1013-compute-gfxoff-guard.patch
 260e2d84ed9ec1585b4fc6092f3bb01347ac57a43de428afb0203190974d6099  ./patches/kernel-7.1/0006-bc250-kfd-flush-tlb-by-runlist.patch
 732bde3ae261f0b244375e2ab603d43349dcc4cda834027056f84b3cfd2432c9  ./patches/kernel-7.1/0007-amdgpu-ttm-null-page-guard.patch
+94c221aac12529e9a4f94eb06c71be531ca445f5e7d2b9b9c55ea2589d46cfc1  ./patches/kernel-7.1/0008-cyan-skillfish-sclk-range.patch
 e7a4220f64331e343ac97c724b8e4c0fa634090e8ede04bd7d354a7e03b7bb2e  ./patches/kernel-7.2/0001-bc250-8core-telemetry-gpu-activity.patch
 8d6ae89c7b2c8a081e8bbd52101f4c639bd7bcc53aab0bbc68fd38312ca3e37c  ./patches/kernel-7.2/0003-nct6687d-hwmon.patch
 a73d86157580e0441c18755cd2e9024726fb1465ed96d40a17bb4264e075f88e  ./patches/kernel-7.2/0004-gfx1013-pasid-tlb-invalidation.patch
 faaa05af2f7ce372f5e4a0494e66e64a7021441264d4bcea391014830548279d  ./patches/kernel-7.2/0005-gfx1013-compute-gfxoff-guard.patch
 1a8e4a6a9de06fbc6ea5ee4bc010f3cbc0a4ec57808f6c87abb07990438330fe  ./patches/kernel-7.2/0006-bc250-kfd-flush-tlb-by-runlist.patch
 3ebe3dbdf29211a2b42980c5afdc0141f4bb275ad01d7a756e2118633321580c  ./patches/kernel-7.2/0007-amdgpu-ttm-null-page-guard.patch
+94c221aac12529e9a4f94eb06c71be531ca445f5e7d2b9b9c55ea2589d46cfc1  ./patches/kernel-7.2/0008-cyan-skillfish-sclk-range.patch
 07b90b1ee3ed4c98f8b400c08c2ff2610da1849390d4a0ec55a2df4d5563d0e4  ./patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
 d706e3df80f881991c0de5c141d65b0f311b6fd04d523f4e7ebd6634f31f1958  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 734a9b7bf51eff67b4e49d36c31f7be41ff64971fbfba18a022e66efcfa40298  ./patches/mesa-git/0003-gfx1013-taskmesh-queries.patch

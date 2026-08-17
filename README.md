@@ -196,6 +196,7 @@ Applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`:
 0005-gfx1013-compute-gfxoff-guard.patch
 0006-bc250-kfd-flush-tlb-by-runlist.patch
 0007-amdgpu-ttm-null-page-guard.patch
+0008-cyan-skillfish-sclk-range.patch
 ```
 
 The audio patch disables DP spread spectrum for Cyan Skillfish through `ignore_dpref_ss`.  
@@ -212,6 +213,7 @@ Applied to `linux-cachyos-rc-bc250`:
 0005-gfx1013-compute-gfxoff-guard.patch
 0006-bc250-kfd-flush-tlb-by-runlist.patch
 0007-amdgpu-ttm-null-page-guard.patch
+0008-cyan-skillfish-sclk-range.patch
 ```
 
 There is intentionally no `0002-bc250-audio.patch` here.  
@@ -232,6 +234,7 @@ Both patch sets contain:
 - the GFX1013 compute GFXOFF guard;
 - an **opt-in** KFD/HWS runlist rebuild workaround for stale ROCm compute TLB translations (`amdgpu.bc250_flush_by_runlist=1`);
 - a defensive AMDGPU TTM NULL-page guard so partially populated BO cleanup cannot dereference a missing page;
+- a widened Cyan Skillfish SMU SCLK range (350–2230 MHz, up from the stock 1000–2000 MHz) so userspace SMU-based governors such as [filippor/cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) can drive the full clock range;
 - integration of the external `nct6687` hwmon/PWM driver.
 
 ## BC-250 APU telemetry
