@@ -9,10 +9,10 @@ Allow RADV_GFX103=1 to promote GFX1013 to the GFX10.3 software path. The option 
  1 file changed, 4 insertions(+)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 8891df5..98323ec 100644
+index a4eb7b7424a..e3f83c0086a 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -2667,6 +2667,10 @@ radv_physical_device_try_create(struct radv_instance *instance, drmDevicePtr drm
+@@ -2675,6 +2675,10 @@ radv_physical_device_try_create(struct radv_instance *instance, drmDevicePtr drm
     }
  
     memcpy(&pdev->info, &winsys_info.base, sizeof(pdev->info));

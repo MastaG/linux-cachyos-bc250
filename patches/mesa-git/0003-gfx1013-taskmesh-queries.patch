@@ -11,7 +11,7 @@ Expose GFX1013 mesh-shader queries only through the opt-in GFX10.3 override. Onc
  3 files changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
-index dfe6b5a..6485b5f 100644
+index b8d10d7dd2d..3d237e615ed 100644
 --- a/src/amd/common/ac_gpu_info.c
 +++ b/src/amd/common/ac_gpu_info.c
 @@ -1041,6 +1041,7 @@ void ac_fill_bug_info(struct radeon_info *info)
@@ -23,10 +23,10 @@ index dfe6b5a..6485b5f 100644
     info->has_export_conflict_bug = info->gfx_level == GFX11;
  
 diff --git a/src/amd/common/ac_gpu_info.h b/src/amd/common/ac_gpu_info.h
-index 0236010..227831e 100644
+index f17679d232d..2f7c067d0e3 100644
 --- a/src/amd/common/ac_gpu_info.h
 +++ b/src/amd/common/ac_gpu_info.h
-@@ -292,6 +292,7 @@ struct radeon_info {
+@@ -314,6 +314,7 @@ struct radeon_info {
     bool has_taskmesh_indirect0_bug;
     bool has_gfx1013_mesh_shading;
     bool has_gfx1013_task_shading;
@@ -35,10 +35,10 @@ index 0236010..227831e 100644
     bool sdma_supports_compression; /* Whether SDMA supports DCC and HTILE. */
     bool has_set_context_pairs;
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index dc23d79..8891df5 100644
+index 7790c084a32..a4eb7b7424a 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -1360,7 +1360,9 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
+@@ -1361,7 +1361,9 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
        .taskShader = task_en,
        .multiviewMeshShader = full_mesh_features,
        .primitiveFragmentShadingRateMeshShader = full_mesh_features,

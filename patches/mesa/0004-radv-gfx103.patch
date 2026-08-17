@@ -9,16 +9,16 @@ Allow RADV_GFX103=1 to promote GFX1013 to the GFX10.3 software path. The option 
  1 file changed, 3 insertions(+)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 1c4271c..66c367c 100644
+index 1475db33..ab281a18 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -2474,6 +2474,9 @@ radv_physical_device_try_create(struct radv_instance *instance, drmDevicePtr drm
-       pdev->vk.supported_sync_types = pdev->ws->get_sync_types(pdev->ws);
-       pdev->ws->query_info(pdev->ws, &pdev->info);
+@@ -2620,6 +2620,9 @@ radv_physical_device_try_create(struct radv_instance *instance, drmDevicePtr drm
+    memcpy(&pdev->info, &winsys_info.base, sizeof(pdev->info));
+    memcpy(&pdev->syncobj_sync_type, &winsys_info.syncobj_sync_type, sizeof(pdev->syncobj_sync_type));
  
-+      if (pdev->info.family == CHIP_GFX1013 && debug_get_bool_option("RADV_GFX103", false))
-+         pdev->info.gfx_level = GFX10_3;
++   if (pdev->info.family == CHIP_GFX1013 && debug_get_bool_option("RADV_GFX103", false))
++      pdev->info.gfx_level = GFX10_3;
 +
-       if (instance->vk.enabled_extensions.KHR_display) {
-          master_fd = open(drm_device->nodes[DRM_NODE_PRIMARY], O_RDWR | O_CLOEXEC);
-          if (master_fd >= 0) {
+    for (uint32_t p = RADEON_CTX_PRIORITY_LOW; p <= RADEON_CTX_PRIORITY_REALTIME; p++) {
+       if (winsys_info.global_priority_mask & BITFIELD_BIT(p))
+          pdev->global_priority_mask |= radeon_to_vk_priority(p);
