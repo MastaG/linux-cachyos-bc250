@@ -224,6 +224,7 @@ All three kernels use:
 - GFX1013 PASID TLB invalidation fix and compute GFXOFF guard
 - Opt-in KFD/HWS runlist TLB workaround (\`amdgpu.bc250_flush_by_runlist=1\`)
 - AMDGPU TTM NULL-page cleanup guard for partially populated BOs
+- Widened Cyan Skillfish SMU SCLK range (350-2230 MHz) for userspace SMU governors
 - \`nct6687.ko\` from Fred78290/nct6687d commit \`${nct_commit}\`
 - upstream \`nct6683\` disabled to avoid claiming the same Super-I/O IDs
 
@@ -231,15 +232,15 @@ All three kernels use:
 
 - CachyOS packaging commit: \`${mesa_cachyos_commit}\`
 - Version: \`${mesa_pkgver}-${mesa_pkgrel}\`${mesa_epoch:+ (epoch ${mesa_epoch})}
-- Applied patches: \`0001\` compute-queue fix, \`0002\` mesh/task support, \`0003\` mesh queries, \`0004\` RADV_GFX103 runtime override.
-- \`0001\` is always active; GFX1013 mesh/task feature exposure remains disabled unless \`RADV_GFX103=1\` is set for the application.
+- Applied patches: \`0001\` compute-queue fix, \`0002\` mesh/task support, \`0003\` mesh queries, \`0004\` RADV_GFX103 runtime override, \`0005\` BC-250 FSR4 signed 4x8 dp4a fallback reassociation.
+- \`0001\` and \`0005\` are always active; GFX1013 mesh/task feature exposure remains disabled unless \`RADV_GFX103=1\` is set for the application.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 
 ## Patched stable CachyOS lib32-mesa
 
 - CachyOS packaging commit: \`${lib32_cachyos_commit}\`
 - Version: \`${lib32_pkgver}-${lib32_pkgrel}\`${lib32_epoch:+ (epoch ${lib32_epoch})}
-- Uses the same four-patch series and runtime gating as stable 64-bit Mesa.
+- Uses the same five-patch series and runtime gating as stable 64-bit Mesa.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 
 ## Patched CachyOS mesa-git
@@ -248,8 +249,8 @@ All three kernels use:
 - Mesa main commit: \`${mesa_git_commit}\`
 - Package version: \`${mesa_git_pkgver}-${mesa_git_pkgrel}\`
 - Builds both \`mesa-git\` and \`lib32-mesa-git\` from the same pinned Mesa commit.
-- Applies separately rebased \`0001\` through \`0004\` patches in order.
-- \`0001\` is always active; the experimental GFX1013 mesh/task path is opt-in with \`RADV_GFX103=1\`.
+- Applies separately rebased \`0001\` through \`0005\` patches in order.
+- \`0001\` and \`0005\` are always active; the experimental GFX1013 mesh/task path is opt-in with \`RADV_GFX103=1\`.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 EOF_NOTES
 

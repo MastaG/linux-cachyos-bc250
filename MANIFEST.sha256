@@ -35,7 +35,7 @@ bd77100ae9adf9a3caa0449ff9431d53b6f8ad7fe042fe4a0e73c07c31bf8f2c  ./scripts/buil
 d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/build-mesa-package.sh
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 1ad2dd4c34649461bfb6c7610e51459f26a88dbaa0699046d952abbddaa6def5  ./scripts/ci-build.sh
-1a940ae06fa90acbc2fc22497a2cc54d3e372569903366bc6c645086940c20aa  ./scripts/finalize-repository.sh
+5a1d18a95698169f6b978d7d553ba1e7bab68ca386cdeff8e9ec1c6421c2c373  ./scripts/finalize-repository.sh
 28b2271d32d3f1bbc7d4d5d37b51a57943f935e649598bf213db17bd1c8e67aa  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 e26b0047956239f24e049b5e7c24c51ed1d2f0c553d4a9558f477baf0b2a6029  ./scripts/prepare-mesa-git-pkgbuild.sh
 50b0ca3a1eb5264265bba316cd53adbe551bc8f4800534df5cad2ffad9ba480d  ./scripts/prepare-mesa-pkgbuild.sh
