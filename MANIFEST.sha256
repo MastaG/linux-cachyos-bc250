@@ -1,7 +1,7 @@
 12c22719d10c994da22bf997764e600b32e3649f0b8f578d74a97d7d9cc8edf7  ./.github/workflows/build-release.yml
 58e5221a3e56e9bafacb83b069e11943a47af51761ceb7fa39d73aa481674ced  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-0b2f8210ee5dbe5ba2ecf1c9febe5e92667e371c0d0781f5dfd20c1fda1e373f  ./README.md
+a6fbe7d9edf0fcf18bc66a2af387b4130c36eace081c1af9bacb55d5fb533b5d  ./README.md
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
 0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  ./pacman/stable.conf.example
@@ -24,10 +24,12 @@ cd2d00cb4b72509f44a17936b50524538018a17ba42fdfede5d660ddd916995f  ./patches/mesa
 0420aa834541f28b7d665560c94393873a6ea754c0250a8513d6f084a7c1eeec  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 291f5bf74d3423365d20542286f832bd76e19b07611a35caab2524df3522dff2  ./patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
 5b5a167075cb29328bedb0e33de6e4a32a2399528fc02851c6aee4ef2db1e9a0  ./patches/mesa-git/0004-radv-gfx103.patch
+27cb963e139c5a705cb2abf4559d032943c2eb36541f267e69f792dbfbad5748  ./patches/mesa-git/0005-bc250-fsr4-sdot4x8-reassoc.patch
 4283ed9479b082d7cf56b9838675107f78a7aa9afcefeb9ec505edf79f2776d7  ./patches/mesa/0001-gfx1013-compute-queue-fix.patch
 5009c271d5a4efb7d4a447d12ca52016e3b07546401b359e3bd6a6d9399363fa  ./patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 f4547fbf694a83f31ad9613c1d312209bcd81d87fccd6e9a48c3c3adebf18532  ./patches/mesa/0003-gfx1013-taskmesh-queries.patch
 a77116a0a3320b2dfaa43c9a2e5ec8853eb518473b121a2a97efebd4a0dbfde1  ./patches/mesa/0004-radv-gfx103.patch
+e748004bb2bd98f063e83193f72dab33b5207537359d257cc2f43c036a5fa431  ./patches/mesa/0005-bc250-fsr4-sdot4x8-reassoc.patch
 bd77100ae9adf9a3caa0449ff9431d53b6f8ad7fe042fe4a0e73c07c31bf8f2c  ./scripts/build-lib32-mesa-package.sh
 4baaed1249eb29d5cb40250931dd7add17f028db75d5e5512dc9b0369e8e07d6  ./scripts/build-mesa-git-package.sh
 d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/build-mesa-package.sh

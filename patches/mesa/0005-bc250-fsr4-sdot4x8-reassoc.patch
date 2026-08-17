@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: David <dmorazasanchezmendo@gmail.com>
+Date: Fri, 14 Aug 2026 22:44:30 +0000
+Subject: [PATCH 5/5] nir: reassociate the signed 4x8 dp4a fallback sum for
+ GFX1013
+
+Reassociate sdot_4x8_a_b from a balanced iadd tree into a right-leaning
+chain. Mesa already lowers this fallback's multiplies to
+imul24_relaxed upstream; the remaining win from this BC-250 FSR4
+testing is the cheaper dependency chain from the reassociated sum.
+
+Verified on the BC-250 (GFX1013) with FSR 4.1.1 in Cyberpunk 2077:
+correct rendering with a substantially smaller generated shader
+(measured against the pre-imul24_relaxed baseline: 64269 -> 37613
+instructions for a representative FSR 4.1.1 shader).
+
+https://github.com/dmorazasanchez/bc250-fsr4
+---
+ src/compiler/nir/nir_opt_algebraic.py | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/src/compiler/nir/nir_opt_algebraic.py b/src/compiler/nir/nir_opt_algebraic.py
+index fd5c6bf00a4..59bcd263d9e 100644
+--- a/src/compiler/nir/nir_opt_algebraic.py
++++ b/src/compiler/nir/nir_opt_algebraic.py
+@@ -444,10 +444,13 @@ for sz in (16, 32, 64):
+ 
+ # Shorthand for the expansion of just the dot product part of the [iu]dp4a
+ # instructions.
+-sdot_4x8_a_b = ('iadd', ('iadd', ('imul24_relaxed', ('extract_i8', a, 0), ('extract_i8', b, 0)),
+-                                 ('imul24_relaxed', ('extract_i8', a, 1), ('extract_i8', b, 1))),
+-                        ('iadd', ('imul24_relaxed', ('extract_i8', a, 2), ('extract_i8', b, 2)),
+-                                 ('imul24_relaxed', ('extract_i8', a, 3), ('extract_i8', b, 3))))
++sdot_4x8_a_b = ('iadd',
++                    ('imul24_relaxed', ('extract_i8', a, 3), ('extract_i8', b, 3)),
++                    ('iadd',
++                     ('imul24_relaxed', ('extract_i8', a, 2), ('extract_i8', b, 2)),
++                     ('iadd',
++                      ('imul24_relaxed', ('extract_i8', a, 1), ('extract_i8', b, 1)),
++                      ('imul24_relaxed', ('extract_i8', a, 0), ('extract_i8', b, 0)))))
+ udot_4x8_a_b = ('iadd', ('iadd', ('umul24_relaxed', ('extract_u8', a, 0), ('extract_u8', b, 0)),
+                                  ('umul24_relaxed', ('extract_u8', a, 1), ('extract_u8', b, 1))),
+                         ('iadd', ('umul24_relaxed', ('extract_u8', a, 2), ('extract_u8', b, 2)),

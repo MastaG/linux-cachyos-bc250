@@ -291,17 +291,19 @@ When unset, the resolver follows the configured upstream branch.
 The workflow resolves a single exact commit from `CachyOS/CachyOS-PKGBUILDS` and downloads the current stable Mesa packaging from that revision.  
 The upstream Mesa version and epoch remain unchanged; the GitHub Actions run number is appended to `pkgrel`.
 
-All four BC-250 Mesa patches are applied at build time, in order:
+All five BC-250 Mesa patches are applied at build time, in order:
 
 ```text
 patches/mesa/0001-gfx1013-compute-queue-fix.patch
 patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa/0003-gfx1013-taskmesh-queries.patch
 patches/mesa/0004-radv-gfx103.patch
+patches/mesa/0005-bc250-fsr4-sdot4x8-reassoc.patch
 ```
 
 `0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.  
-`0002` and `0003` contain the experimental mesh/task-shader and mesh-query plumbing. For GFX1013 their user-visible feature path remains disabled unless `0004` sees `RADV_GFX103=1` at runtime.
+`0002` and `0003` contain the experimental mesh/task-shader and mesh-query plumbing. For GFX1013 their user-visible feature path remains disabled unless `0004` sees `RADV_GFX103=1` at runtime.  
+`0005` reassociates the NIR fallback expansion for the signed 4x8 dot product (`sdot_4x8_a_b`, used by `[iu]dp4a`) into a right-leaning sum, always active regardless of environment variables. Upstream Mesa already lowers this fallback's multiplies to `imul24_relaxed`; the reassociation is the remaining contribution from BC-250 FSR4 testing (David Moraza Sanchez, [dmorazasanchez/bc250-fsr4](https://github.com/dmorazasanchez/bc250-fsr4)), verified with FSR 4.1.1 in Cyberpunk 2077.
 
 For an individual Steam game that specifically needs the experimental mesh-shader path, use:
 
@@ -321,7 +323,7 @@ Stable Mesa is built with:
 ## Patched stable CachyOS lib32-mesa
 
 `lib32-mesa` comes directly from the current CachyOS `mesa/lib32-mesa/PKGBUILD` at the same pinned packaging commit.  
-It receives the exact same four GFX1013 patches and runtime gating as stable 64-bit Mesa, so 32-bit Wine/Steam workloads see the same driver behavior.
+It receives the exact same five GFX1013 patches and runtime gating as stable 64-bit Mesa, so 32-bit Wine/Steam workloads see the same driver behavior.
 
 The clean Arch build container explicitly enables `[multilib]` before dependency resolution.
 
@@ -338,19 +340,20 @@ mesa-git
 lib32-mesa-git
 ```
 
-The Git variant carries a separately rebased copy of the same four-patch series:
+The Git variant carries a separately rebased copy of the same five-patch series:
 
 ```text
 patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
 patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
 patches/mesa-git/0004-radv-gfx103.patch
+patches/mesa-git/0005-bc250-fsr4-sdot4x8-reassoc.patch
 ```
 
-`0001` remains active regardless of environment variables.  
+`0001` and `0005` remain active regardless of environment variables.  
 The experimental GFX1013 mesh/task path from `0002`/`0003` is opt-in through `RADV_GFX103=1`; `0004` provides that runtime override and defaults to disabled. The same limitations as stable Mesa apply: mesh shaders are the currently tested use case, while task shaders are still not working correctly.
 
-There is deliberately no separate `series` file. The build script explicitly applies the four numbered patches in order through CachyOS' `mesa-userpatches` mechanism.
+There is deliberately no separate `series` file. The build script explicitly applies the five numbered patches in order through CachyOS' `mesa-userpatches` mechanism.
 
 To switch explicitly to Git Mesa:
 
@@ -522,3 +525,5 @@ Only use this repository when you trust the project and its workflow.
 - GabriWar — BC-250 ROCm/KFD TLB investigation, runlist invalidation workaround and AMDGPU TTM NULL-page guard.  
   <https://github.com/GabriWar/bc250-rocm-working>
 - punsh — additional BC-250 APU telemetry and GPU Metrics power-field fixes.
+- David Moraza Sanchez (dmorazasanchez) — BC-250 FSR4 signed 4x8 dot-product fallback reassociation.  
+  <https://github.com/dmorazasanchez/bc250-fsr4>
