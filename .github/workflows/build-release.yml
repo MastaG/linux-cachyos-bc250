@@ -279,6 +279,19 @@ jobs:
           compression-level: 0
           include-hidden-files: true
 
+      - name: Ensure gh CLI is available
+        # The ghcr.io/actions/actions-runner base image does not ship gh.
+        # Installed on the runner's own Ubuntu base, not the ephemeral build
+        # container, so this is a no-op once it's present.
+        if: steps.build.outputs.any == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v gh >/dev/null || {
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends gh
+          }
+
       - name: Publish pacman repository release
         if: steps.build.outputs.any == 'true'
         env:
