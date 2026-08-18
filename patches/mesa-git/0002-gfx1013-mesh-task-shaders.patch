@@ -86,10 +86,10 @@ index 3c0a9bb1889..f1efbe156d7 100644
     setup_tcs_info(&ctx);
  
 diff --git a/src/amd/vulkan/radv_cmd_buffer.c b/src/amd/vulkan/radv_cmd_buffer.c
-index ee908c2642d..aa4f6dfb174 100644
+index 09e10b3b16a..e2ba24bb829 100644
 --- a/src/amd/vulkan/radv_cmd_buffer.c
 +++ b/src/amd/vulkan/radv_cmd_buffer.c
-@@ -3179,7 +3179,8 @@ radv_emit_hw_ngg(struct radv_cmd_buffer *cmd_buffer, const struct radv_shader *e
+@@ -3195,7 +3195,8 @@ radv_emit_hw_ngg(struct radv_cmd_buffer *cmd_buffer, const struct radv_shader *e
         *
         * Requirement: GE_CNTL.VERT_GRP_SIZE = VGT_GS_ONCHIP_CNTL.ES_VERTS_PER_SUBGRP - 5
         */
@@ -99,7 +99,7 @@ index ee908c2642d..aa4f6dfb174 100644
           ge_cntl &= C_03096C_VERT_GRP_SIZE;
  
           if (ngg_state->hw_max_esverts > 5) {
-@@ -8829,10 +8830,13 @@ radv_bind_pre_rast_shader(struct radv_cmd_buffer *cmd_buffer, const struct radv_
+@@ -8849,10 +8850,13 @@ radv_bind_pre_rast_shader(struct radv_cmd_buffer *cmd_buffer, const struct radv_
     }
  
     if ((shader->info.stage == MESA_SHADER_MESH) != !!(cmd_buffer->state.active_stages & VK_SHADER_STAGE_MESH_BIT_EXT)) {
@@ -116,7 +116,7 @@ index ee908c2642d..aa4f6dfb174 100644
     }
  
     if (cmd_buffer->state.force_vrs_per_vertex != shader->info.force_vrs_per_vertex) {
-@@ -11902,6 +11906,7 @@ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struc
+@@ -11922,6 +11926,7 @@ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struc
     const struct radv_physical_device *pdev = radv_device_physical(device);
     const uint32_t view_mask = cmd_state->render.view_mask;
     const unsigned num_views = MAX2(1, util_bitcount(view_mask));
@@ -124,7 +124,7 @@ index ee908c2642d..aa4f6dfb174 100644
     unsigned ace_predication_size = num_views * 11; /* DISPATCH_TASKMESH_INDIRECT_MULTI_ACE size */
  
     if (pdev->info.has_taskmesh_indirect0_bug && info->count_va) {
-@@ -11920,8 +11925,15 @@ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struc
+@@ -11940,8 +11945,15 @@ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struc
        ac_emit_cp_copy_data(ace_cs->b, COPY_DATA_IMM, COPY_DATA_DST_MEM, 1, workaround_cond_va,
                             AC_CP_COPY_DATA_WR_CONFIRM, false);
  
@@ -142,7 +142,7 @@ index ee908c2642d..aa4f6dfb174 100644
     }
  
     radv_cs_emit_compute_predication(device, cmd_state, ace_cs, cmd_state->cond_render.mec_inv_pred_va,
-@@ -11938,6 +11950,9 @@ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struc
+@@ -11958,6 +11970,9 @@ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struc
     if (!view_mask) {
        radv_cs_emit_dispatch_taskmesh_indirect_multi_ace_packet(device, cmd_state, ace_cs, info->indirect_va,
                                                                 info->count, info->count_va, info->stride);
@@ -152,7 +152,7 @@ index ee908c2642d..aa4f6dfb174 100644
        radv_cs_emit_dispatch_taskmesh_gfx_packet(device, cmd_state, cs);
     } else {
        u_foreach_bit (view, view_mask) {
-@@ -11945,11 +11960,14 @@ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struc
+@@ -11965,11 +11980,14 @@ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struc
  
           radv_cs_emit_dispatch_taskmesh_indirect_multi_ace_packet(device, cmd_state, ace_cs, info->indirect_va,
                                                                    info->count, info->count_va, info->stride);
@@ -169,10 +169,10 @@ index ee908c2642d..aa4f6dfb174 100644
                             6 * num_views /* Nx DISPATCH_TASKMESH_DIRECT_ACE */);
  
 diff --git a/src/amd/vulkan/radv_device.c b/src/amd/vulkan/radv_device.c
-index 2bb78a95afb..3b290e6b683 100644
+index 86a29b75930..ca146a55454 100644
 --- a/src/amd/vulkan/radv_device.c
 +++ b/src/amd/vulkan/radv_device.c
-@@ -1221,6 +1221,10 @@ radv_device_init_compiler_info(struct radv_device *device)
+@@ -1222,6 +1222,10 @@ radv_device_init_compiler_info(struct radv_device *device)
              .nggc_max_ps_params = nggc_max_ps_params,
              .no_ngg_gs = pdev->drirc.performance.disable_ngg_gs,
              .load_grid_size_from_user_sgpr = pdev->load_grid_size_from_user_sgpr,
@@ -290,10 +290,10 @@ index 2517cc73074..92e49d35736 100644
     NIR_PASS(_, stage->nir, radv_nir_lower_abi, gfx_level, stage, gfx_state, compiler_info->hw.address32_hi);
  
 diff --git a/src/amd/vulkan/radv_queue.c b/src/amd/vulkan/radv_queue.c
-index ea54c470669..5de6c149166 100644
+index 3050f248a5c..9f3018c7a3b 100644
 --- a/src/amd/vulkan/radv_queue.c
 +++ b/src/amd/vulkan/radv_queue.c
-@@ -912,7 +912,7 @@ radv_update_preamble_cs(struct radv_queue_state *queue, struct radv_device *devi
+@@ -914,7 +914,7 @@ radv_update_preamble_cs(struct radv_queue_state *queue, struct radv_device *devi
     }
  
     if (!queue->ring_info.task_rings && needs->task_rings) {
@@ -302,7 +302,7 @@ index ea54c470669..5de6c149166 100644
  
        /* We write the control buffer from the CPU, so need to grant CPU access to the BO.
         * The draw ring needs to be zero-initialized otherwise the ready bits will be incorrect.
-@@ -932,7 +932,7 @@ radv_update_preamble_cs(struct radv_queue_state *queue, struct radv_device *devi
+@@ -934,7 +934,7 @@ radv_update_preamble_cs(struct radv_queue_state *queue, struct radv_device *devi
     }
  
     if (!queue->ring_info.mesh_scratch_ring && needs->mesh_scratch_ring) {
@@ -347,16 +347,16 @@ index 209a2d6fef9..5888edd7ba6 100644
        int32_t force_aniso;
  
 diff --git a/src/amd/vulkan/radv_shader_args.c b/src/amd/vulkan/radv_shader_args.c
-index fd10f6e0d31..a908ee2f54d 100644
+index abbad95984c..e9ea59b1b0c 100644
 --- a/src/amd/vulkan/radv_shader_args.c
 +++ b/src/amd/vulkan/radv_shader_args.c
-@@ -620,7 +620,8 @@ declare_shader_args(const struct radv_compiler_info *compiler_info, struct radv_
-       declare_global_input_sgprs(state, gfx_level, info, user_sgpr_info);
- 
-       if (info->cs.uses_grid_size) {
--         if (compiler_info->key.load_grid_size_from_user_sgpr)
-+         if (compiler_info->key.load_grid_size_from_user_sgpr ||
-+             (stage == MESA_SHADER_TASK && compiler_info->key.has_gfx1013_task_shading))
-             RADV_ADD_UD_ARG(state, 3, AC_ARG_VALUE, ac.num_work_groups, AC_UD_CS_GRID_SIZE);
-          else
-             RADV_ADD_UD_ARG(state, 2, AC_ARG_CONST_ADDR, ac.num_work_groups, AC_UD_CS_GRID_SIZE);
+@@ -627,7 +627,8 @@ declare_shader_args(const struct radv_compiler_info *compiler_info, struct radv_
+                          AC_UD_CS_RAY_DYNAMIC_CALLABLE_STACK_BASE);
+       } else {
+          if (info->cs.uses_grid_size) {
+-            if (compiler_info->key.load_grid_size_from_user_sgpr)
++            if (compiler_info->key.load_grid_size_from_user_sgpr ||
++                (stage == MESA_SHADER_TASK && compiler_info->key.has_gfx1013_task_shading))
+                RADV_ADD_UD_ARG(state, 3, AC_ARG_VALUE, ac.num_work_groups, AC_UD_CS_GRID_SIZE);
+             else
+                RADV_ADD_UD_ARG(state, 2, AC_ARG_CONST_ADDR, ac.num_work_groups, AC_UD_CS_GRID_SIZE);

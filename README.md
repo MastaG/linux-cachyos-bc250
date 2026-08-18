@@ -298,12 +298,12 @@ patches/mesa/0001-gfx1013-compute-queue-fix.patch
 patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa/0003-gfx1013-taskmesh-queries.patch
 patches/mesa/0004-radv-gfx103.patch
-patches/mesa/0005-bc250-fsr4-sdot4x8-reassoc.patch
+patches/mesa/0005-bc250-fsr4-selective-sdot4x8.patch
 ```
 
 `0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.  
 `0002` and `0003` contain the experimental mesh/task-shader and mesh-query plumbing. For GFX1013 their user-visible feature path remains disabled unless `0004` sees `RADV_GFX103=1` at runtime.  
-`0005` reassociates the NIR fallback expansion for the signed 4x8 dot product (`sdot_4x8_a_b`, used by `[iu]dp4a`) into a right-leaning sum, always active regardless of environment variables. Upstream Mesa already lowers this fallback's multiplies to `imul24_relaxed`; the reassociation is the remaining contribution from BC-250 FSR4 testing (David Moraza Sanchez, [dmorazasanchez/bc250-fsr4](https://github.com/dmorazasanchez/bc250-fsr4)), verified with FSR 4.1.1 in Cyberpunk 2077.
+`0005` is always active regardless of environment variables. It splits the NIR fallback expansion for the signed 4x8 dot product (`sdot_4x8_a_b`, used by `[iu]dp4a`) into Mesa's original balanced sum and a right-leaning reassociated sum, selecting between them based on whether the `sdot_4x8_iadd` accumulator is a compile-time constant. A 64-shader FSR4 corpus found that reassociating unconditionally is a large win on most kernels but causes catastrophic register-pressure/spilling regressions on specific shaders that accumulate into a constant; the constant case keeps the balanced lowering, everything else gets the reassociated one. This is EXP-028 from BC-250 FSR4 testing (David Moraza Sanchez, [dmorazasanchez/bc250-fsr4, `v2` branch](https://github.com/dmorazasanchez/bc250-fsr4/tree/v2)), verified with FSR 4.1.1 in Cyberpunk 2077, superseding the earlier unconditional-reassociation patch.
 
 For an individual Steam game that specifically needs the experimental mesh-shader path, use:
 
@@ -347,7 +347,7 @@ patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
 patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
 patches/mesa-git/0004-radv-gfx103.patch
-patches/mesa-git/0005-bc250-fsr4-sdot4x8-reassoc.patch
+patches/mesa-git/0005-bc250-fsr4-selective-sdot4x8.patch
 ```
 
 `0001` and `0005` remain active regardless of environment variables.  
@@ -525,5 +525,5 @@ Only use this repository when you trust the project and its workflow.
 - GabriWar — BC-250 ROCm/KFD TLB investigation, runlist invalidation workaround and AMDGPU TTM NULL-page guard.  
   <https://github.com/GabriWar/bc250-rocm-working>
 - punsh — additional BC-250 APU telemetry and GPU Metrics power-field fixes.
-- David Moraza Sanchez (dmorazasanchez) — BC-250 FSR4 signed 4x8 dot-product fallback reassociation.  
-  <https://github.com/dmorazasanchez/bc250-fsr4>
+- David Moraza Sanchez (dmorazasanchez) — BC-250 FSR4 EXP-028 selective signed 4x8 dot-product fallback lowering.  
+  <https://github.com/dmorazasanchez/bc250-fsr4/tree/v2>
