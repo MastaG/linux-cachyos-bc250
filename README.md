@@ -527,3 +527,4 @@ Only use this repository when you trust the project and its workflow.
 - punsh — additional BC-250 APU telemetry and GPU Metrics power-field fixes.
 - David Moraza Sanchez (dmorazasanchez) — BC-250 FSR4 EXP-028 selective signed 4x8 dot-product fallback lowering.  
   <https://github.com/dmorazasanchez/bc250-fsr4/tree/v2>
+- FilippoR / ViRazY - For the kernel GPU frequency ranges
