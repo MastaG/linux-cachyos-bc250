@@ -1,7 +1,7 @@
 559551e7523e752579d137ec4bfcbe07f79c7c9678d98eaa6c7bf18f7f794a85  ./.github/workflows/build-release.yml
 58e5221a3e56e9bafacb83b069e11943a47af51761ceb7fa39d73aa481674ced  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-144ac63d0072cebb89bee34c75f44e3620595f6d42593fe9cd67881f8507e933  ./README.md
+2c9755ccf5086aa356ef1fd05a4f91d4a2c7083263bfd39b24baaf28615be88b  ./README.md
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
 0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  ./pacman/stable.conf.example
