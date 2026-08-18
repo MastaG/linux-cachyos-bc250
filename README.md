@@ -226,7 +226,7 @@ Both patch sets contain:
 
 - automatic 6-core / hybrid 8-core Cyan Skillfish SMU telemetry handling;
 - correct per-core telemetry for unlocked 8-core BC-250 systems;
-- GPU activity reporting through GPU Metrics and `GPU_LOAD`, with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it);
+- GPU activity reporting through GPU Metrics and `GPU_LOAD` derived from the GFX ring's emitted-fence count (Cyan Skillfish's `GRBM_STATUS` register reads back all-ones regardless of GPU state, which previously pegged `gpu_busy_percent` at 100% even at idle), with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it);
 - safe GFX clock handling for the hybrid metrics layout, with tunable `GetGfxclkFrequency` mailbox caching (`amdgpu.cs_gfxclk_cache_ms`, default 25 ms, `0` disables it);
 - corrected `gpu_metrics` CPU-power reporting and overflow-safe 16-bit power export;
 - optional full BC-250 APU telemetry through `pp_dpm_socclk` (`amdgpu.cs_full_telemetry=1`), disabled by default so the normal sysfs clock ABI is preserved;
