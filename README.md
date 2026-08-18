@@ -221,13 +221,14 @@ The equivalent Cyan Skillfish DP spread-spectrum fix is already present in the c
 
 Both patch sets contain:
 
-> The telemetry/activity and tunable GFXCLK/activity cache logic is consolidated in `0001-bc250-8core-telemetry-gpu-activity.patch`.  
-> Both cache windows default to 25 ms and can still be changed at runtime or disabled with `0`.
+> The telemetry/activity and tunable GFXCLK/activity/metrics cache logic is consolidated in `0001-bc250-8core-telemetry-gpu-activity.patch`.  
+> All three cache windows default to 25 ms and can still be changed at runtime or disabled with `0`.
 
 - automatic 6-core / hybrid 8-core Cyan Skillfish SMU telemetry handling;
 - correct per-core telemetry for unlocked 8-core BC-250 systems;
 - GPU activity reporting through GPU Metrics and `GPU_LOAD` derived from the GFX ring's emitted-fence count (Cyan Skillfish's `GRBM_STATUS` register reads back all-ones regardless of GPU state, which previously pegged `gpu_busy_percent` at 100% even at idle), with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it);
 - safe GFX clock handling for the hybrid metrics layout, with tunable `GetGfxclkFrequency` mailbox caching (`amdgpu.cs_gfxclk_cache_ms`, default 25 ms, `0` disables it);
+- a tunable cache (`amdgpu.cs_metrics_cache_ms`, default 25 ms, `0` disables it) for the bulk SMU metrics table refresh backing temperature, power, voltage, socclk/vclk/dclk/uclk and throttler-status reads. Upstream's own internal debounce for that transfer is only 1 ms, so every distinct hwmon attribute a monitoring tool polls in one cycle could otherwise trigger its own SMU mailbox round trip;
 - corrected `gpu_metrics` CPU-power reporting and overflow-safe 16-bit power export;
 - optional full BC-250 APU telemetry through `pp_dpm_socclk` (`amdgpu.cs_full_telemetry=1`), disabled by default so the normal sysfs clock ABI is preserved;
 - the v33 merged GFX1013 PASID TLB invalidation fix;
@@ -266,6 +267,36 @@ While `cs_full_telemetry=1` is active, `pp_dpm_socclk` is intentionally used as 
 ```bash
 echo 0 | sudo tee /sys/module/amdgpu/parameters/cs_full_telemetry
 ```
+
+## GPU telemetry cache tunables
+
+Reading GPU telemetry on Cyan Skillfish means talking to the SMU firmware, and doing that too often is a real stability risk on this board. This is also why some userspace SMU-based governors, such as [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu), offer a `set-method = "kernel"` option to set clocks through the kernel interface instead of the SMU directly.
+
+Three independent caches bound how often the kernel talks to the SMU for telemetry:
+
+| Parameter | Default | Covers |
+|---|---|---|
+| `amdgpu.cs_activity_cache_ms` | 25 ms | `gpu_busy_percent` / `GPU_LOAD` sampling |
+| `amdgpu.cs_gfxclk_cache_ms` | 25 ms | The `GetGfxclkFrequency` SMU mailbox message |
+| `amdgpu.cs_metrics_cache_ms` | 25 ms | The bulk SMU metrics table: temperature, power, voltage, socclk/vclk/dclk/uclk and throttler status |
+
+All three default to 25 ms, matching [MangoHud](https://github.com/flightlessmango/MangoHud)'s default telemetry poll interval, since that is the most common way BC-250 users watch these values live while gaming. Each is independently tunable and `0` disables that cache (every read then hits the SMU directly).
+
+Change any of them at runtime:
+
+```bash
+echo 50 | sudo tee /sys/module/amdgpu/parameters/cs_activity_cache_ms
+echo 50 | sudo tee /sys/module/amdgpu/parameters/cs_gfxclk_cache_ms
+echo 50 | sudo tee /sys/module/amdgpu/parameters/cs_metrics_cache_ms
+```
+
+Or set them permanently at boot, the same way as the other `amdgpu.*` parameters documented above:
+
+```text
+amdgpu.cs_activity_cache_ms=50 amdgpu.cs_gfxclk_cache_ms=50 amdgpu.cs_metrics_cache_ms=50
+```
+
+`gpu_busy_percent` itself no longer touches the SMU or any hardware register at all: it is derived purely from the GFX ring's existing software fence-tracking, the same activity signal that already backs `fdinfo`'s `drm-engine-gfx`. `cs_activity_cache_ms` only bounds how often that essentially free sample is retaken, not SMU traffic.
 
 ## NCT6687D hardware-monitoring module
 
