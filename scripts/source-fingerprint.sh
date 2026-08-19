@@ -61,7 +61,6 @@ case "$COMPONENT" in
         printf '%s\n' "$CACHYOS_SOURCE_VARIANT" > "$TMP/source-variant"
         printf '%s\n' "$EXPECTED_PKGBASE" > "$TMP/pkgbase"
         printf '%s\n' "$PATCH_SET" > "$TMP/patch-set"
-        printf '%s\n' "$NCT6687D_COMMIT" > "$TMP/nct-commit"
         printf '%s\n' 'generic_v3' > "$TMP/processor-opt"
         printf '%s\n' 'znver2' > "$TMP/cpu-tune"
         {
