@@ -17,19 +17,19 @@ case "$CACHYOS_SOURCE_VARIANT" in
         KERNEL_ID="stable"
         CUSTOM_SUFFIX="cachyos-bc250"
         EXPECTED_PKGBASE="linux-cachyos-bc250"
-        PATCH_SET="kernel-7.1"
+        PATCH_SET="linux-cachyos"
         ;;
     linux-cachyos-rc)
         KERNEL_ID="rc"
         CUSTOM_SUFFIX="cachyos-rc-bc250"
         EXPECTED_PKGBASE="linux-cachyos-rc-bc250"
-        PATCH_SET="kernel-7.2"
+        PATCH_SET="linux-cachyos-rc"
         ;;
     linux-cachyos-bore)
         KERNEL_ID="bore"
         CUSTOM_SUFFIX="cachyos-bore-bc250"
         EXPECTED_PKGBASE="linux-cachyos-bore-bc250"
-        PATCH_SET="kernel-7.1"
+        PATCH_SET="linux-cachyos"
         ;;
     *)
         printf 'ERROR: unsupported CACHYOS_SOURCE_VARIANT: %s\n' "$CACHYOS_SOURCE_VARIANT" >&2
@@ -69,17 +69,10 @@ mapfile -t KERNEL_PATCHES < <(find "$PATCH_DIR" -maxdepth 1 -type f -name '*.pat
     exit 1
 }
 
-if [[ "$PATCH_SET" == kernel-7.1 ]]; then
-    [[ -f "$PATCH_DIR/0002-bc250-audio.patch" ]] || {
-        printf 'ERROR: %s must contain the BC-250 audio patch\n' "$PATCH_SET" >&2
-        exit 1
-    }
-else
-    [[ ! -f "$PATCH_DIR/0002-bc250-audio.patch" ]] || {
-        printf 'ERROR: %s must not contain the audio patch because it is upstream there\n' "$PATCH_SET" >&2
-        exit 1
-    }
-fi
+[[ ! -f "$PATCH_DIR/0002-bc250-audio.patch" ]] || {
+    printf 'ERROR: %s must not contain the audio patch because it is upstream there\n' "$PATCH_SET" >&2
+    exit 1
+}
 
 UPSTREAM_BASE="https://raw.githubusercontent.com/CachyOS/linux-cachyos/master/${CACHYOS_SOURCE_VARIANT}"
 NCT6687D_SOURCE_URL="https://raw.githubusercontent.com/Fred78290/nct6687d/${NCT6687D_COMMIT}/nct6687.c"

@@ -11,17 +11,17 @@ case "$COMPONENT" in
     kernel-stable)
         CACHYOS_SOURCE_VARIANT=linux-cachyos
         EXPECTED_PKGBASE=linux-cachyos-bc250
-        PATCH_SET=kernel-7.1
+        PATCH_SET=linux-cachyos
         ;;
     kernel-rc)
         CACHYOS_SOURCE_VARIANT=linux-cachyos-rc
         EXPECTED_PKGBASE=linux-cachyos-rc-bc250
-        PATCH_SET=kernel-7.2
+        PATCH_SET=linux-cachyos-rc
         ;;
     kernel-bore)
         CACHYOS_SOURCE_VARIANT=linux-cachyos-bore
         EXPECTED_PKGBASE=linux-cachyos-bore-bc250
-        PATCH_SET=kernel-7.1
+        PATCH_SET=linux-cachyos
         ;;
     mesa|lib32-mesa|mesa-git) ;;
     *)

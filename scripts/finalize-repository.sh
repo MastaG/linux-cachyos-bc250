@@ -99,12 +99,12 @@ done
 [[ "$stable_pkgbase" == linux-cachyos-bc250 ]] || { printf 'ERROR: unexpected stable pkgbase: %s\n' "$stable_pkgbase" >&2; exit 1; }
 [[ "$rc_pkgbase" == linux-cachyos-rc-bc250 ]] || { printf 'ERROR: unexpected RC pkgbase: %s\n' "$rc_pkgbase" >&2; exit 1; }
 [[ "$bore_pkgbase" == linux-cachyos-bore-bc250 ]] || { printf 'ERROR: unexpected BORE pkgbase: %s\n' "$bore_pkgbase" >&2; exit 1; }
-[[ "$stable_patch_set" == kernel-7.1 && "$bore_patch_set" == kernel-7.1 ]] || {
-    printf 'ERROR: stable and BORE kernels must use kernel-7.1 patch set\n' >&2
+[[ "$stable_patch_set" == linux-cachyos && "$bore_patch_set" == linux-cachyos ]] || {
+    printf 'ERROR: stable and BORE kernels must use the linux-cachyos patch set\n' >&2
     exit 1
 }
-[[ "$rc_patch_set" == kernel-7.2 ]] || {
-    printf 'ERROR: RC kernel must use kernel-7.2 patch set\n' >&2
+[[ "$rc_patch_set" == linux-cachyos-rc ]] || {
+    printf 'ERROR: RC kernel must use the linux-cachyos-rc patch set\n' >&2
     exit 1
 }
 

@@ -159,7 +159,7 @@ echo 0 | sudo tee /sys/module/amdgpu/parameters/bc250_flush_by_runlist
 The helper only rebuilds an already-active runlist, preserving the scheduler state instead of accidentally activating an inactive runlist.  
 Because the mechanism depends on the hardware scheduler, it is a no-op with `amdgpu.sched_policy=2`; use the normal `sched_policy=0` when testing this ROCm workaround.
 
-`0007-amdgpu-ttm-null-page-guard.patch` is separate from the TLB workaround. TTM allocation failures can legitimately leave NULL entries in a partially populated page vector, while AMDGPU's unpopulate path dereferenced every entry before calling `ttm_pool_free()`. The patch skips NULL entries during the `page->mapping` cleanup; the TTM free path in both supplied Linux 7.1 and 7.2 sources already handles those sparse entries.  
+`0007-amdgpu-ttm-null-page-guard.patch` is separate from the TLB workaround. TTM allocation failures can legitimately leave NULL entries in a partially populated page vector, while AMDGPU's unpopulate path dereferenced every entry before calling `ttm_pool_free()`. The patch skips NULL entries during the `page->mapping` cleanup; the TTM free path in the supplied Linux 7.2 source already handles those sparse entries.  
 This does not fix the compute fault that caused a partial allocation; it prevents that failure from escalating into a kernel NULL-pointer panic during cleanup.
 
 ROCm userspace still requires additional GFX1013-specific work outside this kernel repository. These kernel patches alone should not be read as complete ROCm support.
@@ -174,37 +174,19 @@ The userspace side is still experimental and can evolve independently of these k
 
 ## Kernel patch sets
 
-Kernel patches are deliberately separated by kernel series:
+Patches are organized per upstream CachyOS source package rather than per kernel version:
 
 ```text
-patches/kernel-7.1/
-patches/kernel-7.2/
+patches/linux-cachyos/
+patches/linux-cachyos-rc/
 ```
 
-`linux-cachyos` and `linux-cachyos-bore` currently share the same Linux 7.1 source series and therefore use the same `kernel-7.1` patch set.  
-`linux-cachyos-rc` currently uses the Linux 7.2 RC source and the separate `kernel-7.2` patch set.
+`patches/linux-cachyos` is applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`, since `linux-cachyos` and `linux-cachyos-bore` are built from the same upstream source series.  
+`patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`. It starts as an exact copy of `patches/linux-cachyos`, since `linux-cachyos-rc` currently also resolves to the Linux 7.2 series (7.3-rc has not been published upstream yet) — but it is a dedicated directory precisely so it can diverge independently once CachyOS starts shipping a real 7.3-rc PKGBUILD.
 
-### Linux 7.1 patch set
+### linux-cachyos patch set
 
-Applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`:
-
-```text
-0001-bc250-8core-telemetry-gpu-activity.patch
-0002-bc250-audio.patch
-0003-nct6687d-hwmon.patch
-0004-gfx1013-pasid-tlb-invalidation.patch
-0005-gfx1013-compute-gfxoff-guard.patch
-0006-bc250-kfd-flush-tlb-by-runlist.patch
-0007-amdgpu-ttm-null-page-guard.patch
-0008-cyan-skillfish-sclk-range.patch
-```
-
-The audio patch disables DP spread spectrum for Cyan Skillfish through `ignore_dpref_ss`.  
-It is required for the supplied Linux 7.1 source used to rebase this patch set.
-
-### Linux 7.2 patch set
-
-Applied to `linux-cachyos-rc-bc250`:
+Applied to `linux-cachyos-bc250`, `linux-cachyos-rc-bc250` and `linux-cachyos-bore-bc250`:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -216,10 +198,9 @@ Applied to `linux-cachyos-rc-bc250`:
 0008-cyan-skillfish-sclk-range.patch
 ```
 
-There is intentionally no `0002-bc250-audio.patch` here.  
-The equivalent Cyan Skillfish DP spread-spectrum fix is already present in the current Linux 7.2 RC source.
+There is intentionally no `0002-bc250-audio.patch` here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) is required on the older Linux 7.1 series this repository previously built, but it is already present upstream in the Linux 7.2 source, so applying it again would fail to patch cleanly.
 
-Both patch sets contain:
+This patch set contains:
 
 > The telemetry/activity and tunable GFXCLK/activity/metrics cache logic is consolidated in `0001-bc250-8core-telemetry-gpu-activity.patch`.  
 > All three cache windows default to 25 ms and can still be changed at runtime or disabled with `0`.

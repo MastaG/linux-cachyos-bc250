@@ -1,8 +1,8 @@
 diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
-index f42a40b..a0487ea 100644
+index 0dc60c7..e2d7dd8 100644
 --- a/drivers/hwmon/Kconfig
 +++ b/drivers/hwmon/Kconfig
-@@ -1733,6 +1733,21 @@ config SENSORS_NCT6683
+@@ -1767,6 +1767,21 @@ config SENSORS_NCT6683
  	  This driver can also be built as a module. If so, the module
  	  will be called nct6683.
  
@@ -25,10 +25,10 @@ index f42a40b..a0487ea 100644
  	tristate "Nuvoton NCT6694 Hardware Monitor support"
  	depends on MFD_NCT6694
 diff --git a/drivers/hwmon/Makefile b/drivers/hwmon/Makefile
-index bb8d481..73b0b2a 100644
+index 1f886b3..513c782 100644
 --- a/drivers/hwmon/Makefile
 +++ b/drivers/hwmon/Makefile
-@@ -178,6 +178,7 @@ obj-$(CONFIG_SENSORS_MLXREG_FAN) += mlxreg-fan.o
+@@ -181,6 +181,7 @@ obj-$(CONFIG_SENSORS_MLXREG_FAN) += mlxreg-fan.o
  obj-$(CONFIG_SENSORS_MENF21BMC_HWMON) += menf21bmc_hwmon.o
  obj-$(CONFIG_SENSORS_MR75203)	+= mr75203.o
  obj-$(CONFIG_SENSORS_NCT6683)	+= nct6683.o
