@@ -14,6 +14,7 @@ MESA_GIT_PATCHES=(
     "${PATCH_DIR}/0002-gfx1013-mesh-task-shaders.patch"
     "${PATCH_DIR}/0003-gfx1013-taskmesh-queries.patch"
     "${PATCH_DIR}/0004-radv-gfx103.patch"
+    "${PATCH_DIR}/0005-bc250-fsr4-v3.patch"
 )
 
 [[ "$MESA_GIT_PKGREL" =~ ^[0-9]+$ ]] || {
@@ -80,8 +81,8 @@ for key, value in expected.items():
 PY
 
 # Apply the complete BC-250 Mesa series through CachyOS' native user-patch
-# mechanism. 0001 provides async compute unconditionally. 0002/0003 contain
-# the experimental mesh/task path, but their GFX1013 feature exposure remains
+# mechanism. 0001 and 0005 apply unconditionally. 0002/0003 contain the
+# experimental mesh/task path, but their GFX1013 feature exposure remains
 # dormant unless 0004 sees RADV_GFX103=1 at runtime.
 patch_names=()
 for patch in "${MESA_GIT_PATCHES[@]}"; do

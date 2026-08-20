@@ -11,6 +11,7 @@ MESA_PATCHES=(
     "${MESA_PATCH_DIR}/0002-gfx1013-mesh-task-shaders.patch"
     "${MESA_PATCH_DIR}/0003-gfx1013-taskmesh-queries.patch"
     "${MESA_PATCH_DIR}/0004-radv-gfx103.patch"
+    "${MESA_PATCH_DIR}/0005-bc250-fsr4-v3.patch"
 )
 LIB32_MESA_MARCH="x86-64-v3"
 LIB32_MESA_MTUNE="znver2"
@@ -91,8 +92,8 @@ names = '\n'.join(f'  "{name}"' for name, _, _ in patches)
 sha256s = '\n'.join(f"  '{sha}'" for _, sha, _ in patches)
 b2s = '\n'.join(f"  '{b2}'" for _, _, b2 in patches)
 inject = (
-    '# BC-250 / GFX1013 patch set. 0001 is always active; 0002/0003 are\n'
-    '# runtime-gated on GFX1013 by the RADV_GFX103 override added by 0004.\n'
+    '# BC-250 / GFX1013 patch set. 0001 and 0005 are always active; 0002/0003\n'
+    '# are runtime-gated on GFX1013 by the RADV_GFX103 override added by 0004.\n'
     f'source+=(\n{names}\n)\n'
     f'sha256sums+=(\n{sha256s}\n)\n'
     f'b2sums+=(\n{b2s}\n)\n\n'
