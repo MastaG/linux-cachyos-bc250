@@ -43,4 +43,4 @@ cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo
 eeb453358d62271e629355af4bff424160d2af4b0d41e413f347466144805e4c  ./scripts/resolve-cachyos-mesa.sh
 d54dc6ec221b5e8b4f594a891b8bb77b61e101837e3277918f50aad558b71ba7  ./scripts/resolve-mesa-git.sh
 42d362d8154f29600842ad05297d35a4d4191b81c4e87138a10e4b44aae011f9  ./scripts/resolve-nct6687d.sh
-dc3f9d1f37afe48ecbbc9e83bb317f7e6f21472001d7ec8bdf16c23f23ccf2b1  ./scripts/source-fingerprint.sh
+50d5d5c7ee0cd1a735fbf55826ad2c078b9ca8db626e5670d15213efa88147de  ./scripts/source-fingerprint.sh

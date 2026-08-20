@@ -33,8 +33,17 @@ esac
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# Hash file contents plus the bare file name. Plain `sha256sum "$@"` would put
+# the absolute path in its output, which makes the fingerprint depend on where
+# the checkout happens to live. Self-hosted runners use different work
+# directories, so that made every component look changed whenever a job moved
+# between machines, forcing a full rebuild of all three kernels and all of Mesa.
+# Basenames are unique within each call site here, so renames still count.
 hash_files() {
-    sha256sum "$@"
+    local f
+    for f in "$@"; do
+        printf '%s  %s\n' "$(sha256sum < "$f" | awk '{print $1}')" "$(basename -- "$f")"
+    done
 }
 
 case "$COMPONENT" in
