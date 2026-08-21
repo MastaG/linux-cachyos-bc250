@@ -1,7 +1,7 @@
 559551e7523e752579d137ec4bfcbe07f79c7c9678d98eaa6c7bf18f7f794a85  ./.github/workflows/build-release.yml
 58e5221a3e56e9bafacb83b069e11943a47af51761ceb7fa39d73aa481674ced  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-8781a7a67651c7c61c07e4f77da2ab5715e475144548597591a781fa4e4e4e4c  ./README.md
+be884e4ed29dcd8bf167cfedc9d5347e37227a1a03c65edad0090aa3d3159116  ./README.md
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
 0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  ./pacman/stable.conf.example
@@ -23,12 +23,12 @@ cd2d00cb4b72509f44a17936b50524538018a17ba42fdfede5d660ddd916995f  ./patches/mesa
 be253a647647f169a56c69d511a00aa9f96ad7c005a684339392037f31de36cb  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 291f5bf74d3423365d20542286f832bd76e19b07611a35caab2524df3522dff2  ./patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
 5b5a167075cb29328bedb0e33de6e4a32a2399528fc02851c6aee4ef2db1e9a0  ./patches/mesa-git/0004-radv-gfx103.patch
-91eeb2c3f64187fa1847de7dab5d7763a7e313aab443938a369438ea1653e427  ./patches/mesa-git/0005-bc250-fsr4-v3.patch
+3c5fb6a08cc5b339e9cead8613d5b57c33a9612db254bcba4321ce0739ed67e1  ./patches/mesa-git/0005-bc250-fsr4-v3.patch
 b30db62d989977e0cf7c99813f029ade75da128623966616330b0dacc98a5788  ./patches/mesa/0001-gfx1013-compute-queue-fix.patch
 5009c271d5a4efb7d4a447d12ca52016e3b07546401b359e3bd6a6d9399363fa  ./patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 f4547fbf694a83f31ad9613c1d312209bcd81d87fccd6e9a48c3c3adebf18532  ./patches/mesa/0003-gfx1013-taskmesh-queries.patch
 a77116a0a3320b2dfaa43c9a2e5ec8853eb518473b121a2a97efebd4a0dbfde1  ./patches/mesa/0004-radv-gfx103.patch
-679a3248119ef035919e9c78d4669e73afb942ccf9080cf2d425726c3f7b1c57  ./patches/mesa/0005-bc250-fsr4-v3.patch
+f080f52105578044e129202f459eabd8f275086fca4149cce69f51b7ba2dbb5f  ./patches/mesa/0005-bc250-fsr4-v3.patch
 bd77100ae9adf9a3caa0449ff9431d53b6f8ad7fe042fe4a0e73c07c31bf8f2c  ./scripts/build-lib32-mesa-package.sh
 4baaed1249eb29d5cb40250931dd7add17f028db75d5e5512dc9b0369e8e07d6  ./scripts/build-mesa-git-package.sh
 d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/build-mesa-package.sh
