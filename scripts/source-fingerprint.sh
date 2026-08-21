@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Fingerprints must not depend on the machine computing them. Glob expansion and
+# sort order follow LC_COLLATE, and the temporary directory below mixes cases
+# (PKGBUILD vs config, cpu-tune, ...), so a runner using C collation hashes those
+# files in a different order than one using a UTF-8 locale and produces a
+# different fingerprint for identical sources. That made every component look
+# changed whenever a job moved between the two self-hosted runners.
+export LC_ALL=C
+
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPONENT="${1:?component is required}"
 NCT6687D_COMMIT="${NCT6687D_COMMIT:-}"
