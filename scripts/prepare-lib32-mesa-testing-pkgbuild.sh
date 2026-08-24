@@ -121,6 +121,16 @@ text = text.replace(
     1,
 )
 
+# Skip the debug package for the testing variant. It is a throwaway build used
+# to A/B one patch, so ~80 MB of split-debug symbols per architecture is pure
+# release weight nobody will install. The stable mesa packages keep theirs.
+options_block = re.search(r'^options=\(\n(?:.*\n)*?\)\n', text, flags=re.M)
+if not options_block:
+    raise SystemExit('ERROR: could not find the options array in the Mesa PKGBUILD')
+if '!debug' not in options_block.group(0):
+    text = text.replace(options_block.group(0),
+                        options_block.group(0)[:-2] + '  !debug\n)\n', 1)
+
 # package_mesa() is what runs `meson install` and then _pick's each driver out
 # into a holding directory for the other split packages. Since we emit only the
 # RADV package, package_mesa() never runs and vkradeon/ is never created, so the

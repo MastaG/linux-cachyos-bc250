@@ -36,6 +36,14 @@ tarball="mesa-${_pkgver}.tar.xz"
 url="https://archive.mesa3d.org/${tarball}"
 dest="${BUILD_DIR}/${tarball}"
 
+# Escape hatch for local work: during an outage the retry budget below can take
+# twenty minutes, which is right for CI and painful when hand-running a prepare
+# script. Set BC250_SKIP_MESA_PREFETCH=1 to leave the download to makepkg.
+if [[ -n "${BC250_SKIP_MESA_PREFETCH:-}" ]]; then
+    printf '==> BC250_SKIP_MESA_PREFETCH set; leaving the tarball to makepkg\n'
+    exit 0
+fi
+
 # Only bother if the PKGBUILD actually pulls this tarball; if upstream ever
 # switches to a git source this becomes a no-op instead of a failure.
 if ! grep -q 'archive\.mesa3d\.org' "$PKGBUILD"; then
