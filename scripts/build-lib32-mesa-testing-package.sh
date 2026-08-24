@@ -23,6 +23,19 @@ packages=("$BUILD_DIR"/*.pkg.tar.zst)
     exit 1
 }
 
+# Must not contain the architecture-independent drirc/ICD files: those ship in
+# the 64-bit package, and duplicating them here breaks co-installation.
+expected_files="usr/lib32/libvulkan_radeon.so
+usr/share/licenses/lib32-vulkan-radeon-testing/license.rst"
+for pkg in "${packages[@]}"; do
+    actual_files="$(bsdtar -tf "$pkg" | grep -vE '^\.|/$' | LC_ALL=C sort)"
+    [[ "$actual_files" == "$expected_files" ]] || {
+        printf 'ERROR: %s does not ship the expected file set\n' "$(basename "$pkg")" >&2
+        printf -- '--- expected ---\n%s\n--- got ---\n%s\n' "$expected_files" "$actual_files" >&2
+        exit 1
+    }
+done
+
 mkdir -p -- "$OUT_DIR"
 remove_pkgbase_from_repo "$OUT_DIR" lib32-mesa-testing
 cp -- "${packages[@]}" "$OUT_DIR/"

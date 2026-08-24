@@ -135,7 +135,10 @@ if '!debug' not in options_block.group(0):
 # into a holding directory for the other split packages. Since we emit only the
 # RADV package, package_mesa() never runs and vkradeon/ is never created, so the
 # stock `mv vkradeon/* "$pkgdir"` has nothing to move. Install here instead and
-# drop everything that is not the RADV driver. The license install that follows
+# drop everything that is not the RADV driver. Match upstream's split
+# exactly: the drirc defaults and the ICD manifest are architecture
+# independent and ship in the 64-bit package only, so including them in
+# lib32 too makes the two packages unco-installable. The license install that follows
 # still runs afterwards and is unaffected.
 old_mv = '  mv vkradeon/* "$pkgdir"\n'
 if text.count(old_mv) != 1:
@@ -143,9 +146,9 @@ if text.count(old_mv) != 1:
 text = text.replace(old_mv,
     '  meson install -C build --destdir "$pkgdir" --no-rebuild\n'
     '  find "$pkgdir" \\( -type f -o -type l \\) \\\n'
-    "    ! -name 'libvulkan_radeon.so' \\\n"
-    "    ! -name '00-radv-defaults.conf' \\\n"
-    "    ! -name 'radeon_icd.json' -delete\n"
+    '    ! -path "$pkgdir/usr/lib/libvulkan_radeon.so" \\\n'
+    '    ! -path "$pkgdir/usr/share/drirc.d/00-radv-defaults.conf" \\\n'
+    '    ! -path "$pkgdir/usr/share/vulkan/icd.d/radeon_icd.json" -delete\n'
     '  find "$pkgdir" -mindepth 1 -depth -type d -empty -delete\n', 1)
 
 names = '\n'.join(f'  "{name}"' for name, _, _ in patches)

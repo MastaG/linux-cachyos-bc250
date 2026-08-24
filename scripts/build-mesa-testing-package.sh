@@ -24,6 +24,22 @@ mesa_testing_packages=("$MESA_TESTING_BUILD_DIR"/*.pkg.tar.zst)
     exit 1
 }
 
+# The two testing packages must ship disjoint file sets. The drirc defaults and
+# the ICD manifest are architecture independent and belong to the 64-bit package
+# only; shipping them from both makes pacman refuse to co-install them.
+expected_files="usr/lib/libvulkan_radeon.so
+usr/share/drirc.d/00-radv-defaults.conf
+usr/share/licenses/vulkan-radeon-testing/license.rst
+usr/share/vulkan/icd.d/radeon_icd.json"
+for pkg in "${mesa_testing_packages[@]}"; do
+    actual_files="$(bsdtar -tf "$pkg" | grep -vE '^\.|/$' | LC_ALL=C sort)"
+    [[ "$actual_files" == "$expected_files" ]] || {
+        printf 'ERROR: %s does not ship the expected file set\n' "$(basename "$pkg")" >&2
+        printf -- '--- expected ---\n%s\n--- got ---\n%s\n' "$expected_files" "$actual_files" >&2
+        exit 1
+    }
+done
+
 mkdir -p -- "$OUT_DIR"
 remove_pkgbase_from_repo "$OUT_DIR" mesa-testing
 cp -- "${mesa_testing_packages[@]}" "$OUT_DIR/"
