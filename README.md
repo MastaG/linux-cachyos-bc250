@@ -406,13 +406,25 @@ sudo pacman -Syu vulkan-radeon lib32-vulkan-radeon                   # go back t
 
 The kernels and the stable Mesa packages are untouched either way, and normal `pacman -Syu` upgrades keep working while the testing driver is installed.
 
-The patch set lives in `patches/mesa-testing/`. `0001` through `0004` are byte-identical copies of the stable ones; only `0005` differs. It carries the trimmed FSR4 base plus **exactly one** of the removed pieces, so a measurement tells us whether that piece is the one that matters:
+The patch set lives in `patches/mesa-testing/`. `0001` through `0004` are byte-identical copies of the stable ones; only `0005` differs.
 
-| Candidate | What `0005` adds back | Why this order |
+**Current build is a positive control**, not an isolation candidate: its `0005` is a true copy of `patches/mesa/0005`, the full upstream patch that measures ~8 ms. It exists to prove the harness reproduces the known-good result, because the testing driver is built through a reduced single-package PKGBUILD and that had never been validated against a known-good configuration.
+
+| Result | Meaning |
+|---|---|
+| ~8 ms | The harness is sound and isolation results can be trusted. Resume bisecting. |
+| ~12 ms | The harness itself is at fault, and every isolation result so far — including candidate 1 — is meaningless. |
+
+Results so far:
+
+| Variant | Frame time | Verdict |
 |---|---|---|
-| **1 (current)** | The LDS spill-slot override in `aco_spill.cpp` | In ACO, `scratch_slots = slot_count - lds_slots`, so every spill slot that does not fit in LDS goes to scratch — which on this APU is shared system memory. The override moves roughly 80 slots of spill traffic on-die for shaders already spilling hard. By far the largest effect of the three. |
-| 2 | `imad24_ir3` / `imul24` ACO cases and the MAD-chain lowering shapes | Changes generated ISA, but measured no gain when tested on its own |
-| 3 | The explicit `iadd(0, OpSDot)` wrapper rules | Appears to duplicate folds Mesa already performs |
+| Full upstream V3 (shipped) | ~8 ms | fast — the reference |
+| Trimmed (four pieces removed) | ~12 ms | slow |
+| Trimmed + LDS spill override | ~12 ms | **candidate 1 eliminated** |
+| Trimmed + `imad24_ir3` | no gain reported | candidate 2, possibly an incomplete test |
+
+Candidate 1 was tested first on the theory that spill slots not fitting in LDS go to system-memory scratch. It measured the same regression, so that reasoning was wrong. Candidate 2's earlier test may not have exercised anything, since the ACO opcode handling is only reachable if the algebraic rules that generate `imad24_ir3` are restored alongside it — worth redoing properly once the control passes.
 
 **What to report:** the OptiScaler frame time with the testing driver installed, against the same scene and settings you used for the ~8 ms and ~12 ms numbers. If candidate 1 measures ~8 ms it is the answer and the other two can be dropped. If it measures ~12 ms, `0005` is rebuilt with candidate 2 and the test repeats.
 

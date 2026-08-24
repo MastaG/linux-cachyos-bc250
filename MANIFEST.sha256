@@ -1,7 +1,7 @@
 404f81fad00a748824dbf082342319f6289cadb9b75b9a3946ccad2676164382  ./.github/workflows/build-release.yml
 58e5221a3e56e9bafacb83b069e11943a47af51761ceb7fa39d73aa481674ced  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-bd64daa016264259817fe35b8215b998c615a8a3797d84c25a18e31967575903  ./README.md
+517e2450c12f7cbda67adf2423ad9d2b6cef88e2ca132f8d2332f80afd605da7  ./README.md
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
 0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  ./pacman/stable.conf.example
@@ -28,7 +28,7 @@ b30db62d989977e0cf7c99813f029ade75da128623966616330b0dacc98a5788  ./patches/mesa
 5009c271d5a4efb7d4a447d12ca52016e3b07546401b359e3bd6a6d9399363fa  ./patches/mesa-testing/0002-gfx1013-mesh-task-shaders.patch
 f4547fbf694a83f31ad9613c1d312209bcd81d87fccd6e9a48c3c3adebf18532  ./patches/mesa-testing/0003-gfx1013-taskmesh-queries.patch
 a77116a0a3320b2dfaa43c9a2e5ec8853eb518473b121a2a97efebd4a0dbfde1  ./patches/mesa-testing/0004-radv-gfx103.patch
-a818200861cdf1a4ea579254d1bbde2a0eafa11c37c0a5ca53449bc3fd50cccc  ./patches/mesa-testing/0005-bc250-fsr4-v3-candidate1-lds-spill.patch
+a3cba183b206357789caee5b9a079258d7d1ab924cd3357008c4afdbf5273608  ./patches/mesa-testing/0005-bc250-fsr4-v3-control-full-upstream.patch
 b30db62d989977e0cf7c99813f029ade75da128623966616330b0dacc98a5788  ./patches/mesa/0001-gfx1013-compute-queue-fix.patch
 5009c271d5a4efb7d4a447d12ca52016e3b07546401b359e3bd6a6d9399363fa  ./patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 f4547fbf694a83f31ad9613c1d312209bcd81d87fccd6e9a48c3c3adebf18532  ./patches/mesa/0003-gfx1013-taskmesh-queries.patch
