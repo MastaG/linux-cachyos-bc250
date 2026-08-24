@@ -37,6 +37,20 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Ensure gh CLI is available
+        # The ghcr.io/actions/actions-runner base image does not ship gh.
+        # Installed on the runner's own Ubuntu base, not the ephemeral build
+        # container, so this is a no-op once it's present. This must run before
+        # any step that queries the release, not just before publishing: the
+        # cache decision and the repository seeding both depend on gh.
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v gh >/dev/null || {
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends gh
+          }
+
       - name: Resolve nct6687d source
         id: nct6687d
         shell: bash
@@ -122,8 +136,34 @@ jobs:
           rm -rf previous
           mkdir -p previous
           info=previous/build-info.env
-          if ! gh release download repo --pattern build-info.env --dir previous >/dev/null 2>&1; then
+
+          # Never let a transient GitHub/network failure look like "nothing has
+          # ever been built": that silently rebuilds every component.
+          if ! state="$(./scripts/gh-release-state.sh repo)"; then
+            echo "::error title=Cannot reach GitHub releases::Refusing to treat this as a first build and rebuild every component. Re-run once connectivity is back."
+            exit 1
+          fi
+
+          if [[ "$state" == missing ]]; then
+            echo "No previous release published yet; every component counts as changed."
             : > "$info"
+          else
+            # Any release this workflow publishes contains build-info.env (the
+            # publish step verifies it), so if the release exists and the asset
+            # will not download, that is an error rather than a missing cache.
+            downloaded=false
+            for attempt in 1 2 3 4 5; do
+              if gh release download repo --pattern build-info.env --dir previous --clobber >/dev/null 2>&1; then
+                downloaded=true
+                break
+              fi
+              echo "WARN: build-info.env download failed (attempt $attempt/5)"
+              if (( attempt < 5 )); then sleep $(( attempt * 10 )); fi
+            done
+            if [[ "$downloaded" != true ]]; then
+              echo "::error title=Cannot read previous build fingerprints::The repo release exists but build-info.env could not be downloaded. Refusing to silently rebuild every component."
+              exit 1
+            fi
           fi
 
           previous_value() {
@@ -185,8 +225,25 @@ jobs:
           rm -rf out/repo
           mkdir -p out/repo
 
-          if gh release view repo >/dev/null 2>&1; then
-            if ! gh release download repo --dir out/repo; then
+          # As above: an unreachable API must not look like "no release yet".
+          # The publish step deletes and recreates the release from out/repo, so
+          # seeding from nothing would drop every package not rebuilt this run.
+          if ! state="$(./scripts/gh-release-state.sh repo)"; then
+            echo "::error title=Cannot reach GitHub releases::Refusing to seed from nothing, which would drop existing packages from the published repository."
+            exit 1
+          fi
+
+          if [[ "$state" == found ]]; then
+            downloaded=false
+            for attempt in 1 2 3 4 5; do
+              if gh release download repo --dir out/repo --clobber; then
+                downloaded=true
+                break
+              fi
+              echo "WARN: release download failed (attempt $attempt/5)"
+              if (( attempt < 5 )); then sleep $(( attempt * 10 )); fi
+            done
+            if [[ "$downloaded" != true ]]; then
               echo "::error title=Cannot preserve existing packages::The previous fixed repo release exists, but it could not be downloaded."
               exit 1
             fi
@@ -278,19 +335,6 @@ jobs:
           retention-days: 14
           compression-level: 0
           include-hidden-files: true
-
-      - name: Ensure gh CLI is available
-        # The ghcr.io/actions/actions-runner base image does not ship gh.
-        # Installed on the runner's own Ubuntu base, not the ephemeral build
-        # container, so this is a no-op once it's present.
-        if: steps.build.outputs.any == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          command -v gh >/dev/null || {
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends gh
-          }
 
       - name: Publish pacman repository release
         if: steps.build.outputs.any == 'true'
