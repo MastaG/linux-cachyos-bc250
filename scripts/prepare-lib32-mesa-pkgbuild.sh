@@ -108,6 +108,10 @@ text = text.replace('build() {\n', 'build() {\n' + cpu_tuning, 1)
 path.write_text(text, encoding='utf-8', newline='\n')
 PY
 
+# Fetch the release tarball ourselves; archive.mesa3d.org is unreliable and
+# makepkg's own retry budget is too small to ride out its outages.
+"${ROOT_DIR}/scripts/fetch-mesa-tarball.sh" "$LIB32_MESA_BUILD_DIR"
+
 applied_patches="$(IFS=,; printf '%s' "${patch_names[*]}")"
 cat > "$LIB32_MESA_BUILD_DIR/bc250-lib32-mesa-build.env" <<EOF_META
 CACHYOS_MESA_COMMIT=${CACHYOS_MESA_COMMIT}
