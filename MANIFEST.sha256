@@ -45,10 +45,10 @@ d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/buil
 eb5a2d4a8b4240ecaf2a4e3906052f5abbebc1bb8ab00a6ab2644b75cfb8ff68  ./scripts/finalize-repository.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 e976abec5622912d98f81b7adbb14c8d858109503b55d6a01361eb2088dc3ed3  ./scripts/prepare-lib32-mesa-pkgbuild.sh
-8e92be7bd5261fd2e57747bb2487ecb2b78356e0212834ddc27a38706b80424e  ./scripts/prepare-lib32-mesa-testing-pkgbuild.sh
+09503bdebb94ac368a97469e5236c18a1fb2d8ba49605b6244f404f87dff6544  ./scripts/prepare-lib32-mesa-testing-pkgbuild.sh
 82ba208b6132460dfc57fafc8c67a5e2c5b234eafe33f4e7023e63f1d61fa1e6  ./scripts/prepare-mesa-git-pkgbuild.sh
 f98ab5525bc89e6514bf3bc3b054361d5b532261c1c3331da7ce60c80c63d9a8  ./scripts/prepare-mesa-pkgbuild.sh
-04b7873fda9ae63b2fa20eae11dfb56312e0b94c1e17f69cd7d05623f4dd0bdd  ./scripts/prepare-mesa-testing-pkgbuild.sh
+238387970b25543256a536b4251fada12464df7bf7cfe3dad98defba942dd5f6  ./scripts/prepare-mesa-testing-pkgbuild.sh
 41cbd2dc27b21a2e961ad7a79ce4a089acc6616e78a0b3b3358442a901d2e760  ./scripts/prepare-pkgbuild.sh
 cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo-package-helpers.sh
 eeb453358d62271e629355af4bff424160d2af4b0d41e413f347466144805e4c  ./scripts/resolve-cachyos-mesa.sh

@@ -121,6 +121,23 @@ text = text.replace(
     1,
 )
 
+# package_mesa() is what runs `meson install` and then _pick's each driver out
+# into a holding directory for the other split packages. Since we emit only the
+# RADV package, package_mesa() never runs and vkradeon/ is never created, so the
+# stock `mv vkradeon/* "$pkgdir"` has nothing to move. Install here instead and
+# drop everything that is not the RADV driver. The license install that follows
+# still runs afterwards and is unaffected.
+old_mv = '  mv vkradeon/* "$pkgdir"\n'
+if text.count(old_mv) != 1:
+    raise SystemExit('ERROR: expected one `mv vkradeon/*` in the RADV package function')
+text = text.replace(old_mv,
+    '  meson install -C build --destdir "$pkgdir" --no-rebuild\n'
+    '  find "$pkgdir" \\( -type f -o -type l \\) \\\n'
+    "    ! -name 'libvulkan_radeon.so' \\\n"
+    "    ! -name '00-radv-defaults.conf' \\\n"
+    "    ! -name 'radeon_icd.json' -delete\n"
+    '  find "$pkgdir" -mindepth 1 -depth -type d -empty -delete\n', 1)
+
 names = '\n'.join(f'  "{name}"' for name, _, _ in patches)
 sha256s = '\n'.join(f"  '{sha}'" for _, sha, _ in patches)
 b2s = '\n'.join(f"  '{b2}'" for _, _, b2 in patches)
