@@ -37,7 +37,7 @@ d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/buil
 850f6aa8e90f00b849a209476f1acc83e60913031acd40c01ec17da75f11ab29  ./scripts/finalize-repository.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 8806b2b8683b70cf6c19fdcb655a4b549c0120a961bb4f4287b972e1b9166bf7  ./scripts/prepare-lib32-mesa-pkgbuild.sh
-14941df22f10561e39f041e17654285e5e29935c446828cc7fba09e4a9a6b244  ./scripts/prepare-mesa-git-pkgbuild.sh
+82ba208b6132460dfc57fafc8c67a5e2c5b234eafe33f4e7023e63f1d61fa1e6  ./scripts/prepare-mesa-git-pkgbuild.sh
 39aa8cb4749a2ebea73ccb9b3c67fad84418f456a461559f256f4b853fcae3db  ./scripts/prepare-mesa-pkgbuild.sh
 41cbd2dc27b21a2e961ad7a79ce4a089acc6616e78a0b3b3358442a901d2e760  ./scripts/prepare-pkgbuild.sh
 cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo-package-helpers.sh

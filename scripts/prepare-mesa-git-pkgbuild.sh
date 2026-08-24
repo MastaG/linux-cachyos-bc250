@@ -111,6 +111,21 @@ if len(re.findall(pkgrel_pattern, text, flags=re.M)) != 1:
     raise SystemExit('ERROR: expected one numeric pkgrel assignment in mesa-git PKGBUILD')
 text = re.sub(pkgrel_pattern, lambda m: f'pkgrel={m.group(1)}.{patch_rel}', text, count=1, flags=re.M)
 
+# Arch has removed lib32-libvdpau from [multilib], so pacman aborts the build
+# with "target not found: lib32-libvdpau" before anything is compiled. Nothing
+# actually needs it: Mesa deleted VDPAU in commit 4b54277d ("Remove VDPAU",
+# 2025-08-07), and this PKGBUILD's own merge-base guard therefore never sets
+# _gallium_vdpau, so gallium-vdpau is not built at all. The 64-bit libvdpau
+# makedepend is left alone; that package still exists.
+#
+# This is tolerant on purpose: once CachyOS drops the stale entry the
+# substitution matches nothing and this becomes a no-op.
+stale_vdpau = len(re.findall(r"'lib32-libvdpau'", text))
+if stale_vdpau:
+    text = re.sub(r"'lib32-libvdpau'[ \t]*", '', text)
+    print(f'==> Dropped {stale_vdpau} stale lib32-libvdpau makedepend(s); '
+          'Arch removed the package and Mesa no longer builds VDPAU')
+
 # The upstream PKGBUILD can replace all CFLAGS when _custom_opt_flags is set.
 # Keep that behaviour untouched, then append the BC-250 target after the block.
 pattern = re.compile(
