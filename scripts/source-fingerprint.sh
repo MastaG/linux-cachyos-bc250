@@ -31,7 +31,7 @@ case "$COMPONENT" in
         EXPECTED_PKGBASE=linux-cachyos-bore-bc250
         PATCH_SET=linux-cachyos
         ;;
-    mesa|lib32-mesa|mesa-git) ;;
+    mesa|lib32-mesa|mesa-git|mesa-testing|lib32-mesa-testing) ;;
     *)
         printf 'ERROR: unsupported fingerprint component: %s\n' "$COMPONENT" >&2
         exit 1
@@ -90,7 +90,7 @@ case "$COMPONENT" in
         } | sha256sum | awk '{print $1}'
         ;;
 
-    mesa|lib32-mesa|mesa-git)
+    mesa|lib32-mesa|mesa-git|mesa-testing|lib32-mesa-testing)
         if [[ -z "$CACHYOS_MESA_COMMIT" ]]; then
             CACHYOS_MESA_COMMIT="$("$ROOT_DIR/scripts/resolve-cachyos-mesa.sh")"
         fi
@@ -111,6 +111,32 @@ case "$COMPONENT" in
                 hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
                     "$ROOT_DIR"/scripts/prepare-mesa-pkgbuild.sh \
                     "$ROOT_DIR"/scripts/build-mesa-package.sh \
+                    "$ROOT_DIR"/scripts/repo-package-helpers.sh
+            } | sha256sum | awk '{print $1}'
+
+        elif [[ "$COMPONENT" == mesa-testing ]]; then
+            base="https://raw.githubusercontent.com/CachyOS/CachyOS-PKGBUILDS/${CACHYOS_MESA_COMMIT}/mesa/mesa"
+            curl -fsSL --retry 5 --retry-all-errors -o "$TMP/PKGBUILD" "$base/PKGBUILD"
+            curl -fsSL --retry 5 --retry-all-errors -o "$TMP/gamescope.patch" "$base/gamescope-fps-limiter.patch"
+            {
+                (cd "$TMP" && sha256sum *)
+                hash_files "$ROOT_DIR"/patches/mesa-testing/*.patch
+                hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
+                    "$ROOT_DIR"/scripts/prepare-mesa-testing-pkgbuild.sh \
+                    "$ROOT_DIR"/scripts/build-mesa-testing-package.sh \
+                    "$ROOT_DIR"/scripts/repo-package-helpers.sh
+            } | sha256sum | awk '{print $1}'
+
+        elif [[ "$COMPONENT" == lib32-mesa-testing ]]; then
+            base="https://raw.githubusercontent.com/CachyOS/CachyOS-PKGBUILDS/${CACHYOS_MESA_COMMIT}/mesa/lib32-mesa"
+            curl -fsSL --retry 5 --retry-all-errors -o "$TMP/PKGBUILD" "$base/PKGBUILD"
+            curl -fsSL --retry 5 --retry-all-errors -o "$TMP/gamescope.patch" "$base/gamescope-fps-limiter.patch"
+            {
+                (cd "$TMP" && sha256sum *)
+                hash_files "$ROOT_DIR"/patches/mesa-testing/*.patch
+                hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
+                    "$ROOT_DIR"/scripts/prepare-lib32-mesa-testing-pkgbuild.sh \
+                    "$ROOT_DIR"/scripts/build-lib32-mesa-testing-package.sh \
                     "$ROOT_DIR"/scripts/repo-package-helpers.sh
             } | sha256sum | awk '{print $1}'
 

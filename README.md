@@ -386,6 +386,38 @@ To switch explicitly to Git Mesa:
 sudo pacman -S bc250-cachyos/mesa-git bc250-cachyos/lib32-mesa-git
 ```
 
+## FSR4 isolation testing driver (opt-in, for testers)
+
+Restoring the FSR4 V3 patch to the form upstream wrote it took OptiScaler frame time from about 12 ms back to about 8 ms on real BC-250 hardware. That restored four separate pieces at once, so which one is responsible is still unknown. This repository publishes a testing driver to answer that by measurement rather than argument.
+
+It ships only the RADV driver, because `libvulkan_radeon.so` is where every BC-250 FSR4 change lives:
+
+```text
+vulkan-radeon-testing
+lib32-vulkan-radeon-testing
+```
+
+They `provide` and `conflict` the normal `vulkan-radeon` packages, so swapping is one command each way and nothing else on the system changes:
+
+```bash
+sudo pacman -Syu vulkan-radeon-testing lib32-vulkan-radeon-testing   # try the candidate
+sudo pacman -Syu vulkan-radeon lib32-vulkan-radeon                   # go back to normal
+```
+
+The kernels and the stable Mesa packages are untouched either way, and normal `pacman -Syu` upgrades keep working while the testing driver is installed.
+
+The patch set lives in `patches/mesa-testing/`. `0001` through `0004` are byte-identical copies of the stable ones; only `0005` differs. It carries the trimmed FSR4 base plus **exactly one** of the removed pieces, so a measurement tells us whether that piece is the one that matters:
+
+| Candidate | What `0005` adds back | Why this order |
+|---|---|---|
+| **1 (current)** | The LDS spill-slot override in `aco_spill.cpp` | In ACO, `scratch_slots = slot_count - lds_slots`, so every spill slot that does not fit in LDS goes to scratch — which on this APU is shared system memory. The override moves roughly 80 slots of spill traffic on-die for shaders already spilling hard. By far the largest effect of the three. |
+| 2 | `imad24_ir3` / `imul24` ACO cases and the MAD-chain lowering shapes | Changes generated ISA, but measured no gain when tested on its own |
+| 3 | The explicit `iadd(0, OpSDot)` wrapper rules | Appears to duplicate folds Mesa already performs |
+
+**What to report:** the OptiScaler frame time with the testing driver installed, against the same scene and settings you used for the ~8 ms and ~12 ms numbers. If candidate 1 measures ~8 ms it is the answer and the other two can be dropped. If it measures ~12 ms, `0005` is rebuilt with candidate 2 and the test repeats.
+
+A more direct check, if you would rather not benchmark: run with `RADV_DEBUG=shaderstats` on a fast and a slow driver and compare **scratch bytes** and **LDS** on the FSR4 shaders. If the slow one shows scratch where the fast one shows LDS, that confirms the mechanism in a single run.
+
 ## CPU optimization
 
 All kernels use CachyOS' safe x86-64-v3 baseline with additional Zen 2 tuning:

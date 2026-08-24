@@ -10,6 +10,8 @@ set -Eeuo pipefail
 : "${MESA_FINGERPRINT:?MESA_FINGERPRINT is required}"
 : "${LIB32_MESA_FINGERPRINT:?LIB32_MESA_FINGERPRINT is required}"
 : "${MESA_GIT_FINGERPRINT:?MESA_GIT_FINGERPRINT is required}"
+: "${MESA_TESTING_FINGERPRINT:?MESA_TESTING_FINGERPRINT is required}"
+: "${LIB32_MESA_TESTING_FINGERPRINT:?LIB32_MESA_TESTING_FINGERPRINT is required}"
 
 BUILD_KERNEL_STABLE="${BUILD_KERNEL_STABLE:-false}"
 BUILD_KERNEL_RC="${BUILD_KERNEL_RC:-false}"
@@ -17,9 +19,12 @@ BUILD_KERNEL_BORE="${BUILD_KERNEL_BORE:-false}"
 BUILD_MESA="${BUILD_MESA:-false}"
 BUILD_LIB32_MESA="${BUILD_LIB32_MESA:-false}"
 BUILD_MESA_GIT="${BUILD_MESA_GIT:-false}"
+BUILD_MESA_TESTING="${BUILD_MESA_TESTING:-false}"
+BUILD_LIB32_MESA_TESTING="${BUILD_LIB32_MESA_TESTING:-false}"
 NCT6687D_COMMIT="${NCT6687D_COMMIT:-}"
 
-for var in BUILD_KERNEL_STABLE BUILD_KERNEL_RC BUILD_KERNEL_BORE BUILD_MESA BUILD_LIB32_MESA BUILD_MESA_GIT; do
+for var in BUILD_KERNEL_STABLE BUILD_KERNEL_RC BUILD_KERNEL_BORE BUILD_MESA BUILD_LIB32_MESA \
+           BUILD_MESA_GIT BUILD_MESA_TESTING BUILD_LIB32_MESA_TESTING; do
     value="${!var}"
     [[ "$value" == true || "$value" == false ]] || {
         printf 'ERROR: %s must be true or false: %s\n' "$var" "$value" >&2
@@ -95,10 +100,14 @@ runuser -u builder -- env \
     BUILD_MESA="$BUILD_MESA" \
     BUILD_LIB32_MESA="$BUILD_LIB32_MESA" \
     BUILD_MESA_GIT="$BUILD_MESA_GIT" \
+    BUILD_MESA_TESTING="$BUILD_MESA_TESTING" \
+    BUILD_LIB32_MESA_TESTING="$BUILD_LIB32_MESA_TESTING" \
     BC250_PKGREL="$BC250_PKGREL" \
     MESA_PKGREL="$BC250_PKGREL" \
     LIB32_MESA_PKGREL="$BC250_PKGREL" \
     MESA_GIT_PKGREL="$BC250_PKGREL" \
+    MESA_TESTING_PKGREL="$BC250_PKGREL" \
+    LIB32_MESA_TESTING_PKGREL="$BC250_PKGREL" \
     SOURCE_FINGERPRINT="${SOURCE_FINGERPRINT:-componentized}" \
     KERNEL_STABLE_FINGERPRINT="$KERNEL_STABLE_FINGERPRINT" \
     KERNEL_RC_FINGERPRINT="$KERNEL_RC_FINGERPRINT" \
@@ -106,6 +115,8 @@ runuser -u builder -- env \
     MESA_FINGERPRINT="$MESA_FINGERPRINT" \
     LIB32_MESA_FINGERPRINT="$LIB32_MESA_FINGERPRINT" \
     MESA_GIT_FINGERPRINT="$MESA_GIT_FINGERPRINT" \
+    MESA_TESTING_FINGERPRINT="$MESA_TESTING_FINGERPRINT" \
+    LIB32_MESA_TESTING_FINGERPRINT="$LIB32_MESA_TESTING_FINGERPRINT" \
     NCT6687D_COMMIT="$NCT6687D_COMMIT" \
     CACHYOS_MESA_COMMIT="$CACHYOS_MESA_COMMIT" \
     MESA_GIT_COMMIT="$MESA_GIT_COMMIT" \
@@ -135,6 +146,8 @@ runuser -u builder -- env \
         if [[ "$BUILD_MESA" == true ]]; then /workspace/scripts/build-mesa-package.sh; fi
         if [[ "$BUILD_LIB32_MESA" == true ]]; then /workspace/scripts/build-lib32-mesa-package.sh; fi
         if [[ "$BUILD_MESA_GIT" == true ]]; then /workspace/scripts/build-mesa-git-package.sh; fi
+        if [[ "$BUILD_MESA_TESTING" == true ]]; then /workspace/scripts/build-mesa-testing-package.sh; fi
+        if [[ "$BUILD_LIB32_MESA_TESTING" == true ]]; then /workspace/scripts/build-lib32-mesa-testing-package.sh; fi
 
         /workspace/scripts/finalize-repository.sh
     '
