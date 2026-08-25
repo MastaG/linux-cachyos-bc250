@@ -196,6 +196,7 @@ Applied to `linux-cachyos-bc250`, `linux-cachyos-rc-bc250` and `linux-cachyos-bo
 0006-bc250-kfd-flush-tlb-by-runlist.patch
 0007-amdgpu-ttm-null-page-guard.patch
 0008-cyan-skillfish-sclk-range.patch
+0009-bc250-40cu-unlock.patch
 ```
 
 There is intentionally no `0002-bc250-audio.patch` here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) is required on the older Linux 7.1 series this repository previously built, but it is already present upstream in the Linux 7.2 source, so applying it again would fail to patch cleanly.
@@ -218,6 +219,57 @@ This patch set contains:
 - a defensive AMDGPU TTM NULL-page guard so partially populated BO cleanup cannot dereference a missing page;
 - a widened Cyan Skillfish SMU SCLK range (350–2230 MHz, up from the stock 1000–2000 MHz) so userspace SMU-based governors such as [filippor/cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) can drive the full clock range;
 - integration of the external `nct6687` hwmon/PWM driver.
+- an **opt-in** 40 CU unlock for the harvested shader engines (`amdgpu.bc250_cc_write_mode=3`), described below.
+
+## Optional 40 CU unlock
+
+The BC-250 is a salvaged PS5 APU and ships with **24 of its 40 RDNA2 compute units enabled**. The remaining 16 were fused off by firmware policy rather than because they are defective: they still have power, clocks and matching CGTS configuration, and no power gating is active on them.
+
+`0009-bc250-40cu-unlock.patch` re-enables them by writing two hardware registers during CU enumeration, based on the research and testing in [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
+
+Both registers are required, and this is the part that took the original author a controlled experiment to establish — neither one alone does anything:
+
+| Register | Role | Stock | Unlocked |
+|---|---|---|---|
+| `CC_GC_SHADER_ARRAY_CONFIG` | enumeration mask: how many CUs the driver, RADV and KFD *see* | `0xfff80000` | `0xffe00000` |
+| `SPI_PG_ENABLE_STATIC_WGP_MASK` | dispatch gate: where the SPI is allowed to *send waves* | `0x7` (WGP 0–2) | `0x1F` (WGP 0–4) |
+
+Clearing only the enumeration mask makes the driver report 40 CUs while the hardware still dispatches to 24; enabling only dispatch leaves the driver generating work for 24. A third register, `RLC_PG_ALWAYS_ON_WGP_MASK`, keeps the newly enabled WGPs powered.
+
+**It is disabled by default and does nothing unless you ask for it.** The module parameter defaults to `0`, and every register write is additionally guarded on PCI device ID `0x13FE`, so the patch is inert on any other GPU. There is no permanent change to the hardware: boot without the setting and the board is back to 24 CUs.
+
+Enable it at boot:
+
+```text
+amdgpu.bc250_cc_write_mode=3
+```
+
+Or persist it with a modprobe drop-in:
+
+```bash
+printf '%s\n' 'options amdgpu bc250_cc_write_mode=3' | \
+  sudo tee /etc/modprobe.d/bc250-40cu.conf >/dev/null
+```
+
+Verify after rebooting:
+
+```bash
+dmesg | grep active_cu_number     # expect: active_cu_number 40
+dmesg | grep bc250-40cu           # shows the before/after register values
+RADV_DEBUG=info vulkaninfo --summary 2>&1 | grep num_cu   # expect: num_cu = 40
+```
+
+### Thermals — read this before enabling
+
+The extra CUs cost power. The upstream measurements, on a Vulkan LLM inference workload, were roughly **1.6x throughput for about +30 W and +4 °C** when clocks are held at 1500 MHz. Left at the governor's 2 GHz default the same board drew around 181 W and reached **96 °C**, which is not a sustainable operating point.
+
+If you enable this, cap the clocks. With [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu), the widened SCLK range from `0008` makes 1500 MHz / 900 mV reachable as a safe point, and that is the combination the author recommends. Watch temperatures on the first few runs rather than assuming your board behaves like theirs.
+
+### Not every board may be healthy at 40 CUs
+
+Harvest patterns vary. Boards whose disabled CUs are contiguous appear to be policy-harvested, but a scattered pattern may indicate genuinely defective silicon. The upstream project ships tooling to map your own board and to mask individual WGPs through `amdgpu.disable_cu=SE.SH.WGP` if some of the unlocked units turn out to be unstable. Masking works at WGP granularity, so disabling one CU disables its partner.
+
+This patch is carried unmodified apart from one rebase: upstream Linux added an `adev` argument to `amdgpu_gfx_parse_disable_cu()` after the patch was written, so its context needed updating. The register writes themselves are untouched.
 
 ## BC-250 APU telemetry
 
@@ -585,3 +637,5 @@ Only use this repository when you trust the project and its workflow.
 - David Moraza Sanchez (dmorazasanchez) — BC-250 FSR4 EXP-042B (V3) deferred SDot lowering.  
   <https://github.com/dmorazasanchez/bc250-fsr4/tree/v3>
 - FilippoR / ViRazY - For the kernel GPU frequency ranges
+- duggasco — BC-250 40 CU unlock: dual-register (CC + SPI) research, testing and tooling.  
+  <https://github.com/duggasco/bc250-40cu-unlock>
