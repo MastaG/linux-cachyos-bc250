@@ -248,6 +248,7 @@ All three kernels use:
 - Opt-in KFD/HWS runlist TLB workaround (\`amdgpu.bc250_flush_by_runlist=1\`)
 - AMDGPU TTM NULL-page cleanup guard for partially populated BOs
 - Widened Cyan Skillfish SMU SCLK range (350-2230 MHz) for userspace SMU governors
+- Opt-in 40 CU unlock (\`amdgpu.bc250_cc_write_mode=3\`), off by default; cap clocks to ~1500 MHz before enabling
 - \`nct6687.ko\` from Fred78290/nct6687d commit \`${nct_commit}\`
 - upstream \`nct6683\` disabled to avoid claiming the same Super-I/O IDs
 

@@ -44,7 +44,7 @@ d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/buil
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 6900b4a469ce76e7d9460286e67db45bf014058e22ddd94ea464b3ac0103844e  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
-eb5a2d4a8b4240ecaf2a4e3906052f5abbebc1bb8ab00a6ab2644b75cfb8ff68  ./scripts/finalize-repository.sh
+6e98f8d882b319a8afd499bddebfe89d5ccea7c7bb825e3ec3e0b4f668713215  ./scripts/finalize-repository.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 e976abec5622912d98f81b7adbb14c8d858109503b55d6a01361eb2088dc3ed3  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 79dd58f6bf60af13eaacd1f2b8f536cefaf16fd694d80f8fef3fb3124b28ab93  ./scripts/prepare-lib32-mesa-testing-pkgbuild.sh
