@@ -388,46 +388,35 @@ sudo pacman -S bc250-cachyos/mesa-git bc250-cachyos/lib32-mesa-git
 
 ## FSR4 isolation testing driver (opt-in, for testers)
 
-Restoring the FSR4 V3 patch to the form upstream wrote it took OptiScaler frame time from about 12 ms back to about 8 ms on real BC-250 hardware. That restored four separate pieces at once, so which one is responsible is still unknown. This repository publishes a testing driver to answer that by measurement rather than argument.
-
-It ships only the RADV driver, because `libvulkan_radeon.so` is where every BC-250 FSR4 change lives:
-
-```text
-vulkan-radeon-testing
-lib32-vulkan-radeon-testing
-```
-
-They `provide` and `conflict` the normal `vulkan-radeon` packages, so swapping is one command each way and nothing else on the system changes:
+This harness exists to A/B individual FSR4 patch pieces on real hardware, using a swappable RADV-only driver. It is **idle** unless a question is open; the packages it publishes track whatever `patches/mesa-testing/0005` currently carries.
 
 ```bash
-sudo pacman -Syu vulkan-radeon-testing lib32-vulkan-radeon-testing   # try the candidate
-sudo pacman -Syu vulkan-radeon lib32-vulkan-radeon                   # go back to normal
+sudo pacman -Syu vulkan-radeon-testing lib32-vulkan-radeon-testing   # try it
+sudo pacman -Syu vulkan-radeon lib32-vulkan-radeon                   # go back
 ```
 
-The kernels and the stable Mesa packages are untouched either way, and normal `pacman -Syu` upgrades keep working while the testing driver is installed.
+They `provide`/`conflict` the normal `vulkan-radeon` packages, so swapping is one command each way and nothing else on the system changes. Only the RADV driver differs; kernels and stable Mesa are untouched.
 
-The patch set lives in `patches/mesa-testing/`. `0001` through `0004` are byte-identical copies of the stable ones; only `0005` differs.
+### Result of the V3 bisection (2026-08-25, settled)
 
-**Current build is candidate 2**: the `imad24_ir3` MAD-chain lowering, tested as one unit — the ACO opcode cases, the `madacc`/`madconst` algebraic shapes that generate them, and the GFX1013 dense-reduction prepass. It is the full upstream patch with the spill override and the wrapper rules removed.
+Reverting the trimmed patch to upstream's full form restored performance, but restored four pieces at once. Bisecting on hardware isolated the one that matters:
 
-Results so far:
-
-| Variant | Frame time / latency | Verdict |
+| Variant | Latency / fps | Verdict |
 |---|---|---|
-| Full upstream V3 (shipped) | ~8 ms, ~4 ms latency | fast — the reference |
-| Trimmed (four pieces removed) | ~12 ms, ~6 ms latency, ~80 fps | slow |
-| Trimmed + LDS spill override | same regression | **candidate 1 eliminated** |
-| **Positive control** (= full upstream) | **~4.2 ms latency, ~89 fps** | **harness validated** |
-| Candidate 2: `imad24_ir3` MAD chain | *under test* | — |
-| Candidate 3: `iadd(0, OpSDot)` wrapper rules | not yet built | — |
+| Full upstream V3 | ~4 ms, ~89 fps | fast — reference |
+| Trimmed (four pieces removed) | ~6 ms, ~80 fps | slow |
+| Trimmed + LDS spill override | ~6 ms, ~80 fps | eliminated |
+| Positive control (= full upstream) | ~4.2 ms, ~89 fps | harness validated |
+| **Full minus spill override minus wrapper rules** | **~4 ms, ~89 fps** | **the answer** |
 
-The control mattered: the testing driver is built through a reduced single-package PKGBUILD, and that construction had produced three packaging bugs. Confirming it reproduces the known-good numbers is what makes the elimination of candidate 1 trustworthy.
+The **`imad24_ir3` MAD-chain lowering** is what makes V3 fast. The LDS spill override and the `iadd(0, OpSDot)` wrapper rules earn nothing and are no longer shipped.
 
-Candidate 2 is tested as a unit on purpose. An earlier attempt reported no gain from "`imad24_ir3` + ACO support", but the ACO opcode handling is unreachable dead code unless the algebraic rules that produce `imad24_ir3` are restored alongside it — so that test may have measured nothing.
+Two things that measurement overturned, worth recording because both are counterintuitive:
 
-**What to report:** the OptiScaler frame time with the testing driver installed, against the same scene and settings you used for the ~8 ms and ~12 ms numbers. If candidate 1 measures ~8 ms it is the answer and the other two can be dropped. If it measures ~12 ms, `0005` is rebuilt with candidate 2 and the test repeats.
+- The MAD chain emits roughly **75% more instructions** than the balanced/`add3` form, since `v_mad_i32_i24` is VOP3 and cannot take SDWA byte-selects. It is faster regardless: the chain keeps one accumulator live where `add3` needs four products live at once, and on these shaders register pressure dominates instruction count.
+- The spill override was justified as moving spill traffic from system-memory scratch onto on-die LDS. Plausible, and wrong — adding it alone reproduced the full regression.
 
-A more direct check, if you would rather not benchmark: run with `RADV_DEBUG=shaderstats` on a fast and a slow driver and compare **scratch bytes** and **LDS** on the FSR4 shaders. If the slow one shows scratch where the fast one shows LDS, that confirms the mechanism in a single run.
+The positive control was the step that made the rest trustworthy: the testing driver is built through a reduced single-package PKGBUILD, so confirming it reproduces the known-good numbers is what separates "this piece does nothing" from "the harness is broken".
 
 ## CPU optimization
 
