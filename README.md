@@ -408,23 +408,22 @@ The kernels and the stable Mesa packages are untouched either way, and normal `p
 
 The patch set lives in `patches/mesa-testing/`. `0001` through `0004` are byte-identical copies of the stable ones; only `0005` differs.
 
-**Current build is a positive control**, not an isolation candidate: its `0005` is a true copy of `patches/mesa/0005`, the full upstream patch that measures ~8 ms. It exists to prove the harness reproduces the known-good result, because the testing driver is built through a reduced single-package PKGBUILD and that had never been validated against a known-good configuration.
-
-| Result | Meaning |
-|---|---|
-| ~8 ms | The harness is sound and isolation results can be trusted. Resume bisecting. |
-| ~12 ms | The harness itself is at fault, and every isolation result so far — including candidate 1 — is meaningless. |
+**Current build is candidate 2**: the `imad24_ir3` MAD-chain lowering, tested as one unit — the ACO opcode cases, the `madacc`/`madconst` algebraic shapes that generate them, and the GFX1013 dense-reduction prepass. It is the full upstream patch with the spill override and the wrapper rules removed.
 
 Results so far:
 
-| Variant | Frame time | Verdict |
+| Variant | Frame time / latency | Verdict |
 |---|---|---|
-| Full upstream V3 (shipped) | ~8 ms | fast — the reference |
-| Trimmed (four pieces removed) | ~12 ms | slow |
-| Trimmed + LDS spill override | ~12 ms | **candidate 1 eliminated** |
-| Trimmed + `imad24_ir3` | no gain reported | candidate 2, possibly an incomplete test |
+| Full upstream V3 (shipped) | ~8 ms, ~4 ms latency | fast — the reference |
+| Trimmed (four pieces removed) | ~12 ms, ~6 ms latency, ~80 fps | slow |
+| Trimmed + LDS spill override | same regression | **candidate 1 eliminated** |
+| **Positive control** (= full upstream) | **~4.2 ms latency, ~89 fps** | **harness validated** |
+| Candidate 2: `imad24_ir3` MAD chain | *under test* | — |
+| Candidate 3: `iadd(0, OpSDot)` wrapper rules | not yet built | — |
 
-Candidate 1 was tested first on the theory that spill slots not fitting in LDS go to system-memory scratch. It measured the same regression, so that reasoning was wrong. Candidate 2's earlier test may not have exercised anything, since the ACO opcode handling is only reachable if the algebraic rules that generate `imad24_ir3` are restored alongside it — worth redoing properly once the control passes.
+The control mattered: the testing driver is built through a reduced single-package PKGBUILD, and that construction had produced three packaging bugs. Confirming it reproduces the known-good numbers is what makes the elimination of candidate 1 trustworthy.
+
+Candidate 2 is tested as a unit on purpose. An earlier attempt reported no gain from "`imad24_ir3` + ACO support", but the ACO opcode handling is unreachable dead code unless the algebraic rules that produce `imad24_ir3` are restored alongside it — so that test may have measured nothing.
 
 **What to report:** the OptiScaler frame time with the testing driver installed, against the same scene and settings you used for the ~8 ms and ~12 ms numbers. If candidate 1 measures ~8 ms it is the answer and the other two can be dropped. If it measures ~12 ms, `0005` is rebuilt with candidate 2 and the test repeats.
 
