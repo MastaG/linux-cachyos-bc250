@@ -206,10 +206,10 @@ This patch set contains:
 > The telemetry/activity and tunable GFXCLK/activity/metrics cache logic is consolidated in `0001-bc250-8core-telemetry-gpu-activity.patch`.  
 > All three cache windows default to 25 ms and can still be changed at runtime or disabled with `0`.
 
-- automatic 6-core / hybrid 8-core Cyan Skillfish SMU telemetry handling;
-- correct per-core telemetry for unlocked 8-core BC-250 systems;
+- automatic 6-core / 8-core Cyan Skillfish SMU metrics layout detection;
+- correct per-core telemetry for unlocked 8-core BC-250 systems, matched to the patched SMU firmware in the current community BIOS, with an opt-in fallback (`amdgpu.cs_legacy_8core_metrics=1`) for an older BIOS that unlocks the cores without the SMU metrics patch;
 - GPU activity reporting through GPU Metrics and `GPU_LOAD` derived from the GFX ring's emitted-fence count (Cyan Skillfish's `GRBM_STATUS` register reads back all-ones regardless of GPU state, which previously pegged `gpu_busy_percent` at 100% even at idle), with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it);
-- safe GFX clock handling for the hybrid metrics layout, with tunable `GetGfxclkFrequency` mailbox caching (`amdgpu.cs_gfxclk_cache_ms`, default 25 ms, `0` disables it);
+- GFX clock read through the `GetGfxclkFrequency` SMU mailbox, with tunable caching (`amdgpu.cs_gfxclk_cache_ms`, default 25 ms, `0` disables it);
 - a tunable cache (`amdgpu.cs_metrics_cache_ms`, default 25 ms, `0` disables it) for the bulk SMU metrics table refresh backing temperature, power, voltage, socclk/vclk/dclk/uclk and throttler-status reads. Upstream's own internal debounce for that transfer is only 1 ms, so every distinct hwmon attribute a monitoring tool polls in one cycle could otherwise trigger its own SMU mailbox round trip;
 - corrected `gpu_metrics` CPU-power reporting and overflow-safe 16-bit power export;
 - optional full BC-250 APU telemetry through `pp_dpm_socclk` (`amdgpu.cs_full_telemetry=1`), disabled by default so the normal sysfs clock ABI is preserved;
@@ -273,8 +273,27 @@ This patch is carried unmodified apart from one rebase: upstream Linux added an 
 
 ## BC-250 APU telemetry
 
-The main telemetry patch now includes the additional Cyan Skillfish metrics work while keeping the normal interfaces safe by default.  
-The existing automatic 6-core / hybrid 8-core mapping, GPU activity sampling and 25 ms activity/GFXCLK caches remain unchanged.
+The main telemetry patch includes the additional Cyan Skillfish metrics work while keeping the normal interfaces safe by default.  
+GPU activity sampling and the 25 ms activity/GFXCLK caches are unchanged.
+
+### 6-core and 8-core metrics layouts
+
+The Cyan Skillfish SMU firmware was written for 6 CPU cores. On a BIOS that unlocks all 8, the firmware's metrics table changes shape, and the kernel has to decode it differently. The layout is selected automatically from the number of physical cores the CPU reports, so nothing normally needs configuring:
+
+| Cores detected | Layout used |
+|---|---|
+| 6 | Stock Cyan Skillfish table |
+| 8 | 8-core table as produced by the patched SMU firmware |
+
+The 8-core layout matches the SMU metrics patch in [rw-r-r-0644/bc250-smu-unlock](https://github.com/rw-r-r-0644/bc250-smu-unlock), which ships in the current community BIOS. That firmware widens every per-core array to eight entries and keeps its own slot for each remaining field, so **all eight cores report clock, power, temperature and C0 residency**, with no gaps. The struct offsets in the kernel patch are taken directly from that firmware patch's store instructions rather than guessed, and the total export length is asserted at compile time against the 0x11c bytes the firmware actually DMAs.
+
+If you unlocked 8 cores on an **older BIOS that does not carry the SMU metrics patch**, that firmware instead packed the extra cores into the original 116-byte table, leaving several fields with no slot at all. Select that older decoding with:
+
+```text
+amdgpu.cs_legacy_8core_metrics=1
+```
+
+or at runtime with `echo 1 | sudo tee /sys/module/amdgpu/parameters/cs_legacy_8core_metrics`. Leave it off unless your telemetry is visibly wrong on 8 cores — on the patched firmware it produces garbage, which is exactly what the old default did on the new firmware. If you are unsure which BIOS you have, compare per-core temperatures in `amdgpu_top`: on the patched firmware with the default setting all eight are plausible, and with the wrong setting most read as zero.
 
 The `gpu_metrics` export now places the VDDCR_VDD rail in `average_cpu_power` instead of incorrectly exposing it as SoC power. The VDDCR_GFX rail continues to feed `average_gfx_power`, while `average_soc_power` remains at the unsupported sentinel because this firmware table has no separate SoC-rail power value.  
 The GPU Metrics v2.2 power fields are only 16-bit milliwatt values, so values above their usable range are saturated instead of silently wrapping to a much lower number. `0xffff` remains reserved as the kernel's unsupported-value sentinel.
@@ -293,7 +312,7 @@ amdgpu.cs_full_telemetry=1
 ```
 
 The diagnostic view reports the detected layout, per-core clocks/power/temperature/C0 residency, L3 clocks and temperatures, GFX/SOC/VCLK/DCLK/memory clocks, edge temperature, CPU and GPU rail voltage/current/power, socket power and throttler status.  
-On the discovered 8-core hybrid firmware layout there is no table slot for core 0 power or core 7 C0 residency, and only cores 4 and 5 have per-core temperature slots; these unavailable values are shown as `n/a` rather than interpreting unrelated fields as telemetry.
+Its first line names the active layout (`6-core stock`, `8-core` or `8-core legacy`), which is the quickest way to confirm what the kernel decided. In the legacy layout the firmware has no table slot for core 0 power or core 7 C0 residency, and only cores 4 and 5 have per-core temperature slots; those values are shown as `n/a` rather than interpreting unrelated fields as telemetry.
 
 While `cs_full_telemetry=1` is active, `pp_dpm_socclk` is intentionally used as the diagnostic output instead of its normal single-clock listing. Return to the standard behavior at runtime with:
 
@@ -333,7 +352,7 @@ amdgpu.cs_activity_cache_ms=50 amdgpu.cs_gfxclk_cache_ms=50 amdgpu.cs_metrics_ca
 
 ## cyan-skillfish-governor recommendations
 
-The 8-core hybrid telemetry decoding in this repository's kernel patches is unofficial and community-reverse-engineered; the Cyan Skillfish SMU firmware was written with 6 CPU cores in mind, and the extra decoding only applies to boards running a patched BIOS that unlocks the two extra cores.
+The 8-core telemetry decoding in this repository's kernel patches is unofficial and community-reverse-engineered; the Cyan Skillfish SMU firmware was written with 6 CPU cores in mind, and the extra decoding only applies to boards running a patched BIOS that unlocks the two extra cores.
 
 For [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) users on this kernel:
 
@@ -639,3 +658,5 @@ Only use this repository when you trust the project and its workflow.
 - FilippoR / ViRazY - For the kernel GPU frequency ranges
 - duggasco — BC-250 40 CU unlock: dual-register (CC + SPI) research, testing and tooling.  
   <https://github.com/duggasco/bc250-40cu-unlock>
+- rw-r-r-0644 — BC-250 SMU unlock, including the 8-core metrics firmware patch this repository's kernel decoding is derived from.  
+  <https://github.com/rw-r-r-0644/bc250-smu-unlock>

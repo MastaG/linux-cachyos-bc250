@@ -243,7 +243,7 @@ All three kernels use:
 
 - ISA baseline: **x86-64-v3** (CachyOS \`${processor_opt}\`)
 - CPU tuning: **Zen 2** (\`KCFLAGS=-mtune=${cpu_tune}\`)
-- BC-250 telemetry/GPU-activity fixes
+- BC-250 telemetry/GPU-activity fixes, with 8-core SMU metrics decoding matched to the patched SMU firmware in the current community BIOS (older BIOS without that firmware patch: \`amdgpu.cs_legacy_8core_metrics=1\`)
 - GFX1013 PASID TLB invalidation fix and compute GFXOFF guard
 - Opt-in KFD/HWS runlist TLB workaround (\`amdgpu.bc250_flush_by_runlist=1\`)
 - AMDGPU TTM NULL-page cleanup guard for partially populated BOs
