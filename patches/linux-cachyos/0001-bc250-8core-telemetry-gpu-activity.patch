@@ -99,7 +99,7 @@ index 4884a4e1f261..b90284b7fb01 100644
 +
  #endif
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-index bb9620666dae..1184cd6e5d38 100644
+index bb9620666dae..7cf104e91395 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 @@ -23,6 +23,13 @@
@@ -777,7 +777,7 @@ index bb9620666dae..1184cd6e5d38 100644
  	case SMU_VCLK:
  	case SMU_DCLK:
  		ret = cyan_skillfish_get_current_clk_freq(smu, clk_type, &cur_value);
-@@ -382,54 +909,110 @@ static bool cyan_skillfish_is_dpm_running(struct smu_context *smu)
+@@ -382,54 +909,114 @@ static bool cyan_skillfish_is_dpm_running(struct smu_context *smu)
  					  cyan_skillfish_dpm_features.bits);
  }
  
@@ -887,14 +887,18 @@ index bb9620666dae..1184cd6e5d38 100644
 +	gpu_metrics->current_dclk = cur.DclkFrequency;
 +
 +	/*
-+	 * Per-core power is an average, so take it from the Average table
-+	 * whenever that table has the same per-core layout. The pre-patch
-+	 * 8-core firmware left Average six wide, so there the instantaneous
-+	 * Current values are the only ones that map onto eight cores. Fields
++	 * Upstream sources per-core power from the Average table, which is
++	 * correct on the stock 6-core firmware. Neither 8-core firmware
++	 * maintains that field: the pre-patch one left Average six wide, and
++	 * the patched one widens the layout without populating the per-core
++	 * power average, reporting tens of milliwatts per core with all eight
++	 * pinned at 3850 MHz. The Current table there reports ~4 W each,
++	 * summing to the 34 W the VDDCR_VDD rail itself reports, so use the
++	 * instantaneous values whenever the average is not maintained. Fields
 +	 * with no firmware slot keep the 0xffff sentinel set by
 +	 * smu_cmn_init_soft_gpu_metrics().
 +	 */
-+	pcore = avg.ncores == cur.ncores ? &avg : &cur;
++	pcore = layout == CS_METRICS_STOCK ? &avg : &cur;
 +
 +	for (i = 0; i < cur.ncores; i++) {
 +		gpu_metrics->current_coreclk[i] = cur.CoreFrequency[i];

@@ -5,7 +5,7 @@ a6ad431de079acdc504184b809878cd0e4e6b2bd79b6f2b31ef35cd2c06e2036  ./README.md
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
 0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  ./pacman/stable.conf.example
-33df7901562631a09484f2fb9ca7bac58e16fdf3a745b112cc4dc1a4dafce91a  ./patches/linux-cachyos-rc/0001-bc250-8core-telemetry-gpu-activity.patch
+c6b930593e35e4d774f7da65fc8d0312d80f7c5c646aab7bee711b0447206f8b  ./patches/linux-cachyos-rc/0001-bc250-8core-telemetry-gpu-activity.patch
 8d6ae89c7b2c8a081e8bbd52101f4c639bd7bcc53aab0bbc68fd38312ca3e37c  ./patches/linux-cachyos-rc/0003-nct6687d-hwmon.patch
 a73d86157580e0441c18755cd2e9024726fb1465ed96d40a17bb4264e075f88e  ./patches/linux-cachyos-rc/0004-gfx1013-pasid-tlb-invalidation.patch
 faaa05af2f7ce372f5e4a0494e66e64a7021441264d4bcea391014830548279d  ./patches/linux-cachyos-rc/0005-gfx1013-compute-gfxoff-guard.patch
@@ -13,7 +13,7 @@ faaa05af2f7ce372f5e4a0494e66e64a7021441264d4bcea391014830548279d  ./patches/linu
 3ebe3dbdf29211a2b42980c5afdc0141f4bb275ad01d7a756e2118633321580c  ./patches/linux-cachyos-rc/0007-amdgpu-ttm-null-page-guard.patch
 94c221aac12529e9a4f94eb06c71be531ca445f5e7d2b9b9c55ea2589d46cfc1  ./patches/linux-cachyos-rc/0008-cyan-skillfish-sclk-range.patch
 e89ac4783de277b627749bf8351f6c64c434c467eaa18c0cbe0b9e2ace1a66ab  ./patches/linux-cachyos-rc/0009-bc250-40cu-unlock.patch
-33df7901562631a09484f2fb9ca7bac58e16fdf3a745b112cc4dc1a4dafce91a  ./patches/linux-cachyos/0001-bc250-8core-telemetry-gpu-activity.patch
+c6b930593e35e4d774f7da65fc8d0312d80f7c5c646aab7bee711b0447206f8b  ./patches/linux-cachyos/0001-bc250-8core-telemetry-gpu-activity.patch
 8d6ae89c7b2c8a081e8bbd52101f4c639bd7bcc53aab0bbc68fd38312ca3e37c  ./patches/linux-cachyos/0003-nct6687d-hwmon.patch
 a73d86157580e0441c18755cd2e9024726fb1465ed96d40a17bb4264e075f88e  ./patches/linux-cachyos/0004-gfx1013-pasid-tlb-invalidation.patch
 faaa05af2f7ce372f5e4a0494e66e64a7021441264d4bcea391014830548279d  ./patches/linux-cachyos/0005-gfx1013-compute-gfxoff-guard.patch
