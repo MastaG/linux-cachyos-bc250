@@ -105,6 +105,47 @@ uname -r
 lsmod | grep nct6687
 ```
 
+### 5. Running 8 CPU cores? Check which BIOS you have
+
+Check what your board reports:
+
+```bash
+lscpu | grep '^Core(s) per socket'
+```
+
+Skip the rest of this step if that says `6` — everything works out of the box and nothing here applies to you.
+
+The BC-250's SMU firmware was written for 6 CPU cores. If your BIOS unlocks all 8, that firmware has to report per-core telemetry it was never designed to report, and **which BIOS you flashed decides how complete that telemetry is**. The kernel picks the right decoding automatically, so there is nothing to configure in the normal case — but you should know which of these two you are in:
+
+| Your BIOS | What to do | What you get |
+|---|---|---|
+| Unlocks 8 cores **and** patches the SMU (current community BIOS) | Nothing. This is the default. | Clock, power, temperature and C0 residency for **all 8 cores** |
+| Unlocks 8 cores on the **stock, unpatched** SMU (older BIOS) | Add `amdgpu.cs_legacy_8core_metrics=1` | Correct but **incomplete** — see below |
+
+A prebuilt, easy-to-flash UEFI firmware carrying both the core unlock and the SMU patch is published here:
+
+<https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases>
+
+Follow that repository's own instructions — it ships a script that unpacks the firmware to a USB stick and reboots you into the flashing environment. Flashing firmware can brick a board if it is interrupted, so read its README first and do not do it on a machine you cannot afford to lose.
+
+If you would rather not flash anything, the kernel parameter is a perfectly good answer. Set it on the stock BIOS with 8 cores unlocked and telemetry becomes correct instead of scrambled — you just do not get the full picture, because that firmware has no table slot for some of it:
+
+```text
+amdgpu.cs_legacy_8core_metrics=1
+```
+
+| Reading | Stock BIOS, 8 cores unlocked |
+|---|---|
+| Core clock | All 8 cores |
+| Core power | Cores 1-7 (core 0 has no slot) |
+| Core temperature | Cores 4 and 5 only |
+| C0 residency | Cores 0-6 (core 7 has no slot) |
+| GFX clock, voltages, socket power, temperatures | Complete |
+
+Missing values are reported as unavailable rather than filled in with a number belonging to a different field, so nothing lies to you.
+
+**Do not set this parameter if you are on the patched BIOS** — it decodes the table the wrong way and your telemetry will look scrambled. If you are unsure which BIOS you have, boot without the parameter and look at per-core temperatures in `amdgpu_top`: on the patched BIOS all eight are plausible room-temperature-and-up values. If most of them read zero, you are on the older BIOS and want the parameter.
+
 ## Optional AMDGPU scheduler tuning
 
 Do **not** add `amdgpu.sched_policy=2` as a required installation step.  
@@ -285,7 +326,7 @@ The Cyan Skillfish SMU firmware was written for 6 CPU cores. On a BIOS that unlo
 | 6 | Stock Cyan Skillfish table |
 | 8 | 8-core table as produced by the patched SMU firmware |
 
-The 8-core layout matches the SMU metrics patch in [rw-r-r-0644/bc250-smu-unlock](https://github.com/rw-r-r-0644/bc250-smu-unlock), which ships in the current community BIOS. That firmware widens every per-core array to eight entries and keeps its own slot for each remaining field, so **all eight cores report clock, power, temperature and C0 residency**, with no gaps. The struct offsets in the kernel patch are taken directly from that firmware patch's store instructions rather than guessed, and the total export length is asserted at compile time against the 0x11c bytes the firmware actually DMAs.
+The 8-core layout matches the SMU metrics patch in [rw-r-r-0644/bc250-smu-unlock](https://github.com/rw-r-r-0644/bc250-smu-unlock), which is carried by the current community BIOS ([prebuilt firmware here](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases); see [step 5](#5-running-8-cpu-cores-check-which-bios-you-have) of the quick start). That firmware widens every per-core array to eight entries and keeps its own slot for each remaining field, so **all eight cores report clock, power, temperature and C0 residency**, with no gaps. The struct offsets in the kernel patch are taken directly from that firmware patch's store instructions rather than guessed, and the total export length is asserted at compile time against the 0x11c bytes the firmware actually DMAs.
 
 If you unlocked 8 cores on an **older BIOS that does not carry the SMU metrics patch**, that firmware instead packed the extra cores into the original 116-byte table, leaving several fields with no slot at all. Select that older decoding with:
 
@@ -293,7 +334,9 @@ If you unlocked 8 cores on an **older BIOS that does not carry the SMU metrics p
 amdgpu.cs_legacy_8core_metrics=1
 ```
 
-or at runtime with `echo 1 | sudo tee /sys/module/amdgpu/parameters/cs_legacy_8core_metrics`. Leave it off unless your telemetry is visibly wrong on 8 cores — on the patched firmware it produces garbage, which is exactly what the old default did on the new firmware. If you are unsure which BIOS you have, compare per-core temperatures in `amdgpu_top`: on the patched firmware with the default setting all eight are plausible, and with the wrong setting most read as zero.
+or at runtime with `echo 1 | sudo tee /sys/module/amdgpu/parameters/cs_legacy_8core_metrics`. Telemetry is then correct but incomplete: core power covers cores 1-7, only cores 4 and 5 have a temperature, C0 residency covers cores 0-6, and the stock GfxclkFrequency slot is occupied by C0Residency[6], so GFX clock is read through the `GetGfxclkFrequency` SMU message instead. Everything with no slot is reported as unavailable rather than being filled in from an unrelated field.
+
+Leave the parameter off unless your telemetry is visibly wrong on 8 cores — on the patched firmware it produces garbage, which is exactly what the old default did on the new firmware. If you are unsure which BIOS you have, compare per-core temperatures in `amdgpu_top`: on the patched firmware with the default setting all eight are plausible, and with the wrong setting most read as zero.
 
 The `gpu_metrics` export now places the VDDCR_VDD rail in `average_cpu_power` instead of incorrectly exposing it as SoC power. The VDDCR_GFX rail continues to feed `average_gfx_power`, while `average_soc_power` remains at the unsupported sentinel because this firmware table has no separate SoC-rail power value.  
 The GPU Metrics v2.2 power fields are only 16-bit milliwatt values, so values above their usable range are saturated instead of silently wrapping to a much lower number. `0xffff` remains reserved as the kernel's unsupported-value sentinel.
@@ -660,3 +703,5 @@ Only use this repository when you trust the project and its workflow.
   <https://github.com/duggasco/bc250-40cu-unlock>
 - rw-r-r-0644 — BC-250 SMU unlock, including the 8-core metrics firmware patch this repository's kernel decoding is derived from.  
   <https://github.com/rw-r-r-0644/bc250-smu-unlock>
+- Forbidden-Darkness — prebuilt BC-250 UEFI firmware bundling the 8-core unlock with the SMU telemetry patch, and the script that flashes it.  
+  <https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases>
