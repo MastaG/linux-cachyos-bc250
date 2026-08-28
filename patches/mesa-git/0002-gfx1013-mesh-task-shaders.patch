@@ -196,7 +196,7 @@ index c05d042a1a0..17554ded494 100644
  {
     const struct radv_instance *instance = radv_physical_device_instance(pdev);
  
-    if (instance->debug_flags & RADV_DEBUG_NO_MESH_SHADER)
+    if (RADV_DEBUG(instance, NO_MESH_SHADER))
        return false;
  
 -   return pdev->use_ngg && !pdev->use_llvm && pdev->info.gfx_level >= GFX10_3 && radv_compute_queue_enabled(pdev);

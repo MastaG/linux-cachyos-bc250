@@ -22,7 +22,7 @@ faaa05af2f7ce372f5e4a0494e66e64a7021441264d4bcea391014830548279d  ./patches/linu
 94c221aac12529e9a4f94eb06c71be531ca445f5e7d2b9b9c55ea2589d46cfc1  ./patches/linux-cachyos/0008-cyan-skillfish-sclk-range.patch
 e89ac4783de277b627749bf8351f6c64c434c467eaa18c0cbe0b9e2ace1a66ab  ./patches/linux-cachyos/0009-bc250-40cu-unlock.patch
 cd2d00cb4b72509f44a17936b50524538018a17ba42fdfede5d660ddd916995f  ./patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
-d5f4584cdc54eb085f085af63afe874db735a6f8bee0e503aa818c3a1e1cc9c1  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
+1f57d7b31655760108f61bcbc2e7c0062ece3016f572dff08be4ba48ddb6509f  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 291f5bf74d3423365d20542286f832bd76e19b07611a35caab2524df3522dff2  ./patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
 5b5a167075cb29328bedb0e33de6e4a32a2399528fc02851c6aee4ef2db1e9a0  ./patches/mesa-git/0004-radv-gfx103.patch
 d3f7eb49beba342b02039c0b489403ab80aeb1356e3b1739037b0c0113210e26  ./patches/mesa-git/0005-bc250-fsr4-v3.patch
