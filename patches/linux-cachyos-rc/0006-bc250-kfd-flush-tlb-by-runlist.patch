@@ -1,8 +1,8 @@
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
-index e1689b3..69d2ef1 100644
+index 7fcfc150a7fc..bc1d4c817579 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
-@@ -1458,8 +1458,17 @@ static int kfd_ioctl_unmap_memory_from_gpu(struct file *filep,
+@@ -1459,8 +1459,17 @@ static int kfd_ioctl_unmap_memory_from_gpu(struct file *filep,
  		peer_pdd = kfd_process_device_data_by_id(p, devices_arr[i]);
  		if (WARN_ON_ONCE(!peer_pdd))
  			continue;
@@ -22,7 +22,7 @@ index e1689b3..69d2ef1 100644
  		/* Remove dma mapping after tlb flush to avoid IO_PAGE_FAULT */
  		err = amdgpu_amdkfd_gpuvm_dmaunmap_mem(mem, peer_pdd->drm_priv);
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c
-index 6713767..4092a45 100644
+index 4bc947c3bd0d..49ff08f1d710 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c
 @@ -24,6 +24,7 @@
@@ -33,7 +33,7 @@ index 6713767..4092a45 100644
  #include <linux/slab.h>
  #include <linux/list.h>
  #include <linux/types.h>
-@@ -2656,6 +2657,70 @@ static int execute_queues_cpsch(struct device_queue_manager *dqm,
+@@ -2748,6 +2749,70 @@ static int execute_queues_cpsch(struct device_queue_manager *dqm,
  	return retval;
  }
  
@@ -105,7 +105,7 @@ index 6713767..4092a45 100644
  				 struct queue *q)
  {
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.h b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.h
-index 641b8ad..fa59a51 100644
+index c9f9f7a87111..5474a049bdf0 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.h
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.h
 @@ -314,6 +314,7 @@ unsigned int get_num_sdma_queues(struct device_queue_manager *dqm);

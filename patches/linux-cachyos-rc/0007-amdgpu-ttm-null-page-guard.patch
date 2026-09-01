@@ -1,8 +1,8 @@
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
-index eaa86e3..d3d687b 100644
+index d5a419776e93..483b309a105d 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
-@@ -1279,8 +1279,11 @@ static void amdgpu_ttm_tt_unpopulate(struct ttm_device *bdev,
+@@ -1281,8 +1281,11 @@ static void amdgpu_ttm_tt_unpopulate(struct ttm_device *bdev,
  	if (ttm->page_flags & TTM_TT_FLAG_EXTERNAL)
  		return;
  

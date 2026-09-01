@@ -37,7 +37,7 @@ Signed-off-by: duggasco <duggasco@gmail.com>
  1 file changed, 41 insertions(+)
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
-index a9961d504833..bb26cae0ac25 100644
+index 00798d80479f..06df1e0a0c5d 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
 @@ -26,6 +26,13 @@
@@ -54,7 +54,7 @@ index a9961d504833..bb26cae0ac25 100644
  #include "amdgpu.h"
  #include "amdgpu_gfx.h"
  #include "amdgpu_psp.h"
-@@ -10125,6 +10132,40 @@ static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
+@@ -10131,6 +10138,40 @@ static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
  	amdgpu_gfx_parse_disable_cu(adev, disable_masks, 4, 2);
  
  	mutex_lock(&adev->grbm_idx_mutex);

@@ -223,11 +223,13 @@ patches/linux-cachyos-rc/
 ```
 
 `patches/linux-cachyos` is applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`, since `linux-cachyos` and `linux-cachyos-bore` are built from the same upstream source series.  
-`patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`. It starts as an exact copy of `patches/linux-cachyos`, since `linux-cachyos-rc` currently also resolves to the Linux 7.2 series (7.3-rc has not been published upstream yet) — but it is a dedicated directory precisely so it can diverge independently once CachyOS starts shipping a real 7.3-rc PKGBUILD.
+`patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`, and the two sets are now anchored to different kernels: `patches/linux-cachyos` targets the **Linux 7.2** series, `patches/linux-cachyos-rc` targets **Linux 7.3-rc**. That is exactly why the directory was split.
 
-### linux-cachyos patch set
+The two sets currently contain the same eight patches with the same content — all of them applied to 7.3-rc1 unmodified. Only the hunk offsets and blob hashes differ, because each set is regenerated against its own base so that future rebases are measured from the right kernel.
 
-Applied to `linux-cachyos-bc250`, `linux-cachyos-rc-bc250` and `linux-cachyos-bore-bc250`:
+### Kernel patch set
+
+Both sets carry the same eight patches — `patches/linux-cachyos` for `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2), `patches/linux-cachyos-rc` for `linux-cachyos-rc-bc250` (7.3-rc):
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -240,7 +242,7 @@ Applied to `linux-cachyos-bc250`, `linux-cachyos-rc-bc250` and `linux-cachyos-bo
 0009-bc250-40cu-unlock.patch
 ```
 
-There is intentionally no `0002-bc250-audio.patch` here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) is required on the older Linux 7.1 series this repository previously built, but it is already present upstream in the Linux 7.2 source, so applying it again would fail to patch cleanly.
+There is intentionally no `0002-bc250-audio.patch` here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
 This patch set contains:
 

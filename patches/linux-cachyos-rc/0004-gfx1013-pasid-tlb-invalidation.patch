@@ -1,5 +1,5 @@
 diff --git a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-index 6be2000..b5af7c5 100644
+index c70657bc089b..adb90b07aff6 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
 @@ -232,12 +232,14 @@ static bool gmc_v10_0_get_atc_vmid_pasid_mapping_info(
@@ -96,7 +96,7 @@ index 6be2000..b5af7c5 100644
  		}
  	}
  }
-@@ -964,7 +995,21 @@ static int gmc_v10_0_hw_init(struct amdgpu_ip_block *ip_block)
+@@ -960,7 +991,21 @@ static int gmc_v10_0_hw_init(struct amdgpu_ip_block *ip_block)
  	struct amdgpu_device *adev = ip_block->adev;
  	int r;
  

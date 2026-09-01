@@ -223,21 +223,21 @@ cat > RELEASE_NOTES.md <<EOF_NOTES
 - Upstream source: \`${stable_source}\`
 - Version: \`${stable_pkgver}-${stable_pkgrel}\`
 - Patch set: \`${stable_patch_set}\`
-- Includes the Cyan Skillfish DP-audio spread-spectrum fix required by Linux 7.1.
+- The Cyan Skillfish DP-audio spread-spectrum fix is omitted: it has been upstream since Linux 7.2.
 
 ### Release candidate: \`${rc_pkgbase}\`
 
 - Upstream source: \`${rc_source}\`
 - Version: \`${rc_pkgver}-${rc_pkgrel}\`
 - Patch set: \`${rc_patch_set}\`
-- The separate audio patch is intentionally omitted because the fix is already upstream in the current 7.2 RC source.
+- Built from the \`patches/linux-cachyos-rc\` set, which is maintained against the Linux 7.3-rc series independently of the 7.2 stable set.
 
 ### BORE: \`${bore_pkgbase}\`
 
 - Upstream source: \`${bore_source}\`
 - Version: \`${bore_pkgver}-${bore_pkgrel}\`
 - Patch set: \`${bore_patch_set}\`
-- Uses the same Linux 7.1 BC-250 patch set as the stable kernel, including the audio fix.
+- Uses the same BC-250 patch set as the stable kernel (\`patches/linux-cachyos\`).
 
 All three kernels use:
 
