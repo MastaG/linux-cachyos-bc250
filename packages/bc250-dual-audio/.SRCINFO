@@ -1,7 +1,7 @@
 pkgbase = bc250-dual-audio
 	pkgdesc = Dual-output audio policy for the AMD BC-250: native HDMI/DP plus a switchable Dolby Digital 5.1 (AC3) virtual sink
 	pkgver = 0.6
-	pkgrel = 1
+	pkgrel = 2
 	url = https://github.com/MastaG/bc250-dual-audio
 	install = bc250-dual-audio.install
 	arch = any

@@ -1,7 +1,7 @@
 # Maintainer: MastaG
 pkgname=bc250-dual-audio
 pkgver=0.6
-pkgrel=1
+pkgrel=2
 pkgdesc="Dual-output audio policy for the AMD BC-250: native HDMI/DP plus a switchable Dolby Digital 5.1 (AC3) virtual sink"
 arch=('any')
 url="https://github.com/MastaG/bc250-dual-audio"
@@ -26,13 +26,22 @@ package() {
     install -Dm644 etc/wireplumber/wireplumber.conf.d/50-bc250-audio.conf \
         "$pkgdir/etc/wireplumber/wireplumber.conf.d/50-bc250-audio.conf"
 
-    # Deliberately installed under /usr/local/share rather than the pacman-owned
-    # /usr/share/wireplumber/scripts tree. XDG_DATA_DIRS puts /usr/local/share
-    # ahead of /usr/share, so this shadows the stock ALSA monitor script without
-    # conflicting with the wireplumber package's own copy of the same file, and
-    # without being clobbered when that package is upgraded.
+    # 90-bc250-audio-mode.lua is a filename of our own choosing and the
+    # wireplumber package ships nothing under it, so it installs as a normal
+    # package-owned file under the standard system script tree.
     install -Dm644 usr/local/share/wireplumber/scripts/90-bc250-audio-mode.lua \
-        "$pkgdir/usr/local/share/wireplumber/scripts/90-bc250-audio-mode.lua"
+        "$pkgdir/usr/share/wireplumber/scripts/90-bc250-audio-mode.lua"
+
+    # monitors/alsa.lua cannot move to /usr/share: the wireplumber package's
+    # own stock config hardcodes `name = monitors/alsa.lua, provides =
+    # monitor.alsa`, and owns that exact path, so installing our copy there
+    # would overwrite a pacman-owned file. A different filename doesn't work
+    # either -- verified: WirePlumber refuses to start at all when two
+    # components both declare `provides = monitor.alsa` ("no component
+    # provides 'monitor.alsa'"), rather than picking one. /usr/local/share
+    # ahead of /usr/share in XDG_DATA_DIRS is the only mechanism this
+    # WirePlumber offers for shadowing one stock script under its original
+    # name without touching the package that owns it.
     install -Dm644 usr/local/share/wireplumber/scripts/monitors/alsa.lua \
         "$pkgdir/usr/local/share/wireplumber/scripts/monitors/alsa.lua"
 
