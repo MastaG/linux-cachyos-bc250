@@ -1,7 +1,10 @@
-404f81fad00a748824dbf082342319f6289cadb9b75b9a3946ccad2676164382  ./.github/workflows/build-release.yml
+ad649710f4138cc3c7fe56c41d9113b7dd869d10007383ff8c5b3366b6c87b23  ./.github/workflows/build-release.yml
 58e5221a3e56e9bafacb83b069e11943a47af51761ceb7fa39d73aa481674ced  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-8074ec639416166be0b3d04f0841255b58da06286b09c2e25dd0fb7e4d4d5782  ./README.md
+c8d498fadb2e7bb8d39ca2c10711acb8c5fc2c46e286fad290656ccd2986127b  ./README.md
+613059c72b6c47c039e708a8659777afa9883a155a8dd7f66ccbd1097a99163b  ./packages/bc250-dual-audio/.SRCINFO
+0528ac4ae0c763201b0b2370563249327c5912a040f025c550c973d38bc4bab5  ./packages/bc250-dual-audio/PKGBUILD
+7c6d84e2103df71e1bdd9d64108938308ef5c7626f566a349e6bcb6406a6bd7c  ./packages/bc250-dual-audio/bc250-dual-audio.install
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
 0c1db2e2d0180a992b3279f618b79391f37b5d7afc773123bd4e52fe831f3c01  ./pacman/stable.conf.example
@@ -36,15 +39,16 @@ b30db62d989977e0cf7c99813f029ade75da128623966616330b0dacc98a5788  ./patches/mesa
 f4547fbf694a83f31ad9613c1d312209bcd81d87fccd6e9a48c3c3adebf18532  ./patches/mesa/0003-gfx1013-taskmesh-queries.patch
 a77116a0a3320b2dfaa43c9a2e5ec8853eb518473b121a2a97efebd4a0dbfde1  ./patches/mesa/0004-radv-gfx103.patch
 43202e01e3a3cad51c9d879b49a56ef8b06232daf6f30e2d196e13df634bb502  ./patches/mesa/0005-bc250-fsr4-v3.patch
+43231e45edc634a305fa273391c3c16e95215b36790bb0027d9dc24d89558859  ./scripts/build-bc250-dual-audio-package.sh
 bd77100ae9adf9a3caa0449ff9431d53b6f8ad7fe042fe4a0e73c07c31bf8f2c  ./scripts/build-lib32-mesa-package.sh
 719419f4ea1b207123065f5ddf5b7d5e4c81427a9a1792722e4c9242d18ac1ce  ./scripts/build-lib32-mesa-testing-package.sh
 4baaed1249eb29d5cb40250931dd7add17f028db75d5e5512dc9b0369e8e07d6  ./scripts/build-mesa-git-package.sh
 d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/build-mesa-package.sh
 5b2365ba552a3ff86d74bf54bbc305110425ed8a01a1a14a2a8210264b91aa36  ./scripts/build-mesa-testing-package.sh
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
-6900b4a469ce76e7d9460286e67db45bf014058e22ddd94ea464b3ac0103844e  ./scripts/ci-build.sh
+a21d5c275fa2cbef67843e0e8d427ad228305deb6e4ae7d67b9eac081a2824c3  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
-92473725ace7eb75fe5c804af94e7943032373352160821acedf92bc984dca12  ./scripts/finalize-repository.sh
+b5930146fbfebda35cbffd1c4a2569161a79ace4d120d2d49298e31d3fe790c6  ./scripts/finalize-repository.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 e976abec5622912d98f81b7adbb14c8d858109503b55d6a01361eb2088dc3ed3  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 79dd58f6bf60af13eaacd1f2b8f536cefaf16fd694d80f8fef3fb3124b28ab93  ./scripts/prepare-lib32-mesa-testing-pkgbuild.sh
@@ -56,4 +60,4 @@ cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo
 eeb453358d62271e629355af4bff424160d2af4b0d41e413f347466144805e4c  ./scripts/resolve-cachyos-mesa.sh
 d54dc6ec221b5e8b4f594a891b8bb77b61e101837e3277918f50aad558b71ba7  ./scripts/resolve-mesa-git.sh
 42d362d8154f29600842ad05297d35a4d4191b81c4e87138a10e4b44aae011f9  ./scripts/resolve-nct6687d.sh
-cee88f1dcebf4bcd1f5712e89d040f3c2701d91e0b4b9c03a9cce588998c9127  ./scripts/source-fingerprint.sh
+9ca9661a4e52e319d9ac30ca65e7550b46cf6edbc103f40a21b2c79f35c3bef4  ./scripts/source-fingerprint.sh

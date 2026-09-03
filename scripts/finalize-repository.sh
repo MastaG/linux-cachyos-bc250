@@ -13,6 +13,7 @@ REPO_NAME="bc250-cachyos"
 : "${MESA_GIT_FINGERPRINT:?MESA_GIT_FINGERPRINT is required}"
 : "${MESA_TESTING_FINGERPRINT:?MESA_TESTING_FINGERPRINT is required}"
 : "${LIB32_MESA_TESTING_FINGERPRINT:?LIB32_MESA_TESTING_FINGERPRINT is required}"
+: "${BC250_DUAL_AUDIO_FINGERPRINT:?BC250_DUAL_AUDIO_FINGERPRINT is required}"
 
 BUILD_KERNEL_STABLE="${BUILD_KERNEL_STABLE:-false}"
 BUILD_KERNEL_RC="${BUILD_KERNEL_RC:-false}"
@@ -22,6 +23,7 @@ BUILD_LIB32_MESA="${BUILD_LIB32_MESA:-false}"
 BUILD_MESA_GIT="${BUILD_MESA_GIT:-false}"
 BUILD_MESA_TESTING="${BUILD_MESA_TESTING:-false}"
 BUILD_LIB32_MESA_TESTING="${BUILD_LIB32_MESA_TESTING:-false}"
+BUILD_BC250_DUAL_AUDIO="${BUILD_BC250_DUAL_AUDIO:-false}"
 
 required_metadata=(
     kernel-stable-info.env
@@ -32,6 +34,7 @@ required_metadata=(
     mesa-git-info.env
     mesa-testing-info.env
     lib32-mesa-testing-info.env
+    bc250-dual-audio-info.env
 )
 for file in "${required_metadata[@]}"; do
     [[ -f "$OUT_DIR/$file" ]] || {
@@ -98,12 +101,17 @@ mesa_testing_patches="$(value "$mesa_testing_info" MESA_TESTING_APPLIED_PATCHES)
 lib32_mesa_testing_pkgver="$(value "$lib32_mesa_testing_info" LIB32_MESA_TESTING_PKGVER)"
 lib32_mesa_testing_pkgrel="$(value "$lib32_mesa_testing_info" LIB32_MESA_TESTING_PKGREL)"
 
+bc250_dual_audio_info="$OUT_DIR/bc250-dual-audio-info.env"
+bc250_dual_audio_pkgver="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGVER)"
+bc250_dual_audio_pkgrel="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGREL)"
+
 for field in \
     stable_pkgbase stable_pkgver stable_pkgrel \
     rc_pkgbase rc_pkgver rc_pkgrel \
     bore_pkgbase bore_pkgver bore_pkgrel \
     mesa_pkgver mesa_pkgrel lib32_pkgver lib32_pkgrel \
-    mesa_git_commit mesa_git_pkgver mesa_git_pkgrel mesa_git_lib32; do
+    mesa_git_commit mesa_git_pkgver mesa_git_pkgrel mesa_git_lib32 \
+    bc250_dual_audio_pkgver bc250_dual_audio_pkgrel; do
     [[ -n "${!field}" ]] || {
         printf 'ERROR: missing metadata field %s\n' "$field" >&2
         exit 1
@@ -147,6 +155,7 @@ lib32_count="$(pkgbase_count lib32-mesa)"
 mesa_git_count="$(pkgbase_count mesa-git)"
 mesa_testing_count="$(pkgbase_count mesa-testing)"
 lib32_mesa_testing_count="$(pkgbase_count lib32-mesa-testing)"
+bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
 
 (( stable_count >= 2 )) || { printf 'ERROR: expected stable kernel + headers; found %d package(s)\n' "$stable_count" >&2; exit 1; }
 (( rc_count >= 2 )) || { printf 'ERROR: expected RC kernel + headers; found %d package(s)\n' "$rc_count" >&2; exit 1; }
@@ -156,6 +165,7 @@ lib32_mesa_testing_count="$(pkgbase_count lib32-mesa-testing)"
 (( mesa_git_count == 2 )) || { printf 'ERROR: expected mesa-git + lib32-mesa-git; found %d package(s)\n' "$mesa_git_count" >&2; exit 1; }
 (( mesa_testing_count >= 1 )) || { printf 'ERROR: vulkan-radeon-testing package is missing\n' >&2; exit 1; }
 (( lib32_mesa_testing_count >= 1 )) || { printf 'ERROR: lib32-vulkan-radeon-testing package is missing\n' >&2; exit 1; }
+(( bc250_dual_audio_count == 1 )) || { printf 'ERROR: expected exactly one bc250-dual-audio package; found %d\n' "$bc250_dual_audio_count" >&2; exit 1; }
 
 rm -f -- "${REPO_NAME}.db" "${REPO_NAME}.db.tar.zst" \
           "${REPO_NAME}.files" "${REPO_NAME}.files.tar.zst"
@@ -166,7 +176,8 @@ cp -L --remove-destination "${REPO_NAME}.files.tar.zst" "${REPO_NAME}.files"
 SOURCE_FINGERPRINT="$(printf '%s\n' \
     "$KERNEL_STABLE_FINGERPRINT" "$KERNEL_RC_FINGERPRINT" "$KERNEL_BORE_FINGERPRINT" \
     "$MESA_FINGERPRINT" "$LIB32_MESA_FINGERPRINT" "$MESA_GIT_FINGERPRINT" \
-    "$MESA_TESTING_FINGERPRINT" "$LIB32_MESA_TESTING_FINGERPRINT" | \
+    "$MESA_TESTING_FINGERPRINT" "$LIB32_MESA_TESTING_FINGERPRINT" \
+    "$BC250_DUAL_AUDIO_FINGERPRINT" | \
     sha256sum | awk '{print $1}')"
 
 cat > build-info.env <<EOF_INFO
@@ -179,6 +190,7 @@ LIB32_MESA_FINGERPRINT=${LIB32_MESA_FINGERPRINT}
 MESA_GIT_FINGERPRINT=${MESA_GIT_FINGERPRINT}
 MESA_TESTING_FINGERPRINT=${MESA_TESTING_FINGERPRINT}
 LIB32_MESA_TESTING_FINGERPRINT=${LIB32_MESA_TESTING_FINGERPRINT}
+BC250_DUAL_AUDIO_FINGERPRINT=${BC250_DUAL_AUDIO_FINGERPRINT}
 LAST_RUN_KERNEL_STABLE_BUILD=${BUILD_KERNEL_STABLE}
 LAST_RUN_KERNEL_RC_BUILD=${BUILD_KERNEL_RC}
 LAST_RUN_KERNEL_BORE_BUILD=${BUILD_KERNEL_BORE}
@@ -187,6 +199,7 @@ LAST_RUN_LIB32_MESA_BUILD=${BUILD_LIB32_MESA}
 LAST_RUN_MESA_GIT_BUILD=${BUILD_MESA_GIT}
 LAST_RUN_MESA_TESTING_BUILD=${BUILD_MESA_TESTING}
 LAST_RUN_LIB32_MESA_TESTING_BUILD=${BUILD_LIB32_MESA_TESTING}
+LAST_RUN_BC250_DUAL_AUDIO_BUILD=${BUILD_BC250_DUAL_AUDIO}
 KERNEL_STABLE_PKGBASE=${stable_pkgbase}
 KERNEL_STABLE_PKGVER=${stable_pkgver}
 KERNEL_STABLE_PKGREL=${stable_pkgrel}
@@ -209,6 +222,8 @@ MESA_GIT_COMMIT=${mesa_git_commit}
 MESA_GIT_PKGVER=${mesa_git_pkgver}
 MESA_GIT_PKGREL=${mesa_git_pkgrel}
 MESA_GIT_LIB32=${mesa_git_lib32}
+BC250_DUAL_AUDIO_PKGVER=${bc250_dual_audio_pkgver}
+BC250_DUAL_AUDIO_PKGREL=${bc250_dual_audio_pkgrel}
 GITHUB_SHA=${GITHUB_SHA:-local}
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF_INFO
@@ -294,6 +309,22 @@ sudo pacman -Syu vulkan-radeon lib32-vulkan-radeon                   # go back
 \`\`\`
 
 Everything else, including the kernels and the stable Mesa packages, is unaffected.
+
+## BC-250 dual-output audio (opt-in)
+
+- Package version: \`${bc250_dual_audio_pkgver}-${bc250_dual_audio_pkgrel}\`
+- Packages [MastaG/bc250-dual-audio](https://github.com/MastaG/bc250-dual-audio):
+  a WirePlumber policy giving the BC-250 two permanent, mutually-exclusive
+  outputs — native HDMI/DP (untouched, EDID/ELD-driven) and a switchable
+  Dolby Digital 5.1 (AC3) virtual sink, selectable like any other output in
+  Steam or KDE.
+- Not installed by default; install with \`sudo pacman -S bc250-dual-audio\`.
+
+\`\`\`bash
+sudo pacman -S bc250-dual-audio
+systemctl --user restart pipewire pipewire-pulse wireplumber
+/usr/share/bc250-dual-audio/check.sh
+\`\`\`
 EOF_NOTES
 
 printf 'BC-250 kernels — stable %s, RC %s, BORE %s' \
@@ -311,3 +342,4 @@ printf '    BORE kernel:   %s-%s\n' "$bore_pkgver" "$bore_pkgrel"
 printf '    mesa:          %s-%s\n' "$mesa_pkgver" "$mesa_pkgrel"
 printf '    lib32-mesa:    %s-%s\n' "$lib32_pkgver" "$lib32_pkgrel"
 printf '    mesa-git:      %s-%s (64-bit + lib32)\n' "$mesa_git_pkgver" "$mesa_git_pkgrel"
+printf '    bc250-dual-audio: %s-%s\n' "$bc250_dual_audio_pkgver" "$bc250_dual_audio_pkgrel"

@@ -32,6 +32,7 @@ case "$COMPONENT" in
         PATCH_SET=linux-cachyos
         ;;
     mesa|lib32-mesa|mesa-git|mesa-testing|lib32-mesa-testing) ;;
+    bc250-dual-audio) ;;
     *)
         printf 'ERROR: unsupported fingerprint component: %s\n' "$COMPONENT" >&2
         exit 1
@@ -86,6 +87,22 @@ case "$COMPONENT" in
             hash_files "$ROOT_DIR/scripts/prepare-pkgbuild.sh" \
                 "$ROOT_DIR/scripts/build-package.sh" \
                 "$ROOT_DIR/scripts/resolve-nct6687d.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    bc250-dual-audio)
+        # Unlike the other components, this PKGBUILD has no upstream PKGBUILD to
+        # fetch: it is our own, and source= is already pinned to an immutable git
+        # tag. Our own packaging files fully determine the build, so hash those.
+        pkg_dir="$ROOT_DIR/packages/bc250-dual-audio"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        {
+            hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-dual-audio.install"
+            hash_files "$ROOT_DIR/scripts/build-bc250-dual-audio-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

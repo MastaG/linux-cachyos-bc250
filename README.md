@@ -423,6 +423,30 @@ CONFIG_SENSORS_NCT6687=m
 To pin a known driver revision, set repository variable `NCT6687D_REF` to a full 40-character commit hash.  
 When unset, the resolver follows the configured upstream branch.
 
+## Optional BC-250 dual-output audio
+
+`bc250-dual-audio` packages [MastaG/bc250-dual-audio](https://github.com/MastaG/bc250-dual-audio), a WirePlumber policy that gives the BC-250 two permanent, mutually-exclusive outputs:
+
+- **Native HDMI/DisplayPort** — the normal ACP sink, untouched and EDID/ELD-driven;
+- **Dolby Digital 5.1 (AC3 Encoder)** — a permanent virtual sink. Selecting it moves normal playback over, waits for native HDMI to suspend, then opens a hidden `plug:bc250_a52 -> hw:Generic,3` backend; selecting native HDMI again tears that backend down first. A runtime hardware lock between the AC3 arbiter and a patched ALSA monitor keeps a DP/HDMI hotplug from racing the AC3 backend into `EBUSY`.
+
+Not installed by default — install it explicitly:
+
+```bash
+sudo pacman -S bc250-dual-audio
+systemctl --user restart pipewire pipewire-pulse wireplumber
+```
+
+Then verify with the diagnostic script it ships:
+
+```bash
+/usr/share/bc250-dual-audio/check.sh
+```
+
+Built and tested against **WirePlumber 0.5.16**; installing on a materially different version prints a warning. See the [upstream README](https://github.com/MastaG/bc250-dual-audio) for the full mode-authority model, mutual-exclusion behavior and expected log output while switching.
+
+Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplumber/scripts/monitors/alsa.lua` rather than `/usr/share`. That is not a leftover — `wireplumber`'s own package owns the `/usr/share` copy of that exact file, and `/usr/local/share` precedes `/usr/share` in `XDG_DATA_DIRS`, so this shadows the stock script without a package conflict and without being overwritten when `wireplumber` updates. This package's other script, which has no name collision with anything `wireplumber` ships, installs normally under `/usr/share`.
+
 ## Patched stable CachyOS Mesa
 
 The workflow resolves a single exact commit from `CachyOS/CachyOS-PKGBUILDS` and downloads the current stable Mesa packaging from that revision.  
@@ -650,6 +674,7 @@ A complete fixed release contains at least:
 - Mesa PKGBUILDs, SRCINFO files and patch assets;
 - `kernel-stable-info.env`, `kernel-rc-info.env`, `kernel-bore-info.env`;
 - `mesa-info.env`, `lib32-mesa-info.env`, `mesa-git-info.env`;
+- `bc250-dual-audio` + its PKGBUILD, `.SRCINFO` and `bc250-dual-audio-info.env`;
 - aggregate `build-info.env`, release notes and `SHA256SUMS`.
 
 Publication validates the complete staged repository before deleting/replacing the fixed `repo` release.
