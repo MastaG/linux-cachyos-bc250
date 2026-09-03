@@ -1,0 +1,35 @@
+_check_wp_version() {
+    local ver
+    ver=$(wireplumber --version 2>/dev/null | grep -Eo '0\.5\.[0-9]+' | head -1)
+    if [ -n "$ver" ] && [ "$ver" != "0.5.16" ]; then
+        echo "==> WARNING: this ALSA-monitor guard is built and tested against"
+        echo "==>          WirePlumber 0.5.16. Detected: $ver"
+        echo "==>          The dual-audio policy may not work correctly."
+    fi
+}
+
+_restart_reminder() {
+    echo "==> Restart the audio stack (or reboot) for this to take effect:"
+    echo "==>   systemctl --user restart pipewire pipewire-pulse wireplumber"
+    echo "==> Then check the result with:"
+    echo "==>   /usr/share/bc250-dual-audio/check.sh"
+}
+
+post_install() {
+    _check_wp_version
+    echo "==> BC-250 dual-output audio policy installed."
+    _restart_reminder
+}
+
+post_upgrade() {
+    _check_wp_version
+    echo "==> BC-250 dual-output audio policy updated."
+    _restart_reminder
+}
+
+post_remove() {
+    echo "==> BC-250 dual-output audio policy removed."
+    echo "==> The stock WirePlumber ALSA monitor (owned by the wireplumber"
+    echo "==> package) was never modified and is unaffected."
+    _restart_reminder
+}

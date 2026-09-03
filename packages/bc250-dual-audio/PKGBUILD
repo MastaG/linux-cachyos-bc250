@@ -1,0 +1,43 @@
+# Maintainer: MastaG
+pkgname=bc250-dual-audio
+pkgver=0.6
+pkgrel=1
+pkgdesc="Dual-output audio policy for the AMD BC-250: native HDMI/DP plus a switchable Dolby Digital 5.1 (AC3) virtual sink"
+arch=('any')
+url="https://github.com/MastaG/bc250-dual-audio"
+license=('custom')
+depends=('wireplumber' 'alsa-plugins')
+backup=(
+    'etc/alsa/conf.d/61-bc250-a52.conf'
+    'etc/pipewire/pipewire.conf.d/60-bc250-ac3-output.conf'
+    'etc/wireplumber/wireplumber.conf.d/50-bc250-audio.conf'
+)
+source=("git+${url}.git#tag=v${pkgver}")
+sha256sums=('SKIP')
+install=bc250-dual-audio.install
+
+package() {
+    cd "$srcdir/$pkgname"
+
+    install -Dm644 etc/alsa/conf.d/61-bc250-a52.conf \
+        "$pkgdir/etc/alsa/conf.d/61-bc250-a52.conf"
+    install -Dm644 etc/pipewire/pipewire.conf.d/60-bc250-ac3-output.conf \
+        "$pkgdir/etc/pipewire/pipewire.conf.d/60-bc250-ac3-output.conf"
+    install -Dm644 etc/wireplumber/wireplumber.conf.d/50-bc250-audio.conf \
+        "$pkgdir/etc/wireplumber/wireplumber.conf.d/50-bc250-audio.conf"
+
+    # Deliberately installed under /usr/local/share rather than the pacman-owned
+    # /usr/share/wireplumber/scripts tree. XDG_DATA_DIRS puts /usr/local/share
+    # ahead of /usr/share, so this shadows the stock ALSA monitor script without
+    # conflicting with the wireplumber package's own copy of the same file, and
+    # without being clobbered when that package is upgraded.
+    install -Dm644 usr/local/share/wireplumber/scripts/90-bc250-audio-mode.lua \
+        "$pkgdir/usr/local/share/wireplumber/scripts/90-bc250-audio-mode.lua"
+    install -Dm644 usr/local/share/wireplumber/scripts/monitors/alsa.lua \
+        "$pkgdir/usr/local/share/wireplumber/scripts/monitors/alsa.lua"
+
+    install -Dm755 check.sh "$pkgdir/usr/share/bc250-dual-audio/check.sh"
+
+    install -Dm644 README.md \
+        "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
