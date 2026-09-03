@@ -17,6 +17,7 @@ on:
       - '.github/workflows/build-release.yml'
       - 'patches/**'
       - 'scripts/**'
+      - 'packages/**'
 
 permissions:
   contents: write
