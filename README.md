@@ -75,6 +75,8 @@ The stable kernel is the recommended default:
 sudo pacman -Syu linux-cachyos-bc250 linux-cachyos-bc250-headers
 ```
 
+Or install [`linux-cachyos-bc250-meta`](#linux-cachyos-bc250-meta) instead, which pulls in the stable kernel, its headers, and the other BC-250 extras (currently `bc250-dual-audio`) together, and picks up any new ones added to it in the future on a normal `pacman -Syu`.
+
 Optional RC/testing kernel:
 
 ```bash
@@ -447,6 +449,22 @@ Built and tested against **WirePlumber 0.5.16**; installing on a materially diff
 
 Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplumber/scripts/monitors/alsa.lua` rather than `/usr/share`. That is not a leftover — `wireplumber`'s own package owns the `/usr/share` copy of that exact file, and `/usr/local/share` precedes `/usr/share` in `XDG_DATA_DIRS`, so this shadows the stock script without a package conflict and without being overwritten when `wireplumber` updates. This package's other script, which has no name collision with anything `wireplumber` ships, installs normally under `/usr/share`.
 
+## linux-cachyos-bc250-meta
+
+A pure metapackage — it installs no files of its own, it just depends on the recommended BC-250 software set:
+
+- `linux-cachyos-bc250`
+- `linux-cachyos-bc250-headers`
+- `bc250-dual-audio`
+
+```bash
+sudo pacman -S linux-cachyos-bc250-meta
+```
+
+The point of it is future-proofing: as more BC-250-specific extras land in this repository (for example a VCN unlock, once upstream support for that exists), they get added to this package's `depends=` array instead of requiring users to notice and install each one by hand. Once you have `linux-cachyos-bc250-meta` installed, a plain `sudo pacman -Syu` picks up any newly added extra the next time this package's version is bumped for that — the same mechanism that already updates every other package in this repository, extended to cover the set as a whole.
+
+Installing it does not remove the ability to manage those packages individually, and does not pull in the RC or BORE kernel variants — it only ever tracks the stable kernel.
+
 ## Patched stable CachyOS Mesa
 
 The workflow resolves a single exact commit from `CachyOS/CachyOS-PKGBUILDS` and downloads the current stable Mesa packaging from that revision.  
@@ -675,6 +693,7 @@ A complete fixed release contains at least:
 - `kernel-stable-info.env`, `kernel-rc-info.env`, `kernel-bore-info.env`;
 - `mesa-info.env`, `lib32-mesa-info.env`, `mesa-git-info.env`;
 - `bc250-dual-audio` + its PKGBUILD, `.SRCINFO` and `bc250-dual-audio-info.env`;
+- `linux-cachyos-bc250-meta` + its PKGBUILD, `.SRCINFO` and `linux-cachyos-bc250-meta-info.env`;
 - aggregate `build-info.env`, release notes and `SHA256SUMS`.
 
 Publication validates the complete staged repository before deleting/replacing the fixed `repo` release.

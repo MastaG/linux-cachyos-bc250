@@ -1,0 +1,12 @@
+pkgbase = linux-cachyos-bc250-meta
+	pkgdesc = Metapackage for the recommended BC-250 CachyOS software set (kernel + headers + BC-250 extras)
+	pkgver = 1
+	pkgrel = 1
+	url = https://github.com/MastaG/linux-cachyos-bc250
+	arch = any
+	license = GPL-2.0-only
+	depends = linux-cachyos-bc250
+	depends = linux-cachyos-bc250-headers
+	depends = bc250-dual-audio
+
+pkgname = linux-cachyos-bc250-meta

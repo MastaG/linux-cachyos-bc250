@@ -103,10 +103,12 @@ jobs:
           mesa_testing="$(./scripts/source-fingerprint.sh mesa-testing)"
           lib32_mesa_testing="$(./scripts/source-fingerprint.sh lib32-mesa-testing)"
           bc250_dual_audio="$(./scripts/source-fingerprint.sh bc250-dual-audio)"
+          linux_cachyos_bc250_meta="$(./scripts/source-fingerprint.sh linux-cachyos-bc250-meta)"
           aggregate="$(printf '%s\n' \
             "$kernel_stable" "$kernel_rc" "$kernel_bore" \
             "$mesa" "$lib32_mesa" "$mesa_git" \
-            "$mesa_testing" "$lib32_mesa_testing" "$bc250_dual_audio" | sha256sum | awk '{print $1}')"
+            "$mesa_testing" "$lib32_mesa_testing" "$bc250_dual_audio" \
+            "$linux_cachyos_bc250_meta" | sha256sum | awk '{print $1}')"
 
           echo "kernel_stable=$kernel_stable" >> "$GITHUB_OUTPUT"
           echo "kernel_rc=$kernel_rc" >> "$GITHUB_OUTPUT"
@@ -117,6 +119,7 @@ jobs:
           echo "mesa_testing=$mesa_testing" >> "$GITHUB_OUTPUT"
           echo "lib32_mesa_testing=$lib32_mesa_testing" >> "$GITHUB_OUTPUT"
           echo "bc250_dual_audio=$bc250_dual_audio" >> "$GITHUB_OUTPUT"
+          echo "linux_cachyos_bc250_meta=$linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
           echo "aggregate=$aggregate" >> "$GITHUB_OUTPUT"
 
           printf 'Stable kernel fingerprint: %s\n' "$kernel_stable"
@@ -128,6 +131,7 @@ jobs:
           printf 'mesa-testing fingerprint:  %s\n' "$mesa_testing"
           printf 'lib32-mesa-testing fp:     %s\n' "$lib32_mesa_testing"
           printf 'bc250-dual-audio fp:       %s\n' "$bc250_dual_audio"
+          printf 'linux-cachyos-bc250-meta fp: %s\n' "$linux_cachyos_bc250_meta"
 
       - name: Determine components to build
         id: build
@@ -142,6 +146,7 @@ jobs:
           MESA_TESTING_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa_testing }}
           LIB32_MESA_TESTING_FINGERPRINT: ${{ steps.fingerprints.outputs.lib32_mesa_testing }}
           BC250_DUAL_AUDIO_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_dual_audio }}
+          LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
         shell: bash
         run: |
           set -euo pipefail
@@ -192,6 +197,7 @@ jobs:
           build_mesa_testing=false
           build_lib32_mesa_testing=false
           build_bc250_dual_audio=false
+          build_linux_cachyos_bc250_meta=false
 
           [[ "$(previous_value KERNEL_STABLE_FINGERPRINT)" == "$KERNEL_STABLE_FINGERPRINT" ]] || build_kernel_stable=true
           [[ "$(previous_value KERNEL_RC_FINGERPRINT)" == "$KERNEL_RC_FINGERPRINT" ]] || build_kernel_rc=true
@@ -202,6 +208,7 @@ jobs:
           [[ "$(previous_value MESA_TESTING_FINGERPRINT)" == "$MESA_TESTING_FINGERPRINT" ]] || build_mesa_testing=true
           [[ "$(previous_value LIB32_MESA_TESTING_FINGERPRINT)" == "$LIB32_MESA_TESTING_FINGERPRINT" ]] || build_lib32_mesa_testing=true
           [[ "$(previous_value BC250_DUAL_AUDIO_FINGERPRINT)" == "$BC250_DUAL_AUDIO_FINGERPRINT" ]] || build_bc250_dual_audio=true
+          [[ "$(previous_value LINUX_CACHYOS_BC250_META_FINGERPRINT)" == "$LINUX_CACHYOS_BC250_META_FINGERPRINT" ]] || build_linux_cachyos_bc250_meta=true
 
           if [[ '${{ github.event_name }}' == workflow_dispatch && '${{ inputs.force }}' == true ]]; then
             build_kernel_stable=true
@@ -213,6 +220,7 @@ jobs:
             build_mesa_testing=true
             build_lib32_mesa_testing=true
             build_bc250_dual_audio=true
+            build_linux_cachyos_bc250_meta=true
           fi
 
           any=false
@@ -220,7 +228,7 @@ jobs:
                 "$build_kernel_bore" == true || "$build_mesa" == true || \
                 "$build_lib32_mesa" == true || "$build_mesa_git" == true || \
                 "$build_mesa_testing" == true || "$build_lib32_mesa_testing" == true || \
-                "$build_bc250_dual_audio" == true ]]; then
+                "$build_bc250_dual_audio" == true || "$build_linux_cachyos_bc250_meta" == true ]]; then
             any=true
           fi
 
@@ -233,6 +241,7 @@ jobs:
           echo "mesa_testing=$build_mesa_testing" >> "$GITHUB_OUTPUT"
           echo "lib32_mesa_testing=$build_lib32_mesa_testing" >> "$GITHUB_OUTPUT"
           echo "bc250_dual_audio=$build_bc250_dual_audio" >> "$GITHUB_OUTPUT"
+          echo "linux_cachyos_bc250_meta=$build_linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
           echo "any=$any" >> "$GITHUB_OUTPUT"
 
           echo "Build stable kernel: $build_kernel_stable"
@@ -244,6 +253,7 @@ jobs:
           echo "Build mesa-testing:  $build_mesa_testing"
           echo "Build lib32-mesa-testing: $build_lib32_mesa_testing"
           echo "Build bc250-dual-audio:   $build_bc250_dual_audio"
+          echo "Build linux-cachyos-bc250-meta: $build_linux_cachyos_bc250_meta"
 
       - name: Seed previous repository
         if: steps.build.outputs.any == 'true'
@@ -309,6 +319,7 @@ jobs:
           MESA_TESTING_FINGERPRINT: ${{ steps.fingerprints.outputs.mesa_testing }}
           LIB32_MESA_TESTING_FINGERPRINT: ${{ steps.fingerprints.outputs.lib32_mesa_testing }}
           BC250_DUAL_AUDIO_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_dual_audio }}
+          LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
           CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
           MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
@@ -321,6 +332,7 @@ jobs:
           BUILD_MESA_TESTING: ${{ steps.build.outputs.mesa_testing }}
           BUILD_LIB32_MESA_TESTING: ${{ steps.build.outputs.lib32_mesa_testing }}
           BUILD_BC250_DUAL_AUDIO: ${{ steps.build.outputs.bc250_dual_audio }}
+          BUILD_LINUX_CACHYOS_BC250_META: ${{ steps.build.outputs.linux_cachyos_bc250_meta }}
         shell: bash
         run: |
           set -euo pipefail
@@ -341,6 +353,7 @@ jobs:
             -e BUILD_MESA_TESTING \
             -e BUILD_LIB32_MESA_TESTING \
             -e BUILD_BC250_DUAL_AUDIO \
+            -e BUILD_LINUX_CACHYOS_BC250_META \
             -e BC250_PKGREL='${{ github.run_number }}' \
             -e SOURCE_FINGERPRINT \
             -e KERNEL_STABLE_FINGERPRINT \
@@ -352,6 +365,7 @@ jobs:
             -e MESA_TESTING_FINGERPRINT \
             -e LIB32_MESA_TESTING_FINGERPRINT \
             -e BC250_DUAL_AUDIO_FINGERPRINT \
+            -e LINUX_CACHYOS_BC250_META_FINGERPRINT \
             -e NCT6687D_COMMIT \
             -e CACHYOS_MESA_COMMIT \
             -e MESA_GIT_COMMIT \
@@ -398,6 +412,7 @@ jobs:
             mesa-info.env lib32-mesa-info.env mesa-git-info.env
             mesa-testing-info.env lib32-mesa-testing-info.env
             bc250-dual-audio-info.env
+            linux-cachyos-bc250-meta-info.env
             bc250-cachyos.db bc250-cachyos.db.tar.zst
             bc250-cachyos.files bc250-cachyos.files.tar.zst
           )

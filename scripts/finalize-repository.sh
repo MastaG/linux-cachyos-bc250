@@ -14,6 +14,7 @@ REPO_NAME="bc250-cachyos"
 : "${MESA_TESTING_FINGERPRINT:?MESA_TESTING_FINGERPRINT is required}"
 : "${LIB32_MESA_TESTING_FINGERPRINT:?LIB32_MESA_TESTING_FINGERPRINT is required}"
 : "${BC250_DUAL_AUDIO_FINGERPRINT:?BC250_DUAL_AUDIO_FINGERPRINT is required}"
+: "${LINUX_CACHYOS_BC250_META_FINGERPRINT:?LINUX_CACHYOS_BC250_META_FINGERPRINT is required}"
 
 BUILD_KERNEL_STABLE="${BUILD_KERNEL_STABLE:-false}"
 BUILD_KERNEL_RC="${BUILD_KERNEL_RC:-false}"
@@ -24,6 +25,7 @@ BUILD_MESA_GIT="${BUILD_MESA_GIT:-false}"
 BUILD_MESA_TESTING="${BUILD_MESA_TESTING:-false}"
 BUILD_LIB32_MESA_TESTING="${BUILD_LIB32_MESA_TESTING:-false}"
 BUILD_BC250_DUAL_AUDIO="${BUILD_BC250_DUAL_AUDIO:-false}"
+BUILD_LINUX_CACHYOS_BC250_META="${BUILD_LINUX_CACHYOS_BC250_META:-false}"
 
 required_metadata=(
     kernel-stable-info.env
@@ -35,6 +37,7 @@ required_metadata=(
     mesa-testing-info.env
     lib32-mesa-testing-info.env
     bc250-dual-audio-info.env
+    linux-cachyos-bc250-meta-info.env
 )
 for file in "${required_metadata[@]}"; do
     [[ -f "$OUT_DIR/$file" ]] || {
@@ -105,13 +108,18 @@ bc250_dual_audio_info="$OUT_DIR/bc250-dual-audio-info.env"
 bc250_dual_audio_pkgver="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGVER)"
 bc250_dual_audio_pkgrel="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGREL)"
 
+linux_cachyos_bc250_meta_info="$OUT_DIR/linux-cachyos-bc250-meta-info.env"
+linux_cachyos_bc250_meta_pkgver="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGVER)"
+linux_cachyos_bc250_meta_pkgrel="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGREL)"
+
 for field in \
     stable_pkgbase stable_pkgver stable_pkgrel \
     rc_pkgbase rc_pkgver rc_pkgrel \
     bore_pkgbase bore_pkgver bore_pkgrel \
     mesa_pkgver mesa_pkgrel lib32_pkgver lib32_pkgrel \
     mesa_git_commit mesa_git_pkgver mesa_git_pkgrel mesa_git_lib32 \
-    bc250_dual_audio_pkgver bc250_dual_audio_pkgrel; do
+    bc250_dual_audio_pkgver bc250_dual_audio_pkgrel \
+    linux_cachyos_bc250_meta_pkgver linux_cachyos_bc250_meta_pkgrel; do
     [[ -n "${!field}" ]] || {
         printf 'ERROR: missing metadata field %s\n' "$field" >&2
         exit 1
@@ -156,6 +164,7 @@ mesa_git_count="$(pkgbase_count mesa-git)"
 mesa_testing_count="$(pkgbase_count mesa-testing)"
 lib32_mesa_testing_count="$(pkgbase_count lib32-mesa-testing)"
 bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
+linux_cachyos_bc250_meta_count="$(pkgbase_count linux-cachyos-bc250-meta)"
 
 (( stable_count >= 2 )) || { printf 'ERROR: expected stable kernel + headers; found %d package(s)\n' "$stable_count" >&2; exit 1; }
 (( rc_count >= 2 )) || { printf 'ERROR: expected RC kernel + headers; found %d package(s)\n' "$rc_count" >&2; exit 1; }
@@ -166,6 +175,7 @@ bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
 (( mesa_testing_count >= 1 )) || { printf 'ERROR: vulkan-radeon-testing package is missing\n' >&2; exit 1; }
 (( lib32_mesa_testing_count >= 1 )) || { printf 'ERROR: lib32-vulkan-radeon-testing package is missing\n' >&2; exit 1; }
 (( bc250_dual_audio_count == 1 )) || { printf 'ERROR: expected exactly one bc250-dual-audio package; found %d\n' "$bc250_dual_audio_count" >&2; exit 1; }
+(( linux_cachyos_bc250_meta_count == 1 )) || { printf 'ERROR: expected exactly one linux-cachyos-bc250-meta package; found %d\n' "$linux_cachyos_bc250_meta_count" >&2; exit 1; }
 
 rm -f -- "${REPO_NAME}.db" "${REPO_NAME}.db.tar.zst" \
           "${REPO_NAME}.files" "${REPO_NAME}.files.tar.zst"
@@ -177,7 +187,7 @@ SOURCE_FINGERPRINT="$(printf '%s\n' \
     "$KERNEL_STABLE_FINGERPRINT" "$KERNEL_RC_FINGERPRINT" "$KERNEL_BORE_FINGERPRINT" \
     "$MESA_FINGERPRINT" "$LIB32_MESA_FINGERPRINT" "$MESA_GIT_FINGERPRINT" \
     "$MESA_TESTING_FINGERPRINT" "$LIB32_MESA_TESTING_FINGERPRINT" \
-    "$BC250_DUAL_AUDIO_FINGERPRINT" | \
+    "$BC250_DUAL_AUDIO_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" | \
     sha256sum | awk '{print $1}')"
 
 cat > build-info.env <<EOF_INFO
@@ -191,6 +201,7 @@ MESA_GIT_FINGERPRINT=${MESA_GIT_FINGERPRINT}
 MESA_TESTING_FINGERPRINT=${MESA_TESTING_FINGERPRINT}
 LIB32_MESA_TESTING_FINGERPRINT=${LIB32_MESA_TESTING_FINGERPRINT}
 BC250_DUAL_AUDIO_FINGERPRINT=${BC250_DUAL_AUDIO_FINGERPRINT}
+LINUX_CACHYOS_BC250_META_FINGERPRINT=${LINUX_CACHYOS_BC250_META_FINGERPRINT}
 LAST_RUN_KERNEL_STABLE_BUILD=${BUILD_KERNEL_STABLE}
 LAST_RUN_KERNEL_RC_BUILD=${BUILD_KERNEL_RC}
 LAST_RUN_KERNEL_BORE_BUILD=${BUILD_KERNEL_BORE}
@@ -200,6 +211,7 @@ LAST_RUN_MESA_GIT_BUILD=${BUILD_MESA_GIT}
 LAST_RUN_MESA_TESTING_BUILD=${BUILD_MESA_TESTING}
 LAST_RUN_LIB32_MESA_TESTING_BUILD=${BUILD_LIB32_MESA_TESTING}
 LAST_RUN_BC250_DUAL_AUDIO_BUILD=${BUILD_BC250_DUAL_AUDIO}
+LAST_RUN_LINUX_CACHYOS_BC250_META_BUILD=${BUILD_LINUX_CACHYOS_BC250_META}
 KERNEL_STABLE_PKGBASE=${stable_pkgbase}
 KERNEL_STABLE_PKGVER=${stable_pkgver}
 KERNEL_STABLE_PKGREL=${stable_pkgrel}
@@ -224,6 +236,8 @@ MESA_GIT_PKGREL=${mesa_git_pkgrel}
 MESA_GIT_LIB32=${mesa_git_lib32}
 BC250_DUAL_AUDIO_PKGVER=${bc250_dual_audio_pkgver}
 BC250_DUAL_AUDIO_PKGREL=${bc250_dual_audio_pkgrel}
+LINUX_CACHYOS_BC250_META_PKGVER=${linux_cachyos_bc250_meta_pkgver}
+LINUX_CACHYOS_BC250_META_PKGREL=${linux_cachyos_bc250_meta_pkgrel}
 GITHUB_SHA=${GITHUB_SHA:-local}
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF_INFO
@@ -325,6 +339,16 @@ sudo pacman -S bc250-dual-audio
 systemctl --user restart pipewire pipewire-pulse wireplumber
 /usr/share/bc250-dual-audio/check.sh
 \`\`\`
+
+## linux-cachyos-bc250-meta
+
+- Package version: \`${linux_cachyos_bc250_meta_pkgver}-${linux_cachyos_bc250_meta_pkgrel}\`
+- Pure metapackage, no files of its own: installing it pulls in \`linux-cachyos-bc250\`, \`linux-cachyos-bc250-headers\` and \`bc250-dual-audio\` together.
+- Future BC-250 extras (for example a VCN unlock, once that lands) get added to this package's dependency list rather than requiring a new manual install step: once you have this package installed, \`sudo pacman -Syu\` picks up new extras automatically the next time this package's version is bumped for that.
+
+\`\`\`bash
+sudo pacman -S linux-cachyos-bc250-meta
+\`\`\`
 EOF_NOTES
 
 printf 'BC-250 kernels — stable %s, RC %s, BORE %s' \
@@ -343,3 +367,4 @@ printf '    mesa:          %s-%s\n' "$mesa_pkgver" "$mesa_pkgrel"
 printf '    lib32-mesa:    %s-%s\n' "$lib32_pkgver" "$lib32_pkgrel"
 printf '    mesa-git:      %s-%s (64-bit + lib32)\n' "$mesa_git_pkgver" "$mesa_git_pkgrel"
 printf '    bc250-dual-audio: %s-%s\n' "$bc250_dual_audio_pkgver" "$bc250_dual_audio_pkgrel"
+printf '    linux-cachyos-bc250-meta: %s-%s\n' "$linux_cachyos_bc250_meta_pkgver" "$linux_cachyos_bc250_meta_pkgrel"

@@ -33,6 +33,7 @@ case "$COMPONENT" in
         ;;
     mesa|lib32-mesa|mesa-git|mesa-testing|lib32-mesa-testing) ;;
     bc250-dual-audio) ;;
+    linux-cachyos-bc250-meta) ;;
     *)
         printf 'ERROR: unsupported fingerprint component: %s\n' "$COMPONENT" >&2
         exit 1
@@ -103,6 +104,22 @@ case "$COMPONENT" in
         {
             hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-dual-audio.install"
             hash_files "$ROOT_DIR/scripts/build-bc250-dual-audio-package.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    linux-cachyos-bc250-meta)
+        # Pure metapackage: no upstream source, nothing but our own PKGBUILD
+        # decides what gets built. Its depends= array is the only thing that
+        # ever needs to change, so hashing the PKGBUILD is exact.
+        pkg_dir="$ROOT_DIR/packages/linux-cachyos-bc250-meta"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        {
+            hash_files "$pkg_dir/PKGBUILD"
+            hash_files "$ROOT_DIR/scripts/build-linux-cachyos-bc250-meta-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

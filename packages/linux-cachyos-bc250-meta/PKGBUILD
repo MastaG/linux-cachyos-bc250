@@ -1,0 +1,26 @@
+# Maintainer: MastaG
+#
+# Pure metapackage: no files of its own, just a dependency list. pacman only
+# re-resolves an already-installed package's dependencies when a *newer
+# version* of that package appears in the repo, so pkgrel must be bumped
+# every time the depends= array below changes (adding or removing a BC-250
+# extra) -- otherwise `pacman -Syu` will not pull the new package in for
+# users who already have this one installed. A kernel/Mesa/extras version
+# bump alone does not require bumping this package; those are unpinned here
+# and update independently through their own versions as always.
+pkgname=linux-cachyos-bc250-meta
+pkgver=1
+pkgrel=1
+pkgdesc="Metapackage for the recommended BC-250 CachyOS software set (kernel + headers + BC-250 extras)"
+arch=('any')
+url="https://github.com/MastaG/linux-cachyos-bc250"
+license=('GPL-2.0-only')
+depends=(
+    'linux-cachyos-bc250'
+    'linux-cachyos-bc250-headers'
+    'bc250-dual-audio'
+)
+
+package() {
+    :
+}
