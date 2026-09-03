@@ -1,10 +1,31 @@
-_check_wp_version() {
-    local ver
+_EXPECTED_WP_VERSION=0.5.17
+# sha256 of the stock WirePlumber 0.5.17 monitors/alsa.lua that this package's
+# override is rebased onto. Mirrors the same check upstream's install.sh does:
+# the override is a full replacement of that script, so applying it on top of an
+# unknown base is how it silently stops matching the running WirePlumber.
+_EXPECTED_STOCK_ALSA_SHA256=b0f15addcd2b36a8a5cd87555b9cbd822de1b8663545e5add2faf3d2f4c50211
+_STOCK_ALSA=/usr/share/wireplumber/scripts/monitors/alsa.lua
+
+_check_wireplumber() {
+    local ver stock
+
     ver=$(wireplumber --version 2>/dev/null | grep -Eo '0\.5\.[0-9]+' | head -1)
-    if [ -n "$ver" ] && [ "$ver" != "0.5.16" ]; then
-        echo "==> WARNING: this ALSA-monitor guard is built and tested against"
-        echo "==>          WirePlumber 0.5.16. Detected: $ver"
+    if [ -n "$ver" ] && [ "$ver" != "$_EXPECTED_WP_VERSION" ]; then
+        echo "==> WARNING: this policy is rebased and tested against WirePlumber"
+        echo "==>          $_EXPECTED_WP_VERSION. Detected: $ver"
         echo "==>          The dual-audio policy may not work correctly."
+    fi
+
+    if [ -f "$_STOCK_ALSA" ]; then
+        stock=$(sha256sum "$_STOCK_ALSA" 2>/dev/null | awk '{print $1}')
+        if [ -n "$stock" ] && [ "$stock" != "$_EXPECTED_STOCK_ALSA_SHA256" ]; then
+            echo "==> WARNING: the stock WirePlumber ALSA monitor is not the"
+            echo "==>          $_EXPECTED_WP_VERSION base this override was rebased onto."
+            echo "==>          Expected: $_EXPECTED_STOCK_ALSA_SHA256"
+            echo "==>          Found:    $stock"
+            echo "==>          Native HDMI/AC3 switching may misbehave until this"
+            echo "==>          package is rebased onto the current WirePlumber."
+        fi
     fi
 }
 
@@ -16,13 +37,13 @@ _restart_reminder() {
 }
 
 post_install() {
-    _check_wp_version
+    _check_wireplumber
     echo "==> BC-250 dual-output audio policy installed."
     _restart_reminder
 }
 
 post_upgrade() {
-    _check_wp_version
+    _check_wireplumber
     echo "==> BC-250 dual-output audio policy updated."
     _restart_reminder
 }

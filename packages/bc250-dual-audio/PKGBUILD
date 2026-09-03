@@ -1,7 +1,7 @@
 # Maintainer: MastaG
 pkgname=bc250-dual-audio
-pkgver=0.6
-pkgrel=2
+pkgver=0.7
+pkgrel=1
 pkgdesc="Dual-output audio policy for the AMD BC-250: native HDMI/DP plus a switchable Dolby Digital 5.1 (AC3) virtual sink"
 arch=('any')
 url="https://github.com/MastaG/bc250-dual-audio"
