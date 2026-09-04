@@ -1,12 +1,12 @@
 # Maintainer: MastaG
 pkgname=bc250-dual-audio
-pkgver=0.7
+pkgver=0.8
 pkgrel=1
-pkgdesc="Dual-output audio policy for the AMD BC-250: native HDMI/DP plus a switchable Dolby Digital 5.1 (AC3) virtual sink"
+pkgdesc="Dual-output audio policy for the AMD BC-250: native HDMI/DP plus switchable Dolby Digital 5.1 (AC3) and Dolby Digital Plus 5.1 (E-AC3) virtual sinks"
 arch=('any')
 url="https://github.com/MastaG/bc250-dual-audio"
 license=('custom')
-depends=('wireplumber' 'alsa-plugins')
+depends=('wireplumber' 'alsa-plugins' 'ffmpeg' 'alsa-utils')
 backup=(
     'etc/alsa/conf.d/61-bc250-a52.conf'
     'etc/pipewire/pipewire.conf.d/60-bc250-ac3-output.conf'
@@ -49,4 +49,23 @@ package() {
 
     install -Dm644 README.md \
         "$pkgdir/usr/share/doc/$pkgname/README.md"
+
+    # bc250-eac3-backend.service hardcodes ExecStart=/usr/local/libexec/... ,
+    # and install.sh/rollback.sh use that same literal path for their
+    # backup/restore logic. Keep the binary there so a pacman install and a
+    # manual install.sh run stay interchangeable and the shipped unit file
+    # needs no content edits at package time.
+    install -Dm755 usr/local/libexec/bc250-eac3-backend \
+        "$pkgdir/usr/local/libexec/bc250-eac3-backend"
+
+    # The unit file itself is a vendor file with no reason to live in the
+    # admin-override tier: /usr/lib/systemd/user is systemd's actual search
+    # path for package-owned user units (matching wireplumber.service and
+    # friends), unlike /etc/systemd/user (local overrides) which the repo
+    # layout uses only because that's a sensible path for install.sh's
+    # unmanaged, non-pacman install. Only the directory changes here -- the
+    # file's own content, including its /usr/local/libexec ExecStart=, ships
+    # unmodified.
+    install -Dm644 etc/systemd/user/bc250-eac3-backend.service \
+        "$pkgdir/usr/lib/systemd/user/bc250-eac3-backend.service"
 }

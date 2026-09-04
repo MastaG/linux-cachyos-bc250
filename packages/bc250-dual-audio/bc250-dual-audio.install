@@ -36,21 +36,36 @@ _restart_reminder() {
     echo "==>   /usr/share/bc250-dual-audio/check.sh"
 }
 
+# bc250-eac3-backend.service is a user unit: this scriptlet runs as root at
+# transaction time with no access to the desktop user's session bus, so it
+# cannot enable/start it directly. Safe to print unconditionally on every
+# install/upgrade -- enabling an already-enabled unit is a no-op.
+_eac3_reminder() {
+    echo "==> Enable the Dolby Digital Plus (E-AC3) backend service:"
+    echo "==>   systemctl --user daemon-reload"
+    echo "==>   systemctl --user enable --now bc250-eac3-backend.service"
+}
+
 post_install() {
     _check_wireplumber
     echo "==> BC-250 dual-output audio policy installed."
     _restart_reminder
+    _eac3_reminder
 }
 
 post_upgrade() {
     _check_wireplumber
     echo "==> BC-250 dual-output audio policy updated."
     _restart_reminder
+    _eac3_reminder
 }
 
 post_remove() {
     echo "==> BC-250 dual-output audio policy removed."
     echo "==> The stock WirePlumber ALSA monitor (owned by the wireplumber"
     echo "==> package) was never modified and is unaffected."
+    echo "==> Package removal does not stop or disable a running"
+    echo "==> bc250-eac3-backend.service -- if it was enabled, do so manually:"
+    echo "==>   systemctl --user disable --now bc250-eac3-backend.service"
     _restart_reminder
 }
