@@ -1,7 +1,7 @@
 d2adc3fe9e0d21d325813f0abcd1db90cabe6f2bbad80a043938efccb882d92c  ./.github/workflows/build-release.yml
 58e5221a3e56e9bafacb83b069e11943a47af51761ceb7fa39d73aa481674ced  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-ceb2ca3faee0247dad908dcb6f350a02897f7ae7db51e5dcd98c35b1da9f8ffd  ./README.md
+ade728669d5d6b0afad8eb2163975bedf72eea570ed05a34194a72ec18793c51  ./README.md
 f92ab46ac4e40060fdf131f9e68f25a6a0272f057cfbb9983858aee6d79aa094  ./packages/bc250-dual-audio/.SRCINFO
 a6eb5f38b6a4af0244791ba63e3b154b9e1840d18e63060e41acbf8595e001f0  ./packages/bc250-dual-audio/PKGBUILD
 c11388714bedfeb2839a4247404f9aec6be5f3a9137c42f0eea35e96c96e62dc  ./packages/bc250-dual-audio/bc250-dual-audio.install
@@ -18,6 +18,14 @@ e08643fce4a56cdc5bff1e7a7ba6e4c5975eea4c39b0d5306ffbd6973bebfe9e  ./patches/linu
 af6aadd574343c69638b5f32da980a3fca5c45510872b33c07a1beeff0e5460a  ./patches/linux-cachyos-rc/0007-amdgpu-ttm-null-page-guard.patch
 8bc7ad42dc33363aeff566208b914fab65ad6c6641deeee44868a63e7634adff  ./patches/linux-cachyos-rc/0008-cyan-skillfish-sclk-range.patch
 a19d5cca46c1e5d8f88061cb2fb1569bcaa82967d3e420fed72449cecf5846ff  ./patches/linux-cachyos-rc/0009-bc250-40cu-unlock.patch
+897b3878f4ef3aa3a7b14e4410befc425de39b1fa86cda6b4255b4989fe59a99  ./patches/linux-cachyos-rc/0010-hdmi21-freesync-amd-vsdb.patch
+9dc819be0df727aca660ed33000ebca4c7954922b1253f5fb754d237563a3582  ./patches/linux-cachyos-rc/0011-hdmi21-edid-allm-vrr-hf-vsdb.patch
+b5ce8f8e5a3029c986fafdd4d06c8f2aedff92b9e819c8a11caf257e2febf65a  ./patches/linux-cachyos-rc/0012-hdmi21-vrr-hf-vsdb.patch
+e86e38325420afd38a2adfae6ee805a3b7cda40adc0b6f533140bd558454ed00  ./patches/linux-cachyos-rc/0013-hdmi21-allm-gaming-vrr.patch
+a0cc8f31c2455552a2bf58da1417ab49c775619c11073afc69acaac22a58e32a  ./patches/linux-cachyos-rc/0014-hdmi21-vtem-on-tmds.patch
+80ab69a7fe31bba53091b54a2dc329f631e4e37e072140357b4261b862497952  ./patches/linux-cachyos-rc/0015-passive-vrr-drm-properties.patch
+1cc55c1c99b9783d15d7e609c320221c61b3aecc96a2d1ac811f2c199625decd  ./patches/linux-cachyos-rc/0016-passive-vrr-amdgpu.patch
+2705b1c061f7768ad24e18f891d10e1222cd78051b49921a525d982c65d18716  ./patches/linux-cachyos-rc/0017-passive-vrr-mccs-freesync-fallback.patch
 c6b930593e35e4d774f7da65fc8d0312d80f7c5c646aab7bee711b0447206f8b  ./patches/linux-cachyos/0001-bc250-8core-telemetry-gpu-activity.patch
 8d6ae89c7b2c8a081e8bbd52101f4c639bd7bcc53aab0bbc68fd38312ca3e37c  ./patches/linux-cachyos/0003-nct6687d-hwmon.patch
 a73d86157580e0441c18755cd2e9024726fb1465ed96d40a17bb4264e075f88e  ./patches/linux-cachyos/0004-gfx1013-pasid-tlb-invalidation.patch
@@ -51,7 +59,7 @@ d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/buil
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 6bbeaa132a40dcb810c8c931bf7116c0e034dbd137624602d155856047ed5bcc  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
-2a0ba24bf4ea280cc0d9b7342e5c879bf85932fd9375e8483dfb071cf0782e20  ./scripts/finalize-repository.sh
+2e44069731da2c91f5ee1b3a54bd78cbb698d7885a2ac6e47e992ed54473f8c2  ./scripts/finalize-repository.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 e976abec5622912d98f81b7adbb14c8d858109503b55d6a01361eb2088dc3ed3  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 79dd58f6bf60af13eaacd1f2b8f536cefaf16fd694d80f8fef3fb3124b28ab93  ./scripts/prepare-lib32-mesa-testing-pkgbuild.sh

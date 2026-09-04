@@ -231,7 +231,7 @@ The two sets currently contain the same eight patches with the same content — 
 
 ### Kernel patch set
 
-Both sets carry the same eight patches — `patches/linux-cachyos` for `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2), `patches/linux-cachyos-rc` for `linux-cachyos-rc-bc250` (7.3-rc):
+Both sets share these eight BC-250 patches — `patches/linux-cachyos` for `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2), `patches/linux-cachyos-rc` for `linux-cachyos-rc-bc250` (7.3-rc):
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -243,6 +243,8 @@ Both sets carry the same eight patches — `patches/linux-cachyos` for `linux-ca
 0008-cyan-skillfish-sclk-range.patch
 0009-bc250-40cu-unlock.patch
 ```
+
+`patches/linux-cachyos-rc` additionally carries the [HDMI 2.1 VRR/ALLM backport](#hdmi-21-vrr-and-allm-backport-rc-kernel-only) (`0010`–`0017`), which applies only to the 7.3 series.
 
 There is intentionally no `0002-bc250-audio.patch` here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
@@ -265,6 +267,25 @@ This patch set contains:
 - a widened Cyan Skillfish SMU SCLK range (350–2230 MHz, up from the stock 1000–2000 MHz) so userspace SMU-based governors such as [filippor/cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) can drive the full clock range;
 - integration of the external `nct6687` hwmon/PWM driver.
 - an **opt-in** 40 CU unlock for the harvested shader engines (`amdgpu.bc250_cc_write_mode=3`), described below.
+
+## HDMI 2.1 VRR and ALLM backport (RC kernel only)
+
+`linux-cachyos-rc-bc250` carries eight extra patches (`0010`–`0017`) that add HDMI 2.1 gaming features — Variable Refresh Rate and Auto Low Latency Mode — for sinks that advertise them through the HDMI Forum VSDB (HF-VSDB) rather than AMD's own FreeSync VSDB. This matters for the Steam-Machine use case: TVs and AV receivers generally advertise VRR/ALLM the HDMI-Forum way, not the AMD way.
+
+| Patches | Series | Upstream status |
+|---|---|---|
+| `0010`–`0013` | `HDMI 2.1 VRR and ALLM support` v4 | **Merged to `drm-next` 2026-09-02** → Linux 7.4 |
+| `0014` | `Emit VTEM for HF-VSDB VRR on TMDS links` | **Merged to `drm-next`** → Linux 7.4 |
+| `0015`–`0017` | `drm/amd/display: passive VRR` v1 | **Not merged** — posted 2026-09-01, unreviewed |
+
+The first five landed in `drm-next` on 2026-09-02, one day *after* 7.3-rc1 was tagged, so they missed the 7.3 merge window entirely and are queued for **7.4**. `0010`–`0013` and `0015`–`0017` are taken from CachyOS's own `7.3/hdmi` branch, which cherry-picks them from the mailing list but is **not merged into `7.3/base`** — so the stock RC kernel does not have them. `0014` is taken from `drm-next` directly; CachyOS's branch does not include it.
+
+`0014` is the most interesting one for adapter-based setups. Before it, `amdgpu_dm_update_freesync_state_on_stream()` only built the VTEM (Video Timing Extended Metadata packet, which is how HDMI 2.1 carries VRR) for `SIGNAL_TYPE_HDMI_FRL`. A sink advertising HF-VSDB VRR but no AMD FreeSync therefore never received a VTEM on a TMDS link, and VRR could not engage. Per HDMI 2.1 a VTEM is valid in both TMDS and FRL modes — only the compressed CVTEM is FRL-only. It is reviewed by Harry Wentland and carries a `Tested-by:` from Valve.
+
+**Caveats worth knowing:**
+
+- `0015`–`0017` (passive VRR) are **v1, unreviewed, and the original reporter replied that they do not fix desktop VRR** — only in-game VRR works. They are included because CachyOS ships them on `7.3/hdmi`, but they are the first thing to drop if anything misbehaves.
+- All of this affects the GPU's **own HDMI output path**. The BC-250 exposes only DisplayPort, so with an *active* DP→HDMI converter (which is a DisplayPort sink in its own right) amdgpu never takes the HDMI code path and none of this applies. It should apply with a *passive* DP++ adapter, where the GPU drives HDMI TMDS directly — which is also capped at 4K60, exactly the case `0014` addresses.
 
 ## Optional 40 CU unlock
 
