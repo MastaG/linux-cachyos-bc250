@@ -1,12 +1,12 @@
 # Maintainer: MastaG
 pkgname=bc250-dual-audio
-pkgver=0.9
+pkgver=0.10
 pkgrel=1
 pkgdesc="Dual-output audio policy for the AMD BC-250: native HDMI/DP plus switchable Dolby Digital 5.1 (AC3) and Dolby Digital Plus 5.1 (E-AC3) virtual sinks"
 arch=('any')
 url="https://github.com/MastaG/bc250-dual-audio"
 license=('custom')
-depends=('wireplumber' 'alsa-plugins' 'ffmpeg' 'alsa-utils')
+depends=('wireplumber' 'pipewire' 'alsa-plugins' 'ffmpeg' 'alsa-utils')
 backup=(
     'etc/alsa/conf.d/61-bc250-a52.conf'
     'etc/pipewire/pipewire.conf.d/60-bc250-ac3-output.conf'
