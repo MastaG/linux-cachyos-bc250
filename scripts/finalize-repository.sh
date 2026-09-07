@@ -183,6 +183,39 @@ repo-add "${REPO_NAME}.db.tar.zst" "${packages[@]}"
 cp -L --remove-destination "${REPO_NAME}.db.tar.zst" "${REPO_NAME}.db"
 cp -L --remove-destination "${REPO_NAME}.files.tar.zst" "${REPO_NAME}.files"
 
+# Record each component's fingerprint as reported by its own -info.env rather
+# than from the environment.
+#
+# OUT_DIR is seeded with the previously published release, so every component
+# starts out holding its last successfully built metadata. A component that
+# builds this run overwrites that file with the fingerprint it was given; a
+# component that is skipped, or whose build FAILED, leaves the seeded file in
+# place. Reading the fingerprint back from the file therefore records the old
+# value for a failed component, so the next run still sees a mismatch and
+# retries it. Taking it from the environment instead would stamp the new
+# fingerprint on a component that was never successfully built and the failure
+# would be cached forever.
+fingerprint_from() {
+    local file="$1" key="$2" fallback="$3" found
+    found="$(value "$file" "$key")"
+    if [[ -n "$found" && "$found" != unknown ]]; then
+        printf '%s' "$found"
+    else
+        printf '%s' "$fallback"
+    fi
+}
+
+KERNEL_STABLE_FINGERPRINT="$(fingerprint_from "$stable_info" KERNEL_FINGERPRINT "$KERNEL_STABLE_FINGERPRINT")"
+KERNEL_RC_FINGERPRINT="$(fingerprint_from "$rc_info" KERNEL_FINGERPRINT "$KERNEL_RC_FINGERPRINT")"
+KERNEL_BORE_FINGERPRINT="$(fingerprint_from "$bore_info" KERNEL_FINGERPRINT "$KERNEL_BORE_FINGERPRINT")"
+MESA_FINGERPRINT="$(fingerprint_from "$mesa_info" MESA_FINGERPRINT "$MESA_FINGERPRINT")"
+LIB32_MESA_FINGERPRINT="$(fingerprint_from "$lib32_info" LIB32_MESA_FINGERPRINT "$LIB32_MESA_FINGERPRINT")"
+MESA_GIT_FINGERPRINT="$(fingerprint_from "$mesa_git_info" MESA_GIT_FINGERPRINT "$MESA_GIT_FINGERPRINT")"
+MESA_TESTING_FINGERPRINT="$(fingerprint_from "$mesa_testing_info" MESA_TESTING_FINGERPRINT "$MESA_TESTING_FINGERPRINT")"
+LIB32_MESA_TESTING_FINGERPRINT="$(fingerprint_from "$lib32_mesa_testing_info" LIB32_MESA_TESTING_FINGERPRINT "$LIB32_MESA_TESTING_FINGERPRINT")"
+BC250_DUAL_AUDIO_FINGERPRINT="$(fingerprint_from "$bc250_dual_audio_info" BC250_DUAL_AUDIO_FINGERPRINT "$BC250_DUAL_AUDIO_FINGERPRINT")"
+LINUX_CACHYOS_BC250_META_FINGERPRINT="$(fingerprint_from "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_FINGERPRINT "$LINUX_CACHYOS_BC250_META_FINGERPRINT")"
+
 SOURCE_FINGERPRINT="$(printf '%s\n' \
     "$KERNEL_STABLE_FINGERPRINT" "$KERNEL_RC_FINGERPRINT" "$KERNEL_BORE_FINGERPRINT" \
     "$MESA_FINGERPRINT" "$LIB32_MESA_FINGERPRINT" "$MESA_GIT_FINGERPRINT" \

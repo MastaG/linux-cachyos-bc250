@@ -61,9 +61,9 @@ bd77100ae9adf9a3caa0449ff9431d53b6f8ad7fe042fe4a0e73c07c31bf8f2c  ./scripts/buil
 d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/build-mesa-package.sh
 5b2365ba552a3ff86d74bf54bbc305110425ed8a01a1a14a2a8210264b91aa36  ./scripts/build-mesa-testing-package.sh
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
-6bbeaa132a40dcb810c8c931bf7116c0e034dbd137624602d155856047ed5bcc  ./scripts/ci-build.sh
+9a955e40f391ac4576969f32e0b8e9d28148250eb9b12f9207f695d61fc8d5b0  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
-6a3bc6aeabf5a2aca6006b9c38cae7df3188ebf8890303d9e5b4384257d2031a  ./scripts/finalize-repository.sh
+0862fc823d1d8e2c3cf168dc52b06bb6c7d8fe0da86be47682b8df9d299b45ec  ./scripts/finalize-repository.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 e976abec5622912d98f81b7adbb14c8d858109503b55d6a01361eb2088dc3ed3  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 79dd58f6bf60af13eaacd1f2b8f536cefaf16fd694d80f8fef3fb3124b28ab93  ./scripts/prepare-lib32-mesa-testing-pkgbuild.sh

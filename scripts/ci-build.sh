@@ -143,22 +143,47 @@ runuser -u builder -- env \
         }
         trap _ccache_stats EXIT
 
+        # Components are built independently. A failing component must not stop
+        # the others from being published: out/repo is seeded with the previous
+        # release, so a component that fails simply keeps the packages and the
+        # -info.env it already had, and finalize-repository.sh reads its
+        # fingerprint back from that file so the next run retries it. Without
+        # this, one broken component (historically mesa-git, which tracks live
+        # upstream and a rolling Rust toolchain) blocked publication of every
+        # component built after it.
+        failed_components=""
+        run_component() {
+            local name=$1
+            shift
+            if "$@"; then
+                printf "==> component %s: built\n" "$name"
+            else
+                printf "::error title=Component build failed::%s failed to build. Its previously published packages are kept and it will be retried on the next run.\n" "$name"
+                failed_components="${failed_components}${failed_components:+ }${name}"
+            fi
+        }
+
         if [[ "$BUILD_KERNEL_STABLE" == true ]]; then
-            CACHYOS_SOURCE_VARIANT=linux-cachyos /workspace/scripts/build-package.sh
+            run_component kernel-stable env CACHYOS_SOURCE_VARIANT=linux-cachyos /workspace/scripts/build-package.sh
         fi
         if [[ "$BUILD_KERNEL_RC" == true ]]; then
-            CACHYOS_SOURCE_VARIANT=linux-cachyos-rc /workspace/scripts/build-package.sh
+            run_component kernel-rc env CACHYOS_SOURCE_VARIANT=linux-cachyos-rc /workspace/scripts/build-package.sh
         fi
         if [[ "$BUILD_KERNEL_BORE" == true ]]; then
-            CACHYOS_SOURCE_VARIANT=linux-cachyos-bore /workspace/scripts/build-package.sh
+            run_component kernel-bore env CACHYOS_SOURCE_VARIANT=linux-cachyos-bore /workspace/scripts/build-package.sh
         fi
-        if [[ "$BUILD_MESA" == true ]]; then /workspace/scripts/build-mesa-package.sh; fi
-        if [[ "$BUILD_LIB32_MESA" == true ]]; then /workspace/scripts/build-lib32-mesa-package.sh; fi
-        if [[ "$BUILD_MESA_GIT" == true ]]; then /workspace/scripts/build-mesa-git-package.sh; fi
-        if [[ "$BUILD_MESA_TESTING" == true ]]; then /workspace/scripts/build-mesa-testing-package.sh; fi
-        if [[ "$BUILD_LIB32_MESA_TESTING" == true ]]; then /workspace/scripts/build-lib32-mesa-testing-package.sh; fi
-        if [[ "$BUILD_BC250_DUAL_AUDIO" == true ]]; then /workspace/scripts/build-bc250-dual-audio-package.sh; fi
-        if [[ "$BUILD_LINUX_CACHYOS_BC250_META" == true ]]; then /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh; fi
+        if [[ "$BUILD_MESA" == true ]]; then run_component mesa /workspace/scripts/build-mesa-package.sh; fi
+        if [[ "$BUILD_LIB32_MESA" == true ]]; then run_component lib32-mesa /workspace/scripts/build-lib32-mesa-package.sh; fi
+        if [[ "$BUILD_MESA_GIT" == true ]]; then run_component mesa-git /workspace/scripts/build-mesa-git-package.sh; fi
+        if [[ "$BUILD_MESA_TESTING" == true ]]; then run_component mesa-testing /workspace/scripts/build-mesa-testing-package.sh; fi
+        if [[ "$BUILD_LIB32_MESA_TESTING" == true ]]; then run_component lib32-mesa-testing /workspace/scripts/build-lib32-mesa-testing-package.sh; fi
+        if [[ "$BUILD_BC250_DUAL_AUDIO" == true ]]; then run_component bc250-dual-audio /workspace/scripts/build-bc250-dual-audio-package.sh; fi
+        if [[ "$BUILD_LINUX_CACHYOS_BC250_META" == true ]]; then run_component linux-cachyos-bc250-meta /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh; fi
 
         /workspace/scripts/finalize-repository.sh
+
+        if [[ -n "$failed_components" ]]; then
+            printf "==> failed components (previous packages retained): %s\n" "$failed_components"
+            exit 1
+        fi
     '
