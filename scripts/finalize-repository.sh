@@ -294,7 +294,7 @@ All three kernels use:
 
 - CachyOS packaging commit: \`${lib32_cachyos_commit}\`
 - Version: \`${lib32_pkgver}-${lib32_pkgrel}\`${lib32_epoch:+ (epoch ${lib32_epoch})}
-- Uses the same five-patch series and runtime gating as stable 64-bit Mesa.
+- Uses the same seven-patch series and runtime gating as stable 64-bit Mesa.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 
 ## Patched CachyOS mesa-git

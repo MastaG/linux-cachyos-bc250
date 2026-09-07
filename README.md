@@ -491,7 +491,7 @@ Installing it does not remove the ability to manage those packages individually,
 The workflow resolves a single exact commit from `CachyOS/CachyOS-PKGBUILDS` and downloads the current stable Mesa packaging from that revision.  
 The upstream Mesa version and epoch remain unchanged; the GitHub Actions run number is appended to `pkgrel`.
 
-All five BC-250 Mesa patches are applied at build time, in order:
+All seven BC-250 Mesa patches are applied at build time, in order:
 
 ```text
 patches/mesa/0001-gfx1013-compute-queue-fix.patch
@@ -499,6 +499,8 @@ patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa/0003-gfx1013-taskmesh-queries.patch
 patches/mesa/0004-radv-gfx103.patch
 patches/mesa/0005-bc250-fsr4-v3.patch
+patches/mesa/0006-bc250-fsr4-combined-unroll.patch
+patches/mesa/0007-bc250-fsr4-imageprep-texture.patch
 ```
 
 `0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.  
@@ -508,6 +510,16 @@ patches/mesa/0005-bc250-fsr4-v3.patch
 The patch is carried as upstream wrote it, apart from two hunks dropped while rebasing onto this tree: the GFX1013 compute-queue change and the `RADV_GFX103` override, which duplicate `0001` and `0004` byte-for-byte and would otherwise fail to apply twice. The patch header records that.
 
 One part of it is easy to misread. `0005` raises the LDS spill-slot budget for GFX1013 compute shaders that are already spilling heavily (128–255 spill slots). That deliberately costs occupancy, because in ACO every spill slot which does not fit in LDS goes to scratch instead, and scratch on this APU is backed by shared system memory. Keeping that traffic on-die is worth more here than the lost waves: removing this override measured roughly 12 ms versus 8 ms of OptiScaler frame time on real BC-250 hardware. It is not a mistake, and it should not be "simplified" away.
+
+`0006` and `0007` come from the downstream BC-250 FSR4 research kit dated 2026-09-06 (by "fish"), rebased onto this tree. That kit's own base patch is a squash of work this repository already carries plus its newer optimization; only the part we did not already have is kept here, so `0001`-`0005` are not duplicated. The kit ships its own measurement harness, evidence and prebuilt drivers, and its numbers below are the kit's, not ours.
+
+`0006` is the "combined-unroll" selection and is **active by default**. It adds NIR-level pattern matching and rematerialization over FSR4's dot and convolution loops — grouped dots, loop and cooperative rematerialization, and pointwise column streaming. Every rewrite is gated on exact shader identity: the `bc250_*_expected[]` tables verify the incoming shader's constants before any `bc250_*_prepacked[]` replacement is used, so a shader that does not match is passed through untouched. It also carries two supporting changes it depends on — correct NIR metadata invalidation in `ac_nir_fixup_smem_loads_null_prt()`, and separation of the FSR4 pipeline cache key so cached shaders cannot be served across `BC250_FSR4_DISABLE` settings. The kit measures 8.015 ms to 5.843 ms per FSR4.1.1 INT8 upscale (1506x848 to 2560x1440 Balanced, 40 CU at 1850 MHz): 2.172 ms, 27.1%, against a within-window standard deviation of about 0.01 ms.
+
+`0007` adds two candidates that are **off unless their environment variable is set**. `BC250_FSR4_IMAGEPREP=1` swaps FSR4's image-preparation shader for a rewritten SPIR-V module that interleaves the sixteen feature channels across quad phases; the arithmetic, addresses and packing are unchanged, only channel ownership moves. Selection is a whole-module `memcmp`, so any other shader passes through untouched, and the cooperative region is additionally guarded by even output dimensions. `BC250_FSR4_TEXTURE=1` groups eight output columns instead of four in the final texture shader's pointwise streaming schedule, for one shader identity only.
+
+Treat `0007`'s numbers with more caution than `0006`'s. The kit measures imageprep alone at 0.062 ms (1.07%), texture alone at 0.057 ms (0.97%) and both together at 0.069 ms (1.19%) — they overlap rather than sum. Each arm is two launches, and the six control runs across those campaigns span 0.061 ms, which is the size of the effect being claimed. The kit's own stated next step is to replicate this with more launches on a second board. That is why these are opt-in and `0006` is not.
+
+Both are pinned to FSR4.1.1 INT8 by exact shader identity. A different FSR4 build, or a resolution outside the matched bucket, silently produces no uplift and no warning — the same mechanism that made the upstream author's 1080p results flat until they found FSR4 ships separate shaders per resolution bucket.
 
 For an individual Steam game that specifically needs the experimental mesh-shader path, use:
 
@@ -544,7 +556,7 @@ mesa-git
 lib32-mesa-git
 ```
 
-The Git variant carries a separately rebased copy of the same five-patch series:
+The Git variant carries a separately rebased copy of the same seven-patch series:
 
 ```text
 patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
@@ -552,6 +564,8 @@ patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
 patches/mesa-git/0004-radv-gfx103.patch
 patches/mesa-git/0005-bc250-fsr4-v3.patch
+patches/mesa-git/0006-bc250-fsr4-combined-unroll.patch
+patches/mesa-git/0007-bc250-fsr4-imageprep-texture.patch
 ```
 
 `0001` and `0005` remain active regardless of environment variables.  
