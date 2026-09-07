@@ -491,7 +491,7 @@ Installing it does not remove the ability to manage those packages individually,
 The workflow resolves a single exact commit from `CachyOS/CachyOS-PKGBUILDS` and downloads the current stable Mesa packaging from that revision.  
 The upstream Mesa version and epoch remain unchanged; the GitHub Actions run number is appended to `pkgrel`.
 
-All seven BC-250 Mesa patches are applied at build time, in order:
+All eight BC-250 Mesa patches are applied at build time, in order:
 
 ```text
 patches/mesa/0001-gfx1013-compute-queue-fix.patch
@@ -501,6 +501,7 @@ patches/mesa/0004-radv-gfx103.patch
 patches/mesa/0005-bc250-fsr4-v3.patch
 patches/mesa/0006-bc250-fsr4-combined-unroll.patch
 patches/mesa/0007-bc250-fsr4-imageprep-texture.patch
+patches/mesa/0008-bc250-fsr4-resolution-variants.patch
 ```
 
 `0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.  
@@ -520,6 +521,12 @@ One part of it is easy to misread. `0005` raises the LDS spill-slot budget for G
 Treat `0007`'s numbers with more caution than `0006`'s. The kit measures imageprep alone at 0.062 ms (1.07%), texture alone at 0.057 ms (0.97%) and both together at 0.069 ms (1.19%) — they overlap rather than sum. Each arm is two launches, and the six control runs across those campaigns span 0.061 ms, which is the size of the effect being claimed. The kit's own stated next step is to replicate this with more launches on a second board. That is why these are opt-in and `0006` is not.
 
 Both are pinned to FSR4.1.1 INT8 by exact shader identity. A different FSR4 build, or a resolution outside the matched bucket, silently produces no uplift and no warning — the same mechanism that made the upstream author's 1080p results flat until they found FSR4 ships separate shaders per resolution bucket.
+
+`0008` is that bucket problem addressed, and is **opt-in** via `BC250_FSR4_RESOLUTION_VARIANTS=1`. It adds 24 further shader identities covering the 1080p and 4K+ buckets, each tagged with flag bit `0x40000000` so they are ignored entirely unless the switch is set.
+
+It also carries a correctness fix rather than an optimization. The pinned INT8 8K shaders encode masked DWORD stores at byte `0x08000000`, an address inside their own 332 MB scratch allocation, where a store can overwrite a live input and race a neighbouring invocation at clipped edges. For eight exactly identified bytecodes — matched by size and FNV-1a hash, and additionally verified to hold an `OpConstant` of that value at the expected word before anything is written — the constant is rewritten so the store lands beyond any scratch buffer this provider supports. That guard can be enabled on its own with `BC250_FSR4_RESOLUTION_GUARD=1`.
+
+Upstream notes the 4K+ bucket previously failed to show an uplift and is curious whether the multi-bucket logic changes that. That is unverified here, as are `0008`'s performance effects generally.
 
 For an individual Steam game that specifically needs the experimental mesh-shader path, use:
 
@@ -556,7 +563,7 @@ mesa-git
 lib32-mesa-git
 ```
 
-The Git variant carries a separately rebased copy of the same seven-patch series:
+The Git variant carries a separately rebased copy of the same eight-patch series:
 
 ```text
 patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
@@ -566,6 +573,7 @@ patches/mesa-git/0004-radv-gfx103.patch
 patches/mesa-git/0005-bc250-fsr4-v3.patch
 patches/mesa-git/0006-bc250-fsr4-combined-unroll.patch
 patches/mesa-git/0007-bc250-fsr4-imageprep-texture.patch
+patches/mesa-git/0008-bc250-fsr4-resolution-variants.patch
 ```
 
 `0001` and `0005` remain active regardless of environment variables.  
@@ -779,6 +787,10 @@ Only use this repository when you trust the project and its workflow.
 - punsh — additional BC-250 APU telemetry and GPU Metrics power-field fixes.
 - David Moraza Sanchez (dmorazasanchez) — BC-250 FSR4 EXP-042B (V3) deferred SDot lowering.  
   <https://github.com/dmorazasanchez/bc250-fsr4/tree/v3>
+- fish / @iamastrangeloop — BC-250 FSR4 optimization beyond V3: the combined-unroll
+  selection, the image-preparation and texture candidates, and the resolution-variant
+  coverage with its 8K masked-store guard, together with the measurement harness,
+  evidence and prebuilt drivers those results were produced with.
 - FilippoR / ViRazY - For the kernel GPU frequency ranges
 - duggasco — BC-250 40 CU unlock: dual-register (CC + SPI) research, testing and tooling.  
   <https://github.com/duggasco/bc250-40cu-unlock>
