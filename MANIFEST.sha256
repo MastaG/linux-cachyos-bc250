@@ -2,8 +2,8 @@ a61909e6e5d8033a8204421e1af4cd15be460683183e8d8c0433438e3fc2e903  ./.github/work
 58e5221a3e56e9bafacb83b069e11943a47af51761ceb7fa39d73aa481674ced  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
 03670803df09ef8fecee27847ab216661e2f620ef9b376d0241f6146300c2656  ./packages/bc250-dual-audio/bc250-dual-audio.install
-9a98205a9baf9e64e2641426e90426d06564654a181fa1077a975691504da34f  ./packages/bc250-dual-audio/PKGBUILD
-47c33530d3c2829306974788239808cdbfa2e1c2b25b0f6240fee720b39d9b03  ./packages/bc250-dual-audio/.SRCINFO
+b82ba04d8740950460bbe7d29f51b4b8fd7b623bfb94888d873ced75086d7d72  ./packages/bc250-dual-audio/PKGBUILD
+fa17f0d9ff6e4e030940831a99b850a490e58d43b04cacf517949ea9dc6e73f3  ./packages/bc250-dual-audio/.SRCINFO
 c8b9145b0030767062e5f3a30f29952093ef0b9c6e605aae52131b3978c54960  ./packages/linux-cachyos-bc250-meta/PKGBUILD
 765f7886102162bc105d3f78fca6ddebeb1a924261cdfbfc074bbf516736f554  ./packages/linux-cachyos-bc250-meta/.SRCINFO
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
