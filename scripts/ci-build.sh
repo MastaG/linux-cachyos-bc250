@@ -70,6 +70,44 @@ printf 'builder ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/builder
 chmod 0440 /etc/sudoers.d/builder
 chown -R builder:builder /workspace
 
+# TEMPORARY: shadow rust-bindgen with 0.72.1 on PATH.
+#
+# rust-bindgen 0.73.x generates Rust that does not compile for Mesa's rusticl
+# frontend. Mesa asks bindgen to render pipe_map_flags and pipe_resource_usage
+# as --bitfield-enum, so they become newtypes, and those enums are also C
+# bitfield members in p_state.h. 0.73.x emits "let val: u32 = val as _;" in the
+# generated bitfield accessors, which is E0605: you cannot "as"-cast a newtype.
+# 0.72.1 emitted a transmute there and compiles. Both stable mesa and mesa-git
+# enable rusticl, so without this every Mesa component fails to build.
+#
+# This shadows the binary on PATH rather than pinning the package, because
+# pinning cannot survive makepkg. mesa-git names rust-bindgen explicitly in
+# makedepends, so --syncdeps runs pacman -S on it by name: IgnorePkg only
+# produces an "install anyway?" prompt that --noconfirm answers yes to, and an
+# epoch-bumped local package is simply downgraded back to the repo version.
+# Both were tried and both failed. Meson resolves bindgen through PATH, so
+# putting 0.72.1 ahead of /usr/bin works regardless of what pacman installs.
+#
+# REMOVE THIS once bindgen or Mesa fixes it upstream: drop this block and the
+# BINDGEN_PIN_DIR entry from the PATH below. Leaving it in place indefinitely
+# means silently building Mesa against an increasingly stale bindgen.
+BINDGEN_PIN_VERSION="0.72.1-3"
+BINDGEN_PIN_DIR=/opt/bindgen-pin
+BINDGEN_PIN_URL="https://archive.archlinux.org/packages/r/rust-bindgen/rust-bindgen-${BINDGEN_PIN_VERSION}-x86_64.pkg.tar.zst"
+if curl -fsSL --retry 3 -o /tmp/rust-bindgen-pin.pkg.tar.zst "$BINDGEN_PIN_URL" &&
+   mkdir -p "$BINDGEN_PIN_DIR" &&
+   tar -C "$BINDGEN_PIN_DIR" -xf /tmp/rust-bindgen-pin.pkg.tar.zst usr/bin/bindgen &&
+   [[ -x "$BINDGEN_PIN_DIR/usr/bin/bindgen" ]]; then
+    chmod -R a+rX "$BINDGEN_PIN_DIR"
+    printf '==> rust-bindgen %s shadowed on PATH (0.73.x breaks rusticl; see ci-build.sh): %s\n' \
+        "$BINDGEN_PIN_VERSION" "$("$BINDGEN_PIN_DIR/usr/bin/bindgen" --version 2>&1)"
+else
+    BINDGEN_PIN_DIR=""
+    printf '::warning title=bindgen shadow failed::could not stage rust-bindgen %s; Mesa components will likely fail to build on rusticl\n' \
+        "$BINDGEN_PIN_VERSION"
+fi
+rm -f /tmp/rust-bindgen-pin.pkg.tar.zst
+
 # ccache is shared by every makepkg invocation below: all three kernels,
 # stable Mesa, stable lib32-mesa and mesa-git/lib32-mesa-git. BUILDENV enables
 # makepkg's native integration; prepending the wrapper directory makes the
@@ -95,7 +133,7 @@ fi
 # selects its reduced CI kernel configuration.
 runuser -u builder -- env \
     HOME=/home/builder \
-    PATH="$CCACHE_WRAPPER_DIR:$PATH" \
+    PATH="${BINDGEN_PIN_DIR:+$BINDGEN_PIN_DIR/usr/bin:}$CCACHE_WRAPPER_DIR:$PATH" \
     CCACHE_DIR="$CCACHE_DIR" \
     CCACHE_MAXSIZE="$CCACHE_MAXSIZE" \
     CCACHE_COMPILERCHECK="$CCACHE_COMPILERCHECK" \
