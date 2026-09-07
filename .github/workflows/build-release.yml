@@ -382,8 +382,30 @@ jobs:
         shell: bash
         run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
 
+      - name: Check whether the staged repository can be published
+        # A component build may fail without invalidating the repository:
+        # out/repo is seeded with the previous release and a failed component
+        # simply keeps the packages it already had, so finalize-repository.sh
+        # still produces a complete repo. It drops out/.publish-ready when it
+        # gets that far. Publishing on that marker rather than on the build
+        # step's exit status stops one broken component (historically mesa-git,
+        # which tracks live upstream) from blocking every other component's
+        # release. If the build died before finalize, the marker is absent and
+        # nothing is published.
+        id: publishable
+        if: always() && steps.build.outputs.any == 'true'
+        shell: bash
+        run: |
+          if [[ -f out/.publish-ready ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Repository staged successfully; publishing."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Nothing published::The build did not reach finalize-repository.sh, so the previously published repository is left untouched."
+          fi
+
       - name: Preserve workflow artifact
-        if: steps.build.outputs.any == 'true'
+        if: always() && steps.build.outputs.any == 'true' && steps.publishable.outputs.ready == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: bc250-cachyos-repo-${{ github.run_number }}
@@ -394,7 +416,7 @@ jobs:
           include-hidden-files: true
 
       - name: Publish pacman repository release
-        if: steps.build.outputs.any == 'true'
+        if: always() && steps.build.outputs.any == 'true' && steps.publishable.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash

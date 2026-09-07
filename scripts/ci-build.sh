@@ -133,6 +133,9 @@ runuser -u builder -- env \
     GITHUB_SHA="${GITHUB_SHA:-unknown}" \
     bash -c '
         set -Eeuo pipefail
+        # Self-hosted runners keep the workspace between runs, so clear any
+        # marker left by a previous run before it can be mistaken for this one.
+        rm -f /workspace/out/.publish-ready
         ccache -M "$CCACHE_MAXSIZE" >/dev/null
         echo "==> ccache: persistent cache at $CCACHE_DIR (max $CCACHE_MAXSIZE)"
         echo "==> ccache compiler wrapper: $(command -v gcc)"
@@ -181,6 +184,14 @@ runuser -u builder -- env \
         if [[ "$BUILD_LINUX_CACHYOS_BC250_META" == true ]]; then run_component linux-cachyos-bc250-meta /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh; fi
 
         /workspace/scripts/finalize-repository.sh
+
+        # finalize-repository.sh completed, so out/repo is a complete, valid
+        # repository: everything that built this run, plus the previously
+        # published packages for everything that did not. It is safe to publish
+        # even though some components failed. The workflow gates its publish
+        # steps on this marker, because the build step itself still exits
+        # non-zero and would otherwise skip them.
+        mkdir -p /workspace/out && : > /workspace/out/.publish-ready
 
         if [[ -n "$failed_components" ]]; then
             printf "==> failed components (previous packages retained): %s\n" "$failed_components"
