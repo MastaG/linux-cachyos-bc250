@@ -221,6 +221,29 @@ runuser -u builder -- env \
         if [[ "$BUILD_BC250_DUAL_AUDIO" == true ]]; then run_component bc250-dual-audio /workspace/scripts/build-bc250-dual-audio-package.sh; fi
         if [[ "$BUILD_LINUX_CACHYOS_BC250_META" == true ]]; then run_component linux-cachyos-bc250-meta /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh; fi
 
+        # Self-expiring trigger for the rust-bindgen shadow staged above.
+        # If a Mesa component built, pacman has installed the current
+        # rust-bindgen at /usr/bin/bindgen alongside our shadowed 0.72.1. Probe
+        # it with the exact pattern that breaks rusticl -- a --bitfield-enum
+        # newtype used as a C bitfield member -- and say so in the run summary
+        # once it compiles again, so the workaround gets removed instead of
+        # quietly pinning Mesa to a stale bindgen forever. Entirely fail-soft.
+        if [[ -x /usr/bin/bindgen ]] && command -v rustc >/dev/null 2>&1; then
+            printf "enum bc250_probe_e { A = 1, B = 2 };\nstruct bc250_probe_s { enum bc250_probe_e f : 24; };\n" > /tmp/bindgen-probe.h
+            if /usr/bin/bindgen --default-enum-style rust --bitfield-enum bc250_probe_e \
+                   --allowlist-type bc250_probe_s --allowlist-type bc250_probe_e \
+                   /tmp/bindgen-probe.h -o /tmp/bindgen-probe.rs -- -x c >/dev/null 2>&1 &&
+               rustc --edition 2021 --crate-type rlib /tmp/bindgen-probe.rs \
+                   -o /tmp/bindgen-probe.rlib >/dev/null 2>&1; then
+                printf "::warning title=bindgen shadow can now be removed::system %s compiles the rusticl pattern again. Drop the BINDGEN_PIN block and its PATH entry in scripts/ci-build.sh.\n" \
+                    "$(/usr/bin/bindgen --version 2>&1)"
+            else
+                printf "==> rust-bindgen shadow still required (system %s still miscompiles the rusticl pattern)\n" \
+                    "$(/usr/bin/bindgen --version 2>&1)"
+            fi
+            rm -f /tmp/bindgen-probe.h /tmp/bindgen-probe.rs /tmp/bindgen-probe.rlib
+        fi
+
         /workspace/scripts/finalize-repository.sh
 
         # finalize-repository.sh completed, so out/repo is a complete, valid
