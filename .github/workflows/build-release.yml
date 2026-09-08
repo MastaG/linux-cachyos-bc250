@@ -185,15 +185,31 @@ jobs:
             exit 1
           fi
 
-          if [[ "$state" == missing ]]; then
-            # A missing release does not have to mean starting over. Every run
-            # that produced a complete, publishable repository uploaded it as a
-            # workflow artifact, so the newest of those is a faithful copy of the
-            # last good release -- including every component's -info.env. Restore
-            # it here, into the same out/repo the seeding step would have filled,
-            # so one download serves both and only genuinely changed components
-            # rebuild. This is what recovers from a publish that deleted the
-            # release and then failed to recreate it.
+          # Three ways to learn what was published last, tried in order.
+          # The release itself is authoritative; a workflow artifact from a run
+          # that produced a complete repository is an equally faithful copy and
+          # covers the release being absent *or* present but empty, which is
+          # what a failed publish leaves behind.
+          have_previous=false
+
+          if [[ "$state" == found ]]; then
+            for attempt in 1 2 3 4 5; do
+              if gh release download repo --pattern '*info.env' --dir previous --clobber >/dev/null 2>&1; then
+                have_previous=true
+                break
+              fi
+              echo "WARN: *info.env download failed (attempt $attempt/5)"
+              if (( attempt < 5 )); then sleep $(( attempt * 10 )); fi
+            done
+            [[ -f "$info" ]] || : > "$info"
+          fi
+
+          if [[ "$have_previous" != true ]]; then
+            # Either there is no release, or there is one but it carries no
+            # fingerprints -- an empty release left by a publish that failed
+            # partway. Recover from the newest artifact instead, into the same
+            # out/repo the seeding step would have filled, so one download
+            # serves both and only genuinely changed components rebuild.
             : > "$info"
             rm -rf out/repo && mkdir -p out/repo
             artifact="$(gh api repos/${GITHUB_REPOSITORY}/actions/artifacts --paginate \
@@ -203,41 +219,29 @@ jobs:
                     | "\(.workflow_run.id) \(.name)"' 2>/dev/null || true)"
             if [[ -n "$artifact" && "$artifact" != null* ]]; then
               read -r artifact_run artifact_name <<<"$artifact"
-              echo "No release found; restoring from workflow artifact $artifact_name (run $artifact_run)."
+              echo "No usable release state; restoring from workflow artifact $artifact_name (run $artifact_run)."
               if gh run download "$artifact_run" -n "$artifact_name" --dir out/repo &&
                  [[ -f out/repo/build-info.env ]]; then
                 cp out/repo/build-info.env "$info"
                 cp out/repo/*-info.env previous/ 2>/dev/null || true
+                have_previous=true
                 echo "restored=true" >> "$GITHUB_OUTPUT"
                 echo "Restored $(find out/repo -maxdepth 1 -type f | wc -l) assets; only changed components will rebuild."
               else
-                echo "::warning title=Artifact restore failed::Could not restore $artifact_name; every component counts as changed."
                 rm -rf out/repo && mkdir -p out/repo
               fi
-            else
-              echo "No previous release and no usable artifact; every component counts as changed."
             fi
-          else
-            # Every published release contains build-info.env and one
-            # <component>-info.env per component, so if the release exists and
-            # these will not download, that is an error rather than a missing
-            # cache. The per-component files matter more than the aggregate now:
-            # components are published as they build, so after a run that was
-            # cancelled partway the per-component files are current while
-            # build-info.env is still the previous run's.
-            downloaded=false
-            for attempt in 1 2 3 4 5; do
-              if gh release download repo --pattern '*info.env' --dir previous --clobber >/dev/null 2>&1; then
-                downloaded=true
-                break
-              fi
-              echo "WARN: build-info.env download failed (attempt $attempt/5)"
-              if (( attempt < 5 )); then sleep $(( attempt * 10 )); fi
-            done
-            if [[ "$downloaded" != true ]]; then
-              echo "::error title=Cannot read previous build fingerprints::The repo release exists but its *-info.env assets could not be downloaded. Refusing to silently rebuild every component."
+          fi
+
+          if [[ "$have_previous" != true ]]; then
+            if [[ "$state" == found ]]; then
+              # The release exists but neither it nor any artifact could be
+              # read. Treating that as a first build would rebuild everything
+              # off a transient failure, so stop instead.
+              echo "::error title=Cannot read previous build fingerprints::The repo release exists but neither its *info.env assets nor a workflow artifact could be read. Refusing to silently rebuild every component."
               exit 1
             fi
+            echo "No previous release and no usable artifact; every component counts as changed."
           fi
 
           # Prefer the component's own -info.env, which is published as soon as
@@ -645,15 +649,18 @@ jobs:
             # incremental publish could not complete -- rather than deleting and
             # recreating the release, which would re-upload several gigabytes and
             # leave the repository missing while it happened.
-            gh release edit repo --title "$title" --notes-file "$out/RELEASE_NOTES.md"
+            # Title and notes are cosmetic; never fail the publish over them.
+            gh release edit repo --title "$title" --notes-file "$out/RELEASE_NOTES.md" ||
+              echo "::warning title=Could not update release notes::Assets are still published."
             ./scripts/publish-repo-delta.sh final
             printf 'Release updated in place (%d assets staged).\n' "${#assets[@]}"
           else
-            printf 'Creating the release with %d assets.\n' "${#assets[@]}"
-            gh release create repo \
-              --target '${{ github.sha }}' \
-              --title "$title" \
-              --notes-file "$out/RELEASE_NOTES.md" \
-              --latest=false \
-              "${assets[@]}"
+            # Creating a release is the one thing GITHUB_TOKEN is refused here,
+            # with HTTP 403 "Resource not accessible by integration", even with
+            # Contents: write -- the same token updates an existing release
+            # without complaint. So say what to do rather than failing opaquely
+            # after a full build.
+            echo "::error title=No repo release to publish into::The release does not exist and Actions cannot create it. Create it once by hand, then re-run:"
+            echo "  gh api repos/${GITHUB_REPOSITORY}/releases -X POST -f tag_name=repo -f name=repo -f make_latest=false"
+            exit 1
           fi

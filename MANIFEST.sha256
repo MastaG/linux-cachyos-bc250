@@ -1,4 +1,4 @@
-f8e1b5faba3821ba30da27ae0b1cf8a83e487e4760cef1b34a38a653b7ed6fe4  ./.github/workflows/build-release.yml
+f6363cb3670de7fc643cccf1eadd26c5c62f7cbaa545a3397ccea8ea3e644b8c  ./.github/workflows/build-release.yml
 bb28f8adfdf313f530d184774d7978d1bd97a7b7ae55de5374162b3fb2c257c1  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
 03670803df09ef8fecee27847ab216661e2f620ef9b376d0241f6146300c2656  ./packages/bc250-dual-audio/bc250-dual-audio.install
