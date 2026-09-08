@@ -2,9 +2,14 @@
 # SPDX-License-Identifier: MIT
 """Point Proton at this tool's pinned FSR4 payload, then hand the process over.
 
-Steam runs the sibling `proton` shim, which runs this file; this file execve()s
-the real GE-Proton under `ge/`. The indirection exists so the environment can be
-prepared without patching GE's own launcher.
+Steam runs a sibling shim, which runs this file; this file execve()s the real
+Proton. The indirection exists so the environment can be prepared without
+patching Proton's own launcher.
+
+The two packages lay their tool directory out differently -- protonge-latest
+keeps GE under `ge/`, while proton-cachyos-native is the Proton tree itself --
+so where the real proton and the pinned manifest live comes from the config
+written at build time, not from anything assumed here.
 
 Everything this touches is either owned by the package (the pinned manifest, the
 OptiScaler proxy name, the preset) or a stale setting from some other Proton
@@ -80,7 +85,7 @@ def environment(config, inherited, *, game):
     # Xalia inherits the global proxy below and can keep a closed game alive.
     env["PROTON_USE_XALIA"] = "0"
 
-    env["PROTON_UPSCALER_MANIFEST"] = str(TOOL / "ge" / "upscaler-manifest.json")
+    env["PROTON_UPSCALER_MANIFEST"] = str(TOOL / config["manifest"])
     env["PROTON_OPTISCALER_NAME"] = config["proxy"]
 
     preset = dict(config["preset"])
@@ -107,8 +112,8 @@ def main():
     game = bool(os.environ.get("SteamAppId") or os.environ.get("SteamGameId"))
     env = environment(config, os.environ, game=game)
     # Replace this process so Steam keeps the pid it started and every inherited
-    # descriptor, exactly as if it had run GE-Proton directly.
-    proton = str(TOOL / "ge" / "proton")
+    # descriptor, exactly as if it had run Proton directly.
+    proton = str(TOOL / config["proton"])
     os.execve(proton, [proton, *sys.argv[1:]], env)
 
 

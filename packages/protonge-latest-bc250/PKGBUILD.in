@@ -151,6 +151,8 @@ build() {
         --dlss "$srcdir/nvngx_dlss.dll" \
         --licenses "$srcdir" \
         --preset "$srcdir/optiscaler-preset.json" \
+        --manifest-rel "ge/upscaler-manifest.json" \
+        --proton-rel "ge/proton" \
         --output "$srcdir/$_gedir" \
         --config "$srcdir/bc250-fsr4-config.json"
 }

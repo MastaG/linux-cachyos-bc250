@@ -643,17 +643,25 @@ The positive control was the step that made the rest trustworthy: the testing dr
 
 ## FSR4-capable Proton (opt-in)
 
-`protonge-latest-bc250` packages GE-Proton as a system-wide Steam compatibility tool with everything FSR 4.1.1 needs on this hardware already inside it: the AMD FSR4 provider, OptiScaler, OptiPatcher and a known-good OptiScaler configuration.
+Two packages, same idea: a Steam compatibility tool with everything FSR 4.1.1 needs on this hardware already inside it — the AMD FSR4 provider, OptiScaler, OptiPatcher and a known-good OptiScaler configuration.
+
+| package | base | build |
+|---|---|---|
+| `protonge-latest-bc250` | GE-Proton, repacked | minutes; tracks the newest GE release |
+| `proton-cachyos-native-bc250` | CachyOS's Proton, rebuilt from source | hours; Zen 2-tuned (`-march=x86-64-v3 -mtune=znver2`) |
 
 ```bash
-sudo pacman -S protonge-latest-bc250
+sudo pacman -S protonge-latest-bc250            # or
+sudo pacman -S proton-cachyos-native-bc250
 ```
 
-Restart Steam, then pick **GE-Proton 11-6 (BC-250 FSR4)** under a game's Properties → Compatibility, or set it as the global default under Steam → Settings → Compatibility.
+They can both be installed at once, and both sit alongside the distro's own Proton packages. Pick whichever the game likes; the FSR4 payload and its configuration are identical.
 
-It installs to `/usr/share/steam/compatibilitytools.d/protonge-latest-bc250/` and deliberately declares no `provides`, `conflicts` or `replaces`: it sits **alongside** the distro's own Proton packages, and Steam lists each separately. Nothing is written to `$HOME`, and `pacman -R` removes it cleanly. (Flatpak Steam cannot see it — its sandbox has its own `/usr`.)
+Restart Steam, then pick **GE-Proton 11-6 (BC-250 FSR4)** or **proton-cachyos-… (native, BC-250 FSR4)** under a game's Properties → Compatibility, or set one as the global default under Steam → Settings → Compatibility.
 
-This needs the `vulkan-radeon` package from this repository. The provider calls into FSR4 support that lives in our patched RADV, not in stock Mesa.
+Each installs to `/usr/share/steam/compatibilitytools.d/<pkgname>/` and deliberately declares no `provides`, `conflicts` or `replaces`. That matters most for the native package: upstream's `proton-cachyos-native` ships `replaces=('proton-cachyos')`, which inherited as-is would make pacman **uninstall** the official package when ours is installed. Both fields are cleared, every installed path and the Steam-internal tool name are derived from the package name, and the build asserts on the resulting `.SRCINFO` so a future upstream change cannot quietly reintroduce it. Nothing is written to `$HOME`, and `pacman -R` removes them cleanly. (Flatpak Steam cannot see them — its sandbox has its own `/usr`.)
+
+Both need the `vulkan-radeon` package from this repository. The provider calls into FSR4 support that lives in our patched RADV, not in stock Mesa.
 
 ### What "pinned" means here
 
@@ -672,9 +680,11 @@ BC250_FSR4_DEBUG=1 %command%         # FSR4 watermark + OptiScaler log + PROTON_
 
 `PROTON_DLSS_UPGRADE`, `PROTON_XESS_UPGRADE`, `PROTON_FFX3_UPGRADE`, `PROTON_FFX4_UPGRADE` and `PROTON_MLFG_UPGRADE` are cleared: this package ships none of those upscalers, and in pinned mode a request for one that is absent stops the game from starting. A stale launch option left over from another Proton build would otherwise become a game that will not launch.
 
-### Which GE-Proton, and which OptiScaler
+### Which Proton, and which OptiScaler
 
-The package tracks the newest GE-Proton release automatically; `pkgver` follows it (`GE-Proton11-6` → `11.6`). The Steam-internal tool name stays `protonge-latest-bc250` across upgrades on purpose — Steam stores that name per game, so a name carrying the version would reset everyone's per-game choice on every update.
+`protonge-latest-bc250` tracks the newest GE-Proton release automatically; `pkgver` follows it (`GE-Proton11-6` → `11.6`). The Steam-internal tool name stays `protonge-latest-bc250` across upgrades on purpose — Steam stores that name per game, so a name carrying the version would reset everyone's per-game choice on every update.
+
+`proton-cachyos-native-bc250` follows CachyOS's `proton-cachyos-native` PKGBUILD, pinned to the same `CachyOS-PKGBUILDS` commit as the Mesa packages. Rather than carrying a diff of that PKGBUILD, the prepare step rewrites it and asserts on every anchor it touches, so an upstream change fails the build naming what moved instead of a patch applying at an offset and quietly meaning something else.
 
 The OptiScaler build is pinned rather than tracked. Nightlies publish most days, and following them would rebuild a ~700 MB package daily for a payload nobody asked to move. Moving it forward is a one-line change to `FALLBACK_TAG` in `scripts/select-optiscaler.py`, which changes the component fingerprint and triggers exactly one rebuild. `BC250_FSR4_TRACK_OPTISCALER=1` validates and takes the newest nightly instead, for checking whether the preset still applies to it.
 
@@ -799,6 +809,7 @@ A complete fixed release contains at least:
 - `bc250-dual-audio` + its PKGBUILD, `.SRCINFO` and `bc250-dual-audio-info.env`;
 - `linux-cachyos-bc250-meta` + its PKGBUILD, `.SRCINFO` and `linux-cachyos-bc250-meta-info.env`;
 - `protonge-latest-bc250` + its PKGBUILD, `.SRCINFO` and `protonge-latest-bc250-info.env`;
+- `proton-cachyos-native-bc250` + its PKGBUILD, `.SRCINFO` and `proton-cachyos-native-bc250-info.env`;
 - aggregate `build-info.env`, release notes and `SHA256SUMS`.
 
 Publication validates the complete staged repository before deleting/replacing the fixed `repo` release.

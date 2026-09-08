@@ -39,6 +39,7 @@ stage_fsr4_payload_sources() {
         [SHA_LAUNCH]="$common/bc250-fsr4-launch.py"
         [SHA_PAYLOAD_BUILDER]="$root/scripts/build-fsr4-payload.py"
         [SHA_PRESET]="$common/optiscaler-preset.json"
+        [SHA_SHIM]="$common/proton-shim.sh"
     )
 
     for name in "${!sources[@]}"; do
@@ -67,6 +68,7 @@ fsr4_payload_source_paths() {
         "$root/packages/bc250-fsr4-common/patches/$base/0001-pinned-upscaler-manifest.patch" \
         "$root/packages/bc250-fsr4-common/bc250-fsr4-launch.py" \
         "$root/packages/bc250-fsr4-common/optiscaler-preset.json" \
+        "$root/packages/bc250-fsr4-common/proton-shim.sh" \
         "$root/packages/bc250-fsr4-common/licenses/FidelityFX-SDK-4.0.2.txt" \
         "$root/packages/bc250-fsr4-common/licenses/NVIDIA-DLSS.txt" \
         "$root/scripts/build-fsr4-payload.py" \

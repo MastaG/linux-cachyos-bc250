@@ -162,6 +162,12 @@ def main() -> int:
     ap.add_argument("--licenses", type=Path, required=True, help="directory of license notices")
     ap.add_argument("--preset", type=Path, required=True, help="optiscaler-preset.json")
     ap.add_argument("--proxy", default="winmm.dll")
+    # Where the wrapper will find things, relative to the Steam tool directory.
+    # protonge-latest nests GE under ge/; proton-cachyos-native is the tree itself.
+    ap.add_argument("--manifest-rel", required=True,
+                    help="path from the tool root to upscaler-manifest.json")
+    ap.add_argument("--proton-rel", required=True,
+                    help="path from the tool root to the real proton launcher")
     ap.add_argument("--output", type=Path, required=True,
                     help="GE tree the manifest and artifacts are written into")
     ap.add_argument("--config", type=Path, required=True,
@@ -192,6 +198,8 @@ def main() -> int:
                 "optiscaler_version": args.optiscaler_version,
                 "provider_version": args.provider_version,
                 "proxy": args.proxy,
+                "manifest": args.manifest_rel,
+                "proton": args.proton_rel,
                 "preset": preset,
             },
             indent=2,

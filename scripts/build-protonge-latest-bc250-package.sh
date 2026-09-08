@@ -45,8 +45,7 @@ printf '    %s (%s, %s)\n' "$OPTISCALER_TAG" "$OPTISCALER_VERSION" \
 # Files we author, staged next to the rendered PKGBUILD so makepkg treats them
 # as ordinary local sources and checksums them like any other.
 stage_fsr4_payload_sources "$ROOT_DIR" "$BUILD_DIR" ge-proton
-cp -- "$PKG_DIR/proton-shim.sh" "$PKG_DIR/ntsync.conf" "$BUILD_DIR/"
-FSR4_PAYLOAD_SHA256[SHA_SHIM]="$(sha256sum < "$PKG_DIR/proton-shim.sh" | awk '{print $1}')"
+cp -- "$PKG_DIR/ntsync.conf" "$BUILD_DIR/"
 FSR4_PAYLOAD_SHA256[SHA_NTSYNC]="$(sha256sum < "$PKG_DIR/ntsync.conf" | awk '{print $1}')"
 
 : "${BC250_PKGREL:=1}"

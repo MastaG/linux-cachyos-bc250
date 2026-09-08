@@ -36,6 +36,7 @@ case "$COMPONENT" in
     bc250-dual-audio) ;;
     linux-cachyos-bc250-meta) ;;
     protonge-latest-bc250) ;;
+    proton-cachyos-native-bc250) ;;
     *)
         printf 'ERROR: unsupported fingerprint component: %s\n' "$COMPONENT" >&2
         exit 1
@@ -145,9 +146,42 @@ case "$COMPONENT" in
             (cd "$TMP" && sha256sum *)
             mapfile -t payload_sources < <(fsr4_payload_source_paths "$ROOT_DIR" ge-proton)
             hash_files "${payload_sources[@]}"
-            hash_files "$pkg_dir/PKGBUILD.in" "$pkg_dir/proton-shim.sh" "$pkg_dir/ntsync.conf"
+            hash_files "$pkg_dir/PKGBUILD.in" "$pkg_dir/ntsync.conf"
             hash_files "$ROOT_DIR/scripts/build-protonge-latest-bc250-package.sh" \
                 "$ROOT_DIR/scripts/resolve-protonge.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    proton-cachyos-native-bc250)
+        # Same repository as the Mesa PKGBUILDs, so the same commit pin, and the
+        # same reasoning as protonge-latest-bc250 for the OptiScaler build: it is
+        # pinned by FALLBACK_TAG in select-optiscaler.py rather than resolved
+        # live, so this rebuilds only when something actually changed. That
+        # matters more here -- this one compiles Proton and Wine from source.
+        if [[ -z "$CACHYOS_MESA_COMMIT" ]]; then
+            CACHYOS_MESA_COMMIT="$("$ROOT_DIR/scripts/resolve-cachyos-mesa.sh")"
+        fi
+        [[ "$CACHYOS_MESA_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+            printf 'ERROR: invalid CACHYOS_MESA_COMMIT: %s\n' "$CACHYOS_MESA_COMMIT" >&2
+            exit 1
+        }
+        # shellcheck disable=SC1091
+        source "$ROOT_DIR/scripts/fsr4-payload-sources.sh"
+
+        base="https://raw.githubusercontent.com/CachyOS/CachyOS-PKGBUILDS/${CACHYOS_MESA_COMMIT}/proton-cachyos-native"
+        for file in PKGBUILD compatibilitytool.vdf.template ntsync.conf proton-cachyos-native.install; do
+            curl -fsSL --retry 5 --retry-all-errors -o "$TMP/$file" "$base/$file"
+        done
+        printf '%s\n' 'x86-64-v3' > "$TMP/march"
+        printf '%s\n' 'znver2' > "$TMP/mtune"
+        {
+            (cd "$TMP" && sha256sum *)
+            mapfile -t payload_sources < <(fsr4_payload_source_paths "$ROOT_DIR" proton-cachyos)
+            hash_files "${payload_sources[@]}"
+            hash_files "$ROOT_DIR/scripts/prepare-proton-cachyos-native-pkgbuild.sh" \
+                "$ROOT_DIR/scripts/build-proton-cachyos-native-bc250-package.sh" \
+                "$ROOT_DIR/scripts/resolve-cachyos-mesa.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

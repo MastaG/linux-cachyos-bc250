@@ -15,6 +15,7 @@ set -Eeuo pipefail
 : "${BC250_DUAL_AUDIO_FINGERPRINT:?BC250_DUAL_AUDIO_FINGERPRINT is required}"
 : "${LINUX_CACHYOS_BC250_META_FINGERPRINT:?LINUX_CACHYOS_BC250_META_FINGERPRINT is required}"
 : "${PROTONGE_LATEST_BC250_FINGERPRINT:?PROTONGE_LATEST_BC250_FINGERPRINT is required}"
+: "${PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT:?PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT is required}"
 
 BUILD_KERNEL_STABLE="${BUILD_KERNEL_STABLE:-false}"
 BUILD_KERNEL_RC="${BUILD_KERNEL_RC:-false}"
@@ -27,12 +28,14 @@ BUILD_LIB32_MESA_TESTING="${BUILD_LIB32_MESA_TESTING:-false}"
 BUILD_BC250_DUAL_AUDIO="${BUILD_BC250_DUAL_AUDIO:-false}"
 BUILD_LINUX_CACHYOS_BC250_META="${BUILD_LINUX_CACHYOS_BC250_META:-false}"
 BUILD_PROTONGE_LATEST_BC250="${BUILD_PROTONGE_LATEST_BC250:-false}"
+BUILD_PROTON_CACHYOS_NATIVE_BC250="${BUILD_PROTON_CACHYOS_NATIVE_BC250:-false}"
 NCT6687D_COMMIT="${NCT6687D_COMMIT:-}"
 PROTONGE_TAG="${PROTONGE_TAG:-}"
 
 for var in BUILD_KERNEL_STABLE BUILD_KERNEL_RC BUILD_KERNEL_BORE BUILD_MESA BUILD_LIB32_MESA \
            BUILD_MESA_GIT BUILD_MESA_TESTING BUILD_LIB32_MESA_TESTING BUILD_BC250_DUAL_AUDIO \
-           BUILD_LINUX_CACHYOS_BC250_META BUILD_PROTONGE_LATEST_BC250; do
+           BUILD_LINUX_CACHYOS_BC250_META BUILD_PROTONGE_LATEST_BC250 \
+           BUILD_PROTON_CACHYOS_NATIVE_BC250; do
     value="${!var}"
     [[ "$value" == true || "$value" == false ]] || {
         printf 'ERROR: %s must be true or false: %s\n' "$var" "$value" >&2
@@ -151,6 +154,7 @@ runuser -u builder -- env \
     BUILD_BC250_DUAL_AUDIO="$BUILD_BC250_DUAL_AUDIO" \
     BUILD_LINUX_CACHYOS_BC250_META="$BUILD_LINUX_CACHYOS_BC250_META" \
     BUILD_PROTONGE_LATEST_BC250="$BUILD_PROTONGE_LATEST_BC250" \
+    BUILD_PROTON_CACHYOS_NATIVE_BC250="$BUILD_PROTON_CACHYOS_NATIVE_BC250" \
     BC250_PKGREL="$BC250_PKGREL" \
     MESA_PKGREL="$BC250_PKGREL" \
     LIB32_MESA_PKGREL="$BC250_PKGREL" \
@@ -169,6 +173,7 @@ runuser -u builder -- env \
     BC250_DUAL_AUDIO_FINGERPRINT="$BC250_DUAL_AUDIO_FINGERPRINT" \
     LINUX_CACHYOS_BC250_META_FINGERPRINT="$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
     PROTONGE_LATEST_BC250_FINGERPRINT="$PROTONGE_LATEST_BC250_FINGERPRINT" \
+    PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" \
     NCT6687D_COMMIT="$NCT6687D_COMMIT" \
     PROTONGE_TAG="$PROTONGE_TAG" \
     CACHYOS_MESA_COMMIT="$CACHYOS_MESA_COMMIT" \
@@ -227,6 +232,7 @@ runuser -u builder -- env \
         if [[ "$BUILD_BC250_DUAL_AUDIO" == true ]]; then run_component bc250-dual-audio /workspace/scripts/build-bc250-dual-audio-package.sh; fi
         if [[ "$BUILD_LINUX_CACHYOS_BC250_META" == true ]]; then run_component linux-cachyos-bc250-meta /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh; fi
         if [[ "$BUILD_PROTONGE_LATEST_BC250" == true ]]; then run_component protonge-latest-bc250 /workspace/scripts/build-protonge-latest-bc250-package.sh; fi
+        if [[ "$BUILD_PROTON_CACHYOS_NATIVE_BC250" == true ]]; then run_component proton-cachyos-native-bc250 /workspace/scripts/build-proton-cachyos-native-bc250-package.sh; fi
 
         # Self-expiring trigger for the rust-bindgen shadow staged above.
         # If a Mesa component built, pacman has installed the current

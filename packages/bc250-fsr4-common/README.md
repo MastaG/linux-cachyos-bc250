@@ -73,11 +73,18 @@ $(OBJ)/.protonfixes-post-source: patches-source
 Because that glob is sorted, dropping this in as a later-sorting directory is
 all the integration required — no Makefile or `prepare()` changes.
 
-## `bc250-fsr4-launch.py`
+## `bc250-fsr4-launch.py` and `proton-shim.sh`
 
-The Steam compatibility tool is a thin directory: a `proton` shim runs this, and
-this `execve()`s the real Proton under `ge/`. It exists so the pinned payload can
-be selected without patching Proton's own launcher.
+Steam runs the shim named by `toolmanifest.vdf`; the shim runs the wrapper; the
+wrapper `execve()`s the real Proton. It exists so the pinned payload can be
+selected without patching Proton's own launcher, and the `execve` means Steam
+still ends up supervising exactly one process.
+
+The two packages lay the tool directory out differently — protonge-latest keeps
+GE under `ge/` and installs the shim as `proton`, while proton-cachyos-native
+*is* the Proton tree and installs the shim as `bc250-fsr4-proton` beside
+upstream's own `proton`. Rather than encode that, the wrapper reads both paths
+from the config written at build time, so one wrapper serves both.
 
 What it sets is limited to what the package owns — the manifest path, the
 OptiScaler proxy name, the preset — plus the two `VK_NVX_*` names appended to
