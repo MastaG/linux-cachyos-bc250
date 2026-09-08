@@ -114,6 +114,16 @@ else
 fi
 rm -f /tmp/rust-bindgen-pin.pkg.tar.zst
 
+# proton-cachyos-native's makedepends include two AUR-only packages that a
+# vanilla Arch container cannot resolve. Only fetch them when that component is
+# actually being built, and treat a failure the way the bindgen shadow is
+# treated -- warn and continue, so the other components still build and publish.
+if [[ "$BUILD_PROTON_CACHYOS_NATIVE_BC250" == true ]]; then
+    if ! /workspace/scripts/install-proton-build-deps.sh; then
+        printf '::warning title=Proton build dependencies unavailable::could not install afdko/mingw-w64-tools; proton-cachyos-native-bc250 will fail to build\n'
+    fi
+fi
+
 # ccache is shared by every makepkg invocation below: all three kernels,
 # stable Mesa, stable lib32-mesa and mesa-git/lib32-mesa-git. BUILDENV enables
 # makepkg's native integration; prepending the wrapper directory makes the
