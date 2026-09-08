@@ -13,6 +13,14 @@ set -Eeuo pipefail
 # call rather than only after everything has built.
 MODE="${1:?mode is required: setup, component or finalize}"
 COMPONENT="${2:-}"
+
+# ccache reads CCACHE_MAXSIZE straight out of the environment and rejects an
+# empty value ("invalid size"). The workflow passes it through unconditionally
+# so that the vars.CCACHE_MAXSIZE repository variable can override the sizing,
+# and that variable is normally unset -- which arrives here as "". Drop it, so
+# setup computes a size and the per-component invocations fall back to the
+# max_size setup already wrote into the cache config.
+[[ -n "${CCACHE_MAXSIZE:-}" ]] || unset CCACHE_MAXSIZE
 case "$MODE" in
     setup|finalize) ;;
     component) : "${COMPONENT:?component name is required}" ;;
