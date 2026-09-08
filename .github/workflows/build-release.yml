@@ -397,16 +397,29 @@ jobs:
             fi
           fi
 
-          # Baseline for the incremental publisher: exactly what the release
-          # holds at this moment. Recorded before the cleanup below so that the
-          # assets removed there are removed from the release too, which the old
-          # delete-and-recreate publish used to handle implicitly.
-          while IFS= read -r -d '' file; do
-            printf '%s  %s\n' "$(sha256sum < "$file" | awk '{print $1}')" "$(basename -- "$file")"
-          done < <(find out/repo -maxdepth 1 -type f -print0 | sort -z) \
-            > "${RUNNER_TEMP:-out}/bc250-published-state"
-          printf 'Recorded %d already-published assets.\n' \
-            "$(wc -l < "${RUNNER_TEMP:-out}/bc250-published-state")"
+          # Baseline for the incremental publisher: what the release holds at
+          # this moment, which is not the same as what out/repo holds.
+          #
+          # When the content came from a workflow artifact the release does NOT
+          # have it -- that is why it was restored -- so the baseline has to be
+          # empty or the publisher would compare the restored copy against
+          # itself, conclude nothing changed, and upload none of it. That is
+          # exactly how run 34273594213 left the release empty after recording
+          # "165 already-published assets" that were not published at all.
+          #
+          # Otherwise it is recorded before the cleanup below, so assets removed
+          # there are removed from the release too -- which the old
+          # delete-and-recreate publish handled implicitly.
+          state_file="${RUNNER_TEMP:-out}/bc250-published-state"
+          if [[ '${{ steps.build.outputs.restored }}' == true ]]; then
+            : > "$state_file"
+            echo "Restored content is not in the release yet; baseline is empty so all of it is republished."
+          else
+            while IFS= read -r -d '' file; do
+              printf '%s  %s\n' "$(sha256sum < "$file" | awk '{print $1}')" "$(basename -- "$file")"
+            done < <(find out/repo -maxdepth 1 -type f -print0 | sort -z) > "$state_file"
+            printf 'Recorded %d already-published assets.\n' "$(wc -l < "$state_file")"
+          fi
 
           # Remove auxiliary assets from the old single-kernel architecture.
           # Package files themselves are left alone; the stable builder removes
@@ -421,6 +434,17 @@ jobs:
             out/repo/0005-gfx1013-compute-gfxoff-guard.patch
 
           echo "Existing package artifacts will be preserved unless their .PKGINFO pkgbase is rebuilt."
+
+          # Put the restored repository back on the release now, before anything
+          # is built. It brings the repository back for users immediately rather
+          # than at the end of the run, and it does not depend on any component
+          # succeeding -- run 34273594213 built only mesa-git, which failed, so
+          # nothing was published even though a complete repository was sitting
+          # in out/repo the whole time.
+          if [[ '${{ steps.build.outputs.restored }}' == true ]]; then
+            ./scripts/publish-repo-delta.sh restore || \
+              echo "::warning title=Restore publish incomplete::The final publish will retry."
+          fi
 
       - name: Build changed Zen 2-tuned packages
         if: steps.build.outputs.any == 'true'
