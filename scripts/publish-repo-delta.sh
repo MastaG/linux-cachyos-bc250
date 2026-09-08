@@ -74,12 +74,25 @@ fi
 printf '==> [%s] publishing %d changed, %d database, %d removed\n' \
     "$LABEL" "${#uploads[@]}" "${#db_uploads[@]}" "${#deletions[@]}"
 
-# The release has to exist before anything can be uploaded into it. On a first
-# ever run there is nothing to create it from yet, so leave that to the final
-# publish and simply do nothing here.
+# The release has to exist before anything can be uploaded into it. Create it
+# empty rather than waiting for the final publish, because waiting is what makes
+# a run all-or-nothing again: with no release to upload into, nothing is
+# published until every component has finished, and one late failure throws away
+# hours of kernel builds. That is not hypothetical -- it is what happened
+# repeatedly while recovering from the release being deleted.
+#
+# The title and notes here are provisional. finalize-repository.sh writes the
+# real ones and the final publish applies them with `gh release edit`.
 if ! gh release view repo >/dev/null 2>&1; then
-    printf '::warning title=No release to update::[%s] the repo release does not exist yet; leaving it to the final publish.\n' "$LABEL"
-    exit 0
+    printf '==> [%s] no repo release exists; creating one to publish into\n' "$LABEL"
+    if ! gh release create repo \
+            ${GITHUB_SHA:+--target "$GITHUB_SHA"} \
+            --title "BC-250 CachyOS repository (build in progress)" \
+            --notes "This release is being rebuilt. Package listings appear as components finish." \
+            --latest=false >/dev/null 2>&1; then
+        printf '::warning title=No release to update::[%s] could not create the repo release; leaving it to the final publish.\n' "$LABEL"
+        exit 0
+    fi
 fi
 
 upload() {

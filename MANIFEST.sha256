@@ -85,7 +85,7 @@ f98ab5525bc89e6514bf3bc3b054361d5b532261c1c3331da7ce60c80c63d9a8  ./scripts/prep
 925339b7e96de38f2a507d1a796f71fa009f637e0d9e7ad28969c88e7123c003  ./scripts/prepare-mesa-testing-pkgbuild.sh
 41cbd2dc27b21a2e961ad7a79ce4a089acc6616e78a0b3b3358442a901d2e760  ./scripts/prepare-pkgbuild.sh
 550f7d4aa018c95bdedf1163b65ad4b926882058b31c6d755cca3fc0dd3d3477  ./scripts/prepare-proton-cachyos-native-pkgbuild.sh
-873ca441d237105fe949af9897327a0e71e54ddba7928b773ff4184f41a71e53  ./scripts/publish-repo-delta.sh
+cd37c41635a7f45cc83b522006532925330dd5b97947187ba574300e9f25127e  ./scripts/publish-repo-delta.sh
 cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo-package-helpers.sh
 eeb453358d62271e629355af4bff424160d2af4b0d41e413f347466144805e4c  ./scripts/resolve-cachyos-mesa.sh
 d54dc6ec221b5e8b4f594a891b8bb77b61e101837e3277918f50aad558b71ba7  ./scripts/resolve-mesa-git.sh
