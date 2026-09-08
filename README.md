@@ -75,7 +75,7 @@ The stable kernel is the recommended default:
 sudo pacman -Syu linux-cachyos-bc250 linux-cachyos-bc250-headers
 ```
 
-Or install [`linux-cachyos-bc250-meta`](#linux-cachyos-bc250-meta) instead, which pulls in the stable kernel, its headers, and the other BC-250 extras (currently `bc250-dual-audio`) together, and picks up any new ones added to it in the future on a normal `pacman -Syu`.
+Or install [`linux-cachyos-bc250-meta`](#linux-cachyos-bc250-meta) instead, which pulls in the stable kernel, its headers, and the other BC-250 extras (currently `bc250-dual-audio` and both FSR4 Proton packages) together, and picks up any new ones added to it in the future on a normal `pacman -Syu`.
 
 Optional RC/testing kernel:
 
@@ -495,10 +495,14 @@ A pure metapackage — it installs no files of its own, it just depends on the r
 - `linux-cachyos-bc250`
 - `linux-cachyos-bc250-headers`
 - `bc250-dual-audio`
+- `protonge-latest-bc250`
+- `proton-cachyos-native-bc250`
 
 ```bash
 sudo pacman -S linux-cachyos-bc250-meta
 ```
+
+The two Proton packages are alternatives rather than complements — the same pinned FSR4 payload over a different Proton — so having both costs roughly 3 GB and puts two entries in Steam's compatibility list. That is deliberate: a BC-250 owner gets whichever one a given game prefers without having to know the difference up front. If you would rather pick one, install it directly and skip the metapackage.
 
 The point of it is future-proofing: as more BC-250-specific extras land in this repository (for example a VCN unlock, once upstream support for that exists), they get added to this package's `depends=` array instead of requiring users to notice and install each one by hand. Once you have `linux-cachyos-bc250-meta` installed, a plain `sudo pacman -Syu` picks up any newly added extra the next time this package's version is bumped for that — the same mechanism that already updates every other package in this repository, extended to cover the set as a whole.
 

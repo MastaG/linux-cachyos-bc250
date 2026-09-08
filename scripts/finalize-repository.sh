@@ -457,7 +457,8 @@ sudo pacman -S proton-cachyos-native-bc250
 ## linux-cachyos-bc250-meta
 
 - Package version: \`${linux_cachyos_bc250_meta_pkgver}-${linux_cachyos_bc250_meta_pkgrel}\`
-- Pure metapackage, no files of its own: installing it pulls in \`linux-cachyos-bc250\`, \`linux-cachyos-bc250-headers\` and \`bc250-dual-audio\` together.
+- Pure metapackage, no files of its own: installing it pulls in \`linux-cachyos-bc250\`, \`linux-cachyos-bc250-headers\`, \`bc250-dual-audio\` and both FSR4 Proton packages (\`protonge-latest-bc250\` and \`proton-cachyos-native-bc250\`) together.
+- The two Proton packages are alternatives, not complements: same pinned FSR4 payload over a different Proton. Having both installed costs roughly 3 GB and puts two entries in Steam's compatibility list, so install them individually instead if you would rather pick one.
 - Future BC-250 extras (for example a VCN unlock, once that lands) get added to this package's dependency list rather than requiring a new manual install step: once you have this package installed, \`sudo pacman -Syu\` picks up new extras automatically the next time this package's version is bumped for that.
 
 \`\`\`bash
