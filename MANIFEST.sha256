@@ -36,6 +36,7 @@ af6aadd574343c69638b5f32da980a3fca5c45510872b33c07a1beeff0e5460a  ./patches/linu
 8bc7ad42dc33363aeff566208b914fab65ad6c6641deeee44868a63e7634adff  ./patches/linux-cachyos-rc/0008-cyan-skillfish-sclk-range.patch
 a19d5cca46c1e5d8f88061cb2fb1569bcaa82967d3e420fed72449cecf5846ff  ./patches/linux-cachyos-rc/0009-bc250-40cu-unlock.patch
 a0cc8f31c2455552a2bf58da1417ab49c775619c11073afc69acaac22a58e32a  ./patches/linux-cachyos-rc/0010-hdmi21-vtem-on-tmds.patch
+dc70044447502b828985498902cf9c2312d865c50ef90ed790b047f7d279ce31  ./patches/linux-cachyos-rc/0011-gud-bound-tv-mode-count.patch
 b30db62d989977e0cf7c99813f029ade75da128623966616330b0dacc98a5788  ./patches/mesa/0001-gfx1013-compute-queue-fix.patch
 5009c271d5a4efb7d4a447d12ca52016e3b07546401b359e3bd6a6d9399363fa  ./patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 f4547fbf694a83f31ad9613c1d312209bcd81d87fccd6e9a48c3c3adebf18532  ./patches/mesa/0003-gfx1013-taskmesh-queries.patch
