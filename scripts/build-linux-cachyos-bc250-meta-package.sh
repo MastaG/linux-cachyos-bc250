@@ -16,6 +16,39 @@ cp -- "$PKG_DIR/PKGBUILD" "$BUILD_DIR/"
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/scripts/repo-package-helpers.sh"
 
+# Every dependency of this metapackage is a package this repository itself
+# provides, so it must not be published unless all of them are actually in the
+# repository -- otherwise `pacman -S linux-cachyos-bc250-meta` fails for
+# everyone with an unresolvable dependency.
+#
+# This used to be guaranteed by finalize-repository.sh refusing to publish an
+# incomplete repository at all. Components are now published as they build, so
+# the guarantee has to be made here: fail rather than produce a metapackage
+# whose dependencies are missing, and it will be retried on the next run once
+# they exist.
+meta_depends="$(
+    bash -c 'source "$1" >/dev/null 2>&1; printf "%s\n" "${depends[@]}"' _ "$BUILD_DIR/PKGBUILD"
+)"
+missing=()
+while IFS= read -r dependency; do
+    [[ -n "$dependency" ]] || continue
+    found=false
+    shopt -s nullglob
+    for package in "$OUT_DIR"/*.pkg.tar.zst; do
+        name="$(bsdtar -xOf "$package" .PKGINFO 2>/dev/null |
+            awk -F ' = ' '$1 == "pkgname" { print $2; exit }')"
+        if [[ "$name" == "$dependency" ]]; then found=true; break; fi
+    done
+    [[ "$found" == true ]] || missing+=("$dependency")
+done <<< "$meta_depends"
+
+if (( ${#missing[@]} )); then
+    printf 'ERROR: refusing to build the metapackage; these dependencies are not in the repository yet:\n' >&2
+    printf '       %s\n' "${missing[@]}" >&2
+    printf '       They must be published before a metapackage that requires them.\n' >&2
+    exit 1
+fi
+
 cd -- "$BUILD_DIR"
 # --nodeps, not --syncdeps: every entry in depends= here is one of our own
 # bc250-cachyos packages, resolvable on an end-user machine that has added

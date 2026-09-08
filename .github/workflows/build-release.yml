@@ -189,12 +189,16 @@ jobs:
             echo "No previous release published yet; every component counts as changed."
             : > "$info"
           else
-            # Any release this workflow publishes contains build-info.env (the
-            # publish step verifies it), so if the release exists and the asset
-            # will not download, that is an error rather than a missing cache.
+            # Every published release contains build-info.env and one
+            # <component>-info.env per component, so if the release exists and
+            # these will not download, that is an error rather than a missing
+            # cache. The per-component files matter more than the aggregate now:
+            # components are published as they build, so after a run that was
+            # cancelled partway the per-component files are current while
+            # build-info.env is still the previous run's.
             downloaded=false
             for attempt in 1 2 3 4 5; do
-              if gh release download repo --pattern build-info.env --dir previous --clobber >/dev/null 2>&1; then
+              if gh release download repo --pattern '*info.env' --dir previous --clobber >/dev/null 2>&1; then
                 downloaded=true
                 break
               fi
@@ -202,13 +206,25 @@ jobs:
               if (( attempt < 5 )); then sleep $(( attempt * 10 )); fi
             done
             if [[ "$downloaded" != true ]]; then
-              echo "::error title=Cannot read previous build fingerprints::The repo release exists but build-info.env could not be downloaded. Refusing to silently rebuild every component."
+              echo "::error title=Cannot read previous build fingerprints::The repo release exists but its *-info.env assets could not be downloaded. Refusing to silently rebuild every component."
               exit 1
             fi
           fi
 
+          # Prefer the component's own -info.env, which is published as soon as
+          # that component builds, and fall back to the aggregate build-info.env
+          # for a release made before per-component publishing existed. The two
+          # keys differ because the three kernels all use KERNEL_FINGERPRINT in
+          # their own file but distinct names in the aggregate.
           previous_value() {
-            sed -n "s/^$1=//p" "$info" | head -n1
+            local file="previous/$1" own_key="$2" aggregate_key="$3" value=""
+            if [[ -f "$file" ]]; then
+              value="$(sed -n "s/^${own_key}=//p" "$file" | head -n1)"
+            fi
+            if [[ -z "$value" ]]; then
+              value="$(sed -n "s/^${aggregate_key}=//p" "$info" | head -n1)"
+            fi
+            printf '%s' "$value"
           }
 
           build_kernel_stable=false
@@ -224,18 +240,18 @@ jobs:
           build_protonge_latest_bc250=false
           build_proton_cachyos_native_bc250=false
 
-          [[ "$(previous_value KERNEL_STABLE_FINGERPRINT)" == "$KERNEL_STABLE_FINGERPRINT" ]] || build_kernel_stable=true
-          [[ "$(previous_value KERNEL_RC_FINGERPRINT)" == "$KERNEL_RC_FINGERPRINT" ]] || build_kernel_rc=true
-          [[ "$(previous_value KERNEL_BORE_FINGERPRINT)" == "$KERNEL_BORE_FINGERPRINT" ]] || build_kernel_bore=true
-          [[ "$(previous_value MESA_FINGERPRINT)" == "$MESA_FINGERPRINT" ]] || build_mesa=true
-          [[ "$(previous_value LIB32_MESA_FINGERPRINT)" == "$LIB32_MESA_FINGERPRINT" ]] || build_lib32_mesa=true
-          [[ "$(previous_value MESA_GIT_FINGERPRINT)" == "$MESA_GIT_FINGERPRINT" ]] || build_mesa_git=true
-          [[ "$(previous_value MESA_TESTING_FINGERPRINT)" == "$MESA_TESTING_FINGERPRINT" ]] || build_mesa_testing=true
-          [[ "$(previous_value LIB32_MESA_TESTING_FINGERPRINT)" == "$LIB32_MESA_TESTING_FINGERPRINT" ]] || build_lib32_mesa_testing=true
-          [[ "$(previous_value BC250_DUAL_AUDIO_FINGERPRINT)" == "$BC250_DUAL_AUDIO_FINGERPRINT" ]] || build_bc250_dual_audio=true
-          [[ "$(previous_value LINUX_CACHYOS_BC250_META_FINGERPRINT)" == "$LINUX_CACHYOS_BC250_META_FINGERPRINT" ]] || build_linux_cachyos_bc250_meta=true
-          [[ "$(previous_value PROTONGE_LATEST_BC250_FINGERPRINT)" == "$PROTONGE_LATEST_BC250_FINGERPRINT" ]] || build_protonge_latest_bc250=true
-          [[ "$(previous_value PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT)" == "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" ]] || build_proton_cachyos_native_bc250=true
+          [[ "$(previous_value kernel-stable-info.env KERNEL_FINGERPRINT KERNEL_STABLE_FINGERPRINT)" == "$KERNEL_STABLE_FINGERPRINT" ]] || build_kernel_stable=true
+          [[ "$(previous_value kernel-rc-info.env KERNEL_FINGERPRINT KERNEL_RC_FINGERPRINT)" == "$KERNEL_RC_FINGERPRINT" ]] || build_kernel_rc=true
+          [[ "$(previous_value kernel-bore-info.env KERNEL_FINGERPRINT KERNEL_BORE_FINGERPRINT)" == "$KERNEL_BORE_FINGERPRINT" ]] || build_kernel_bore=true
+          [[ "$(previous_value mesa-info.env MESA_FINGERPRINT MESA_FINGERPRINT)" == "$MESA_FINGERPRINT" ]] || build_mesa=true
+          [[ "$(previous_value lib32-mesa-info.env LIB32_MESA_FINGERPRINT LIB32_MESA_FINGERPRINT)" == "$LIB32_MESA_FINGERPRINT" ]] || build_lib32_mesa=true
+          [[ "$(previous_value mesa-git-info.env MESA_GIT_FINGERPRINT MESA_GIT_FINGERPRINT)" == "$MESA_GIT_FINGERPRINT" ]] || build_mesa_git=true
+          [[ "$(previous_value mesa-testing-info.env MESA_TESTING_FINGERPRINT MESA_TESTING_FINGERPRINT)" == "$MESA_TESTING_FINGERPRINT" ]] || build_mesa_testing=true
+          [[ "$(previous_value lib32-mesa-testing-info.env LIB32_MESA_TESTING_FINGERPRINT LIB32_MESA_TESTING_FINGERPRINT)" == "$LIB32_MESA_TESTING_FINGERPRINT" ]] || build_lib32_mesa_testing=true
+          [[ "$(previous_value bc250-dual-audio-info.env BC250_DUAL_AUDIO_FINGERPRINT BC250_DUAL_AUDIO_FINGERPRINT)" == "$BC250_DUAL_AUDIO_FINGERPRINT" ]] || build_bc250_dual_audio=true
+          [[ "$(previous_value linux-cachyos-bc250-meta-info.env LINUX_CACHYOS_BC250_META_FINGERPRINT LINUX_CACHYOS_BC250_META_FINGERPRINT)" == "$LINUX_CACHYOS_BC250_META_FINGERPRINT" ]] || build_linux_cachyos_bc250_meta=true
+          [[ "$(previous_value protonge-latest-bc250-info.env PROTONGE_LATEST_BC250_FINGERPRINT PROTONGE_LATEST_BC250_FINGERPRINT)" == "$PROTONGE_LATEST_BC250_FINGERPRINT" ]] || build_protonge_latest_bc250=true
+          [[ "$(previous_value proton-cachyos-native-bc250-info.env PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT)" == "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" ]] || build_proton_cachyos_native_bc250=true
 
           if [[ '${{ github.event_name }}' == workflow_dispatch && '${{ inputs.force }}' == true ]]; then
             build_kernel_stable=true
@@ -327,6 +343,15 @@ jobs:
             echo "No previous fixed release exists; starting a new repository."
           fi
 
+          # Baseline for the incremental publisher: exactly what the release
+          # holds at this moment. Recorded before the cleanup below so that the
+          # assets removed there are removed from the release too, which the old
+          # delete-and-recreate publish used to handle implicitly.
+          while IFS= read -r -d '' file; do
+            printf '%s  %s\n' "$(sha256sum < "$file" | awk '{print $1}')" "$(basename -- "$file")"
+          done < <(find out/repo -maxdepth 1 -type f -print0 | sort -z) > out/.published-state
+          printf 'Recorded %d already-published assets.\n' "$(wc -l < out/.published-state)"
+
           # Remove auxiliary assets from the old single-kernel architecture.
           # Package files themselves are left alone; the stable builder removes
           # the old linux-cachyos-bc250 pkgbase via .PKGINFO before replacing it.
@@ -373,10 +398,28 @@ jobs:
           BUILD_PROTONGE_LATEST_BC250: ${{ steps.build.outputs.protonge_latest_bc250 }}
           BUILD_PROTON_CACHYOS_NATIVE_BC250: ${{ steps.build.outputs.proton_cachyos_native_bc250 }}
           PROTONGE_TAG: ${{ steps.protonge.outputs.tag }}
+          # This step publishes each component as it builds, so it needs the
+          # token. It stays on the runner: the token is never handed to the
+          # build container, which runs upstream PKGBUILD code.
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm \
+
+          # One long-lived container, driven per component, so the runner can
+          # publish each one the moment it builds. A run that is cancelled or
+          # dies partway then keeps everything that already finished, instead of
+          # throwing away hours of kernel and Proton builds.
+          container=bc250-build-${{ github.run_id }}
+          # Self-hosted runner: a container left behind by a cancelled run would
+          # hold the workspace mount and the ccache volume open, so clear any
+          # from earlier runs as well as this one, and catch the signals a
+          # cancellation actually sends rather than only a clean exit.
+          docker ps -aq --filter 'name=^bc250-build-' | xargs -r docker rm -f >/dev/null 2>&1 || true
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT INT TERM
+
+          docker run -d --name "$container" \
             --security-opt label=disable \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -v bc250-ccache:/ccache \
@@ -416,8 +459,56 @@ jobs:
             -e PROTONGE_TAG \
             -e GITHUB_REPOSITORY='${{ github.repository }}' \
             -e GITHUB_SHA='${{ github.sha }}' \
-            archlinux:base-devel \
-            bash /workspace/scripts/ci-build.sh
+            archlinux:base-devel sleep infinity
+
+          docker exec "$container" bash /workspace/scripts/ci-build.sh setup
+
+          # Cheap components first, so a run that is cut short has published as
+          # much as possible. linux-cachyos-bc250-meta is deliberately last:
+          # every one of its dependencies is a package from this repository, and
+          # it refuses to build until they are all present.
+          components=(
+            "bc250-dual-audio:$BUILD_BC250_DUAL_AUDIO"
+            "kernel-stable:$BUILD_KERNEL_STABLE"
+            "kernel-rc:$BUILD_KERNEL_RC"
+            "kernel-bore:$BUILD_KERNEL_BORE"
+            "mesa:$BUILD_MESA"
+            "lib32-mesa:$BUILD_LIB32_MESA"
+            "mesa-git:$BUILD_MESA_GIT"
+            "mesa-testing:$BUILD_MESA_TESTING"
+            "lib32-mesa-testing:$BUILD_LIB32_MESA_TESTING"
+            "protonge-latest-bc250:$BUILD_PROTONGE_LATEST_BC250"
+            "proton-cachyos-native-bc250:$BUILD_PROTON_CACHYOS_NATIVE_BC250"
+            "linux-cachyos-bc250-meta:$BUILD_LINUX_CACHYOS_BC250_META"
+          )
+
+          failed=""
+          for entry in "${components[@]}"; do
+            name="${entry%%:*}"
+            wanted="${entry##*:}"
+            [[ "$wanted" == true ]] || continue
+
+            echo "::group::build $name"
+            if docker exec "$container" bash /workspace/scripts/ci-build.sh component "$name"; then
+              echo "==> component $name: built"
+              echo "::endgroup::"
+              # Publish immediately. Fail-soft: the final publish is still
+              # authoritative, so a hiccup here only costs the early upload.
+              sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE/out" || true
+              ./scripts/publish-repo-delta.sh "$name" || true
+            else
+              echo "::endgroup::"
+              echo "::error title=Component build failed::$name failed to build. Its previously published packages are kept and it will be retried on the next run."
+              failed="${failed}${failed:+ }${name}"
+            fi
+          done
+
+          docker exec "$container" bash /workspace/scripts/ci-build.sh finalize || true
+
+          if [[ -n "$failed" ]]; then
+            echo "==> failed components (previous packages retained): $failed"
+            exit 1
+          fi
 
       - name: Restore workspace ownership
         # Always runs, even if the build above failed, so a container-root-owned
@@ -500,16 +591,22 @@ jobs:
             exit 1
           }
 
-          printf 'Publishing %d release assets.\n' "${#assets[@]}"
-
           if gh release view repo >/dev/null 2>&1; then
-            gh release delete repo --yes --cleanup-tag
-            sleep 2
+            # The release already exists and the build step has been updating it
+            # after every component. Push whatever is still outstanding -- the
+            # aggregate files finalize-repository.sh just wrote, and anything an
+            # incremental publish could not complete -- rather than deleting and
+            # recreating the release, which would re-upload several gigabytes and
+            # leave the repository missing while it happened.
+            gh release edit repo --title "$title" --notes-file "$out/RELEASE_NOTES.md"
+            ./scripts/publish-repo-delta.sh final
+            printf 'Release updated in place (%d assets staged).\n' "${#assets[@]}"
+          else
+            printf 'Creating the release with %d assets.\n' "${#assets[@]}"
+            gh release create repo \
+              --target '${{ github.sha }}' \
+              --title "$title" \
+              --notes-file "$out/RELEASE_NOTES.md" \
+              --latest=false \
+              "${assets[@]}"
           fi
-
-          gh release create repo \
-            --target '${{ github.sha }}' \
-            --title "$title" \
-            --notes-file "$out/RELEASE_NOTES.md" \
-            --latest=false \
-            "${assets[@]}"

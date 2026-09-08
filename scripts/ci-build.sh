@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Invoked several times against one long-lived container, so that the runner can
+# publish each component as soon as it builds:
+#
+#   ci-build.sh setup                 root-side container preparation, once
+#   ci-build.sh component <name>      build exactly one component
+#   ci-build.sh finalize              validate and write the aggregate files
+#
+# Splitting it this way is what lets a cancelled or crashed run keep the
+# components that already finished: the runner uploads after each `component`
+# call rather than only after everything has built.
+MODE="${1:?mode is required: setup, component or finalize}"
+COMPONENT="${2:-}"
+case "$MODE" in
+    setup|finalize) ;;
+    component) : "${COMPONENT:?component name is required}" ;;
+    *) printf 'ERROR: unknown mode: %s\n' "$MODE" >&2; exit 1 ;;
+esac
+
 : "${BC250_PKGREL:?BC250_PKGREL is required}"
 : "${CACHYOS_MESA_COMMIT:?CACHYOS_MESA_COMMIT is required}"
 : "${MESA_GIT_COMMIT:?MESA_GIT_COMMIT is required}"
@@ -46,6 +64,8 @@ done
 if [[ "$BUILD_KERNEL_STABLE" == true || "$BUILD_KERNEL_RC" == true || "$BUILD_KERNEL_BORE" == true ]]; then
     : "${NCT6687D_COMMIT:?NCT6687D_COMMIT is required when a kernel is built}"
 fi
+
+if [[ "$MODE" == setup ]]; then
 
 # Stable lib32-mesa and mesa-git's lib32-mesa-git output need Arch multilib.
 if ! grep -Eq '^[[:space:]]*\[multilib\][[:space:]]*$' /etc/pacman.conf; then
@@ -145,6 +165,24 @@ fi
     exit 1
 }
 
+# Self-hosted runners keep the workspace between runs, so clear any marker left
+# by a previous run before it can be mistaken for this one.
+rm -f /workspace/out/.publish-ready
+printf '==> build container prepared\n'
+exit 0
+fi
+
+# --- component and finalize modes -------------------------------------------
+#
+# These run against the container `setup` already prepared, so they recompute
+# the few paths they need rather than redoing any of that work.
+: "${CCACHE_DIR:=/ccache}"
+: "${CCACHE_MAXSIZE:=30G}"
+: "${CCACHE_COMPILERCHECK:=content}"
+CCACHE_WRAPPER_DIR=/usr/lib/ccache/bin
+BINDGEN_PIN_DIR=/opt/bindgen-pin
+[[ -x "$BINDGEN_PIN_DIR/usr/bin/bindgen" ]] || BINDGEN_PIN_DIR=""
+
 # Do not pass CI or GITHUB_RUN_ID to makepkg. CachyOS otherwise intentionally
 # selects its reduced CI kernel configuration.
 runuser -u builder -- env \
@@ -190,11 +228,10 @@ runuser -u builder -- env \
     MESA_GIT_COMMIT="$MESA_GIT_COMMIT" \
     GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-unknown/unknown}" \
     GITHUB_SHA="${GITHUB_SHA:-unknown}" \
+    MODE="$MODE" \
+    COMPONENT="$COMPONENT" \
     bash -c '
         set -Eeuo pipefail
-        # Self-hosted runners keep the workspace between runs, so clear any
-        # marker left by a previous run before it can be mistaken for this one.
-        rm -f /workspace/out/.publish-ready
         ccache -M "$CCACHE_MAXSIZE" >/dev/null
         echo "==> ccache: persistent cache at $CCACHE_DIR (max $CCACHE_MAXSIZE)"
         echo "==> ccache compiler wrapper: $(command -v gcc)"
@@ -205,44 +242,33 @@ runuser -u builder -- env \
         }
         trap _ccache_stats EXIT
 
-        # Components are built independently. A failing component must not stop
-        # the others from being published: out/repo is seeded with the previous
-        # release, so a component that fails simply keeps the packages and the
-        # -info.env it already had, and finalize-repository.sh reads its
-        # fingerprint back from that file so the next run retries it. Without
-        # this, one broken component (historically mesa-git, which tracks live
-        # upstream and a rolling Rust toolchain) blocked publication of every
-        # component built after it.
-        failed_components=""
-        run_component() {
-            local name=$1
-            shift
-            if "$@"; then
-                printf "==> component %s: built\n" "$name"
-            else
-                printf "::error title=Component build failed::%s failed to build. Its previously published packages are kept and it will be retried on the next run.\n" "$name"
-                failed_components="${failed_components}${failed_components:+ }${name}"
-            fi
-        }
+        # One component per invocation. The runner publishes after each one
+        # returns, which is what makes a cancelled or crashed run keep whatever
+        # already finished. Reporting a failure belongs to the runner too: it
+        # simply moves on to the next component, exactly as the previous
+        # single-invocation loop did.
+        if [[ "$MODE" == component ]]; then
+            case "$COMPONENT" in
+                kernel-stable) env CACHYOS_SOURCE_VARIANT=linux-cachyos /workspace/scripts/build-package.sh ;;
+                kernel-rc)     env CACHYOS_SOURCE_VARIANT=linux-cachyos-rc /workspace/scripts/build-package.sh ;;
+                kernel-bore)   env CACHYOS_SOURCE_VARIANT=linux-cachyos-bore /workspace/scripts/build-package.sh ;;
+                mesa)                        /workspace/scripts/build-mesa-package.sh ;;
+                lib32-mesa)                  /workspace/scripts/build-lib32-mesa-package.sh ;;
+                mesa-git)                    /workspace/scripts/build-mesa-git-package.sh ;;
+                mesa-testing)                /workspace/scripts/build-mesa-testing-package.sh ;;
+                lib32-mesa-testing)          /workspace/scripts/build-lib32-mesa-testing-package.sh ;;
+                bc250-dual-audio)            /workspace/scripts/build-bc250-dual-audio-package.sh ;;
+                linux-cachyos-bc250-meta)    /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh ;;
+                protonge-latest-bc250)       /workspace/scripts/build-protonge-latest-bc250-package.sh ;;
+                proton-cachyos-native-bc250) /workspace/scripts/build-proton-cachyos-native-bc250-package.sh ;;
+                *) printf "ERROR: unknown component: %s\\n" "$COMPONENT" >&2; exit 1 ;;
+            esac
 
-        if [[ "$BUILD_KERNEL_STABLE" == true ]]; then
-            run_component kernel-stable env CACHYOS_SOURCE_VARIANT=linux-cachyos /workspace/scripts/build-package.sh
+            # Leave the database describing what is staged right now, so the
+            # runner can upload this component and a database that matches it.
+            /workspace/scripts/update-repo-db.sh
+            exit 0
         fi
-        if [[ "$BUILD_KERNEL_RC" == true ]]; then
-            run_component kernel-rc env CACHYOS_SOURCE_VARIANT=linux-cachyos-rc /workspace/scripts/build-package.sh
-        fi
-        if [[ "$BUILD_KERNEL_BORE" == true ]]; then
-            run_component kernel-bore env CACHYOS_SOURCE_VARIANT=linux-cachyos-bore /workspace/scripts/build-package.sh
-        fi
-        if [[ "$BUILD_MESA" == true ]]; then run_component mesa /workspace/scripts/build-mesa-package.sh; fi
-        if [[ "$BUILD_LIB32_MESA" == true ]]; then run_component lib32-mesa /workspace/scripts/build-lib32-mesa-package.sh; fi
-        if [[ "$BUILD_MESA_GIT" == true ]]; then run_component mesa-git /workspace/scripts/build-mesa-git-package.sh; fi
-        if [[ "$BUILD_MESA_TESTING" == true ]]; then run_component mesa-testing /workspace/scripts/build-mesa-testing-package.sh; fi
-        if [[ "$BUILD_LIB32_MESA_TESTING" == true ]]; then run_component lib32-mesa-testing /workspace/scripts/build-lib32-mesa-testing-package.sh; fi
-        if [[ "$BUILD_BC250_DUAL_AUDIO" == true ]]; then run_component bc250-dual-audio /workspace/scripts/build-bc250-dual-audio-package.sh; fi
-        if [[ "$BUILD_LINUX_CACHYOS_BC250_META" == true ]]; then run_component linux-cachyos-bc250-meta /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh; fi
-        if [[ "$BUILD_PROTONGE_LATEST_BC250" == true ]]; then run_component protonge-latest-bc250 /workspace/scripts/build-protonge-latest-bc250-package.sh; fi
-        if [[ "$BUILD_PROTON_CACHYOS_NATIVE_BC250" == true ]]; then run_component proton-cachyos-native-bc250 /workspace/scripts/build-proton-cachyos-native-bc250-package.sh; fi
 
         # Self-expiring trigger for the rust-bindgen shadow staged above.
         # If a Mesa component built, pacman has installed the current
@@ -272,13 +298,7 @@ runuser -u builder -- env \
         # finalize-repository.sh completed, so out/repo is a complete, valid
         # repository: everything that built this run, plus the previously
         # published packages for everything that did not. It is safe to publish
-        # even though some components failed. The workflow gates its publish
-        # steps on this marker, because the build step itself still exits
-        # non-zero and would otherwise skip them.
+        # even though some components failed. The workflow gates its final
+        # publish on this marker.
         mkdir -p /workspace/out && : > /workspace/out/.publish-ready
-
-        if [[ -n "$failed_components" ]]; then
-            printf "==> failed components (previous packages retained): %s\n" "$failed_components"
-            exit 1
-        fi
     '
