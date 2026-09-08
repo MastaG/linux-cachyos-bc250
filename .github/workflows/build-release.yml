@@ -225,6 +225,7 @@ jobs:
                 cp out/repo/build-info.env "$info"
                 cp out/repo/*-info.env previous/ 2>/dev/null || true
                 have_previous=true
+                restored=true
                 echo "restored=true" >> "$GITHUB_OUTPUT"
                 echo "Restored $(find out/repo -maxdepth 1 -type f | wc -l) assets; only changed components will rebuild."
               else
@@ -301,7 +302,15 @@ jobs:
             build_proton_cachyos_native_bc250=true
           fi
 
+          # Restoring means the release did not match our known-good state --
+          # it was missing, or empty after a failed publish. The assets have to
+          # be pushed back even when no component needs rebuilding, and every
+          # step that publishes is gated on `any`, so this has to force it.
           any=false
+          if [[ "${restored:-false}" == true ]]; then
+            any=true
+            echo "Release needs republishing from the restored artifact."
+          fi
           if [[ "$build_kernel_stable" == true || "$build_kernel_rc" == true || \
                 "$build_kernel_bore" == true || "$build_mesa" == true || \
                 "$build_lib32_mesa" == true || "$build_mesa_git" == true || \
@@ -348,39 +357,44 @@ jobs:
           set -euo pipefail
 
           # The decision step may already have restored out/repo from a workflow
-          # artifact because the release was missing. Do not discard that.
+          # artifact, because the release was missing or carried nothing usable.
+          # That copy is complete, so there is nothing left to seed.
           if [[ '${{ steps.build.outputs.restored }}' == true ]]; then
             echo "Keeping the $(find out/repo -maxdepth 1 -type f | wc -l) assets restored from the workflow artifact."
           else
             rm -rf out/repo
             mkdir -p out/repo
-          fi
 
-          # As above: an unreachable API must not look like "no release yet".
-          # The publish step deletes and recreates the release from out/repo, so
-          # seeding from nothing would drop every package not rebuilt this run.
-          if ! state="$(./scripts/gh-release-state.sh repo)"; then
-            echo "::error title=Cannot reach GitHub releases::Refusing to seed from nothing, which would drop existing packages from the published repository."
-            exit 1
-          fi
-
-          if [[ "$state" == found ]]; then
-            downloaded=false
-            for attempt in 1 2 3 4 5; do
-              if gh release download repo --dir out/repo --clobber; then
-                downloaded=true
-                break
-              fi
-              echo "WARN: release download failed (attempt $attempt/5)"
-              if (( attempt < 5 )); then sleep $(( attempt * 10 )); fi
-            done
-            if [[ "$downloaded" != true ]]; then
-              echo "::error title=Cannot preserve existing packages::The previous fixed repo release exists, but it could not be downloaded."
+            # An unreachable API must not look like "no release yet": seeding
+            # from nothing would drop every package not rebuilt this run.
+            if ! state="$(./scripts/gh-release-state.sh repo)"; then
+              echo "::error title=Cannot reach GitHub releases::Refusing to seed from nothing, which would drop existing packages from the published repository."
               exit 1
             fi
-            echo "Seeded out/repo from the previous fixed release."
-          else
-            echo "No release to seed from; using whatever the decision step restored."
+
+            if [[ "$state" == found ]]; then
+              downloaded=false
+              for attempt in 1 2 3 4 5; do
+                if gh release download repo --dir out/repo --clobber; then
+                  downloaded=true
+                  break
+                fi
+                echo "WARN: release download failed (attempt $attempt/5)"
+                if (( attempt < 5 )); then sleep $(( attempt * 10 )); fi
+              done
+              if [[ "$downloaded" != true ]]; then
+                # An empty release downloads nothing and fails here. The
+                # decision step already proved there was no usable previous
+                # state -- it would have restored otherwise -- so this is a
+                # repository being rebuilt from scratch, not lost packages.
+                echo "::warning title=Nothing to seed::The repo release exists but has no assets to download; starting from an empty repository."
+                rm -rf out/repo && mkdir -p out/repo
+              else
+                echo "Seeded out/repo from the previous fixed release."
+              fi
+            else
+              echo "No release to seed from; starting a new repository."
+            fi
           fi
 
           # Baseline for the incremental publisher: exactly what the release
