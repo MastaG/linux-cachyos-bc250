@@ -74,35 +74,36 @@ fi
 printf '==> [%s] publishing %d changed, %d database, %d removed\n' \
     "$LABEL" "${#uploads[@]}" "${#db_uploads[@]}" "${#deletions[@]}"
 
-# The release has to exist before anything can be uploaded into it. Create it
-# empty rather than waiting for the final publish, because waiting is what makes
-# a run all-or-nothing again: with no release to upload into, nothing is
-# published until every component has finished, and one late failure throws away
-# hours of kernel builds. That is not hypothetical -- it is what happened
-# repeatedly while recovering from the release being deleted.
-#
-# The title and notes here are provisional. finalize-repository.sh writes the
-# real ones and the final publish applies them with `gh release edit`.
-if ! gh release view repo >/dev/null 2>&1; then
-    printf '==> [%s] no repo release exists; creating one to publish into\n' "$LABEL"
-    if ! gh release create repo \
-            ${GITHUB_SHA:+--target "$GITHUB_SHA"} \
-            --title "BC-250 CachyOS repository (build in progress)" \
-            --notes "This release is being rebuilt. Package listings appear as components finish." \
-            --latest=false >/dev/null 2>&1; then
-        printf '::warning title=No release to update::[%s] could not create the repo release; leaving it to the final publish.\n' "$LABEL"
-        exit 0
+# Confirm the release is there before uploading into it, with retries and the
+# real error kept -- a single transient read used to be enough to skip the whole
+# upload, because this both hid the error and then tried to *create* the release
+# as a fallback. Actions cannot create releases on this repository (see
+# scripts/../.github/workflows: HTTP 403 with Contents: write), so that fallback
+# could never succeed and only turned a blip into a silent no-op.
+release_present=false
+for attempt in 1 2 3; do
+    if view_err="$(gh release view repo 2>&1 >/dev/null)"; then
+        release_present=true
+        break
     fi
+    printf 'WARN: [%s] could not read the repo release (attempt %d/3): %s\n' \
+        "$LABEL" "$attempt" "${view_err%%$'\n'*}" >&2
+    (( attempt < 3 )) && sleep $(( attempt * 5 ))
+done
+if [[ "$release_present" != true ]]; then
+    printf '::warning title=Release unreachable::[%s] the repo release could not be read, so nothing was uploaded. The final publish reports what to do if it is genuinely missing.\n' "$LABEL"
+    exit 0
 fi
 
 upload() {
-    local name attempt
+    local name attempt err
     for name in "$@"; do
         for attempt in 1 2 3; do
-            if gh release upload repo "$OUT_DIR/$name" --clobber >/dev/null 2>&1; then
+            if err="$(gh release upload repo "$OUT_DIR/$name" --clobber 2>&1 >/dev/null)"; then
                 continue 2
             fi
-            printf 'WARN: [%s] upload of %s failed (attempt %d/3)\n' "$LABEL" "$name" "$attempt" >&2
+            printf 'WARN: [%s] upload of %s failed (attempt %d/3): %s\n' \
+                "$LABEL" "$name" "$attempt" "${err%%$'\n'*}" >&2
             (( attempt < 3 )) && sleep $(( attempt * 5 ))
         done
         printf '::warning title=Incremental publish incomplete::[%s] could not upload %s; the final publish will retry.\n' \
