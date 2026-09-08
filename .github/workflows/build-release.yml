@@ -385,8 +385,10 @@ jobs:
           # delete-and-recreate publish used to handle implicitly.
           while IFS= read -r -d '' file; do
             printf '%s  %s\n' "$(sha256sum < "$file" | awk '{print $1}')" "$(basename -- "$file")"
-          done < <(find out/repo -maxdepth 1 -type f -print0 | sort -z) > out/.published-state
-          printf 'Recorded %d already-published assets.\n' "$(wc -l < out/.published-state)"
+          done < <(find out/repo -maxdepth 1 -type f -print0 | sort -z) \
+            > "${RUNNER_TEMP:-out}/bc250-published-state"
+          printf 'Recorded %d already-published assets.\n' \
+            "$(wc -l < "${RUNNER_TEMP:-out}/bc250-published-state")"
 
           # Remove auxiliary assets from the old single-kernel architecture.
           # Package files themselves are left alone; the stable builder removes
@@ -530,7 +532,13 @@ jobs:
               echo "::endgroup::"
               # Publish immediately. Fail-soft: the final publish is still
               # authoritative, so a hiccup here only costs the early upload.
-              sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE/out" || true
+              #
+              # Do NOT chown the workspace here. ci-build.sh setup gives it to
+              # the container build user, and taking it back mid-loop leaves
+              # every later component unable to replace its own packages --
+              # which is exactly how run 34263985704 failed three components.
+              # Publishing only needs to read out/repo, and makepkg output is
+              # world-readable.
               ./scripts/publish-repo-delta.sh "$name" || true
             else
               echo "::endgroup::"

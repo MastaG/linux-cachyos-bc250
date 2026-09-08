@@ -26,7 +26,11 @@ set -Eeuo pipefail
 # on and the final publish fixes everything up.
 
 OUT_DIR="${OUT_DIR:-out/repo}"
-STATE="${PUBLISH_STATE:-out/.published-state}"
+# Deliberately not inside the workspace: ci-build.sh setup does
+# `chown -R builder:builder /workspace` so the container can build there, which
+# leaves the runner unable to write to it. Reading out/repo still works, since
+# makepkg produces world-readable files.
+STATE="${PUBLISH_STATE:-${RUNNER_TEMP:-out}/bc250-published-state}"
 LABEL="${1:-delta}"
 
 : "${GH_TOKEN:?GH_TOKEN is required to publish}"

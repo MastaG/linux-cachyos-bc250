@@ -1,4 +1,4 @@
-eb86b2cb8d45f8456810d8f1b09f62ce596f51ca4feb7dea009a26ae0659aace  ./.github/workflows/build-release.yml
+3d1ac2f76486b71ba77c055ab445bfaa8e8b09a0f31a29fe6d25c9f96e30dd9a  ./.github/workflows/build-release.yml
 bb28f8adfdf313f530d184774d7978d1bd97a7b7ae55de5374162b3fb2c257c1  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
 03670803df09ef8fecee27847ab216661e2f620ef9b376d0241f6146300c2656  ./packages/bc250-dual-audio/bc250-dual-audio.install
@@ -85,7 +85,7 @@ f98ab5525bc89e6514bf3bc3b054361d5b532261c1c3331da7ce60c80c63d9a8  ./scripts/prep
 925339b7e96de38f2a507d1a796f71fa009f637e0d9e7ad28969c88e7123c003  ./scripts/prepare-mesa-testing-pkgbuild.sh
 41cbd2dc27b21a2e961ad7a79ce4a089acc6616e78a0b3b3358442a901d2e760  ./scripts/prepare-pkgbuild.sh
 550f7d4aa018c95bdedf1163b65ad4b926882058b31c6d755cca3fc0dd3d3477  ./scripts/prepare-proton-cachyos-native-pkgbuild.sh
-bd755fe4dc71db061782c0b41c0b08ad9b5745173f8e708d3d18d51579169ef8  ./scripts/publish-repo-delta.sh
+873ca441d237105fe949af9897327a0e71e54ddba7928b773ff4184f41a71e53  ./scripts/publish-repo-delta.sh
 cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo-package-helpers.sh
 eeb453358d62271e629355af4bff424160d2af4b0d41e413f347466144805e4c  ./scripts/resolve-cachyos-mesa.sh
 d54dc6ec221b5e8b4f594a891b8bb77b61e101837e3277918f50aad558b71ba7  ./scripts/resolve-mesa-git.sh
