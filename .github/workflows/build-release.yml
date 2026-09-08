@@ -436,6 +436,9 @@ jobs:
           BUILD_PROTONGE_LATEST_BC250: ${{ steps.build.outputs.protonge_latest_bc250 }}
           BUILD_PROTON_CACHYOS_NATIVE_BC250: ${{ steps.build.outputs.proton_cachyos_native_bc250 }}
           PROTONGE_TAG: ${{ steps.protonge.outputs.tag }}
+          # Empty unless the repository variable pins it, in which case
+          # ci-build.sh sizes the cache from the runner's own free space.
+          CCACHE_MAXSIZE: ${{ vars.CCACHE_MAXSIZE }}
           # This step publishes each component as it builds, so it needs the
           # token. It stays on the runner: the token is never handed to the
           # build container, which runs upstream PKGBUILD code.
@@ -463,7 +466,7 @@ jobs:
             -v bc250-ccache:/ccache \
             -w /workspace \
             -e CCACHE_DIR=/ccache \
-            -e CCACHE_MAXSIZE=30G \
+            -e CCACHE_MAXSIZE \
             -e CCACHE_COMPILERCHECK=content \
             -e BUILD_KERNEL_STABLE \
             -e BUILD_KERNEL_RC \

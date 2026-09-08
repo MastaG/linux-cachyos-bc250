@@ -1,4 +1,4 @@
-3d1ac2f76486b71ba77c055ab445bfaa8e8b09a0f31a29fe6d25c9f96e30dd9a  ./.github/workflows/build-release.yml
+f8e1b5faba3821ba30da27ae0b1cf8a83e487e4760cef1b34a38a653b7ed6fe4  ./.github/workflows/build-release.yml
 bb28f8adfdf313f530d184774d7978d1bd97a7b7ae55de5374162b3fb2c257c1  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
 03670803df09ef8fecee27847ab216661e2f620ef9b376d0241f6146300c2656  ./packages/bc250-dual-audio/bc250-dual-audio.install
@@ -72,7 +72,7 @@ d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/buil
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 8687b3733fb34f1307288a7f915ec15aa79bd302aa8c7c7173900a3b52d5809a  ./scripts/build-proton-cachyos-native-bc250-package.sh
 dc99e7f0bf6c96af8ec221d6df603ad779aee37a89294747ff401a7d44eac6f5  ./scripts/build-protonge-latest-bc250-package.sh
-701fab877c3f7dfcad561632988e1878de2e12cb16d7b8b7a493f364d9ec245b  ./scripts/ci-build.sh
+06e82896d0f2e0463d8340fccfd20bb0d5d332519740cea6ac66df421b671574  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
 f0035472d6c6e776afe5fd8ee86d8219c0f07452fe90596d4cc0538d11aff591  ./scripts/finalize-repository.sh
 18952c41e9072a51fcc8d66b28786868f03b1aedb9cc1a3d44bd4de200e9d95b  ./scripts/fsr4-payload-sources.sh

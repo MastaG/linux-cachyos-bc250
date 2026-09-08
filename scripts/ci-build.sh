@@ -149,11 +149,42 @@ fi
 # makepkg's native integration; prepending the wrapper directory makes the
 # compiler routing explicit for Meson and nested build systems as well.
 : "${CCACHE_DIR:=/ccache}"
-: "${CCACHE_MAXSIZE:=30G}"
 : "${CCACHE_COMPILERCHECK:=content}"
 CCACHE_WRAPPER_DIR=/usr/lib/ccache/bin
 mkdir -p -- "$CCACHE_DIR"
 chown builder:builder "$CCACHE_DIR"
+
+# Size the cache to the machine rather than pinning a number.
+#
+# The runners do not have the same disk, and the cache volume is per-machine, so
+# one hardcoded value is either too small on the big runner or too large on the
+# small one. It was 30G, and that was far too small for what shares it: three
+# kernels, five Mesa variants and a full Wine/Proton build. Measured on run
+# 34263985704 the cache sat at 30.0/30.0 GB with a **0.95% hit rate** -- 25639
+# misses out of 25886 cacheable calls -- because every component evicted the
+# previous one before it could ever be reused. Every build was effectively cold.
+#
+# Take a share of what the volume can actually hold (its free space plus what
+# the cache already occupies, since that is reclaimable), clamped so a huge disk
+# does not hand ccache everything and a small one still gets a usable cache.
+# CCACHE_MAXSIZE in the environment overrides this entirely.
+if [[ -z "${CCACHE_MAXSIZE:-}" ]]; then
+    mkdir -p -- "$CCACHE_DIR"
+    _free_gb=$(( $(df -B1G --output=avail "$CCACHE_DIR" | tail -1) ))
+    _used_gb=$(( $(du -sBG "$CCACHE_DIR" 2>/dev/null | awk '{print $1+0}') ))
+    _usable=$(( _free_gb + _used_gb ))
+    CCACHE_MAXSIZE=$(( _usable * 60 / 100 ))
+    (( CCACHE_MAXSIZE < 20 )) && CCACHE_MAXSIZE=20
+    (( CCACHE_MAXSIZE > 150 )) && CCACHE_MAXSIZE=150
+    CCACHE_MAXSIZE="${CCACHE_MAXSIZE}G"
+    printf '==> ccache sized to %s (%dG usable on %s: %dG free + %dG already cached)\n' \
+        "$CCACHE_MAXSIZE" "$_usable" "$CCACHE_DIR" "$_free_gb" "$_used_gb"
+fi
+export CCACHE_MAXSIZE
+
+# ccache records max_size in its own config, so setting it once here is enough
+# for every component invocation that follows.
+runuser -u builder -- ccache -M "$CCACHE_MAXSIZE" >/dev/null
 sed -i 's/!ccache/ccache/g' /etc/makepkg.conf
 if ! grep -Eq '^[[:space:]]*BUILDENV=.*[([:space:]]ccache([[:space:]]|\))' /etc/makepkg.conf; then
     printf 'ERROR: failed to enable ccache in /etc/makepkg.conf BUILDENV\n' >&2
@@ -177,8 +208,8 @@ fi
 # These run against the container `setup` already prepared, so they recompute
 # the few paths they need rather than redoing any of that work.
 : "${CCACHE_DIR:=/ccache}"
-: "${CCACHE_MAXSIZE:=30G}"
 : "${CCACHE_COMPILERCHECK:=content}"
+
 CCACHE_WRAPPER_DIR=/usr/lib/ccache/bin
 BINDGEN_PIN_DIR=/opt/bindgen-pin
 [[ -x "$BINDGEN_PIN_DIR/usr/bin/bindgen" ]] || BINDGEN_PIN_DIR=""
@@ -189,7 +220,6 @@ runuser -u builder -- env \
     HOME=/home/builder \
     PATH="${BINDGEN_PIN_DIR:+$BINDGEN_PIN_DIR/usr/bin:}$CCACHE_WRAPPER_DIR:$PATH" \
     CCACHE_DIR="$CCACHE_DIR" \
-    CCACHE_MAXSIZE="$CCACHE_MAXSIZE" \
     CCACHE_COMPILERCHECK="$CCACHE_COMPILERCHECK" \
     BUILD_KERNEL_STABLE="$BUILD_KERNEL_STABLE" \
     BUILD_KERNEL_RC="$BUILD_KERNEL_RC" \
@@ -232,8 +262,7 @@ runuser -u builder -- env \
     COMPONENT="$COMPONENT" \
     bash -c '
         set -Eeuo pipefail
-        ccache -M "$CCACHE_MAXSIZE" >/dev/null
-        echo "==> ccache: persistent cache at $CCACHE_DIR (max $CCACHE_MAXSIZE)"
+        echo "==> ccache: persistent cache at $CCACHE_DIR (max $(ccache --get-config max_size 2>/dev/null || echo unknown))"
         echo "==> ccache compiler wrapper: $(command -v gcc)"
         ccache -z >/dev/null
         _ccache_stats() {
