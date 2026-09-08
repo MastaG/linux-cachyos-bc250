@@ -1,0 +1,204 @@
+# Maintainer: MastaG
+#
+# Template. scripts/build-protonge-latest-bc250-package.sh resolves the GE-Proton
+# release and the OptiScaler build, then substitutes the @...@ placeholders.
+# Do not run makepkg on this file directly.
+#
+# GE-Proton, repackaged as a system-wide Steam compatibility tool with the FSR4
+# payload the BC-250 needs pinned into it. Nothing is compiled: upstream ships
+# prebuilt Windows PE and Linux ELF binaries, and this only rearranges them.
+
+pkgname=protonge-latest-bc250
+_getag=@PROTONGE_TAG@
+_gedir="${_getag}-x86_64"
+_optiscaler_version=@OPTISCALER_VERSION@
+_provider_version=4.1.1
+pkgver=@PROTONGE_VERSION@
+pkgrel=@PKGREL@
+pkgdesc="GE-Proton ${_getag} for the AMD BC-250, with a pinned FSR4 provider, OptiScaler and preset"
+arch=('x86_64')
+url="https://github.com/GloriousEggroll/proton-ge-custom"
+license=('custom')
+
+# python3 runs both the wrapper and Proton itself. Everything else GE needs is
+# inside its own files/ tree, which is the point of the runtime it ships.
+depends=('python')
+
+# Steam is what runs this, but it is not required to install it: the tool is
+# just files under /usr/share/steam, and a user may install it before Steam.
+optdepends=('steam: the client that runs this compatibility tool')
+
+# Deliberately no provides=, conflicts= or replaces=. This must sit alongside
+# the distro's own Proton packages, not displace them -- every path below is
+# derived from $pkgname, so several of these can be installed at once and Steam
+# lists each separately.
+
+# !strip is the important one. These are upstream's released binaries: stripping
+# them would alter files whose SHA256 the pinned manifest and GE's own release
+# checksums describe, for no benefit, and PE objects are not ours to rewrite.
+options=('!strip' '!debug' '!lto' '!staticlibs' 'emptydirs')
+
+source=(
+    "@PROTONGE_ASSET@::@PROTONGE_URL@"
+    "@OPTISCALER_ASSET@::@OPTISCALER_URL@"
+    "OptiPatcher_v0.41.asi::@PAYLOAD_BASE@/OptiPatcher_v0.41.asi"
+    "amdxcffx64_v4.1.1.xz::@PAYLOAD_BASE@/amdxcffx64_v4.1.1.xz"
+    # Pinned by commit, so these URLs are immutable and need no mirror.
+    "amd_fidelityfx_upscaler_dx12.dll::https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/f4c1da8e92f3fe563b5c28c44e6267ce6b6b8eb2/Kits/FidelityFX/signedbin/amd_fidelityfx_upscaler_dx12.dll"
+    "nvngx_dlss.dll::https://raw.githubusercontent.com/NVIDIA/DLSS/a291cc7d2cc642a51566f3dfd5376f635cd1b284/lib/Windows_x86_64/rel/nvngx_dlss.dll"
+    '0001-pinned-upscaler-manifest.patch'
+    'bc250-fsr4-launch.py'
+    'build-fsr4-payload.py'
+    'optiscaler-preset.json'
+    'proton-shim.sh'
+    'ntsync.conf'
+    'FidelityFX-SDK-4.0.2.txt'
+    'NVIDIA-DLSS.txt'
+)
+
+# The 7z and the .xz are payload inputs handed to build-fsr4-payload.py as-is.
+# makepkg would otherwise unpack both into $srcdir.
+noextract=(
+    "@OPTISCALER_ASSET@"
+    'amdxcffx64_v4.1.1.xz'
+)
+
+# Two checksum arrays, because the two kinds of source are pinned differently.
+# GE publishes a .sha512sum beside each release tarball and nothing else, and
+# that is the only pin obtainable without downloading half a gigabyte at resolve
+# time -- so the tarball is verified with the hash upstream actually published.
+# Everything else carries a SHA256 we pinned ourselves.
+sha512sums=(
+    '@PROTONGE_SHA512@'
+    'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+    'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+)
+sha256sums=(
+    'SKIP'
+    '@OPTISCALER_SHA256@'
+    'fb12735bfcc0d47f534f2206d57ec34129dc3d22b6405a1c2ef86745ab48b2eb'
+    '5de9b6d9f5475a0f2622e4cbce88cde46c68929d9bd0bbc353c70056997bb771'
+    '241e6e5e4d848424eb8ec9a6b22c43fe34cf0cf52d30002ca435ba42e53a9ca0'
+    'be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e'
+    '@SHA_PATCH@'
+    '@SHA_LAUNCH@'
+    '@SHA_PAYLOAD_BUILDER@'
+    '@SHA_PRESET@'
+    '@SHA_SHIM@'
+    '@SHA_NTSYNC@'
+    'be05d8cd5489deff924dbe91e0c5b8c0ff034d43cd11749bf9a67a0c38252b7b'
+    '21b5daec892b12bea692e66bc8fe45cf5902ccaf3a7b831e78050d8859881c37'
+)
+
+prepare() {
+    cd "$srcdir/$_gedir"
+
+    # Teach protonfixes to read a local, checksum-verified manifest.
+    #
+    # This is the GE-rooted patch (a/protonfixes/upscalers.py). GE ships
+    # umu-protonfixes as released; proton-cachyos patches the same file eight
+    # times before we see it, so that package uses a separately rebased copy.
+    # --fuzz=0 so a GE release that moves this file fails the build here rather
+    # than producing a subtly misplaced hunk.
+    #
+    # The status is checked explicitly, and then the result is checked again:
+    # errexit does not reliably fire for a command in the middle of a pkgfunc,
+    # and an unpatched upscalers.py ignores PROTON_UPSCALER_MANIFEST completely
+    # and downloads from the network at game launch instead. That failure is
+    # silent and defeats the entire point of this package, so it gets two gates.
+    if ! patch --batch --fuzz=0 -Np1 -i "$srcdir/0001-pinned-upscaler-manifest.patch"; then
+        printf 'ERROR: the pinned-manifest patch does not apply to %s\n' "$_getag" >&2
+        printf '       protonfixes/upscalers.py has moved; rebase the ge-proton patch.\n' >&2
+        return 1
+    fi
+    if ! grep -q 'PROTON_UPSCALER_MANIFEST' protonfixes/upscalers.py; then
+        printf 'ERROR: upscalers.py has no pinned-manifest support after patching\n' >&2
+        return 1
+    fi
+
+    # GE's toolmanifest.vdf is reused verbatim as this tool's own, so that
+    # require_tool_appid keeps tracking whichever Steam Linux Runtime GE targets
+    # instead of a number copied here that silently goes stale. That only works
+    # while its commandline is the "/proton" our shim provides, so check.
+    if ! grep -qF '"commandline" "/proton %verb%"' toolmanifest.vdf; then
+        printf 'ERROR: %s toolmanifest.vdf no longer runs /proton; the shim would be bypassed\n' \
+            "$_getag" >&2
+        cat toolmanifest.vdf >&2
+        return 1
+    fi
+
+    # Steam scans one level below compatibilitytools.d, so this copy is already
+    # invisible where GE lands. Removing it means a future Steam that scans
+    # deeper cannot register the tool twice under GE's own name.
+    rm -f compatibilitytool.vdf
+
+    # Byte-compiled from whatever Python built the release; regenerated per user
+    # at runtime anyway, and never useful inside a read-only package.
+    find . -type d -name __pycache__ -prune -exec rm -rf -- {} +
+}
+
+build() {
+    # Writes upscaler-manifest.json plus artifacts/ into the GE tree, and the
+    # wrapper's config beside it. Both come out of the same run so the versions
+    # the wrapper asks for and the versions the manifest offers cannot drift.
+    python3 "$srcdir/build-fsr4-payload.py" \
+        --optiscaler "$srcdir/@OPTISCALER_ASSET@" \
+        --optiscaler-version "$_optiscaler_version" \
+        --optipatcher "$srcdir/OptiPatcher_v0.41.asi" \
+        --provider "$srcdir/amdxcffx64_v4.1.1.xz" \
+        --provider-version "$_provider_version" \
+        --ffx-sdk "$srcdir/amd_fidelityfx_upscaler_dx12.dll" \
+        --dlss "$srcdir/nvngx_dlss.dll" \
+        --licenses "$srcdir" \
+        --preset "$srcdir/optiscaler-preset.json" \
+        --output "$srcdir/$_gedir" \
+        --config "$srcdir/bc250-fsr4-config.json"
+}
+
+package() {
+    local _tool="$pkgdir/usr/share/steam/compatibilitytools.d/$pkgname"
+    install -d "$_tool"
+
+    # -a to keep GE's internal symlinks and executable bits exactly as released.
+    cp -a "$srcdir/$_gedir" "$_tool/ge"
+
+    install -Dm755 "$srcdir/proton-shim.sh" "$_tool/proton"
+    install -Dm644 "$srcdir/bc250-fsr4-launch.py" "$_tool/bc250-fsr4-launch.py"
+    install -Dm644 "$srcdir/bc250-fsr4-config.json" "$_tool/bc250-fsr4-config.json"
+    install -Dm644 "$_tool/ge/toolmanifest.vdf" "$_tool/toolmanifest.vdf"
+
+    # The internal name is the package name and never carries the GE version:
+    # Steam stores it per game, so a name that moved with each release would
+    # silently reset everyone's per-game compatibility choice on upgrade. The
+    # display name is where the version belongs.
+    cat > "$_tool/compatibilitytool.vdf" <<EOF_VDF
+"compatibilitytools"
+{
+  "compat_tools"
+  {
+    "$pkgname"
+    {
+      "install_path" "."
+      "display_name" "GE-Proton ${_getag#GE-Proton} (BC-250 FSR4)"
+      "from_oslist"  "windows"
+      "to_oslist"    "linux"
+    }
+  }
+}
+EOF_VDF
+
+    install -Dm644 "$srcdir/ntsync.conf" "$pkgdir/usr/lib/modules-load.d/10-$pkgname.conf"
+
+    install -d "$pkgdir/usr/share/licenses/$pkgname"
+    # GE ships these three at its root; they belong with the other licences
+    # rather than inside the tool Steam browses. Checked rather than assumed:
+    # this package redistributes third-party binaries, so a release that renamed
+    # one of these must stop the build, not quietly ship without the notice.
+    if ! mv "$_tool/ge"/{PATENTS.AV1,LICENSE,LICENSE.OFL} \
+            "$pkgdir/usr/share/licenses/$pkgname/"; then
+        printf 'ERROR: %s no longer ships the licence files this expects\n' "$_getag" >&2
+        return 1
+    fi
+    install -m644 "$srcdir/FidelityFX-SDK-4.0.2.txt" "$srcdir/NVIDIA-DLSS.txt" \
+        "$pkgdir/usr/share/licenses/$pkgname/"
+}

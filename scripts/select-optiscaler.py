@@ -27,6 +27,8 @@ from __future__ import annotations
 import argparse
 import configparser
 import json
+import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -39,6 +41,28 @@ FALLBACK_ASSET = "OptiScaler_v10.0.0-pre1_20260904.7z"
 FALLBACK_SHA256 = "730d5057338cf68adc3bf38a358985a04629ad00fae305bd717694a392216a53"
 
 NIGHTLY_REPO = "optiscaler/OptiScaler-nightly"
+NIGHTLY_URL = f"https://github.com/{NIGHTLY_REPO}/releases/download"
+
+# Where the mirrored copy lives. Nightlies are pruned after roughly a month, so
+# a pinned upstream nightly URL 404s within weeks; the mirror is what keeps an
+# old build reproducible. Overridable so a fork can point at its own release.
+MIRROR_BASE = os.environ.get(
+    "BC250_FSR4_PAYLOAD_BASE",
+    "https://github.com/MastaG/linux-cachyos-bc250/releases/download/bc250-fsr4-payload",
+)
+
+
+def asset_version(asset: str) -> str | None:
+    """Derive the version string protonfixes must ask for, from the asset name.
+
+    OptiScaler_v10.0.0-pre1_20260904.7z -> 10.0.0-pre1-20260904
+
+    The pinned manifest is matched by exact version string, so this has to agree
+    with what build-fsr4-payload.py writes into it. Returning None is a reason to
+    fall back: a build we cannot name is a build we cannot pin.
+    """
+    match = re.fullmatch(r"OptiScaler_v(.+)_(\d{8})\.7z", asset)
+    return f"{match[1]}-{match[2]}" if match else None
 
 
 def preset_keys(preset_path: Path) -> list[str]:
@@ -70,16 +94,26 @@ class NoExtractor(RuntimeError):
 def extract_ini(archive: Path, workdir: Path) -> Path | None:
     """Extract OptiScaler.ini from the 7z. It sits at the archive root.
 
-    Raises NoExtractor when no 7z tool exists at all: that is an environment
+    bsdtar is listed last but is the one that is always there: it comes with
+    libarchive, which makepkg already requires, so the package needs no p7zip
+    makedepends just to run this check.
+
+    Raises NoExtractor when no extractor exists at all: that is an environment
     problem, not evidence about the archive, and conflating the two produces a
-    "this build is broken" warning when the truth is "install p7zip".
+    "this build is broken" warning when the truth is "install an extractor".
     """
+    commands = {
+        "7z": ["7z", "x", "-y", f"-o{workdir}", str(archive), "OptiScaler.ini"],
+        "7za": ["7za", "x", "-y", f"-o{workdir}", str(archive), "OptiScaler.ini"],
+        "7zr": ["7zr", "x", "-y", f"-o{workdir}", str(archive), "OptiScaler.ini"],
+        "bsdtar": ["bsdtar", "-xf", str(archive), "-C", str(workdir), "OptiScaler.ini"],
+    }
     tried = False
-    for tool in ("7z", "7za", "7zr"):
+    for tool, command in commands.items():
         try:
             subprocess.run(
-                [tool, "x", "-y", f"-o{workdir}", str(archive), "OptiScaler.ini"],
-                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                command, check=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
         except FileNotFoundError:
             continue
@@ -91,7 +125,7 @@ def extract_ini(archive: Path, workdir: Path) -> Path | None:
         if found.is_file():
             return found
     if not tried:
-        raise NoExtractor("no 7z, 7za or 7zr on PATH (install p7zip)")
+        raise NoExtractor("no 7z, 7za, 7zr or bsdtar on PATH")
     return None
 
 
@@ -121,7 +155,24 @@ def latest_nightly() -> tuple[str, str, str] | None:
 
 
 def emit(tag: str, asset: str, sha256: str, mirrored: bool, out: Path | None) -> None:
-    result = {"tag": tag, "asset": asset, "sha256": sha256, "mirrored": mirrored}
+    """Write the selection as an env file the PKGBUILD template is rendered from.
+
+    The URL is decided here rather than by the caller, because "mirrored" and
+    "which host to fetch from" are the same fact: a fallback build may no longer
+    exist upstream at all.
+    """
+    version = asset_version(asset)
+    if version is None:
+        raise RuntimeError(f"cannot derive a pinned version from asset name: {asset}")
+    url = f"{MIRROR_BASE}/{asset}" if mirrored else f"{NIGHTLY_URL}/{tag}/{asset}"
+    result = {
+        "tag": tag,
+        "asset": asset,
+        "sha256": sha256,
+        "mirrored": mirrored,
+        "url": url,
+        "version": version,
+    }
     text = "\n".join(f"OPTISCALER_{k.upper()}={v}" for k, v in result.items())
     print(text)
     if out:
@@ -152,6 +203,12 @@ def main() -> int:
         return 0
 
     tag, asset, url = latest
+    if asset_version(asset) is None:
+        print(f"::warning title=OptiScaler asset name changed::{asset} does not carry a "
+              f"version this can pin; using the mirrored {FALLBACK_TAG} instead.",
+              file=sys.stderr)
+        emit(FALLBACK_TAG, FALLBACK_ASSET, FALLBACK_SHA256, True, args.output)
+        return 0
     if tag == FALLBACK_TAG:
         print(f"==> latest nightly is the mirrored build ({tag})", file=sys.stderr)
         emit(FALLBACK_TAG, FALLBACK_ASSET, FALLBACK_SHA256, True, args.output)

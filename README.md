@@ -641,6 +641,45 @@ Two things that measurement overturned, worth recording because both are counter
 
 The positive control was the step that made the rest trustworthy: the testing driver is built through a reduced single-package PKGBUILD, so confirming it reproduces the known-good numbers is what separates "this piece does nothing" from "the harness is broken".
 
+## FSR4-capable Proton (opt-in)
+
+`protonge-latest-bc250` packages GE-Proton as a system-wide Steam compatibility tool with everything FSR 4.1.1 needs on this hardware already inside it: the AMD FSR4 provider, OptiScaler, OptiPatcher and a known-good OptiScaler configuration.
+
+```bash
+sudo pacman -S protonge-latest-bc250
+```
+
+Restart Steam, then pick **GE-Proton 11-6 (BC-250 FSR4)** under a game's Properties → Compatibility, or set it as the global default under Steam → Settings → Compatibility.
+
+It installs to `/usr/share/steam/compatibilitytools.d/protonge-latest-bc250/` and deliberately declares no `provides`, `conflicts` or `replaces`: it sits **alongside** the distro's own Proton packages, and Steam lists each separately. Nothing is written to `$HOME`, and `pacman -R` removes it cleanly. (Flatpak Steam cannot see it — its sandbox has its own `/usr`.)
+
+This needs the `vulkan-radeon` package from this repository. The provider calls into FSR4 support that lives in our patched RADV, not in stock Mesa.
+
+### What "pinned" means here
+
+Stock protonfixes downloads the provider and OptiScaler from a remote manifest when a game starts. That needs network at launch, pins nothing, and OptiScaler nightlies are pruned after about a month — so a URL that worked in testing 404s for a customer weeks later.
+
+This package ships those artifacts inside itself and points protonfixes at a local manifest instead. Every archive and every extracted file is SHA256-verified before it reaches a prefix, and a mismatch **refuses the launch** rather than quietly falling back to the network. The same strictness applies to the OptiScaler configuration: a preset key the shipped build does not define fails the launch, which is why the build validates the preset against the build's own `OptiScaler.ini` before selecting it.
+
+### Launch options
+
+FSR4 and OptiScaler are on by default, but they are still yours to set per game:
+
+```text
+PROTON_FSR4_UPGRADE=0 %command%      # this game runs without FSR4
+BC250_FSR4_DEBUG=1 %command%         # FSR4 watermark + OptiScaler log + PROTON_LOG
+```
+
+`PROTON_DLSS_UPGRADE`, `PROTON_XESS_UPGRADE`, `PROTON_FFX3_UPGRADE`, `PROTON_FFX4_UPGRADE` and `PROTON_MLFG_UPGRADE` are cleared: this package ships none of those upscalers, and in pinned mode a request for one that is absent stops the game from starting. A stale launch option left over from another Proton build would otherwise become a game that will not launch.
+
+### Which GE-Proton, and which OptiScaler
+
+The package tracks the newest GE-Proton release automatically; `pkgver` follows it (`GE-Proton11-6` → `11.6`). The Steam-internal tool name stays `protonge-latest-bc250` across upgrades on purpose — Steam stores that name per game, so a name carrying the version would reset everyone's per-game choice on every update.
+
+The OptiScaler build is pinned rather than tracked. Nightlies publish most days, and following them would rebuild a ~700 MB package daily for a payload nobody asked to move. Moving it forward is a one-line change to `FALLBACK_TAG` in `scripts/select-optiscaler.py`, which changes the component fingerprint and triggers exactly one rebuild. `BC250_FSR4_TRACK_OPTISCALER=1` validates and takes the newest nightly instead, for checking whether the preset still applies to it.
+
+The design notes, including why the OptiScaler payload is rearranged the way it is and why two separate copies of the protonfixes patch exist, are in [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md).
+
 ## CPU optimization
 
 All kernels use CachyOS' safe x86-64-v3 baseline with additional Zen 2 tuning:
@@ -759,6 +798,7 @@ A complete fixed release contains at least:
 - `mesa-info.env`, `lib32-mesa-info.env`, `mesa-git-info.env`;
 - `bc250-dual-audio` + its PKGBUILD, `.SRCINFO` and `bc250-dual-audio-info.env`;
 - `linux-cachyos-bc250-meta` + its PKGBUILD, `.SRCINFO` and `linux-cachyos-bc250-meta-info.env`;
+- `protonge-latest-bc250` + its PKGBUILD, `.SRCINFO` and `protonge-latest-bc250-info.env`;
 - aggregate `build-info.env`, release notes and `SHA256SUMS`.
 
 Publication validates the complete staged repository before deleting/replacing the fixed `repo` release.

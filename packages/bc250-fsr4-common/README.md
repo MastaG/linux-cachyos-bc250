@@ -25,7 +25,7 @@ the distro:
 3. **A known-good OptiScaler configuration**, applied through
    `PROTON_OPTISCALER_CONFIG`.
 
-## `patches/0001-pinned-upscaler-manifest.patch`
+## `patches/*/0001-pinned-upscaler-manifest.patch`
 
 Adds `PROTON_UPSCALER_MANIFEST` to protonfixes' `upscalers.py`: point it at a
 local JSON manifest and artifacts are read from disk, with mandatory archive and
@@ -34,10 +34,27 @@ directory, and validation of everything requested *before* any prefix payload is
 written. A local-mode failure stops the launch rather than falling back to the
 network. Absent the variable, stock behaviour is unchanged.
 
-Derived from the upstream BC-250 FSR4 work (see the repository README credits)
-and rebased here onto the `upscalers.py` that results *after* proton-cachyos's
-own eight `patches/protonfixes/0002-upscalers/` patches apply. Thirteen of
-fifteen hunks applied unchanged; two were resolved by hand:
+**There are two copies, because there are two different `upscalers.py` files.**
+GE-Proton ships umu-protonfixes as released; proton-cachyos applies eight
+patches of its own to that same file first. A patch rebased onto one does not
+apply to the other — three of sixteen hunks fail — so each package uses the copy
+matching its base, and `stage_fsr4_payload_sources` takes the base as an
+argument rather than guessing.
+
+### `patches/ge-proton/`
+
+For `protonge-latest-bc250`. This is the upstream BC-250 FSR4 work's own patch,
+unmodified: its declared base is GE-Proton11-6's `protonfixes/upscalers.py`, and
+that file in GE-Proton11-6 hashes to the `4128896c…` the patch header names.
+
+Rooted at the Proton tree (`a/protonfixes/upscalers.py`), because that package
+applies it itself, from the extracted tarball root.
+
+### `patches/proton-cachyos/`
+
+For `proton-cachyos-native-bc250`. Rebased onto the `upscalers.py` that results
+*after* proton-cachyos's own eight `patches/protonfixes/0002-upscalers/` patches
+apply. Thirteen of fifteen hunks applied unchanged; two were resolved by hand:
 
 - the OptiScaler config loop, whose context differs (`log.debug(e)`)
 - the upscalers tuple, where **proton-cachyos hardcodes `('fsr4', …, True)`**
@@ -55,6 +72,51 @@ $(OBJ)/.protonfixes-post-source: patches-source
 
 Because that glob is sorted, dropping this in as a later-sorting directory is
 all the integration required — no Makefile or `prepare()` changes.
+
+## `bc250-fsr4-launch.py`
+
+The Steam compatibility tool is a thin directory: a `proton` shim runs this, and
+this `execve()`s the real Proton under `ge/`. It exists so the pinned payload can
+be selected without patching Proton's own launcher.
+
+What it sets is limited to what the package owns — the manifest path, the
+OptiScaler proxy name, the preset — plus the two `VK_NVX_*` names appended to
+`VKD3D_DISABLE_EXTENSIONS`, which vkd3d's separate D3D12 device cannot create
+once OptiScaler advertises them.
+
+Two deliberate choices about the rest:
+
+- **FSR4 and OptiScaler default to on but stay overridable.** `get_version()`
+  maps both `0` and `1` to `'default'`, and the pinned manifest holds exactly
+  one entry per upscaler, so `PROTON_FSR4_UPGRADE=0` in a game's launch options
+  cleanly turns FSR4 off and `=1` still resolves to what we ship. The upstream
+  runtime scrubs these instead; a distro package should not ignore a launch
+  option a user set on purpose.
+- **DLSS, XeSS, FFX3, FFX4 and MLFG are scrubbed**, because those we genuinely
+  cannot honour: the pinned manifest ships none of them, and pinned mode refuses
+  a launch rather than falling back to the network. Left in place, a stale launch
+  option from another Proton build becomes a game that will not start.
+
+`BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
+`PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
+
+## `../../scripts/build-fsr4-payload.py`
+
+Assembles the payload at build time and writes both the manifest and the
+wrapper's config, so the versions the wrapper asks for and the versions the
+manifest offers come out of one run and cannot drift.
+
+It has to run at build time rather than shipping a static manifest: the patch
+above requires a per-file SHA256 for every non-`.ini` entry of the OptiScaler
+build, so the manifest can only be computed from the archive actually selected.
+
+The OptiScaler tree it lays out is not the archive as shipped —
+`OptiScaler.dll` becomes the `winmm.dll` proxy, the pinned NVIDIA NGX surrogate
+and the older 4.0.2 FidelityFX bridge are added (the bundled 4.1.1 SDK would
+otherwise shadow the equally versioned provider our RADV drives), OptiPatcher
+goes into `plugins/`, and upstream's interactive `.bat`/`.sh` installers are
+removed. The archive is written deterministically, since its SHA256 is both its
+filename and its manifest entry.
 
 ## `optiscaler-preset.json`
 
@@ -80,5 +142,27 @@ month, so a pinned nightly URL 404s within weeks, and the FSR4 provider is
 served from a GitHub Pages site that can change without versioning. The mirror
 makes the build reproducible; the selector still tracks upstream when it can.
 
-The FidelityFX SDK is MIT licensed, which permits redistribution; its notice
-ships in both packages.
+Two pinned artifacts are *not* mirrored, because they are served from immutable
+commit-addressed URLs and cannot change under us: the FidelityFX SDK bridge and
+the NVIDIA NGX surrogate.
+
+## `licenses/`
+
+The notices that ship beside the redistributed binaries, byte-identical to the
+upstream files at the commits pinned in the PKGBUILDs.
+
+The FidelityFX SDK is MIT licensed, so redistribution is straightforward.
+
+`nvngx_dlss.dll` is the one that needed a decision. The upstream BC-250 FSR4
+project deliberately does not redistribute it — its installer downloads it at
+install time — and GE-Proton does not bundle it either, which is why stock
+protonfixes fetches it at launch. A pacman package cannot do that: whatever the
+build pulls in ends up inside the `.pkg.tar.zst`. It is shipped here as a
+conscious call, under the NVIDIA RTX SDK licence's clause 1(c), which permits
+distributing SDK material in object form as incorporated into an application
+with material additional functionality. Without it, games whose DLSS input path
+checks for an NVIDIA-signed library lose the OptiScaler hook entirely; the
+FSR/XeSS/Vulkan input paths and the whole ffx upscaler chain are unaffected.
+
+It is used only as a signature surrogate beside the proxy. No DLSS upscaler is
+installed, and no DLL is ever taken from a game directory.

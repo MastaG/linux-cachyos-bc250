@@ -85,6 +85,18 @@ jobs:
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "Using Mesa main commit: $commit"
 
+      - name: Resolve GE-Proton release
+        id: protonge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROTONGE_TAG: ${{ vars.PROTONGE_TAG }}
+        run: |
+          set -euo pipefail
+          tag="$(./scripts/resolve-protonge.sh | awk -F= '$1 == "PROTONGE_TAG" { print $2 }')"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Using GE-Proton release: $tag"
+
       - name: Calculate component fingerprints
         id: fingerprints
         shell: bash
@@ -92,6 +104,7 @@ jobs:
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
           CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
           MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
+          PROTONGE_TAG: ${{ steps.protonge.outputs.tag }}
         run: |
           set -euo pipefail
 
@@ -105,11 +118,12 @@ jobs:
           lib32_mesa_testing="$(./scripts/source-fingerprint.sh lib32-mesa-testing)"
           bc250_dual_audio="$(./scripts/source-fingerprint.sh bc250-dual-audio)"
           linux_cachyos_bc250_meta="$(./scripts/source-fingerprint.sh linux-cachyos-bc250-meta)"
+          protonge_latest_bc250="$(./scripts/source-fingerprint.sh protonge-latest-bc250)"
           aggregate="$(printf '%s\n' \
             "$kernel_stable" "$kernel_rc" "$kernel_bore" \
             "$mesa" "$lib32_mesa" "$mesa_git" \
             "$mesa_testing" "$lib32_mesa_testing" "$bc250_dual_audio" \
-            "$linux_cachyos_bc250_meta" | sha256sum | awk '{print $1}')"
+            "$linux_cachyos_bc250_meta" "$protonge_latest_bc250" | sha256sum | awk '{print $1}')"
 
           echo "kernel_stable=$kernel_stable" >> "$GITHUB_OUTPUT"
           echo "kernel_rc=$kernel_rc" >> "$GITHUB_OUTPUT"
@@ -121,6 +135,7 @@ jobs:
           echo "lib32_mesa_testing=$lib32_mesa_testing" >> "$GITHUB_OUTPUT"
           echo "bc250_dual_audio=$bc250_dual_audio" >> "$GITHUB_OUTPUT"
           echo "linux_cachyos_bc250_meta=$linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
+          echo "protonge_latest_bc250=$protonge_latest_bc250" >> "$GITHUB_OUTPUT"
           echo "aggregate=$aggregate" >> "$GITHUB_OUTPUT"
 
           printf 'Stable kernel fingerprint: %s\n' "$kernel_stable"
@@ -133,6 +148,7 @@ jobs:
           printf 'lib32-mesa-testing fp:     %s\n' "$lib32_mesa_testing"
           printf 'bc250-dual-audio fp:       %s\n' "$bc250_dual_audio"
           printf 'linux-cachyos-bc250-meta fp: %s\n' "$linux_cachyos_bc250_meta"
+          printf 'protonge-latest-bc250 fp:  %s\n' "$protonge_latest_bc250"
 
       - name: Determine components to build
         id: build
@@ -148,6 +164,7 @@ jobs:
           LIB32_MESA_TESTING_FINGERPRINT: ${{ steps.fingerprints.outputs.lib32_mesa_testing }}
           BC250_DUAL_AUDIO_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_dual_audio }}
           LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
+          PROTONGE_LATEST_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.protonge_latest_bc250 }}
         shell: bash
         run: |
           set -euo pipefail
@@ -199,6 +216,7 @@ jobs:
           build_lib32_mesa_testing=false
           build_bc250_dual_audio=false
           build_linux_cachyos_bc250_meta=false
+          build_protonge_latest_bc250=false
 
           [[ "$(previous_value KERNEL_STABLE_FINGERPRINT)" == "$KERNEL_STABLE_FINGERPRINT" ]] || build_kernel_stable=true
           [[ "$(previous_value KERNEL_RC_FINGERPRINT)" == "$KERNEL_RC_FINGERPRINT" ]] || build_kernel_rc=true
@@ -210,6 +228,7 @@ jobs:
           [[ "$(previous_value LIB32_MESA_TESTING_FINGERPRINT)" == "$LIB32_MESA_TESTING_FINGERPRINT" ]] || build_lib32_mesa_testing=true
           [[ "$(previous_value BC250_DUAL_AUDIO_FINGERPRINT)" == "$BC250_DUAL_AUDIO_FINGERPRINT" ]] || build_bc250_dual_audio=true
           [[ "$(previous_value LINUX_CACHYOS_BC250_META_FINGERPRINT)" == "$LINUX_CACHYOS_BC250_META_FINGERPRINT" ]] || build_linux_cachyos_bc250_meta=true
+          [[ "$(previous_value PROTONGE_LATEST_BC250_FINGERPRINT)" == "$PROTONGE_LATEST_BC250_FINGERPRINT" ]] || build_protonge_latest_bc250=true
 
           if [[ '${{ github.event_name }}' == workflow_dispatch && '${{ inputs.force }}' == true ]]; then
             build_kernel_stable=true
@@ -222,6 +241,7 @@ jobs:
             build_lib32_mesa_testing=true
             build_bc250_dual_audio=true
             build_linux_cachyos_bc250_meta=true
+            build_protonge_latest_bc250=true
           fi
 
           any=false
@@ -229,7 +249,8 @@ jobs:
                 "$build_kernel_bore" == true || "$build_mesa" == true || \
                 "$build_lib32_mesa" == true || "$build_mesa_git" == true || \
                 "$build_mesa_testing" == true || "$build_lib32_mesa_testing" == true || \
-                "$build_bc250_dual_audio" == true || "$build_linux_cachyos_bc250_meta" == true ]]; then
+                "$build_bc250_dual_audio" == true || "$build_linux_cachyos_bc250_meta" == true || \
+                "$build_protonge_latest_bc250" == true ]]; then
             any=true
           fi
 
@@ -243,6 +264,7 @@ jobs:
           echo "lib32_mesa_testing=$build_lib32_mesa_testing" >> "$GITHUB_OUTPUT"
           echo "bc250_dual_audio=$build_bc250_dual_audio" >> "$GITHUB_OUTPUT"
           echo "linux_cachyos_bc250_meta=$build_linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
+          echo "protonge_latest_bc250=$build_protonge_latest_bc250" >> "$GITHUB_OUTPUT"
           echo "any=$any" >> "$GITHUB_OUTPUT"
 
           echo "Build stable kernel: $build_kernel_stable"
@@ -255,6 +277,7 @@ jobs:
           echo "Build lib32-mesa-testing: $build_lib32_mesa_testing"
           echo "Build bc250-dual-audio:   $build_bc250_dual_audio"
           echo "Build linux-cachyos-bc250-meta: $build_linux_cachyos_bc250_meta"
+          echo "Build protonge-latest-bc250:    $build_protonge_latest_bc250"
 
       - name: Seed previous repository
         if: steps.build.outputs.any == 'true'
@@ -321,6 +344,7 @@ jobs:
           LIB32_MESA_TESTING_FINGERPRINT: ${{ steps.fingerprints.outputs.lib32_mesa_testing }}
           BC250_DUAL_AUDIO_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_dual_audio }}
           LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
+          PROTONGE_LATEST_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.protonge_latest_bc250 }}
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
           CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
           MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
@@ -334,6 +358,8 @@ jobs:
           BUILD_LIB32_MESA_TESTING: ${{ steps.build.outputs.lib32_mesa_testing }}
           BUILD_BC250_DUAL_AUDIO: ${{ steps.build.outputs.bc250_dual_audio }}
           BUILD_LINUX_CACHYOS_BC250_META: ${{ steps.build.outputs.linux_cachyos_bc250_meta }}
+          BUILD_PROTONGE_LATEST_BC250: ${{ steps.build.outputs.protonge_latest_bc250 }}
+          PROTONGE_TAG: ${{ steps.protonge.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
@@ -355,6 +381,7 @@ jobs:
             -e BUILD_LIB32_MESA_TESTING \
             -e BUILD_BC250_DUAL_AUDIO \
             -e BUILD_LINUX_CACHYOS_BC250_META \
+            -e BUILD_PROTONGE_LATEST_BC250 \
             -e BC250_PKGREL='${{ github.run_number }}' \
             -e SOURCE_FINGERPRINT \
             -e KERNEL_STABLE_FINGERPRINT \
@@ -367,9 +394,11 @@ jobs:
             -e LIB32_MESA_TESTING_FINGERPRINT \
             -e BC250_DUAL_AUDIO_FINGERPRINT \
             -e LINUX_CACHYOS_BC250_META_FINGERPRINT \
+            -e PROTONGE_LATEST_BC250_FINGERPRINT \
             -e NCT6687D_COMMIT \
             -e CACHYOS_MESA_COMMIT \
             -e MESA_GIT_COMMIT \
+            -e PROTONGE_TAG \
             -e GITHUB_REPOSITORY='${{ github.repository }}' \
             -e GITHUB_SHA='${{ github.sha }}' \
             archlinux:base-devel \
@@ -435,6 +464,7 @@ jobs:
             mesa-info.env lib32-mesa-info.env mesa-git-info.env
             mesa-testing-info.env lib32-mesa-testing-info.env
             bc250-dual-audio-info.env
+            protonge-latest-bc250-info.env
             linux-cachyos-bc250-meta-info.env
             bc250-cachyos.db bc250-cachyos.db.tar.zst
             bc250-cachyos.files bc250-cachyos.files.tar.zst

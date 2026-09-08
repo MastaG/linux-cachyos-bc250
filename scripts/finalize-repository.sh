@@ -15,6 +15,7 @@ REPO_NAME="bc250-cachyos"
 : "${LIB32_MESA_TESTING_FINGERPRINT:?LIB32_MESA_TESTING_FINGERPRINT is required}"
 : "${BC250_DUAL_AUDIO_FINGERPRINT:?BC250_DUAL_AUDIO_FINGERPRINT is required}"
 : "${LINUX_CACHYOS_BC250_META_FINGERPRINT:?LINUX_CACHYOS_BC250_META_FINGERPRINT is required}"
+: "${PROTONGE_LATEST_BC250_FINGERPRINT:?PROTONGE_LATEST_BC250_FINGERPRINT is required}"
 
 BUILD_KERNEL_STABLE="${BUILD_KERNEL_STABLE:-false}"
 BUILD_KERNEL_RC="${BUILD_KERNEL_RC:-false}"
@@ -26,6 +27,7 @@ BUILD_MESA_TESTING="${BUILD_MESA_TESTING:-false}"
 BUILD_LIB32_MESA_TESTING="${BUILD_LIB32_MESA_TESTING:-false}"
 BUILD_BC250_DUAL_AUDIO="${BUILD_BC250_DUAL_AUDIO:-false}"
 BUILD_LINUX_CACHYOS_BC250_META="${BUILD_LINUX_CACHYOS_BC250_META:-false}"
+BUILD_PROTONGE_LATEST_BC250="${BUILD_PROTONGE_LATEST_BC250:-false}"
 
 required_metadata=(
     kernel-stable-info.env
@@ -38,6 +40,7 @@ required_metadata=(
     lib32-mesa-testing-info.env
     bc250-dual-audio-info.env
     linux-cachyos-bc250-meta-info.env
+    protonge-latest-bc250-info.env
 )
 for file in "${required_metadata[@]}"; do
     [[ -f "$OUT_DIR/$file" ]] || {
@@ -112,6 +115,12 @@ linux_cachyos_bc250_meta_info="$OUT_DIR/linux-cachyos-bc250-meta-info.env"
 linux_cachyos_bc250_meta_pkgver="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGVER)"
 linux_cachyos_bc250_meta_pkgrel="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGREL)"
 
+protonge_info="$OUT_DIR/protonge-latest-bc250-info.env"
+protonge_pkgver="$(value "$protonge_info" PROTONGE_LATEST_BC250_PKGVER)"
+protonge_pkgrel="$(value "$protonge_info" PROTONGE_LATEST_BC250_PKGREL)"
+protonge_ge_tag="$(value "$protonge_info" PROTONGE_LATEST_BC250_GE_TAG)"
+protonge_optiscaler="$(value "$protonge_info" PROTONGE_LATEST_BC250_OPTISCALER)"
+
 for field in \
     stable_pkgbase stable_pkgver stable_pkgrel \
     rc_pkgbase rc_pkgver rc_pkgrel \
@@ -119,7 +128,8 @@ for field in \
     mesa_pkgver mesa_pkgrel lib32_pkgver lib32_pkgrel \
     mesa_git_commit mesa_git_pkgver mesa_git_pkgrel mesa_git_lib32 \
     bc250_dual_audio_pkgver bc250_dual_audio_pkgrel \
-    linux_cachyos_bc250_meta_pkgver linux_cachyos_bc250_meta_pkgrel; do
+    linux_cachyos_bc250_meta_pkgver linux_cachyos_bc250_meta_pkgrel \
+    protonge_pkgver protonge_pkgrel protonge_ge_tag protonge_optiscaler; do
     [[ -n "${!field}" ]] || {
         printf 'ERROR: missing metadata field %s\n' "$field" >&2
         exit 1
@@ -165,6 +175,7 @@ mesa_testing_count="$(pkgbase_count mesa-testing)"
 lib32_mesa_testing_count="$(pkgbase_count lib32-mesa-testing)"
 bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
 linux_cachyos_bc250_meta_count="$(pkgbase_count linux-cachyos-bc250-meta)"
+protonge_count="$(pkgbase_count protonge-latest-bc250)"
 
 (( stable_count >= 2 )) || { printf 'ERROR: expected stable kernel + headers; found %d package(s)\n' "$stable_count" >&2; exit 1; }
 (( rc_count >= 2 )) || { printf 'ERROR: expected RC kernel + headers; found %d package(s)\n' "$rc_count" >&2; exit 1; }
@@ -176,6 +187,7 @@ linux_cachyos_bc250_meta_count="$(pkgbase_count linux-cachyos-bc250-meta)"
 (( lib32_mesa_testing_count >= 1 )) || { printf 'ERROR: lib32-vulkan-radeon-testing package is missing\n' >&2; exit 1; }
 (( bc250_dual_audio_count == 1 )) || { printf 'ERROR: expected exactly one bc250-dual-audio package; found %d\n' "$bc250_dual_audio_count" >&2; exit 1; }
 (( linux_cachyos_bc250_meta_count == 1 )) || { printf 'ERROR: expected exactly one linux-cachyos-bc250-meta package; found %d\n' "$linux_cachyos_bc250_meta_count" >&2; exit 1; }
+(( protonge_count == 1 )) || { printf 'ERROR: expected exactly one protonge-latest-bc250 package; found %d\n' "$protonge_count" >&2; exit 1; }
 
 rm -f -- "${REPO_NAME}.db" "${REPO_NAME}.db.tar.zst" \
           "${REPO_NAME}.files" "${REPO_NAME}.files.tar.zst"
@@ -215,12 +227,14 @@ MESA_TESTING_FINGERPRINT="$(fingerprint_from "$mesa_testing_info" MESA_TESTING_F
 LIB32_MESA_TESTING_FINGERPRINT="$(fingerprint_from "$lib32_mesa_testing_info" LIB32_MESA_TESTING_FINGERPRINT "$LIB32_MESA_TESTING_FINGERPRINT")"
 BC250_DUAL_AUDIO_FINGERPRINT="$(fingerprint_from "$bc250_dual_audio_info" BC250_DUAL_AUDIO_FINGERPRINT "$BC250_DUAL_AUDIO_FINGERPRINT")"
 LINUX_CACHYOS_BC250_META_FINGERPRINT="$(fingerprint_from "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_FINGERPRINT "$LINUX_CACHYOS_BC250_META_FINGERPRINT")"
+PROTONGE_LATEST_BC250_FINGERPRINT="$(fingerprint_from "$protonge_info" PROTONGE_LATEST_BC250_FINGERPRINT "$PROTONGE_LATEST_BC250_FINGERPRINT")"
 
 SOURCE_FINGERPRINT="$(printf '%s\n' \
     "$KERNEL_STABLE_FINGERPRINT" "$KERNEL_RC_FINGERPRINT" "$KERNEL_BORE_FINGERPRINT" \
     "$MESA_FINGERPRINT" "$LIB32_MESA_FINGERPRINT" "$MESA_GIT_FINGERPRINT" \
     "$MESA_TESTING_FINGERPRINT" "$LIB32_MESA_TESTING_FINGERPRINT" \
-    "$BC250_DUAL_AUDIO_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" | \
+    "$BC250_DUAL_AUDIO_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
+    "$PROTONGE_LATEST_BC250_FINGERPRINT" | \
     sha256sum | awk '{print $1}')"
 
 cat > build-info.env <<EOF_INFO
@@ -235,6 +249,7 @@ MESA_TESTING_FINGERPRINT=${MESA_TESTING_FINGERPRINT}
 LIB32_MESA_TESTING_FINGERPRINT=${LIB32_MESA_TESTING_FINGERPRINT}
 BC250_DUAL_AUDIO_FINGERPRINT=${BC250_DUAL_AUDIO_FINGERPRINT}
 LINUX_CACHYOS_BC250_META_FINGERPRINT=${LINUX_CACHYOS_BC250_META_FINGERPRINT}
+PROTONGE_LATEST_BC250_FINGERPRINT=${PROTONGE_LATEST_BC250_FINGERPRINT}
 LAST_RUN_KERNEL_STABLE_BUILD=${BUILD_KERNEL_STABLE}
 LAST_RUN_KERNEL_RC_BUILD=${BUILD_KERNEL_RC}
 LAST_RUN_KERNEL_BORE_BUILD=${BUILD_KERNEL_BORE}
@@ -245,6 +260,7 @@ LAST_RUN_MESA_TESTING_BUILD=${BUILD_MESA_TESTING}
 LAST_RUN_LIB32_MESA_TESTING_BUILD=${BUILD_LIB32_MESA_TESTING}
 LAST_RUN_BC250_DUAL_AUDIO_BUILD=${BUILD_BC250_DUAL_AUDIO}
 LAST_RUN_LINUX_CACHYOS_BC250_META_BUILD=${BUILD_LINUX_CACHYOS_BC250_META}
+LAST_RUN_PROTONGE_LATEST_BC250_BUILD=${BUILD_PROTONGE_LATEST_BC250}
 KERNEL_STABLE_PKGBASE=${stable_pkgbase}
 KERNEL_STABLE_PKGVER=${stable_pkgver}
 KERNEL_STABLE_PKGREL=${stable_pkgrel}
@@ -271,6 +287,10 @@ BC250_DUAL_AUDIO_PKGVER=${bc250_dual_audio_pkgver}
 BC250_DUAL_AUDIO_PKGREL=${bc250_dual_audio_pkgrel}
 LINUX_CACHYOS_BC250_META_PKGVER=${linux_cachyos_bc250_meta_pkgver}
 LINUX_CACHYOS_BC250_META_PKGREL=${linux_cachyos_bc250_meta_pkgrel}
+PROTONGE_LATEST_BC250_PKGVER=${protonge_pkgver}
+PROTONGE_LATEST_BC250_PKGREL=${protonge_pkgrel}
+PROTONGE_LATEST_BC250_GE_TAG=${protonge_ge_tag}
+PROTONGE_LATEST_BC250_OPTISCALER=${protonge_optiscaler}
 GITHUB_SHA=${GITHUB_SHA:-local}
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF_INFO
@@ -376,6 +396,27 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 /usr/share/bc250-dual-audio/check.sh
 \`\`\`
 
+## protonge-latest-bc250 (opt-in)
+
+- Package version: \`${protonge_pkgver}-${protonge_pkgrel}\` (\`${protonge_ge_tag}\`)
+- GE-Proton, installed system-wide as a Steam compatibility tool with everything
+  FSR 4.1.1 needs on this hardware already pinned inside it: the AMD provider,
+  OptiScaler \`${protonge_optiscaler}\`, OptiPatcher, and a known-good OptiScaler
+  configuration. Nothing is downloaded when a game starts, and every artifact is
+  SHA256-verified before it reaches a prefix.
+- Installs alongside the distro's own Proton packages rather than replacing them.
+  It appears in Steam as **GE-Proton ${protonge_ge_tag#GE-Proton} (BC-250 FSR4)**;
+  pick it per game under Properties -> Compatibility, or as the global default.
+- Needs the \`vulkan-radeon\` package from this repository: the FSR4 support the
+  provider calls into lives in our patched RADV, not in stock Mesa.
+- FSR4 and OptiScaler are on by default. They remain launch options, so
+  \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
+  \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+
+\`\`\`bash
+sudo pacman -S protonge-latest-bc250
+\`\`\`
+
 ## linux-cachyos-bc250-meta
 
 - Package version: \`${linux_cachyos_bc250_meta_pkgver}-${linux_cachyos_bc250_meta_pkgrel}\`
@@ -404,3 +445,5 @@ printf '    lib32-mesa:    %s-%s\n' "$lib32_pkgver" "$lib32_pkgrel"
 printf '    mesa-git:      %s-%s (64-bit + lib32)\n' "$mesa_git_pkgver" "$mesa_git_pkgrel"
 printf '    bc250-dual-audio: %s-%s\n' "$bc250_dual_audio_pkgver" "$bc250_dual_audio_pkgrel"
 printf '    linux-cachyos-bc250-meta: %s-%s\n' "$linux_cachyos_bc250_meta_pkgver" "$linux_cachyos_bc250_meta_pkgrel"
+printf '    protonge-latest-bc250: %s-%s (%s, OptiScaler %s)\n' \
+    "$protonge_pkgver" "$protonge_pkgrel" "$protonge_ge_tag" "$protonge_optiscaler"

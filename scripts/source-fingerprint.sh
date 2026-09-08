@@ -14,6 +14,7 @@ COMPONENT="${1:?component is required}"
 NCT6687D_COMMIT="${NCT6687D_COMMIT:-}"
 CACHYOS_MESA_COMMIT="${CACHYOS_MESA_COMMIT:-}"
 MESA_GIT_COMMIT="${MESA_GIT_COMMIT:-}"
+PROTONGE_TAG="${PROTONGE_TAG:-}"
 
 case "$COMPONENT" in
     kernel-stable)
@@ -34,6 +35,7 @@ case "$COMPONENT" in
     mesa|lib32-mesa|mesa-git|mesa-testing|lib32-mesa-testing) ;;
     bc250-dual-audio) ;;
     linux-cachyos-bc250-meta) ;;
+    protonge-latest-bc250) ;;
     *)
         printf 'ERROR: unsupported fingerprint component: %s\n' "$COMPONENT" >&2
         exit 1
@@ -104,6 +106,48 @@ case "$COMPONENT" in
         {
             hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-dual-audio.install"
             hash_files "$ROOT_DIR/scripts/build-bc250-dual-audio-package.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    protonge-latest-bc250)
+        # Two things decide what this package contains: which GE-Proton release
+        # it repacks, and the FSR4 payload we lay over it.
+        #
+        # The OptiScaler build is pinned by FALLBACK_TAG inside
+        # select-optiscaler.py, so hashing that script is what makes bumping the
+        # pin trigger exactly one rebuild. Deliberately NOT resolved live here:
+        # OptiScaler-nightly publishes most days, and tracking it would rebuild a
+        # ~700 MB package daily for a payload nobody asked to move. See
+        # scripts/build-protonge-latest-bc250-package.sh for that reasoning and
+        # for BC250_FSR4_TRACK_OPTISCALER, which opts into the live check.
+        if [[ -z "$PROTONGE_TAG" ]]; then
+            PROTONGE_TAG="$(
+                "$ROOT_DIR/scripts/resolve-protonge.sh" |
+                    awk -F= '$1 == "PROTONGE_TAG" { print $2; exit }'
+            )"
+        fi
+        [[ "$PROTONGE_TAG" =~ ^GE-Proton[0-9]+-[0-9]+$ ]] || {
+            printf 'ERROR: invalid PROTONGE_TAG: %s\n' "$PROTONGE_TAG" >&2
+            exit 1
+        }
+
+        pkg_dir="$ROOT_DIR/packages/protonge-latest-bc250"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        # shellcheck disable=SC1091
+        source "$ROOT_DIR/scripts/fsr4-payload-sources.sh"
+
+        printf '%s\n' "$PROTONGE_TAG" > "$TMP/ge-tag"
+        {
+            (cd "$TMP" && sha256sum *)
+            mapfile -t payload_sources < <(fsr4_payload_source_paths "$ROOT_DIR" ge-proton)
+            hash_files "${payload_sources[@]}"
+            hash_files "$pkg_dir/PKGBUILD.in" "$pkg_dir/proton-shim.sh" "$pkg_dir/ntsync.conf"
+            hash_files "$ROOT_DIR/scripts/build-protonge-latest-bc250-package.sh" \
+                "$ROOT_DIR/scripts/resolve-protonge.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;
