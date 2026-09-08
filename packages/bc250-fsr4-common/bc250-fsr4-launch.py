@@ -52,6 +52,25 @@ OWNED = (
 )
 
 
+def game_launch(arguments, inherited):
+    """True only for an actual game launch.
+
+    Steam runs this tool for path conversion, installers and GPU queries too,
+    and those calls can inherit a game identity from the session -- so the verb
+    has to agree as well. "0" is Steam's own "no game" value for the ids.
+
+    Getting this wrong applies the whole FSR4 environment to a utility call.
+    """
+    return bool(
+        arguments
+        and arguments[0] in ("run", "waitforexitandrun")
+        and any(
+            inherited.get(name, "") not in ("", "0")
+            for name in ("SteamAppId", "SteamGameId")
+        )
+    )
+
+
 def defaulted(env, name, value):
     """Set `name` unless the caller chose something. Empty counts as unset."""
     env[name] = env.get(name, "").strip() or value
@@ -63,8 +82,8 @@ def environment(config, inherited, *, game):
     # them. Python tolerates that silently, but saying so avoids the attempts.
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     if not game:
-        # Steam also runs the tool with no game identity, for path conversion,
-        # installers and GPU queries. Those calls want ordinary Proton.
+        # Path conversion, installers and GPU queries want ordinary Proton, even
+        # when a game identity happens to be inherited from the session.
         return env
 
     for name in UNSHIPPED + OWNED:
@@ -109,7 +128,7 @@ def environment(config, inherited, *, game):
 
 def main():
     config = json.loads((TOOL / "bc250-fsr4-config.json").read_text())
-    game = bool(os.environ.get("SteamAppId") or os.environ.get("SteamGameId"))
+    game = game_launch(sys.argv[1:], os.environ)
     env = environment(config, os.environ, game=game)
     # Replace this process so Steam keeps the pid it started and every inherited
     # descriptor, exactly as if it had run Proton directly.

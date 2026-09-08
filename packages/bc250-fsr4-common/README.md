@@ -104,6 +104,13 @@ Two deliberate choices about the rest:
   a launch rather than falling back to the network. Left in place, a stale launch
   option from another Proton build becomes a game that will not start.
 
+It also decides what counts as a game launch, which needs both the verb
+(`run`/`waitforexitandrun`) and a non-zero Steam id. Steam runs the tool for path
+conversion, installers and GPU queries too, and those can inherit a game identity
+from the session; testing the id alone applies the whole FSR4 environment to
+them. Upstream fixed the same bug in rc5 ("Keep Steam utility calls and zero-ID
+launches out of game upscaler injection").
+
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
