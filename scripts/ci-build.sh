@@ -167,7 +167,30 @@ chown builder:builder "$CCACHE_DIR"
 # Take a share of what the volume can actually hold (its free space plus what
 # the cache already occupies, since that is reclaimable), clamped so a huge disk
 # does not hand ccache everything and a small one still gets a usable cache.
-# CCACHE_MAXSIZE in the environment overrides this entirely.
+# Precedence: CCACHE_MAXSIZE in the environment (the vars.CCACHE_MAXSIZE repo
+# variable) wins, then a per-machine pin, then this calculation.
+#
+# The per-machine pin exists because the repo variable is global and the runners
+# are not alike: capping the constrained machine through it would cap the large
+# one too. Drop a file in the cache volume on the machine that needs a ceiling:
+#
+#   echo 60G > <volume>/.bc250-maxsize
+#
+# Note this is the only way to bound the cache. `podman volume create --opt
+# size=` looks like it would work and is accepted, but it needs XFS project
+# quotas -- on btrfs or ext4 the container then fails to start with a mount
+# permission error, so it is worse than useless here.
+if [[ -z "${CCACHE_MAXSIZE:-}" && -r "$CCACHE_DIR/.bc250-maxsize" ]]; then
+    _pinned="$(tr -d '[:space:]' < "$CCACHE_DIR/.bc250-maxsize")"
+    if [[ "$_pinned" =~ ^[0-9]+[MGT]$ ]]; then
+        CCACHE_MAXSIZE="$_pinned"
+        printf '==> ccache pinned to %s by %s\n' "$CCACHE_MAXSIZE" "$CCACHE_DIR/.bc250-maxsize"
+    else
+        printf '::warning title=Bad ccache pin::%s contains %q, which is not a size like 60G; ignoring it.\n' \
+            "$CCACHE_DIR/.bc250-maxsize" "$_pinned"
+    fi
+fi
+
 if [[ -z "${CCACHE_MAXSIZE:-}" ]]; then
     mkdir -p -- "$CCACHE_DIR"
     _free_gb=$(( $(df -B1G --output=avail "$CCACHE_DIR" | tail -1) ))

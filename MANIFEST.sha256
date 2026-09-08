@@ -72,7 +72,7 @@ d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/buil
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 8687b3733fb34f1307288a7f915ec15aa79bd302aa8c7c7173900a3b52d5809a  ./scripts/build-proton-cachyos-native-bc250-package.sh
 dc99e7f0bf6c96af8ec221d6df603ad779aee37a89294747ff401a7d44eac6f5  ./scripts/build-protonge-latest-bc250-package.sh
-06e82896d0f2e0463d8340fccfd20bb0d5d332519740cea6ac66df421b671574  ./scripts/ci-build.sh
+34f780db9686e111c5db284bdd8b7a9a0ea25c04ab2cf3310119ba3505a138c0  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
 f0035472d6c6e776afe5fd8ee86d8219c0f07452fe90596d4cc0538d11aff591  ./scripts/finalize-repository.sh
 18952c41e9072a51fcc8d66b28786868f03b1aedb9cc1a3d44bd4de200e9d95b  ./scripts/fsr4-payload-sources.sh
