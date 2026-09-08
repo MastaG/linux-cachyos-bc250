@@ -186,8 +186,37 @@ jobs:
           fi
 
           if [[ "$state" == missing ]]; then
-            echo "No previous release published yet; every component counts as changed."
+            # A missing release does not have to mean starting over. Every run
+            # that produced a complete, publishable repository uploaded it as a
+            # workflow artifact, so the newest of those is a faithful copy of the
+            # last good release -- including every component's -info.env. Restore
+            # it here, into the same out/repo the seeding step would have filled,
+            # so one download serves both and only genuinely changed components
+            # rebuild. This is what recovers from a publish that deleted the
+            # release and then failed to recreate it.
             : > "$info"
+            rm -rf out/repo && mkdir -p out/repo
+            artifact="$(gh api repos/${GITHUB_REPOSITORY}/actions/artifacts --paginate \
+              --jq '[.artifacts[] | select(.expired == false)
+                     | select(.name | startswith("bc250-cachyos-repo-"))]
+                    | sort_by(.created_at) | reverse | .[0]
+                    | "\(.workflow_run.id) \(.name)"' 2>/dev/null || true)"
+            if [[ -n "$artifact" && "$artifact" != null* ]]; then
+              read -r artifact_run artifact_name <<<"$artifact"
+              echo "No release found; restoring from workflow artifact $artifact_name (run $artifact_run)."
+              if gh run download "$artifact_run" -n "$artifact_name" --dir out/repo &&
+                 [[ -f out/repo/build-info.env ]]; then
+                cp out/repo/build-info.env "$info"
+                cp out/repo/*-info.env previous/ 2>/dev/null || true
+                echo "restored=true" >> "$GITHUB_OUTPUT"
+                echo "Restored $(find out/repo -maxdepth 1 -type f | wc -l) assets; only changed components will rebuild."
+              else
+                echo "::warning title=Artifact restore failed::Could not restore $artifact_name; every component counts as changed."
+                rm -rf out/repo && mkdir -p out/repo
+              fi
+            else
+              echo "No previous release and no usable artifact; every component counts as changed."
+            fi
           else
             # Every published release contains build-info.env and one
             # <component>-info.env per component, so if the release exists and
@@ -313,8 +342,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf out/repo
-          mkdir -p out/repo
+
+          # The decision step may already have restored out/repo from a workflow
+          # artifact because the release was missing. Do not discard that.
+          if [[ '${{ steps.build.outputs.restored }}' == true ]]; then
+            echo "Keeping the $(find out/repo -maxdepth 1 -type f | wc -l) assets restored from the workflow artifact."
+          else
+            rm -rf out/repo
+            mkdir -p out/repo
+          fi
 
           # As above: an unreachable API must not look like "no release yet".
           # The publish step deletes and recreates the release from out/repo, so
@@ -340,7 +376,7 @@ jobs:
             fi
             echo "Seeded out/repo from the previous fixed release."
           else
-            echo "No previous fixed release exists; starting a new repository."
+            echo "No release to seed from; using whatever the decision step restored."
           fi
 
           # Baseline for the incremental publisher: exactly what the release
