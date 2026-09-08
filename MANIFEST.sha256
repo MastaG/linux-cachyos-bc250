@@ -25,14 +25,7 @@ e08643fce4a56cdc5bff1e7a7ba6e4c5975eea4c39b0d5306ffbd6973bebfe9e  ./patches/linu
 af6aadd574343c69638b5f32da980a3fca5c45510872b33c07a1beeff0e5460a  ./patches/linux-cachyos-rc/0007-amdgpu-ttm-null-page-guard.patch
 8bc7ad42dc33363aeff566208b914fab65ad6c6641deeee44868a63e7634adff  ./patches/linux-cachyos-rc/0008-cyan-skillfish-sclk-range.patch
 a19d5cca46c1e5d8f88061cb2fb1569bcaa82967d3e420fed72449cecf5846ff  ./patches/linux-cachyos-rc/0009-bc250-40cu-unlock.patch
-897b3878f4ef3aa3a7b14e4410befc425de39b1fa86cda6b4255b4989fe59a99  ./patches/linux-cachyos-rc/0010-hdmi21-freesync-amd-vsdb.patch
-9dc819be0df727aca660ed33000ebca4c7954922b1253f5fb754d237563a3582  ./patches/linux-cachyos-rc/0011-hdmi21-edid-allm-vrr-hf-vsdb.patch
-b5ce8f8e5a3029c986fafdd4d06c8f2aedff92b9e819c8a11caf257e2febf65a  ./patches/linux-cachyos-rc/0012-hdmi21-vrr-hf-vsdb.patch
-e86e38325420afd38a2adfae6ee805a3b7cda40adc0b6f533140bd558454ed00  ./patches/linux-cachyos-rc/0013-hdmi21-allm-gaming-vrr.patch
-a0cc8f31c2455552a2bf58da1417ab49c775619c11073afc69acaac22a58e32a  ./patches/linux-cachyos-rc/0014-hdmi21-vtem-on-tmds.patch
-80ab69a7fe31bba53091b54a2dc329f631e4e37e072140357b4261b862497952  ./patches/linux-cachyos-rc/0015-passive-vrr-drm-properties.patch
-1cc55c1c99b9783d15d7e609c320221c61b3aecc96a2d1ac811f2c199625decd  ./patches/linux-cachyos-rc/0016-passive-vrr-amdgpu.patch
-2705b1c061f7768ad24e18f891d10e1222cd78051b49921a525d982c65d18716  ./patches/linux-cachyos-rc/0017-passive-vrr-mccs-freesync-fallback.patch
+a0cc8f31c2455552a2bf58da1417ab49c775619c11073afc69acaac22a58e32a  ./patches/linux-cachyos-rc/0010-hdmi21-vtem-on-tmds.patch
 b30db62d989977e0cf7c99813f029ade75da128623966616330b0dacc98a5788  ./patches/mesa/0001-gfx1013-compute-queue-fix.patch
 5009c271d5a4efb7d4a447d12ca52016e3b07546401b359e3bd6a6d9399363fa  ./patches/mesa/0002-gfx1013-mesh-task-shaders.patch
 f4547fbf694a83f31ad9613c1d312209bcd81d87fccd6e9a48c3c3adebf18532  ./patches/mesa/0003-gfx1013-taskmesh-queries.patch
@@ -54,7 +47,7 @@ b30db62d989977e0cf7c99813f029ade75da128623966616330b0dacc98a5788  ./patches/mesa
 f4547fbf694a83f31ad9613c1d312209bcd81d87fccd6e9a48c3c3adebf18532  ./patches/mesa-testing/0003-gfx1013-taskmesh-queries.patch
 a77116a0a3320b2dfaa43c9a2e5ec8853eb518473b121a2a97efebd4a0dbfde1  ./patches/mesa-testing/0004-radv-gfx103.patch
 952579562a100311f64fea92151b63c11559fe6aaed44ea8fa46cd5a7ec71586  ./patches/mesa-testing/0005-bc250-fsr4-v3-candidate2-imad24-madchain.patch
-77390728ea085913bfadf0a1fba21cbc76931e7329aec5efb93109e094d17cf7  ./README.md
+754256c765446736f7ec0a8c295ef663a872a2821670771729c94011e7fb6e87  ./README.md
 43231e45edc634a305fa273391c3c16e95215b36790bb0027d9dc24d89558859  ./scripts/build-bc250-dual-audio-package.sh
 bd77100ae9adf9a3caa0449ff9431d53b6f8ad7fe042fe4a0e73c07c31bf8f2c  ./scripts/build-lib32-mesa-package.sh
 719419f4ea1b207123065f5ddf5b7d5e4c81427a9a1792722e4c9242d18ac1ce  ./scripts/build-lib32-mesa-testing-package.sh
@@ -65,7 +58,7 @@ d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/buil
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 39c7a7a0c2ebc9a3a2ca03c1151672bb0b1b9f74cc5897f8e389c9da429d59cb  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
-979b8f996421fb4e7a371cce4ff6771b6a2e1d6be6d61a263022ce9214b04850  ./scripts/finalize-repository.sh
+91d612f16901ec7fba729e98daa287a9f802f71f421864bdaa067baafbf450e5  ./scripts/finalize-repository.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 e976abec5622912d98f81b7adbb14c8d858109503b55d6a01361eb2088dc3ed3  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 79dd58f6bf60af13eaacd1f2b8f536cefaf16fd694d80f8fef3fb3124b28ab93  ./scripts/prepare-lib32-mesa-testing-pkgbuild.sh

@@ -293,7 +293,7 @@ cat > RELEASE_NOTES.md <<EOF_NOTES
 - Version: \`${rc_pkgver}-${rc_pkgrel}\`
 - Patch set: \`${rc_patch_set}\`
 - Built from the \`patches/linux-cachyos-rc\` set, which is maintained against the Linux 7.3-rc series independently of the 7.2 stable set.
-- Additionally carries an HDMI 2.1 VRR + ALLM backport (\`0010\`-\`0017\`) for sinks advertising these through the HDMI Forum VSDB rather than AMD's FreeSync VSDB. \`0010\`-\`0014\` are merged to \`drm-next\` (Linux 7.4) and missed 7.3 by one day; \`0014\` ("Emit VTEM for HF-VSDB VRR on TMDS links") also fixes VRR never engaging on TMDS links. \`0015\`-\`0017\` (passive VRR) are still unreviewed upstream.
+- Additionally carries \`0010\` ("Emit VTEM for HF-VSDB VRR on TMDS links", upstream \`640fd039dc8b\`), which fixes HDMI 2.1 VRR never engaging on TMDS links for sinks advertising VRR through the HDMI Forum VSDB. Merged to \`drm-next\` for Linux 7.4. The other seven patches of the original backport arrived in \`cachyos-7.3-rc2-1\` via CachyOS's \`7.3/hdmi\` merge and were dropped here.
 
 ### BORE: \`${bore_pkgbase}\`
 

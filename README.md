@@ -244,7 +244,7 @@ Both sets share these eight BC-250 patches — `patches/linux-cachyos` for `linu
 0009-bc250-40cu-unlock.patch
 ```
 
-`patches/linux-cachyos-rc` additionally carries the [HDMI 2.1 VRR/ALLM backport](#hdmi-21-vrr-and-allm-backport-rc-kernel-only) (`0010`–`0017`), which applies only to the 7.3 series.
+`patches/linux-cachyos-rc` additionally carries one [HDMI 2.1 patch](#hdmi-21-vrr-and-allm-backport-rc-kernel-only) (`0010`), which applies only to the 7.3 series.
 
 There is intentionally no `0002-bc250-audio.patch` here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
@@ -270,22 +270,40 @@ This patch set contains:
 
 ## HDMI 2.1 VRR and ALLM backport (RC kernel only)
 
-`linux-cachyos-rc-bc250` carries eight extra patches (`0010`–`0017`) that add HDMI 2.1 gaming features — Variable Refresh Rate and Auto Low Latency Mode — for sinks that advertise them through the HDMI Forum VSDB (HF-VSDB) rather than AMD's own FreeSync VSDB. This matters for the Steam-Machine use case: TVs and AV receivers generally advertise VRR/ALLM the HDMI-Forum way, not the AMD way.
+`linux-cachyos-rc-bc250` carries one extra patch, `0010`, supporting HDMI 2.1
+Variable Refresh Rate for sinks that advertise it through the HDMI Forum VSDB
+(HF-VSDB) rather than AMD's own FreeSync VSDB. That matters for the
+Steam-Machine use case: TVs and AV receivers generally advertise VRR/ALLM the
+HDMI-Forum way, not the AMD way.
 
-| Patches | Series | Upstream status |
-|---|---|---|
-| `0010`–`0013` | `HDMI 2.1 VRR and ALLM support` v4 | **Merged to `drm-next` 2026-09-02** → Linux 7.4 |
-| `0014` | `Emit VTEM for HF-VSDB VRR on TMDS links` | **Merged to `drm-next`** → Linux 7.4 |
-| `0015`–`0017` | `drm/amd/display: passive VRR` v1 | **Not merged** — posted 2026-09-01, unreviewed |
+This was an eight-patch backport when it was written against 7.3-rc1. **CachyOS
+has since merged its `7.3/hdmi` branch into `7.3/base`, so seven of the eight
+arrived upstream in `cachyos-7.3-rc2-1` and were removed here** — carrying them
+would have meant applying the same changes twice. Verified two ways before
+removal: each removed patch reverses cleanly against the new tree, and
+`git merge-base --is-ancestor` confirms every one of their commits is now an
+ancestor of `cachyos-7.3-rc2-1`.
 
-The first five landed in `drm-next` on 2026-09-02, one day *after* 7.3-rc1 was tagged, so they missed the 7.3 merge window entirely and are queued for **7.4**. `0010`–`0013` and `0015`–`0017` are taken from CachyOS's own `7.3/hdmi` branch, which cherry-picks them from the mailing list but is **not merged into `7.3/base`** — so the stock RC kernel does not have them. `0014` is taken from `drm-next` directly; CachyOS's branch does not include it.
+`0010` (upstream `640fd039dc8b`, "Emit VTEM for HF-VSDB VRR on TMDS links") is
+the one that did **not** arrive that way. It came from `drm-next` directly and
+was never on CachyOS's `7.3/hdmi` branch, so it still has to be carried here. It
+is also the most useful of the set for adapter-based setups. Before it,
+`amdgpu_dm_update_freesync_state_on_stream()` only built the VTEM — the Video
+Timing Extended Metadata packet, which is how HDMI 2.1 carries VRR timing — for
+`SIGNAL_TYPE_HDMI_FRL`. A sink advertising HF-VSDB VRR but no AMD FreeSync
+therefore never received a VTEM on a TMDS link, and VRR could not engage at all.
+Per HDMI 2.1 a VTEM is valid on both TMDS and FRL; only the compressed CVTEM is
+FRL-only. It is reviewed by Harry Wentland and carries a `Tested-by:` from Valve.
 
-`0014` is the most interesting one for adapter-based setups. Before it, `amdgpu_dm_update_freesync_state_on_stream()` only built the VTEM (Video Timing Extended Metadata packet, which is how HDMI 2.1 carries VRR) for `SIGNAL_TYPE_HDMI_FRL`. A sink advertising HF-VSDB VRR but no AMD FreeSync therefore never received a VTEM on a TMDS link, and VRR could not engage. Per HDMI 2.1 a VTEM is valid in both TMDS and FRL modes — only the compressed CVTEM is FRL-only. It is reviewed by Harry Wentland and carries a `Tested-by:` from Valve.
+It is queued for **Linux 7.4** — it landed in `drm-next` on 2026-09-02, one day
+after 7.3-rc1 was tagged, so it missed the 7.3 merge window by a day and can be
+dropped once 7.4 arrives.
 
-**Caveats worth knowing:**
-
-- `0015`–`0017` (passive VRR) are **v1, unreviewed, and the original reporter replied that they do not fix desktop VRR** — only in-game VRR works. They are included because CachyOS ships them on `7.3/hdmi`, but they are the first thing to drop if anything misbehaves.
-- All of this affects the GPU's **own HDMI output path**. The BC-250 exposes only DisplayPort, so with an *active* DP→HDMI converter (which is a DisplayPort sink in its own right) amdgpu never takes the HDMI code path and none of this applies. It should apply with a *passive* DP++ adapter, where the GPU drives HDMI TMDS directly — which is also capped at 4K60, exactly the case `0014` addresses.
+Caveat unchanged: the BC-250 is DisplayPort-only, so none of this applies through
+an **active** DP→HDMI converter, where the GPU still speaks DisplayPort and the
+HDMI code never runs. It should engage with a **passive** DP++ adapter, where the
+GPU drives HDMI TMDS directly — which is exactly the 4K60 case the VTEM fix
+targets.
 
 ## Optional 40 CU unlock
 
