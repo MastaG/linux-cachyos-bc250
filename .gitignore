@@ -3,3 +3,4 @@
 /previous/
 *.pkg.tar.zst
 /rebase/
+__pycache__/

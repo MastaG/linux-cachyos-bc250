@@ -319,9 +319,9 @@ All three kernels use:
 
 - CachyOS packaging commit: \`${mesa_cachyos_commit}\`
 - Version: \`${mesa_pkgver}-${mesa_pkgrel}\`${mesa_epoch:+ (epoch ${mesa_epoch})}
-- Applied patches: \`0001\` compute-queue fix, \`0002\` mesh/task support, \`0003\` mesh queries, \`0004\` RADV_GFX103 runtime override, \`0005\` BC-250 FSR4 EXP-042B (V3) deferred SDot lowering, \`0006\` FSR4 combined-unroll selection, \`0007\` FSR4 image-preparation and texture candidates, \`0008\` FSR4 resolution-variant coverage and 8K masked-store guard.
-- \`0006\` is active by default. \`0007\` and \`0008\` are opt-in: set \`BC250_FSR4_IMAGEPREP=1\`, \`BC250_FSR4_TEXTURE=1\` or \`BC250_FSR4_RESOLUTION_VARIANTS=1\` to enable them. Every FSR4 rewrite is gated on exact shader identity, so an unmatched shader is left untouched.
-- \`0006\`-\`0008\` are the work of fish / @iamastrangeloop, rebased onto this tree. Their reported figure for \`0006\` is 8.015 ms to 5.843 ms per FSR4.1.1 INT8 upscale at 1440p Balanced (27.1%); the opt-in candidates measure around 1% each and are not independently verified here.
+- Applied patches: \`0001\` compute-queue fix, \`0002\` mesh/task support, \`0003\` mesh queries, \`0004\` RADV_GFX103 runtime override, \`0005\` BC-250 FSR4 EXP-042B (V3) deferred SDot lowering, \`0006\` FSR4 combined-unroll selection, \`0007\` FSR4 image-preparation and texture candidates, \`0008\` FSR4 resolution-variant coverage and 8K masked-store guard, \`0009\` FSR4 production defaults.
+- \`0006\`-\`0009\` are active by default since \`0009\` enables the candidates: set \`BC250_FSR4_IMAGEPREP=1\`, \`BC250_FSR4_TEXTURE=1\` or \`BC250_FSR4_RESOLUTION_VARIANTS=1\` to enable them. Every FSR4 rewrite is gated on exact shader identity, so an unmatched shader is left untouched.
+- \`0006\`-\`0008\` are the work of fish / @iamastrangeloop, \`0009\` of daniel-h-0, rebased onto this tree. Their reported figure for \`0006\` is 8.015 ms to 5.843 ms per FSR4.1.1 INT8 upscale at 1440p Balanced (27.1%); the opt-in candidates measure around 1% each and are not independently verified here.
 - \`0001\` and \`0005\` are always active; GFX1013 mesh/task feature exposure remains disabled unless \`RADV_GFX103=1\` is set for the application.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 

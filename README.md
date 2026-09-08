@@ -509,7 +509,7 @@ Installing it does not remove the ability to manage those packages individually,
 The workflow resolves a single exact commit from `CachyOS/CachyOS-PKGBUILDS` and downloads the current stable Mesa packaging from that revision.  
 The upstream Mesa version and epoch remain unchanged; the GitHub Actions run number is appended to `pkgrel`.
 
-All eight BC-250 Mesa patches are applied at build time, in order:
+All nine BC-250 Mesa patches are applied at build time, in order:
 
 ```text
 patches/mesa/0001-gfx1013-compute-queue-fix.patch
@@ -520,6 +520,7 @@ patches/mesa/0005-bc250-fsr4-v3.patch
 patches/mesa/0006-bc250-fsr4-combined-unroll.patch
 patches/mesa/0007-bc250-fsr4-imageprep-texture.patch
 patches/mesa/0008-bc250-fsr4-resolution-variants.patch
+patches/mesa/0009-bc250-fsr4-production-defaults.patch
 ```
 
 `0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.  
@@ -543,6 +544,8 @@ Both are pinned to FSR4.1.1 INT8 by exact shader identity. A different FSR4 buil
 `0008` is that bucket problem addressed, and is **opt-in** via `BC250_FSR4_RESOLUTION_VARIANTS=1`. It adds 24 further shader identities covering the 1080p and 4K+ buckets, each tagged with flag bit `0x40000000` so they are ignored entirely unless the switch is set.
 
 It also carries a correctness fix rather than an optimization. The pinned INT8 8K shaders encode masked DWORD stores at byte `0x08000000`, an address inside their own 332 MB scratch allocation, where a store can overwrite a live input and race a neighbouring invocation at clipped edges. For eight exactly identified bytecodes — matched by size and FNV-1a hash, and additionally verified to hold an `OpConstant` of that value at the expected word before anything is written — the constant is rewritten so the store lands beyond any scratch buffer this provider supports. That guard can be enabled on its own with `BC250_FSR4_RESOLUTION_GUARD=1`.
+
+`0009` flips every FSR4 candidate from opt-in to on by default — `BC250_FSR4_IMAGEPREP`, `BC250_FSR4_TEXTURE`, `BC250_FSR4_RESOLUTION_VARIANTS` and `BC250_FSR4_RESOLUTION_GUARD` all default on, with the pipeline cache key moved to `v3` so pipelines cached by an older driver are not reused. Each remains individually overridable, and `BC250_FSR4_DISABLE=1` still disables the integration wholesale. Note this ships the image-preparation and texture candidates to every user; their measured effect is about 1% each at n=2 per arm, which is the size of the run-to-run spread in the same campaigns.
 
 Upstream notes the 4K+ bucket previously failed to show an uplift and is curious whether the multi-bucket logic changes that. That is unverified here, as are `0008`'s performance effects generally.
 
@@ -581,7 +584,7 @@ mesa-git
 lib32-mesa-git
 ```
 
-The Git variant carries a separately rebased copy of the same eight-patch series:
+The Git variant carries a separately rebased copy of the same nine-patch series:
 
 ```text
 patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
@@ -592,6 +595,7 @@ patches/mesa-git/0005-bc250-fsr4-v3.patch
 patches/mesa-git/0006-bc250-fsr4-combined-unroll.patch
 patches/mesa-git/0007-bc250-fsr4-imageprep-texture.patch
 patches/mesa-git/0008-bc250-fsr4-resolution-variants.patch
+patches/mesa-git/0009-bc250-fsr4-production-defaults.patch
 ```
 
 `0001` and `0005` remain active regardless of environment variables.  
@@ -809,6 +813,10 @@ Only use this repository when you trust the project and its workflow.
   selection, the image-preparation and texture candidates, and the resolution-variant
   coverage with its 8K masked-store guard, together with the measurement harness,
   evidence and prebuilt drivers those results were produced with.
+- daniel-h-0 — BC-250 FSR4 v4: the production defaults, and the pinned local
+  upscaler manifest that lets Proton load a checksum-verified FSR4 provider and
+  OptiScaler from disk instead of downloading them at launch.  
+  <https://github.com/daniel-h-0/bc250-fsr4-fork>
 - FilippoR / ViRazY - For the kernel GPU frequency ranges
 - duggasco — BC-250 40 CU unlock: dual-register (CC + SPI) research, testing and tooling.  
   <https://github.com/duggasco/bc250-40cu-unlock>

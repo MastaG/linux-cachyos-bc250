@@ -1,9 +1,12 @@
 a61909e6e5d8033a8204421e1af4cd15be460683183e8d8c0433438e3fc2e903  ./.github/workflows/build-release.yml
-58e5221a3e56e9bafacb83b069e11943a47af51761ceb7fa39d73aa481674ced  ./.gitignore
+bb28f8adfdf313f530d184774d7978d1bd97a7b7ae55de5374162b3fb2c257c1  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
 03670803df09ef8fecee27847ab216661e2f620ef9b376d0241f6146300c2656  ./packages/bc250-dual-audio/bc250-dual-audio.install
 b82ba04d8740950460bbe7d29f51b4b8fd7b623bfb94888d873ced75086d7d72  ./packages/bc250-dual-audio/PKGBUILD
 fa17f0d9ff6e4e030940831a99b850a490e58d43b04cacf517949ea9dc6e73f3  ./packages/bc250-dual-audio/.SRCINFO
+164a9e58945b932eca9427e5239b840d7b10d7a86a9e37f8adea37f813729e12  ./packages/bc250-fsr4-common/optiscaler-preset.json
+7427039f8149505405daa18d477658be7fbdf7a36e12fcfc9d2a5379a086bd2e  ./packages/bc250-fsr4-common/patches/0001-pinned-upscaler-manifest.patch
+586b3ec507f756c9f7002a32095a3dce57227606c38286815b5d33ca1091353a  ./packages/bc250-fsr4-common/README.md
 c8b9145b0030767062e5f3a30f29952093ef0b9c6e605aae52131b3978c54960  ./packages/linux-cachyos-bc250-meta/PKGBUILD
 765f7886102162bc105d3f78fca6ddebeb1a924261cdfbfc074bbf516736f554  ./packages/linux-cachyos-bc250-meta/.SRCINFO
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
@@ -34,6 +37,7 @@ a77116a0a3320b2dfaa43c9a2e5ec8853eb518473b121a2a97efebd4a0dbfde1  ./patches/mesa
 b19281863aa2b8465649d370a39bf436d65ae6f06c51fb8f79228d0277d848ec  ./patches/mesa/0006-bc250-fsr4-combined-unroll.patch
 004644a2704e69b1083cf26c8d250f860eb9595573188343137615afdcc31c93  ./patches/mesa/0007-bc250-fsr4-imageprep-texture.patch
 517cf1be2d9e69031793121d9b80a1d968411cc06b982a3155de927690aa1d42  ./patches/mesa/0008-bc250-fsr4-resolution-variants.patch
+298c2e08a8532bde513427494ff1ea8caee6ddc33deac497c6f03ad570357479  ./patches/mesa/0009-bc250-fsr4-production-defaults.patch
 cd2d00cb4b72509f44a17936b50524538018a17ba42fdfede5d660ddd916995f  ./patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
 1f57d7b31655760108f61bcbc2e7c0062ece3016f572dff08be4ba48ddb6509f  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 291f5bf74d3423365d20542286f832bd76e19b07611a35caab2524df3522dff2  ./patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
@@ -42,12 +46,13 @@ d3f7eb49beba342b02039c0b489403ab80aeb1356e3b1739037b0c0113210e26  ./patches/mesa
 3130b2d1b6156fd32c3926d4f2c0cffca9bb2a0eecb486d76c0611a64f53c111  ./patches/mesa-git/0006-bc250-fsr4-combined-unroll.patch
 ec944cb957935d6ded7cd642d9e361118e8a085a831f586ddb4a69154fadf621  ./patches/mesa-git/0007-bc250-fsr4-imageprep-texture.patch
 3caac93221278011723f4ab462d7c9f609cd3d64086845a3662124cbc3251f92  ./patches/mesa-git/0008-bc250-fsr4-resolution-variants.patch
+7187db2180574b087a22a08e6776b22b959b65942829ccd3b6933cbf3eaac97a  ./patches/mesa-git/0009-bc250-fsr4-production-defaults.patch
 b30db62d989977e0cf7c99813f029ade75da128623966616330b0dacc98a5788  ./patches/mesa-testing/0001-gfx1013-compute-queue-fix.patch
 5009c271d5a4efb7d4a447d12ca52016e3b07546401b359e3bd6a6d9399363fa  ./patches/mesa-testing/0002-gfx1013-mesh-task-shaders.patch
 f4547fbf694a83f31ad9613c1d312209bcd81d87fccd6e9a48c3c3adebf18532  ./patches/mesa-testing/0003-gfx1013-taskmesh-queries.patch
 a77116a0a3320b2dfaa43c9a2e5ec8853eb518473b121a2a97efebd4a0dbfde1  ./patches/mesa-testing/0004-radv-gfx103.patch
 952579562a100311f64fea92151b63c11559fe6aaed44ea8fa46cd5a7ec71586  ./patches/mesa-testing/0005-bc250-fsr4-v3-candidate2-imad24-madchain.patch
-754256c765446736f7ec0a8c295ef663a872a2821670771729c94011e7fb6e87  ./README.md
+c5e731533c98c166182c1e9f5a1962178b490fc23cc77897d6f59b665062c58e  ./README.md
 43231e45edc634a305fa273391c3c16e95215b36790bb0027d9dc24d89558859  ./scripts/build-bc250-dual-audio-package.sh
 bd77100ae9adf9a3caa0449ff9431d53b6f8ad7fe042fe4a0e73c07c31bf8f2c  ./scripts/build-lib32-mesa-package.sh
 719419f4ea1b207123065f5ddf5b7d5e4c81427a9a1792722e4c9242d18ac1ce  ./scripts/build-lib32-mesa-testing-package.sh
@@ -58,7 +63,7 @@ d6d713b8e82f83d972e0e81d4874e393fa660e250eb4bcc95fabd7e39c40bdba  ./scripts/buil
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 39c7a7a0c2ebc9a3a2ca03c1151672bb0b1b9f74cc5897f8e389c9da429d59cb  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
-91d612f16901ec7fba729e98daa287a9f802f71f421864bdaa067baafbf450e5  ./scripts/finalize-repository.sh
+22f6dd8a80aea8ada8df2f7907b1bd4f94fc5c98b92c776f243dc33e6d5b4816  ./scripts/finalize-repository.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 e976abec5622912d98f81b7adbb14c8d858109503b55d6a01361eb2088dc3ed3  ./scripts/prepare-lib32-mesa-pkgbuild.sh
 79dd58f6bf60af13eaacd1f2b8f536cefaf16fd694d80f8fef3fb3124b28ab93  ./scripts/prepare-lib32-mesa-testing-pkgbuild.sh
@@ -70,4 +75,5 @@ cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo
 eeb453358d62271e629355af4bff424160d2af4b0d41e413f347466144805e4c  ./scripts/resolve-cachyos-mesa.sh
 d54dc6ec221b5e8b4f594a891b8bb77b61e101837e3277918f50aad558b71ba7  ./scripts/resolve-mesa-git.sh
 42d362d8154f29600842ad05297d35a4d4191b81c4e87138a10e4b44aae011f9  ./scripts/resolve-nct6687d.sh
+9f1df481373721dc8b711d2336b16dc2c0912fe02f5dc0035994c8f4bf69dd7b  ./scripts/select-optiscaler.py
 5213370d476a578b793d07ad4bbe074d099c4165084951337883a38442b329fe  ./scripts/source-fingerprint.sh

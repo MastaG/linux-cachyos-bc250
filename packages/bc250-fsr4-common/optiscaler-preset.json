@@ -1,0 +1,27 @@
+{
+  "preset": {
+    "FSR.Fsr4EnableWatermark": "auto",
+    "FSR.Fsr4ForceModel": "2",
+    "FSR.FsrNonLinearColorSpace": "false",
+    "FSR.FsrNonLinearPQ": "auto",
+    "FSR.FsrNonLinearSRGB": "auto",
+    "FSR.UpscalerIndex": "0",
+    "FrameGen.Enabled": "false",
+    "Hotfix.CreateD3D12DeviceForLuma": "false",
+    "Hotfix.ExtendedStateRestore": "false",
+    "Hotfix.RestoreComputeSignature": "false",
+    "Hotfix.RestoreGraphicSignature": "false",
+    "Libraries.OptiDllPath": "C:\\windows\\system32\\umu\\OptiScaler",
+    "Log.LogToFile": "false",
+    "Menu.DisableSplash": "true",
+    "Plugins.LoadAsiPlugins": "true",
+    "Plugins.LoadReShade": "true",
+    "Plugins.Path": "C:\\windows\\system32\\umu\\OptiScaler\\plugins",
+    "Spoofing.Dxgi": "auto",
+    "Spoofing.Vulkan": "auto",
+    "Spoofing.VulkanExtensionSpoofing": "true",
+    "Upscalers.Dx11Upscaler": "ffx_12",
+    "Upscalers.Dx12Upscaler": "ffx",
+    "Upscalers.VulkanUpscaler": "ffx_12"
+  }
+}
