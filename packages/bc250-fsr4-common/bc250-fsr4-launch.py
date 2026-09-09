@@ -62,16 +62,25 @@ def game_launch(arguments, inherited):
     and those calls can inherit a game identity from the session -- so the verb
     has to agree as well. "0" is Steam's own "no game" value for the ids.
 
-    Getting this wrong applies the whole FSR4 environment to a utility call.
+    umu, which is how Heroic and Lutris run this tool, is the exception: it
+    derives SteamAppId from its own GAMEID and writes SteamGameId to match, so
+    a non-Steam title arrives with both set to "0". Heroic's GAMEID for a GOG
+    game is literally "umu-0". Judged on the ids alone that reads as a utility
+    call and the launch loses FSR4 entirely -- which is what happened. umu
+    always names the game in UMU_ID, and Steam never sets it, so its presence
+    is the signal the ids cannot give here.
+
+    Getting this wrong applies the whole FSR4 environment to a utility call, or
+    withholds it from a real one.
     """
-    return bool(
-        arguments
-        and arguments[0] in ("run", "waitforexitandrun")
-        and any(
-            inherited.get(name, "") not in ("", "0")
-            for name in ("SteamAppId", "SteamGameId")
-        )
-    )
+    if not arguments or arguments[0] not in ("run", "waitforexitandrun"):
+        return False
+    if any(
+        inherited.get(name, "") not in ("", "0")
+        for name in ("SteamAppId", "SteamGameId")
+    ):
+        return True
+    return bool(inherited.get("UMU_ID", "").strip())
 
 
 def defaulted(env, name, value):

@@ -123,12 +123,21 @@ Two deliberate choices about the rest:
   a launch rather than falling back to the network. Left in place, a stale launch
   option from another Proton build becomes a game that will not start.
 
-It also decides what counts as a game launch, which needs both the verb
-(`run`/`waitforexitandrun`) and a non-zero Steam id. Steam runs the tool for path
-conversion, installers and GPU queries too, and those can inherit a game identity
-from the session; testing the id alone applies the whole FSR4 environment to
-them. Upstream fixed the same bug in rc5 ("Keep Steam utility calls and zero-ID
-launches out of game upscaler injection").
+It also decides what counts as a game launch, which needs the verb
+(`run`/`waitforexitandrun`) and then either a non-zero Steam id or a `UMU_ID`.
+Steam runs the tool for path conversion, installers and GPU queries too, and
+those can inherit a game identity from the session; testing the id alone applies
+the whole FSR4 environment to them. Upstream fixed the same bug in rc5 ("Keep
+Steam utility calls and zero-ID launches out of game upscaler injection").
+
+`UMU_ID` is there because the id test alone is wrong in the other direction for
+umu, which is how Heroic and Lutris run this tool. umu derives `SteamAppId` from
+its own `GAMEID` and overwrites `SteamGameId` to match, so a non-Steam title
+arrives with both set to `"0"` — Heroic's `GAMEID` for a GOG game is literally
+`umu-0`. That reads as a utility call, and the launch silently loses FSR4.
+Lutris happened to escape it only because its default `GAMEID` is `umu-default`,
+which yields the id `"default"`. umu always sets `UMU_ID` and Steam never does,
+so it separates the two cases without weakening the Steam-side rule.
 
 Utility calls retain the local manifest but explicitly disable both upgrades
 and clear inherited proxy settings. This prevents CachyOS's default provider

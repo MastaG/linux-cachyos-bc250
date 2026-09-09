@@ -291,6 +291,37 @@ class RuntimeTests(unittest.TestCase):
             )
         self.assertNotIn("WINEDLLOVERRIDES", env)
 
+    def test_umu_launchers_get_the_payload_despite_a_zero_steam_id(self):
+        # Heroic's GOG launch, verbatim: umu sets both ids from GAMEID=umu-0.
+        heroic = {
+            "SteamAppId": "0",
+            "SteamGameId": "0",
+            "UMU_ID": "umu-0",
+            "STEAM_COMPAT_APP_ID": "0",
+        }
+        for base in BASES:
+            with self.subTest(base=base):
+                env = self.run_upscalers(base, heroic, ["waitforexitandrun"])
+                self.assertEqual(env["WINE_OPTISCALER_NAME"], "winmm.dll")
+                self.assertNotEqual(env["PROTON_FSR4_UPGRADE"], "0")
+                self.assertEqual(
+                    (
+                        self.prefix / "drive_c/windows/system32/amdxcffx64.dll"
+                    ).read_bytes(),
+                    self.provider,
+                )
+
+    def test_umu_does_not_turn_steam_utility_calls_into_game_launches(self):
+        for arguments in (["getcompatpath"], ["getnativepath"], ["destroyprefix"]):
+            with self.subTest(arguments=arguments):
+                self.assertFalse(
+                    wrapper.game_launch(arguments, {"UMU_ID": "umu-0"})
+                )
+        # No umu, no ids: still a utility call, which is the Steam-side rule.
+        self.assertFalse(wrapper.game_launch(["run"], {"SteamAppId": "0"}))
+        self.assertFalse(wrapper.game_launch(["run"], {"UMU_ID": ""}))
+        self.assertFalse(wrapper.game_launch(["run"], {}))
+
     def test_corrupt_requested_payload_is_refused_before_prefix_writes(self):
         provider = self.work / "artifacts/provider.xz"
         provider.write_bytes(b"corrupted archive")
