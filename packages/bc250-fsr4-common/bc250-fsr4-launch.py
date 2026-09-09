@@ -79,6 +79,29 @@ def defaulted(env, name, value):
     env[name] = env.get(name, "").strip() or value
 
 
+def load_native(env, dll):
+    """Ask Wine to load `dll` from disk, unless the caller already decided.
+
+    Wine picks native or builtin by base name, and its hardcoded default for a
+    DLL it implements itself -- winmm among them -- is builtin first. Proton's
+    loader hack redirects the proxy's *path* into system32/umu but does not
+    touch that decision, and a Wine that counts anything below system32 as a
+    system directory then maps OptiScaler and drops it for its own winmm.
+    Nothing fails: protonfixes reports the payload installed, the redirect is
+    logged, and the game simply runs without an upscaler. Measured on
+    proton-cachyos 11.0-20260703; GE-Proton 11-6 loads the same file native.
+    """
+    name = dll.rsplit(".", 1)[0].lower()
+    entries = [entry for entry in env.get("WINEDLLOVERRIDES", "").split(";") if entry]
+    if any(
+        part.strip().lower() == name
+        for entry in entries
+        for part in entry.split("=")[0].split(",")
+    ):
+        return
+    env["WINEDLLOVERRIDES"] = ";".join(entries + [name + "=n,b"])
+
+
 def environment(config, inherited, *, game):
     env = dict(inherited)
     # /usr is read-only, so Proton's own imports cannot drop __pycache__ beside
@@ -116,6 +139,8 @@ def environment(config, inherited, *, game):
     env["PROTON_USE_XALIA"] = "0"
 
     env["PROTON_OPTISCALER_NAME"] = config["proxy"]
+    if env["PROTON_USE_OPTISCALER"] != "0":
+        load_native(env, config["proxy"])
 
     preset = dict(config["preset"])
     if inherited.get("BC250_FSR4_DEBUG") == "1":

@@ -258,6 +258,39 @@ class RuntimeTests(unittest.TestCase):
                         before,
                     )
 
+    def test_the_optiscaler_proxy_is_loaded_from_disk_not_from_wine(self):
+        # Wine defaults winmm to builtin-first, so without this the proxy is
+        # mapped and then discarded and the game runs with no upscaler at all.
+        for base in BASES:
+            with self.subTest(base=base):
+                env = self.run_upscalers(base, {"SteamAppId": "999999998"}, ["run"])
+                self.assertIn("winmm=n,b", env["WINEDLLOVERRIDES"].split(";"))
+
+    def test_an_inherited_proxy_override_and_dll_list_are_left_alone(self):
+        for inherited, expected in [
+            ("winmm=b", "winmm=b"),
+            ("dxgi,winmm=b;d3d11=n", "dxgi,winmm=b;d3d11=n"),
+            ("d3d11=n", "d3d11=n;winmm=n,b"),
+            ("", "winmm=n,b"),
+        ]:
+            with self.subTest(inherited=inherited):
+                with mock.patch.object(wrapper, "TOOL", self.work):
+                    env = wrapper.environment(
+                        self.config,
+                        {"SteamAppId": "999999998", "WINEDLLOVERRIDES": inherited},
+                        game=True,
+                    )
+                self.assertEqual(env["WINEDLLOVERRIDES"], expected)
+
+    def test_the_documented_opt_out_leaves_wines_own_defaults_in_place(self):
+        with mock.patch.object(wrapper, "TOOL", self.work):
+            env = wrapper.environment(
+                self.config,
+                {"SteamAppId": "999999998", "PROTON_FSR4_UPGRADE": "0"},
+                game=True,
+            )
+        self.assertNotIn("WINEDLLOVERRIDES", env)
+
     def test_corrupt_requested_payload_is_refused_before_prefix_writes(self):
         provider = self.work / "artifacts/provider.xz"
         provider.write_bytes(b"corrupted archive")

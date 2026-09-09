@@ -91,7 +91,24 @@ from the config written at build time, so one wrapper serves both.
 What it sets is limited to what the package owns — the manifest path, the
 OptiScaler proxy name, the preset — plus the two `VK_NVX_*` names appended to
 `VKD3D_DISABLE_EXTENSIONS`, which vkd3d's separate D3D12 device cannot create
-once OptiScaler advertises them.
+once OptiScaler advertises them, and a `winmm=n,b` DLL override.
+
+That override is not cosmetic. Wine chooses native or builtin by a module's base
+name, and its hardcoded default for a DLL it implements itself — `winmm` among
+them — is builtin first. Proton's loader hack redirects the proxy's *path* to
+`system32/umu/winmm.dll` but does not touch that decision, so a Wine that counts
+anything below `system32` as a system directory maps OptiScaler and then drops it
+for its own `winmm`. Nothing reports an error: protonfixes logs the payload as
+installed, the redirect is logged, and the game just runs with no upscaler. This
+is what made proton-cachyos-native-bc250 measure like a plain driver while
+protonge-latest-bc250 was visibly faster on the same prefix, and it reproduces
+with nothing but the shipped Wine:
+
+    WINE_OPTISCALER_NAME=winmm.dll WINEDEBUG=+loaddll wine rundll32 winmm.dll,x
+
+logging `umu\winmm.dll ... : builtin` without the override and `: native`
+followed by the proxy's own chain-load of `system32\winmm.dll` with it. An
+override the caller supplied for the proxy name is left alone.
 
 Two deliberate choices about the rest:
 
