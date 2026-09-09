@@ -21,12 +21,16 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       # Only bsdtar is needed, and only from Ubuntu's own archive. The runner
-      # image also carries third-party lists (Chrome, Microsoft), and when one
-      # of those publishes an inconsistent index every job here goes red for a
-      # reason that has nothing to do with this repository -- apt exits 100
-      # even though it says the failed indexes "have been ignored". Let the
-      # install be the gate instead: it fails if the package is really missing.
+      # image also carries Chrome's and Microsoft's lists, and when one of them
+      # publishes an index that does not match its Release file, apt exits 100
+      # and every job here goes red for a reason that has nothing to do with
+      # this repository. Drop those two rather than ignore the exit code, so a
+      # real failure to reach Ubuntu's archive still fails the job. Neither
+      # glob can match ubuntu.sources, which is where the archive we do use is
+      # configured on the 24.04 image.
       - run: |
-          sudo apt-get update -qq || true
+          sudo rm -f /etc/apt/sources.list.d/google*.list \
+                     /etc/apt/sources.list.d/microsoft*.list
+          sudo apt-get update -qq
           sudo apt-get install -y libarchive-tools
       - run: python3 -B -m unittest discover -s tests -v
