@@ -177,6 +177,61 @@ if build; then exit 99; else exit 0; fi
         self.assertFalse((output / "installed-after-failure").exists())
 
 
+class LutrisLayoutTests(unittest.TestCase):
+    """Every launcher has to reach the shim, not just Steam.
+
+    Steam and Heroic read toolmanifest.vdf, and so does umu, so the shim is
+    honoured by all three. Lutris first decides whether a Proton is usable at
+    all by probing for a wine executable in two fixed places, and refuses the
+    tool when it finds neither -- which is what protonge-latest-bc250 did,
+    because GE's own tree lives under ge/ there.
+    """
+
+    #: verbatim from lutris/util/wine/proton.py, Lutris v0.5.22
+    @staticmethod
+    def lutris_wine_path(tool):
+        for candidate in ("dist/bin/wine", "files/bin/wine"):
+            path = os.path.join(tool, candidate)
+            if os.path.exists(path):
+                return path
+        raise AssertionError(f"Lutris would refuse {tool}: no wine executable")
+
+    @staticmethod
+    def lutris_protonpath(wine_path):
+        directory_path = os.path.dirname(wine_path)
+        return os.path.dirname(os.path.dirname(directory_path))
+
+    def test_lutris_finds_wine_and_still_lands_on_the_shim(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            tool = Path(temporary, "protonge-latest-bc250")
+            (tool / "ge/files/bin").mkdir(parents=True)
+            (tool / "ge/files/bin/wine").write_text("#!/bin/sh\n")
+            (tool / "proton").write_text("#!/bin/sh\n")
+            (tool / "toolmanifest.vdf").write_text(
+                '"manifest"\n{\n  "commandline" "/proton %verb%"\n}\n'
+            )
+            # what package() lays down
+            (tool / "files").symlink_to("ge/files")
+
+            wine = self.lutris_wine_path(str(tool))
+            protonpath = self.lutris_protonpath(wine)
+            # Lexical, so it must land on the tool root and not inside ge/ --
+            # otherwise umu would read GE's own manifest and skip the shim.
+            self.assertEqual(Path(protonpath), tool)
+            # umu resolves PROTONPATH before reading the manifest beside it.
+            self.assertEqual(Path(protonpath).resolve(strict=True), tool.resolve())
+            manifest = (tool / "toolmanifest.vdf").read_text()
+            command = manifest.split('"commandline"')[1].split('"')[1]
+            self.assertEqual(Path(protonpath + command.split()[0]).name, "proton")
+
+    def test_the_package_creates_the_symlink_and_refuses_to_dangle(self):
+        pkgbuild = (
+            ROOT / "packages/protonge-latest-bc250/PKGBUILD.in"
+        ).read_text()
+        self.assertIn('ln -s ge/files "$_tool/files"', pkgbuild)
+        self.assertIn('[[ ! -x "$_tool/ge/files/bin/wine" ]]', pkgbuild)
+
+
 class PackageGateTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

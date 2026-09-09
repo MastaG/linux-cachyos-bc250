@@ -169,6 +169,21 @@ package() {
     install -Dm644 "$srcdir/bc250-fsr4-config.json" "$_tool/bc250-fsr4-config.json"
     install -Dm644 "$_tool/ge/toolmanifest.vdf" "$_tool/toolmanifest.vdf"
 
+    # Lutris decides whether a Proton is usable by probing <tool>/dist/bin/wine
+    # and <tool>/files/bin/wine, and refuses the tool outright when it finds
+    # neither -- which is every launch here, because GE's tree is under ge/.
+    # A relative symlink is the whole fix, and it does not cost the payload:
+    # Lutris derives PROTONPATH from the wine path lexically, three dirnames up,
+    # so it lands on the tool root rather than on ge/, and umu then runs
+    # whatever that directory's toolmanifest.vdf names -- this shim. Steam and
+    # Heroic go through the same manifest, so all three agree.
+    if [[ ! -x "$_tool/ge/files/bin/wine" ]]; then
+        printf 'ERROR: %s ships no ge/files/bin/wine; the Lutris symlink would dangle\n' \
+            "$pkgname" >&2
+        return 1
+    fi
+    ln -s ge/files "$_tool/files"
+
     # The internal name is the package name and never carries the GE version:
     # Steam stores it per game, so a name that moved with each release would
     # silently reset everyone's per-game compatibility choice on upgrade. The
