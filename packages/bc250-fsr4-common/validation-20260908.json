@@ -1,0 +1,177 @@
+{
+  "reviewed_source": "738417af25c6e12cb141989ed262966459408f4c",
+  "reference_release": "v4.0.0-rc6",
+  "reference_source": "ff195cfdf7796815533ee4e408b98406e3974ed4",
+  "published_package_checksums": {
+    "lib32-vulkan-radeon-26.2.2-2.106-x86_64.pkg.tar.zst": "4aff80c7e4edd8f9080506ff03268c291d237c816e2ff4fcdb4fdcb2fab67407",
+    "proton-cachyos-native-bc250-11.0.20260703-3.111-x86_64.pkg.tar.zst": "23340f90099bec606c5faf6e1f077aba426802de5a466c69a15a311c13f62f4e",
+    "protonge-latest-bc250-11.6-111-x86_64.pkg.tar.zst": "bd8d9232de9bfe5197ad2b3b1612004862abfde9312dfada0ac68f148d7ef4f4",
+    "vulkan-radeon-26.2.2-2.106-x86_64.pkg.tar.zst": "601c8fc7d9c4fa0f9d6caf552c6b45df9881b913a2ac9158321b4b6d7ec64971"
+  },
+  "published_driver_markers": {
+    "lib32-vulkan-radeon-26.2.2-2.106-x86_64.pkg.tar.zst": {
+      "BC250_FSR4_DISABLE": false,
+      "BC250_FSR4_IMAGEPREP": false,
+      "BC250_FSR4_TEXTURE": false,
+      "BC250_FSR4_RESOLUTION_VARIANTS": false,
+      "BC250_FSR4_RESOLUTION_GUARD": false,
+      "bc250-fsr4-integrated-v3": false
+    },
+    "vulkan-radeon-26.2.2-2.106-x86_64.pkg.tar.zst": {
+      "BC250_FSR4_DISABLE": false,
+      "BC250_FSR4_IMAGEPREP": false,
+      "BC250_FSR4_TEXTURE": false,
+      "BC250_FSR4_RESOLUTION_VARIANTS": false,
+      "BC250_FSR4_RESOLUTION_GUARD": false,
+      "bc250-fsr4-integrated-v3": false
+    }
+  },
+  "reference_15_source_files_equal": {
+    "src/amd/common/ac_gpu_info.c": true,
+    "src/amd/common/ac_gpu_info.h": true,
+    "src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c": true,
+    "src/amd/compiler/aco_shader_info.h": true,
+    "src/amd/compiler/instruction_selection/aco_isel_setup.cpp": true,
+    "src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp": true,
+    "src/amd/vulkan/radv_cmd_buffer.c": true,
+    "src/amd/vulkan/radv_device.c": true,
+    "src/amd/vulkan/radv_physical_device.c": true,
+    "src/amd/vulkan/radv_pipeline.c": true,
+    "src/amd/vulkan/radv_queue.c": true,
+    "src/amd/vulkan/radv_shader.c": true,
+    "src/amd/vulkan/radv_shader.h": true,
+    "src/amd/vulkan/radv_shader_args.c": true,
+    "src/compiler/nir/nir_opt_algebraic.py": true
+  },
+  "generated_patch_counts": {
+    "mesa": 9,
+    "lib32": 9,
+    "mesa-git": 9
+  },
+  "fresh_64bit_radv_builds": {
+    "stable": {
+      "sha256": "0bee5a927146444dd1a0dbb162cc2009c8158e9928b27bb6067f0f46c464d06c",
+      "compiled_from_all_nine_patches": true,
+      "gpu_qualified": false
+    },
+    "git": {
+      "sha256": "1a7011ab092ef74593fe231869eefdcc9d19587d6033c48e1aa5344d797cc11b",
+      "compiled_from_all_nine_patches": true,
+      "gpu_qualified": false
+    }
+  },
+  "payload_comparison": {
+    "protonge-latest-bc250": {
+      "provider_manifest_equal": true,
+      "optiscaler_file_hashes_equal": true,
+      "optiscaler_expected_files": 18,
+      "optiscaler_actual_files": 18,
+      "wrapper_matches_source": true,
+      "proton_launcher_sha256": "95a41f83184ab574d118fdd20f8647d5db0c350eb571314b475f0d25087311cf",
+      "patched_upscalers_sha256": "fec2c03d72855951b2f6a593e6a5e6930c02514f26a80962cb01021abd95991d",
+      "ge_upscalers_equal": true
+    },
+    "proton-cachyos-native-bc250": {
+      "provider_manifest_equal": true,
+      "optiscaler_file_hashes_equal": true,
+      "optiscaler_expected_files": 18,
+      "optiscaler_actual_files": 18,
+      "wrapper_matches_source": true,
+      "proton_launcher_sha256": "ac9db71d040c91333fc614bd86bbf5670a73059741a505aa3504e600b86303bf",
+      "patched_upscalers_sha256": "eee6bd3414e2cf8e975b8a7ca83e679b2ecf6a9aaa207dd68ce350b45a96119e",
+      "ge_upscalers_equal": false
+    }
+  },
+  "windows_probe": [
+    {
+      "tool": "protonge-latest-bc250",
+      "route": "initialize",
+      "returncode": 0,
+      "proxy": "C:\\windows\\system32\\winmm.dll",
+      "canaries_read": 0
+    },
+    {
+      "tool": "protonge-latest-bc250",
+      "route": "shipped-default",
+      "returncode": 0,
+      "proxy": "c:\\windows\\system32\\umu\\winmm.dll",
+      "canaries_read": 5
+    },
+    {
+      "tool": "protonge-latest-bc250",
+      "route": "shipped-off",
+      "returncode": 0,
+      "proxy": "c:\\windows\\system32\\umu\\winmm.dll",
+      "canaries_read": 5
+    },
+    {
+      "tool": "protonge-latest-bc250",
+      "route": "candidate-off",
+      "returncode": 0,
+      "proxy": "C:\\windows\\system32\\winmm.dll",
+      "canaries_read": 5
+    },
+    {
+      "tool": "protonge-latest-bc250",
+      "route": "candidate-default",
+      "returncode": 0,
+      "proxy": "c:\\windows\\system32\\umu\\winmm.dll",
+      "canaries_read": 5
+    },
+    {
+      "tool": "protonge-latest-bc250",
+      "route": "candidate-utility",
+      "returncode": 0,
+      "proxy": "C:\\windows\\system32\\winmm.dll",
+      "canaries_read": 5
+    },
+    {
+      "tool": "proton-cachyos-native-bc250",
+      "route": "initialize",
+      "returncode": 0,
+      "proxy": "C:\\windows\\system32\\winmm.dll",
+      "canaries_read": 0
+    },
+    {
+      "tool": "proton-cachyos-native-bc250",
+      "route": "shipped-default",
+      "returncode": 0,
+      "proxy": "c:\\windows\\system32\\umu\\winmm.dll",
+      "canaries_read": 5
+    },
+    {
+      "tool": "proton-cachyos-native-bc250",
+      "route": "shipped-off",
+      "returncode": 0,
+      "proxy": "c:\\windows\\system32\\umu\\winmm.dll",
+      "canaries_read": 5
+    },
+    {
+      "tool": "proton-cachyos-native-bc250",
+      "route": "candidate-off",
+      "returncode": 0,
+      "proxy": "C:\\windows\\system32\\winmm.dll",
+      "canaries_read": 5
+    },
+    {
+      "tool": "proton-cachyos-native-bc250",
+      "route": "candidate-default",
+      "returncode": 0,
+      "proxy": "c:\\windows\\system32\\umu\\winmm.dll",
+      "canaries_read": 5
+    },
+    {
+      "tool": "proton-cachyos-native-bc250",
+      "route": "candidate-utility",
+      "returncode": 0,
+      "proxy": "C:\\windows\\system32\\winmm.dll",
+      "canaries_read": 5
+    }
+  ],
+  "tests": {
+    "count": 11,
+    "original_implementation": "11 failing subtests plus one missing-validation-API error",
+    "proposed_implementation": "passed"
+  },
+  "qualification_scope": "Real package inspection, source equivalence, generated recipes, two 64-bit RADV builds, private Windows folder/proxy probes and synthetic-save reads. No full 32-bit package or gameplay/FPS qualification; host installation unchanged."
+}

@@ -6,13 +6,8 @@ LIB32_MESA_PKGREL="${LIB32_MESA_PKGREL:-${BC250_PKGREL:-1}}"
 LIB32_MESA_BUILD_DIR="${LIB32_MESA_BUILD_DIR:-${ROOT_DIR}/build/lib32-mesa}"
 CACHYOS_MESA_COMMIT="${CACHYOS_MESA_COMMIT:-}"
 MESA_PATCH_DIR="${ROOT_DIR}/patches/mesa"
-MESA_PATCHES=(
-    "${MESA_PATCH_DIR}/0001-gfx1013-compute-queue-fix.patch"
-    "${MESA_PATCH_DIR}/0002-gfx1013-mesh-task-shaders.patch"
-    "${MESA_PATCH_DIR}/0003-gfx1013-taskmesh-queries.patch"
-    "${MESA_PATCH_DIR}/0004-radv-gfx103.patch"
-    "${MESA_PATCH_DIR}/0005-bc250-fsr4-v3.patch"
-)
+# Share the complete production series with the 64-bit build.
+MESA_PATCHES=("${MESA_PATCH_DIR}"/*.patch)
 LIB32_MESA_MARCH="x86-64-v3"
 LIB32_MESA_MTUNE="znver2"
 

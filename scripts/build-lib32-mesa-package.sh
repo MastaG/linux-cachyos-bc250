@@ -23,6 +23,8 @@ packages=("$BUILD_DIR"/*.pkg.tar.zst)
     exit 1
 }
 
+python3 "$ROOT_DIR/scripts/check-fsr4-driver.py" --expect lib32-vulkan-radeon "${packages[@]}"
+
 mkdir -p -- "$OUT_DIR"
 remove_pkgbase_from_repo "$OUT_DIR" lib32-mesa
 cp -- "${packages[@]}" "$OUT_DIR/"

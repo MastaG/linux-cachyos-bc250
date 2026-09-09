@@ -24,6 +24,8 @@ mesa_packages=("$MESA_BUILD_DIR"/*.pkg.tar.zst)
     exit 1
 }
 
+python3 "$ROOT_DIR/scripts/check-fsr4-driver.py" --expect vulkan-radeon "${mesa_packages[@]}"
+
 mkdir -p -- "$OUT_DIR"
 remove_pkgbase_from_repo "$OUT_DIR" mesa
 cp -- "${mesa_packages[@]}" "$OUT_DIR/"

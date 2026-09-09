@@ -7,7 +7,8 @@ Assets shared by the two FSR4-capable Proton packages:
 
 Both install as Steam compatibility tools under
 `/usr/share/steam/compatibilitytools.d/`, alongside the distro's own Proton
-packages. Nothing is written to `$HOME`, and `pacman -R` removes them cleanly.
+packages. Package installation writes no user prefix. Proton manages prefixes
+and saves normally at launch; removing the package preserves those user files.
 
 ## Why this exists
 
@@ -57,9 +58,10 @@ For `proton-cachyos-native-bc250`. Rebased onto the `upscalers.py` that results
 apply. Thirteen of fifteen hunks applied unchanged; two were resolved by hand:
 
 - the OptiScaler config loop, whose context differs (`log.debug(e)`)
-- the upscalers tuple, where **proton-cachyos hardcodes `('fsr4', …, True)`**
-  and that was deliberately kept. We ship a pinned provider, so always
-  validating it is what we want.
+- the upscalers tuple, where proton-cachyos always stages the FSR4 provider.
+  That upstream behavior remains when no local manifest is selected. In the
+  package's local mode, the `fsr4` compatibility setting controls staging, so
+  explicit opt-outs and utility calls do not request a provider.
 
 Rooted for `patch -d <protonfixes> -Np1`, which is exactly how proton-cachyos's
 `Makefile.in` applies everything under `patches/protonfixes/`:
@@ -93,12 +95,12 @@ once OptiScaler advertises them.
 
 Two deliberate choices about the rest:
 
-- **FSR4 and OptiScaler default to on but stay overridable.** `get_version()`
-  maps both `0` and `1` to `'default'`, and the pinned manifest holds exactly
-  one entry per upscaler, so `PROTON_FSR4_UPGRADE=0` in a game's launch options
-  cleanly turns FSR4 off and `=1` still resolves to what we ship. The upstream
-  runtime scrubs these instead; a distro package should not ignore a launch
-  option a user set on purpose.
+- **FSR4 and OptiScaler default to on but stay overridable.** The documented
+  `PROTON_FSR4_UPGRADE=0` opt-out also defaults the OptiScaler proxy to off.
+  This matters in a previously used prefix: leaving the proxy active lets it
+  rediscover a retained provider. Retained files are preserved. An explicit
+  `PROTON_USE_OPTISCALER` setting remains a separate user choice. `=1` selects
+  the package's pinned version; an unavailable explicit version is rejected.
 - **DLSS, XeSS, FFX3, FFX4 and MLFG are scrubbed**, because those we genuinely
   cannot honour: the pinned manifest ships none of them, and pinned mode refuses
   a launch rather than falling back to the network. Left in place, a stale launch
@@ -110,6 +112,11 @@ conversion, installers and GPU queries too, and those can inherit a game identit
 from the session; testing the id alone applies the whole FSR4 environment to
 them. Upstream fixed the same bug in rc5 ("Keep Steam utility calls and zero-ID
 launches out of game upscaler injection").
+
+Utility calls retain the local manifest but explicitly disable both upgrades
+and clear inherited proxy settings. This prevents CachyOS's default provider
+setup from fetching its remote manifest during a path query, and prevents an
+inherited game setting from re-enabling the proxy in either tool.
 
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
@@ -138,9 +145,10 @@ The 23-key OptiScaler configuration, applied via `PROTON_OPTISCALER_CONFIG`.
 
 **This file is coupled to the OptiScaler build.** The patch above makes an
 unknown key *fatal* in pinned mode, so a build that renames or drops an option
-turns into a game that will not start. `scripts/select-optiscaler.py` therefore
-validates the preset against a candidate build's `OptiScaler.ini` before that
-build is used, and falls back to the mirrored known-good one otherwise.
+turns into a game that will not start. `scripts/build-fsr4-payload.py` validates
+the preset against the actual extracted `OptiScaler.ini` on every build,
+including the normal mirrored fallback. The candidate selector additionally
+checks keys before choosing a newer nightly.
 
 If you add a key here that no OptiScaler build defines, that check fails the
 selection at build time instead of at a customer's launch.
@@ -154,7 +162,7 @@ keeps them forever.
 Mirroring is not gratuitous. OptiScaler nightlies are pruned after roughly a
 month, so a pinned nightly URL 404s within weeks, and the FSR4 provider is
 served from a GitHub Pages site that can change without versioning. The mirror
-makes the build reproducible; the selector still tracks upstream when it can.
+makes the build reproducible; optional tracking can select a newer nightly.
 
 Two pinned artifacts are *not* mirrored, because they are served from immutable
 commit-addressed URLs and cannot change under us: the FidelityFX SDK bridge and

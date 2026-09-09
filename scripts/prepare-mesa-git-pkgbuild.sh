@@ -9,13 +9,8 @@ MESA_GIT_COMMIT="${MESA_GIT_COMMIT:-}"
 MESA_GIT_MARCH="x86-64-v3"
 MESA_GIT_MTUNE="znver2"
 PATCH_DIR="${ROOT_DIR}/patches/mesa-git"
-MESA_GIT_PATCHES=(
-    "${PATCH_DIR}/0001-gfx1013-compute-queue-fix.patch"
-    "${PATCH_DIR}/0002-gfx1013-mesh-task-shaders.patch"
-    "${PATCH_DIR}/0003-gfx1013-taskmesh-queries.patch"
-    "${PATCH_DIR}/0004-radv-gfx103.patch"
-    "${PATCH_DIR}/0005-bc250-fsr4-v3.patch"
-)
+# Use every patch in the ordered production series, just like the stable build.
+MESA_GIT_PATCHES=("${PATCH_DIR}"/*.patch)
 
 [[ "$MESA_GIT_PKGREL" =~ ^[0-9]+$ ]] || {
     printf 'ERROR: MESA_GIT_PKGREL must be numeric: %s\n' "$MESA_GIT_PKGREL" >&2
