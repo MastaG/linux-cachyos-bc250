@@ -74,7 +74,7 @@ noextract=(
 # Everything else carries a SHA256 we pinned ourselves.
 sha512sums=(
     '@PROTONGE_SHA512@'
-    'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+    'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
     'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
 )
 sha256sums=(

@@ -3,6 +3,7 @@
 import importlib.util
 import io
 import os
+import re
 import subprocess
 import tarfile
 import tempfile
@@ -175,6 +176,41 @@ if build; then exit 99; else exit 0; fi
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse((output / "installed-after-failure").exists())
+
+
+class IntegrityArrayTests(unittest.TestCase):
+    """Every source needs an entry in every integrity array makepkg sees.
+
+    makepkg only reports this as "Integrity checks (shaN) differ in size from
+    the source array" once it has already downloaded everything, so a one-line
+    omission costs a full fetch before it fails -- and it failed exactly that
+    way in CI when a source was added without extending sha512sums.
+    """
+
+    def test_protonge_template_arrays_all_match_the_source_count(self):
+        template = ROOT / "packages/protonge-latest-bc250/PKGBUILD.in"
+        with tempfile.TemporaryDirectory() as temporary:
+            # The template's @PLACEHOLDERS@ are all inside quotes, so a dummy
+            # substitution leaves a file bash can source verbatim.
+            text = re.sub(r"@[A-Z0-9_]+@", "dummy", template.read_text())
+            pkgbuild = Path(temporary, "PKGBUILD")
+            pkgbuild.write_text(text)
+            counts = subprocess.check_output(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1" >/dev/null 2>&1; '
+                    'printf "%s %s %s" "${#source[@]}" "${#sha256sums[@]}" '
+                    '"${#sha512sums[@]}"',
+                    "_",
+                    str(pkgbuild),
+                ],
+                text=True,
+            ).split()
+        sources, sha256, sha512 = (int(value) for value in counts)
+        self.assertGreater(sources, 0)
+        self.assertEqual(sha256, sources, "sha256sums does not cover every source")
+        self.assertEqual(sha512, sources, "sha512sums does not cover every source")
 
 
 class LutrisLayoutTests(unittest.TestCase):
