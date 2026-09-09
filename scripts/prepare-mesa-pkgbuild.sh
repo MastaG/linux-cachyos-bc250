@@ -6,13 +6,9 @@ MESA_PKGREL="${MESA_PKGREL:-${BC250_PKGREL:-1}}"
 MESA_BUILD_DIR="${MESA_BUILD_DIR:-${ROOT_DIR}/build/mesa}"
 CACHYOS_MESA_COMMIT="${CACHYOS_MESA_COMMIT:-}"
 MESA_PATCH_DIR="${ROOT_DIR}/patches/mesa"
-MESA_PATCHES=(
-    "${MESA_PATCH_DIR}/0001-gfx1013-compute-queue-fix.patch"
-    "${MESA_PATCH_DIR}/0002-gfx1013-mesh-task-shaders.patch"
-    "${MESA_PATCH_DIR}/0003-gfx1013-taskmesh-queries.patch"
-    "${MESA_PATCH_DIR}/0004-radv-gfx103.patch"
-    "${MESA_PATCH_DIR}/0005-bc250-fsr4-v3.patch"
-)
+# The production directory is the ordered series, including the FSR4 v4
+# patches. Keep experiments in mesa-testing, not an unreferenced file here.
+MESA_PATCHES=("${MESA_PATCH_DIR}"/*.patch)
 MESA_MARCH="x86-64-v3"
 MESA_MTUNE="znver2"
 

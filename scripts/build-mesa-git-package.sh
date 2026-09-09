@@ -66,6 +66,9 @@ done
     exit 1
 }
 
+python3 "$ROOT_DIR/scripts/check-fsr4-driver.py" \
+    --expect mesa-git --expect lib32-mesa-git "${packages[@]}"
+
 pkgrel="${mesa_pkgver_full##*-}"
 pkgver="${mesa_pkgver_full%-*}"
 

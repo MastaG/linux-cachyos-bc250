@@ -1,0 +1,45 @@
+--- a/upscalers.py
++++ b/upscalers.py
+@@ -40 +40 @@
+-        log.crit(str(e))
++        log.crit(e)
+@@ -51 +51 @@
+-        log.crit(str(e))
++        log.crit(e)
+@@ -165 +165 @@
+-        log.crit(str(e))
++        log.crit(e)
+@@ -191 +191 @@
+-    except Exception:
++    except Exception as e:
+@@ -253 +253 @@
+-        log.warn(str(e))
++        log.warn(e)
+@@ -308 +308 @@
+-        log.crit(str(e))
++        log.crit(e)
+@@ -317 +317 @@
+-        log.warn(str(e))
++        log.warn(e)
+@@ -382 +382 @@
+-            log.crit(str(e))
++            log.crit(e)
+@@ -476 +476 @@
+-        log.crit(str(e))
++        log.crit(e)
+@@ -531 +531 @@
+-        log.crit(str(e))
++        log.crit(e)
+@@ -573 +573 @@
+-                log.debug(str(e))
++                log.debug(e)
+@@ -643,2 +643 @@
+-        ('fsr4', fsr4_version, 'fsr4' in compat_config),
+-        # fidelityfx sdk
++        ('fsr4', fsr4_version, True),
+@@ -666 +665,4 @@
+-        pass
++        if 'fsr4' in compat_config:
++            env['FSR4_UPGRADE'] = '1'
++        if 'mlfg' in compat_config:
++            env['MLFG_UPGRADE'] = '1'

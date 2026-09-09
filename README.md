@@ -549,7 +549,14 @@ Both are pinned to FSR4.1.1 INT8 by exact shader identity. A different FSR4 buil
 
 It also carries a correctness fix rather than an optimization. The pinned INT8 8K shaders encode masked DWORD stores at byte `0x08000000`, an address inside their own 332 MB scratch allocation, where a store can overwrite a live input and race a neighbouring invocation at clipped edges. For eight exactly identified bytecodes — matched by size and FNV-1a hash, and additionally verified to hold an `OpConstant` of that value at the expected word before anything is written — the constant is rewritten so the store lands beyond any scratch buffer this provider supports. That guard can be enabled on its own with `BC250_FSR4_RESOLUTION_GUARD=1`.
 
-`0009` flips every FSR4 candidate from opt-in to on by default — `BC250_FSR4_IMAGEPREP`, `BC250_FSR4_TEXTURE`, `BC250_FSR4_RESOLUTION_VARIANTS` and `BC250_FSR4_RESOLUTION_GUARD` all default on, with the pipeline cache key moved to `v3` so pipelines cached by an older driver are not reused. Each remains individually overridable, and `BC250_FSR4_DISABLE=1` still disables the integration wholesale. Note this ships the image-preparation and texture candidates to every user; their measured effect is about 1% each at n=2 per arm, which is the size of the run-to-run spread in the same campaigns.
+`0009` flips every FSR4 candidate from opt-in to on by default — `BC250_FSR4_IMAGEPREP`, `BC250_FSR4_TEXTURE`, `BC250_FSR4_RESOLUTION_VARIANTS` and `BC250_FSR4_RESOLUTION_GUARD` all default on, with the pipeline cache key moved to `v3` so pipelines cached by an older driver are not reused. Each remains individually overridable. `BC250_FSR4_DISABLE=1` disables the profile-specific rewrites and image-preparation replacement; the generic GFX1013 lowering and independent masked-store correctness guard remain active. It does not reproduce a V3 or stock-Mesa comparison. The original kit's image-preparation and texture measurements were about 1% each at n=2 per arm. Later [v4 qualification](https://github.com/daniel-h-0/bc250-fsr4-fork/blob/v4.0.0-rc6/docs/qualification.md) and [matched game measurements](https://github.com/daniel-h-0/bc250-fsr4-fork/blob/v4.0.0-rc6/docs/performance.md) record the combined implementation's tested scope; those results do not qualify a newly built package binary.
+
+The production patch directories are the ordered build series. The stable,
+lib32 and Mesa-Git preparation scripts stage every patch from their respective
+directory. Before promotion, `scripts/check-fsr4-driver.py` examines the actual
+packaged RADV ELF for the compiled v4 path and verifies its architecture. This
+prevents publishing only V3 while uploading unused v4 patches beside it; it is
+a build-coverage check, not a replacement for GPU correctness or gameplay tests.
 
 Upstream notes the 4K+ bucket previously failed to show an uplift and is curious whether the multi-bucket logic changes that. That is unverified here, as are `0008`'s performance effects generally.
 
@@ -571,7 +578,7 @@ Stable Mesa is built with:
 ## Patched stable CachyOS lib32-mesa
 
 `lib32-mesa` comes directly from the current CachyOS `mesa/lib32-mesa/PKGBUILD` at the same pinned packaging commit.  
-It receives the exact same five GFX1013 patches and runtime gating as stable 64-bit Mesa, so 32-bit Wine/Steam workloads see the same driver behavior.
+It receives the same nine-patch production series and runtime gating as stable 64-bit Mesa. Source inclusion and a successful build do not by themselves extend the upstream v4 binary qualification to 32-bit workloads.
 
 The clean Arch build container explicitly enables `[multilib]` before dependency resolution.
 
@@ -678,11 +685,16 @@ This package ships those artifacts inside itself and points protonfixes at a loc
 FSR4 and OptiScaler are on by default, but they are still yours to set per game:
 
 ```text
-PROTON_FSR4_UPGRADE=0 %command%      # this game runs without FSR4
+PROTON_FSR4_UPGRADE=0 %command%      # disable the packaged FSR4 upgrade and default proxy
 BC250_FSR4_DEBUG=1 %command%         # FSR4 watermark + OptiScaler log + PROTON_LOG
 ```
 
-`PROTON_DLSS_UPGRADE`, `PROTON_XESS_UPGRADE`, `PROTON_FFX3_UPGRADE`, `PROTON_FFX4_UPGRADE` and `PROTON_MLFG_UPGRADE` are cleared: this package ships none of those upscalers, and in pinned mode a request for one that is absent stops the game from starting. A stale launch option left over from another Proton build would otherwise become a game that will not launch.
+The opt-out also defaults OptiScaler to off, so it cannot load a provider retained
+from a prior launch. Explicit `PROTON_USE_OPTISCALER` choices remain available;
+prefix payloads and saves are preserved. Steam utility calls use the local
+manifest with both upgrades disabled, including when game settings are inherited.
+
+`PROTON_DLSS_UPGRADE`, `PROTON_XESS_UPGRADE`, `PROTON_FFX3_UPGRADE`, `PROTON_FFX4_UPGRADE`, the older `PROTON_FSR3_UPGRADE` spelling and `PROTON_MLFG_UPGRADE` are cleared: this package ships none of those upscalers, and in pinned mode a request for one that is absent stops the game from starting. A stale launch option left over from another Proton build would otherwise become a game that will not launch.
 
 ### Which Proton, and which OptiScaler
 
@@ -690,7 +702,12 @@ BC250_FSR4_DEBUG=1 %command%         # FSR4 watermark + OptiScaler log + PROTON_
 
 `proton-cachyos-native-bc250` follows CachyOS's `proton-cachyos-native` PKGBUILD, pinned to the same `CachyOS-PKGBUILDS` commit as the Mesa packages. Rather than carrying a diff of that PKGBUILD, the prepare step rewrites it and asserts on every anchor it touches, so an upstream change fails the build naming what moved instead of a patch applying at an offset and quietly meaning something else.
 
-The OptiScaler build is pinned rather than tracked. Nightlies publish most days, and following them would rebuild a ~700 MB package daily for a payload nobody asked to move. Moving it forward is a one-line change to `FALLBACK_TAG` in `scripts/select-optiscaler.py`, which changes the component fingerprint and triggers exactly one rebuild. `BC250_FSR4_TRACK_OPTISCALER=1` validates and takes the newest nightly instead, for checking whether the preset still applies to it.
+The OptiScaler build is pinned rather than tracked. Nightlies publish most days, and following them would rebuild a ~700 MB package daily for a payload nobody asked to move. Moving it forward requires updating `FALLBACK_TAG`, `FALLBACK_ASSET` and `FALLBACK_SHA256` together in `scripts/select-optiscaler.py`, which changes the component fingerprint. `BC250_FSR4_TRACK_OPTISCALER=1` checks the newest nightly instead. Payload assembly validates the preset against the actual extracted INI on every route, including the mirrored fallback.
+
+Run the packaging and launch regression checks with
+`python3 -B -m unittest discover -s tests -v`. They exercise both real upstream
+protonfixes modules, block network access, and check opt-outs, utility calls,
+payload integrity, preset validation and the generated production patch series.
 
 The design notes, including why the OptiScaler payload is rearranged the way it is and why two separate copies of the protonfixes patch exist, are in [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md).
 

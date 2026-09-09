@@ -33,6 +33,7 @@ UNSHIPPED = (
     "PROTON_XESS_UPGRADE",
     "PROTON_FFX3_UPGRADE",
     "PROTON_FFX4_UPGRADE",
+    "PROTON_FSR3_UPGRADE",
     "PROTON_MLFG_UPGRADE",
 )
 
@@ -45,6 +46,8 @@ OWNED = (
     "PROTON_OPTISCALER_CONFIG",
     "WINE_OPTISCALER_NAME",
     "WINE_UPSCALER_REPLACE",
+    "FSR4_UPGRADE",
+    "MLFG_UPGRADE",
     # Sets DXIL_SPIRV_CONFIG=wmma_rdna3_workaround. The BC-250 is gfx1013, which
     # has no WMMA at all; the FSR4 path here comes from our patched RADV. This
     # would only mis-tune codegen for hardware that is not present.
@@ -81,13 +84,18 @@ def environment(config, inherited, *, game):
     # /usr is read-only, so Proton's own imports cannot drop __pycache__ beside
     # them. Python tolerates that silently, but saying so avoids the attempts.
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    if not game:
-        # Path conversion, installers and GPU queries want ordinary Proton, even
-        # when a game identity happens to be inherited from the session.
-        return env
-
     for name in UNSHIPPED + OWNED:
         env.pop(name, None)
+
+    # Keep every invocation in local mode. In particular, CachyOS's stock
+    # provider setup also runs for utilities; dropping the manifest there would
+    # make a path query fetch its remote upscaler manifest.
+    env["PROTON_UPSCALER_MANIFEST"] = str(TOOL / config["manifest"])
+    if not game:
+        # Inherited game settings must not inject payloads into utility calls.
+        env["PROTON_USE_OPTISCALER"] = "0"
+        env["PROTON_FSR4_UPGRADE"] = "0"
+        return env
 
     # FSR4 and OptiScaler are what this tool is for, so they default to on --
     # but they stay the user's call. get_version() maps both "0" and "1" to
@@ -95,8 +103,11 @@ def environment(config, inherited, *, game):
     # so an explicit "0" cleanly turns a feature off and an explicit "1" still
     # resolves to what we ship. A specific version we do not have fails the
     # launch with a message naming it, rather than running something unpinned.
-    defaulted(env, "PROTON_USE_OPTISCALER", config["optiscaler_version"])
     defaulted(env, "PROTON_FSR4_UPGRADE", config["provider_version"])
+    # The documented opt-out disables the package's default proxy as well.
+    # Otherwise OptiScaler can still discover a provider retained in a prefix.
+    defaulted(env, "PROTON_USE_OPTISCALER",
+              "0" if env["PROTON_FSR4_UPGRADE"] == "0" else config["optiscaler_version"])
 
     # Not shipped, and explicitly off rather than merely absent: leaving it to
     # the default would let a future Proton decide.
@@ -104,7 +115,6 @@ def environment(config, inherited, *, game):
     # Xalia inherits the global proxy below and can keep a closed game alive.
     env["PROTON_USE_XALIA"] = "0"
 
-    env["PROTON_UPSCALER_MANIFEST"] = str(TOOL / config["manifest"])
     env["PROTON_OPTISCALER_NAME"] = config["proxy"]
 
     preset = dict(config["preset"])

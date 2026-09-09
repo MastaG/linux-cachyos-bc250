@@ -166,7 +166,7 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --manifest-rel "upscaler-manifest.json" \\\n'
     '        --proton-rel "proton" \\\n'
     "        --output . \\\n"
-    "        --config bc250-fsr4-config.json\n"
+    "        --config bc250-fsr4-config.json || return 1\n"
     "\n"
     '    install -Dm755 "${srcdir}/proton-shim.sh" bc250-fsr4-proton\n'
     '    install -Dm644 "${srcdir}/bc250-fsr4-launch.py" bc250-fsr4-launch.py\n'

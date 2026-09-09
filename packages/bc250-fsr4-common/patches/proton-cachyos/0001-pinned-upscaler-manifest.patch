@@ -235,7 +235,8 @@
 +        ('dlss', dlss_version, 'dlss' in compat_config or implicit_upgrades),
 +        ('xess', xess_version, 'xess' in compat_config or implicit_upgrades),
          # amdxcffx64 4.1.1
-         ('fsr4', fsr4_version, True),
+-        ('fsr4', fsr4_version, True),
++        ('fsr4', fsr4_version, 'fsr4' in compat_config or __manifest_path is None),
 -        ('ffx3', ffx3_version, 'ffx3' in compat_config or 'optiscaler' in compat_config),
 +        ('ffx3', ffx3_version, 'ffx3' in compat_config or implicit_upgrades),
          ('ffx4', ffx4_version, 'ffx4' in compat_config),

@@ -16,6 +16,7 @@ verification is what proves they are the pinned ones, so nothing is fetched here
 from __future__ import annotations
 
 import argparse
+import configparser
 import hashlib
 import json
 import lzma
@@ -30,6 +31,29 @@ from pathlib import Path
 def digest(path: Path) -> str:
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def validate_preset(preset_path: Path, ini_path: Path) -> dict:
+    """Match the launcher's ConfigParser and key/value syntax before packaging."""
+    preset = json.loads(preset_path.read_text())
+    preset = preset["preset"] if isinstance(preset, dict) and "preset" in preset else preset
+    if not isinstance(preset, dict) or not preset:
+        raise RuntimeError("OptiScaler preset must be a non-empty object")
+    parser = configparser.ConfigParser()
+    # Use the same strict parser and encoding as protonfixes, including option
+    # case folding. A candidate selector is not sufficient: the normal build
+    # takes the mirrored fallback without running that candidate check.
+    with ini_path.open() as stream:
+        parser.read_file(stream)
+    for key, value in preset.items():
+        if (not isinstance(value, str) or key.count('.') != 1
+                or any(c in key + value for c in ';=\r\n')):
+            raise RuntimeError("Malformed OptiScaler preset entry: " + key)
+        section, option = key.split('.')
+        if section not in parser or option not in parser[section]:
+            raise RuntimeError("Unknown OptiScaler preset option: " + key)
+        parser[section][option] = value
+    return preset
 
 
 def tar_tree(root: Path, output: Path) -> None:
@@ -76,6 +100,8 @@ def optiscaler_artifact(args, staging: Path) -> tuple[Path, dict]:
     )
     if any(p.is_symlink() or not (p.is_dir() or p.is_file()) for p in extracted.rglob("*")):
         raise RuntimeError("OptiScaler archive contains a link or special file")
+
+    validate_preset(args.preset, extracted / "OptiScaler.ini")
 
     dll = extracted / "OptiScaler.dll"
     # WINMM is imported by Vulkan games that never touch DXGI, so it is the one
@@ -220,5 +246,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
+    except (OSError, ValueError, KeyError, RuntimeError, configparser.Error,
+            subprocess.SubprocessError) as error:
         raise SystemExit("ERROR: " + str(error))

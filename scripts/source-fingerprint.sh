@@ -223,6 +223,7 @@ case "$COMPONENT" in
                 hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
                     "$ROOT_DIR"/scripts/prepare-mesa-pkgbuild.sh \
                     "$ROOT_DIR"/scripts/build-mesa-package.sh \
+                    "$ROOT_DIR"/scripts/check-fsr4-driver.py \
                     "$ROOT_DIR"/scripts/repo-package-helpers.sh
             } | sha256sum | awk '{print $1}'
 
@@ -262,6 +263,7 @@ case "$COMPONENT" in
                 hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
                     "$ROOT_DIR"/scripts/prepare-lib32-mesa-pkgbuild.sh \
                     "$ROOT_DIR"/scripts/build-lib32-mesa-package.sh \
+                    "$ROOT_DIR"/scripts/check-fsr4-driver.py \
                     "$ROOT_DIR"/scripts/repo-package-helpers.sh
             } | sha256sum | awk '{print $1}'
 
@@ -285,6 +287,7 @@ case "$COMPONENT" in
                     "$ROOT_DIR"/scripts/resolve-mesa-git.sh \
                     "$ROOT_DIR"/scripts/prepare-mesa-git-pkgbuild.sh \
                     "$ROOT_DIR"/scripts/build-mesa-git-package.sh \
+                    "$ROOT_DIR"/scripts/check-fsr4-driver.py \
                     "$ROOT_DIR"/scripts/repo-package-helpers.sh
             } | sha256sum | awk '{print $1}'
         fi
