@@ -104,48 +104,11 @@ printf 'builder ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/builder
 chmod 0440 /etc/sudoers.d/builder
 chown -R builder:builder /workspace
 
-# TEMPORARY: shadow rust-bindgen with 0.72.1 on PATH.
-#
-# rust-bindgen 0.73.x generates Rust that does not compile for Mesa's rusticl
-# frontend. Mesa asks bindgen to render pipe_map_flags and pipe_resource_usage
-# as --bitfield-enum, so they become newtypes, and those enums are also C
-# bitfield members in p_state.h. 0.73.x emits "let val: u32 = val as _;" in the
-# generated bitfield accessors, which is E0605: you cannot "as"-cast a newtype.
-# 0.72.1 emitted a transmute there and compiles. Both stable mesa and mesa-git
-# enable rusticl, so without this every Mesa component fails to build.
-#
-# This shadows the binary on PATH rather than pinning the package, because
-# pinning cannot survive makepkg. mesa-git names rust-bindgen explicitly in
-# makedepends, so --syncdeps runs pacman -S on it by name: IgnorePkg only
-# produces an "install anyway?" prompt that --noconfirm answers yes to, and an
-# epoch-bumped local package is simply downgraded back to the repo version.
-# Both were tried and both failed. Meson resolves bindgen through PATH, so
-# putting 0.72.1 ahead of /usr/bin works regardless of what pacman installs.
-#
-# REMOVE THIS once bindgen or Mesa fixes it upstream: drop this block and the
-# BINDGEN_PIN_DIR entry from the PATH below. Leaving it in place indefinitely
-# means silently building Mesa against an increasingly stale bindgen.
-BINDGEN_PIN_VERSION="0.72.1-3"
-BINDGEN_PIN_DIR=/opt/bindgen-pin
-BINDGEN_PIN_URL="https://archive.archlinux.org/packages/r/rust-bindgen/rust-bindgen-${BINDGEN_PIN_VERSION}-x86_64.pkg.tar.zst"
-if curl -fsSL --retry 3 -o /tmp/rust-bindgen-pin.pkg.tar.zst "$BINDGEN_PIN_URL" &&
-   mkdir -p "$BINDGEN_PIN_DIR" &&
-   tar -C "$BINDGEN_PIN_DIR" -xf /tmp/rust-bindgen-pin.pkg.tar.zst usr/bin/bindgen &&
-   [[ -x "$BINDGEN_PIN_DIR/usr/bin/bindgen" ]]; then
-    chmod -R a+rX "$BINDGEN_PIN_DIR"
-    printf '==> rust-bindgen %s shadowed on PATH (0.73.x breaks rusticl; see ci-build.sh): %s\n' \
-        "$BINDGEN_PIN_VERSION" "$("$BINDGEN_PIN_DIR/usr/bin/bindgen" --version 2>&1)"
-else
-    BINDGEN_PIN_DIR=""
-    printf '::warning title=bindgen shadow failed::could not stage rust-bindgen %s; Mesa components will likely fail to build on rusticl\n' \
-        "$BINDGEN_PIN_VERSION"
-fi
-rm -f /tmp/rust-bindgen-pin.pkg.tar.zst
 
 # proton-cachyos-native's makedepends include two AUR-only packages that a
 # vanilla Arch container cannot resolve. Only fetch them when that component is
-# actually being built, and treat a failure the way the bindgen shadow is
-# treated -- warn and continue, so the other components still build and publish.
+# actually being built, and fail soft -- warn and continue, so the other
+# components still build and publish.
 if [[ "$BUILD_PROTON_CACHYOS_NATIVE_BC250" == true ]]; then
     if ! /workspace/scripts/install-proton-build-deps.sh; then
         printf '::warning title=Proton build dependencies unavailable::could not install afdko/mingw-w64-tools; proton-cachyos-native-bc250 will fail to build\n'
@@ -242,14 +205,12 @@ fi
 : "${CCACHE_COMPILERCHECK:=content}"
 
 CCACHE_WRAPPER_DIR=/usr/lib/ccache/bin
-BINDGEN_PIN_DIR=/opt/bindgen-pin
-[[ -x "$BINDGEN_PIN_DIR/usr/bin/bindgen" ]] || BINDGEN_PIN_DIR=""
 
 # Do not pass CI or GITHUB_RUN_ID to makepkg. CachyOS otherwise intentionally
 # selects its reduced CI kernel configuration.
 runuser -u builder -- env \
     HOME=/home/builder \
-    PATH="${BINDGEN_PIN_DIR:+$BINDGEN_PIN_DIR/usr/bin:}$CCACHE_WRAPPER_DIR:$PATH" \
+    PATH="$CCACHE_WRAPPER_DIR:$PATH" \
     CCACHE_DIR="$CCACHE_DIR" \
     CCACHE_COMPILERCHECK="$CCACHE_COMPILERCHECK" \
     BUILD_KERNEL_STABLE="$BUILD_KERNEL_STABLE" \
@@ -330,28 +291,6 @@ runuser -u builder -- env \
             exit 0
         fi
 
-        # Self-expiring trigger for the rust-bindgen shadow staged above.
-        # If a Mesa component built, pacman has installed the current
-        # rust-bindgen at /usr/bin/bindgen alongside our shadowed 0.72.1. Probe
-        # it with the exact pattern that breaks rusticl -- a --bitfield-enum
-        # newtype used as a C bitfield member -- and say so in the run summary
-        # once it compiles again, so the workaround gets removed instead of
-        # quietly pinning Mesa to a stale bindgen forever. Entirely fail-soft.
-        if [[ -x /usr/bin/bindgen ]] && command -v rustc >/dev/null 2>&1; then
-            printf "enum bc250_probe_e { A = 1, B = 2 };\nstruct bc250_probe_s { enum bc250_probe_e f : 24; };\n" > /tmp/bindgen-probe.h
-            if /usr/bin/bindgen --default-enum-style rust --bitfield-enum bc250_probe_e \
-                   --allowlist-type bc250_probe_s --allowlist-type bc250_probe_e \
-                   /tmp/bindgen-probe.h -o /tmp/bindgen-probe.rs -- -x c >/dev/null 2>&1 &&
-               rustc --edition 2021 --crate-type rlib /tmp/bindgen-probe.rs \
-                   -o /tmp/bindgen-probe.rlib >/dev/null 2>&1; then
-                printf "::warning title=bindgen shadow can now be removed::system %s compiles the rusticl pattern again. Drop the BINDGEN_PIN block and its PATH entry in scripts/ci-build.sh.\n" \
-                    "$(/usr/bin/bindgen --version 2>&1)"
-            else
-                printf "==> rust-bindgen shadow still required (system %s still miscompiles the rusticl pattern)\n" \
-                    "$(/usr/bin/bindgen --version 2>&1)"
-            fi
-            rm -f /tmp/bindgen-probe.h /tmp/bindgen-probe.rs /tmp/bindgen-probe.rlib
-        fi
 
         /workspace/scripts/finalize-repository.sh
 

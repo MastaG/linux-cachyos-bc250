@@ -76,7 +76,7 @@ e6332c58538e9634e63e9aa19f4268b097295e00d8a9a9d83b7b41c9f45c530d  ./scripts/buil
 8687b3733fb34f1307288a7f915ec15aa79bd302aa8c7c7173900a3b52d5809a  ./scripts/build-proton-cachyos-native-bc250-package.sh
 dc99e7f0bf6c96af8ec221d6df603ad779aee37a89294747ff401a7d44eac6f5  ./scripts/build-protonge-latest-bc250-package.sh
 98c6dd179d47671451e1d5cb0a10571e86fc0d8064f2102a9abe23e7aaac909c  ./scripts/check-fsr4-driver.py
-7045724830295391ad98d3cb4a46e8294536892b78505cc722854fffca397064  ./scripts/ci-build.sh
+08e9415cdf559764963af586939f4408fdec88a6b0be27e2d398db3744dcb069  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
 f0035472d6c6e776afe5fd8ee86d8219c0f07452fe90596d4cc0538d11aff591  ./scripts/finalize-repository.sh
 18952c41e9072a51fcc8d66b28786868f03b1aedb9cc1a3d44bd4de200e9d95b  ./scripts/fsr4-payload-sources.sh
@@ -89,7 +89,7 @@ f0035472d6c6e776afe5fd8ee86d8219c0f07452fe90596d4cc0538d11aff591  ./scripts/fina
 925339b7e96de38f2a507d1a796f71fa009f637e0d9e7ad28969c88e7123c003  ./scripts/prepare-mesa-testing-pkgbuild.sh
 41cbd2dc27b21a2e961ad7a79ce4a089acc6616e78a0b3b3358442a901d2e760  ./scripts/prepare-pkgbuild.sh
 b91ffad6187495c7069d974e17a54ddb2538ceacdcee381ee31c44a3d7edc859  ./scripts/prepare-proton-cachyos-native-pkgbuild.sh
-26f86762e4fdb1136f2633dec79c7b7e53b3fca33d90e8f92f25c460399c13d2  ./scripts/publish-repo-delta.sh
+65d897599a9f43cd0b3f06f0041819bff274146518c8541bb8e64b230fd1c3a4  ./scripts/publish-repo-delta.sh
 cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo-package-helpers.sh
 eeb453358d62271e629355af4bff424160d2af4b0d41e413f347466144805e4c  ./scripts/resolve-cachyos-mesa.sh
 d54dc6ec221b5e8b4f594a891b8bb77b61e101837e3277918f50aad558b71ba7  ./scripts/resolve-mesa-git.sh

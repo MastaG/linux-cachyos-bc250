@@ -35,6 +35,18 @@ LABEL="${1:-delta}"
 
 : "${GH_TOKEN:?GH_TOKEN is required to publish}"
 
+# Name the repository explicitly instead of letting gh infer it from git.
+#
+# This runs between component builds, after ci-build.sh setup has done
+# `chown -R builder:builder /workspace` so the container can build there. gh
+# shells out to git, git then refuses the workspace with "detected dubious
+# ownership", and every incremental publish failed that way -- five components
+# in run 34311070564, each reporting the release as unreachable when it was
+# perfectly reachable. The final publish only worked because it runs after the
+# ownership is restored.
+export GH_REPO="${GH_REPO:-${GITHUB_REPOSITORY:-}}"
+[[ -n "$GH_REPO" ]] || unset GH_REPO
+
 [[ -d "$OUT_DIR" ]] || { printf 'ERROR: %s does not exist\n' "$OUT_DIR" >&2; exit 1; }
 
 # The database is uploaded after the packages it names, so keep it separate.
