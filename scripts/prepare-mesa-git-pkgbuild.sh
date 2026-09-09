@@ -2,6 +2,12 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Glob expansion below follows LC_COLLATE, and the patch series must be applied
+# in order. source-fingerprint.sh pins this for the same reason -- it hashes the
+# same directory with the same glob, and a run that ordered them differently
+# there once made every component look changed. Keep the two in agreement.
+export LC_ALL=C
 MESA_GIT_PKGREL="${MESA_GIT_PKGREL:-${BC250_PKGREL:-1}}"
 MESA_GIT_BUILD_DIR="${MESA_GIT_BUILD_DIR:-${ROOT_DIR}/build/mesa-git}"
 CACHYOS_MESA_COMMIT="${CACHYOS_MESA_COMMIT:-}"
