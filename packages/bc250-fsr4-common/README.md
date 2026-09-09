@@ -147,6 +147,38 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
+### The opt-in `fsr411b` variant
+
+OptiScaler loads two separate things: `amdxcffx64.dll`, the FSR4 provider our
+patched RADV drives, and `amd_fidelityfx_upscaler_dx12.dll`, the FidelityFX
+bridge. OptiScaler bundles a 4.1.1 bridge that would shadow the equally
+versioned provider, so the default payload lays AMD's signed **4.0.2** bridge
+over it and lets the provider win.
+
+`PROTON_USE_OPTISCALER=fsr411b` selects a second pinned payload, identical
+except for that one file, which is instead an unsigned third-party 4.1.1b
+rebuild claiming to fix RDNA2 ghosting. It is not a provider bump: that binary
+carries its own embedded model — 768 model passes against 4.0.2's 216, plus
+`FSR4_Int8` provider classes — so selecting it most likely hands upscaling to
+that model rather than to the provider path the RADV work targets. That is the
+thing worth measuring, and why it is opt-in rather than default.
+
+Two consequences of pinning are worth stating, because they are what make this
+mechanism necessary at all:
+
+- A tester cannot simply drop the DLL into a prefix or a game directory.
+  `check_optiscaler` verifies every file's SHA256 before launch and refuses to
+  start otherwise, and OptiScaler loads its libraries from
+  `Libraries.OptiDllPath` rather than from the game. Trying an alternate binary
+  requires a build.
+- A variant is a whole second archive rather than a patch, because protonfixes
+  installs an OptiScaler entry all-or-nothing against one set of hashes. It
+  costs about 78 MB in each package. The default archive is bit-for-bit what it
+  was before.
+
+The variant ships `Licenses/THIRD-PARTY-UPSCALER.txt` into the prefix naming the
+origin URL and SHA256, so an unsigned DLL is never sitting there unexplained.
+
 ## `../../scripts/build-fsr4-payload.py`
 
 Assembles the payload at build time and writes both the manifest and the

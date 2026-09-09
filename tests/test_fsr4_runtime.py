@@ -113,6 +113,15 @@ class RuntimeTests(unittest.TestCase):
                 entry = tarfile.TarInfo(name)
                 entry.size = len(data)
                 tar.addfile(entry, io.BytesIO(data))
+        # A second, opt-in variant of the same tree, as the packages ship for an
+        # alternate FidelityFX bridge. Only one file differs.
+        self.variant = dict(self.files, **{"winmm.dll": bytes(range(128)) * 32})
+        variant_archive = artifacts / "opti-alt.tar.xz"
+        with tarfile.open(variant_archive, "w:xz") as tar:
+            for name, data in self.variant.items():
+                entry = tarfile.TarInfo(name)
+                entry.size = len(data)
+                tar.addfile(entry, io.BytesIO(data))
         manifest = {
             "fsr_40_drv": [
                 {
@@ -135,7 +144,18 @@ class RuntimeTests(unittest.TestCase):
                         "winmm.dll": hashlib.md5(self.files["winmm.dll"]).hexdigest(),
                         "OptiScaler.ini": "",
                     },
-                }
+                },
+                {
+                    "version": "test-opti-alt",
+                    "is_dev_file": False,
+                    "download_url": "artifacts/opti-alt.tar.xz",
+                    "zip_sha256_hash": sha256(variant_archive.read_bytes()),
+                    "sha256_hash": {"winmm.dll": sha256(self.variant["winmm.dll"])},
+                    "md5_hash": {
+                        "winmm.dll": hashlib.md5(self.variant["winmm.dll"]).hexdigest(),
+                        "OptiScaler.ini": "",
+                    },
+                },
             ],
         }
         (self.work / "manifest.json").write_text(json.dumps(manifest))
@@ -144,6 +164,7 @@ class RuntimeTests(unittest.TestCase):
             "proxy": "winmm.dll",
             "provider_version": "4.1.1",
             "optiscaler_version": "test-opti",
+            "optiscaler_aliases": {"altbridge": "test-opti-alt"},
             "preset": {"FSR.Fsr4ForceModel": "2"},
         }
 
@@ -322,6 +343,59 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(wrapper.game_launch(["run"], {"UMU_ID": ""}))
         self.assertFalse(wrapper.game_launch(["run"], {}))
 
+    def test_the_default_variant_is_what_a_plain_launch_installs(self):
+        for base in BASES:
+            with self.subTest(base=base):
+                env = self.run_upscalers(base, {"SteamAppId": "999999998"}, ["run"])
+                self.assertEqual(env["PROTON_USE_OPTISCALER"], "test-opti")
+                proxy = self.prefix / "drive_c/windows/system32/umu/winmm.dll"
+                self.assertEqual(proxy.read_bytes(), self.files["winmm.dll"])
+
+    def test_an_opt_in_variant_is_selected_by_its_short_name(self):
+        for base in BASES:
+            with self.subTest(base=base):
+                env = self.run_upscalers(
+                    base,
+                    {"SteamAppId": "999999998", "PROTON_USE_OPTISCALER": "altbridge"},
+                    ["run"],
+                )
+                self.assertEqual(env["PROTON_USE_OPTISCALER"], "test-opti-alt")
+                proxy = self.prefix / "drive_c/windows/system32/umu/winmm.dll"
+                self.assertEqual(proxy.read_bytes(), self.variant["winmm.dll"])
+
+    def test_a_bare_one_still_means_this_packages_default(self):
+        # protonfixes maps "1" to "default", which matches no entry by name once
+        # the manifest carries a variant -- that would refuse the launch.
+        for requested in ("1", "default"):
+            with self.subTest(requested=requested):
+                self.assertEqual(
+                    wrapper.optiscaler_version(self.config, requested), "test-opti"
+                )
+        for base in BASES:
+            with self.subTest(base=base):
+                env = self.run_upscalers(
+                    base,
+                    {"SteamAppId": "999999998", "PROTON_USE_OPTISCALER": "1"},
+                    ["run"],
+                )
+                self.assertEqual(env["PROTON_USE_OPTISCALER"], "test-opti")
+
+    def test_an_unknown_version_is_refused_rather_than_silently_replaced(self):
+        self.assertEqual(
+            wrapper.optiscaler_version(self.config, "9.9.9-nope"), "9.9.9-nope"
+        )
+        for base in BASES:
+            with self.subTest(base=base):
+                with self.assertRaisesRegex(RuntimeError, "missing or ambiguous"):
+                    self.run_upscalers(
+                        base,
+                        {
+                            "SteamAppId": "999999998",
+                            "PROTON_USE_OPTISCALER": "9.9.9-nope",
+                        },
+                        ["run"],
+                    )
+
     def test_corrupt_requested_payload_is_refused_before_prefix_writes(self):
         provider = self.work / "artifacts/provider.xz"
         provider.write_bytes(b"corrupted archive")
@@ -385,7 +459,7 @@ class PresetTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 RuntimeError, "Unknown OptiScaler preset option"
             ):
-                builder.optiscaler_artifact(args, staging)
+                builder.optiscaler_artifact(args, staging, payload, "test-opti")
 
     def test_preset_uses_protonfixes_case_and_delimiter_rules(self):
         with tempfile.TemporaryDirectory() as temporary:

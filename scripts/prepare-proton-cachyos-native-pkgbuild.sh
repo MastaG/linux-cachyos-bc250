@@ -160,6 +160,9 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --optipatcher "${srcdir}/OptiPatcher_v0.41.asi" \\\n'
     '        --provider "${srcdir}/amdxcffx64_v4.1.1.xz" \\\n'
     '        --ffx-sdk "${srcdir}/amd_fidelityfx_upscaler_dx12.dll" \\\n'
+    '        --ffx-sdk-alt "${srcdir}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \\\n'
+    '        --ffx-sdk-alt-name "fsr411b" \\\n'
+    '        --ffx-sdk-alt-origin "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -195,6 +198,11 @@ payload_sources = [
      "f4c1da8e92f3fe563b5c28c44e6267ce6b6b8eb2/Kits/FidelityFX/signedbin/"
      "amd_fidelityfx_upscaler_dx12.dll",
      "241e6e5e4d848424eb8ec9a6b22c43fe34cf0cf52d30002ca435ba42e53a9ca0", False),
+    # Opt-in only, never the default: an unsigned third-party rebuild of the
+    # FidelityFX bridge, mirrored so a deleted upstream release cannot change
+    # what a rebuild produces. Selected with PROTON_USE_OPTISCALER=fsr411b.
+    ("amd_fidelityfx_upscaler_dx12_v4.1.1b.dll", f"{payload_base}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll",
+     "0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75", False),
     ("nvngx_dlss.dll",
      "https://raw.githubusercontent.com/NVIDIA/DLSS/"
      "a291cc7d2cc642a51566f3dfd5376f635cd1b284/lib/Windows_x86_64/rel/nvngx_dlss.dll",

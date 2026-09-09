@@ -87,9 +87,19 @@ def tar_tree(root: Path, output: Path) -> None:
                     )
 
 
-def optiscaler_artifact(args, staging: Path) -> tuple[Path, dict]:
-    """Lay out the OptiScaler tree as it must land in the prefix, and describe it."""
-    extracted = staging / "optiscaler"
+def optiscaler_artifact(
+    args, staging: Path, ffx_sdk: Path, version: str, provenance: str = ""
+) -> tuple[Path, dict]:
+    """Lay out the OptiScaler tree as it must land in the prefix, and describe it.
+
+    `ffx_sdk` is the FidelityFX bridge to lay over OptiScaler's own, and
+    `version` the name protonfixes must ask for. Everything else is identical
+    between variants, which is why the whole tree is rebuilt per variant rather
+    than patched: protonfixes installs an OptiScaler entry all-or-nothing and
+    verifies every file in it, so a variant has to be a complete, self-consistent
+    set with its own hashes.
+    """
+    extracted = staging / ("optiscaler-" + version)
     extracted.mkdir()
     # bsdtar reads 7z and ships with libarchive, which makepkg already needs, so
     # this costs no extra makedepends.
@@ -117,12 +127,20 @@ def optiscaler_artifact(args, staging: Path) -> tuple[Path, dict]:
 
     # OptiScaler bundles a 4.1.1 FidelityFX SDK, which would shadow the equally
     # versioned provider that our RADV actually drives. The older 4.0.2 bridge
-    # lets the pinned 4.1.1 provider win.
-    shutil.copy2(args.ffx_sdk, extracted / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll")
+    # lets the pinned 4.1.1 provider win. A variant that deliberately ships a
+    # newer bridge is opting into the opposite arrangement.
+    shutil.copy2(ffx_sdk, extracted / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll")
     shutil.copy2(
         args.licenses / "FidelityFX-SDK-4.0.2.txt",
         extracted / "Licenses/FidelityFX-SDK-4.0.2.txt",
     )
+    if provenance:
+        # Say in the prefix itself where a non-AMD binary came from. Anyone
+        # looking at an unsigned DLL in their prefix deserves to find this
+        # next to it rather than in a build script.
+        (extracted / "Licenses/THIRD-PARTY-UPSCALER.txt").write_text(
+            provenance, encoding="utf-8"
+        )
 
     plugins = extracted / "OptiScaler/plugins"
     plugins.mkdir(parents=True, exist_ok=True)
@@ -142,7 +160,7 @@ def optiscaler_artifact(args, staging: Path) -> tuple[Path, dict]:
     tar_tree(extracted, output)
     archive_sha256 = digest(output)
     return output, {
-        "version": args.optiscaler_version,
+        "version": version,
         "is_dev_file": False,
         "download_url": "artifacts/optiscaler-" + archive_sha256 + ".tar.xz",
         "zip_sha256_hash": archive_sha256,
@@ -184,6 +202,16 @@ def main() -> int:
     ap.add_argument("--provider-version", default="4.1.1")
     ap.add_argument("--ffx-sdk", type=Path, required=True,
                     help="FidelityFX SDK amd_fidelityfx_upscaler_dx12.dll")
+    # An optional second, opt-in variant of the same tree. It exists so a bridge
+    # can be A/B'd against the shipped one on real hardware without a separate
+    # package and without anyone hand-editing a prefix -- which pinning makes
+    # impossible anyway, since every file is verified before launch.
+    ap.add_argument("--ffx-sdk-alt", type=Path,
+                    help="alternate amd_fidelityfx_upscaler_dx12.dll to offer as a variant")
+    ap.add_argument("--ffx-sdk-alt-name", default="",
+                    help="short name the wrapper accepts for the variant, e.g. fsr411b")
+    ap.add_argument("--ffx-sdk-alt-origin", default="",
+                    help="where the alternate bridge came from, recorded in the prefix")
     ap.add_argument("--dlss", type=Path, required=True, help="NVIDIA nvngx_dlss.dll surrogate")
     ap.add_argument("--licenses", type=Path, required=True, help="directory of license notices")
     ap.add_argument("--preset", type=Path, required=True, help="optiscaler-preset.json")
@@ -203,13 +231,45 @@ def main() -> int:
     artifacts = args.output / "artifacts"
     artifacts.mkdir(parents=True)
 
+    if bool(args.ffx_sdk_alt) != bool(args.ffx_sdk_alt_name):
+        raise SystemExit(
+            "ERROR: --ffx-sdk-alt and --ffx-sdk-alt-name must be given together"
+        )
+    aliases = {}
+    variants = [(args.ffx_sdk, args.optiscaler_version, "")]
+    if args.ffx_sdk_alt:
+        if args.ffx_sdk_alt_name in ("", "default", "1", "0"):
+            raise SystemExit(
+                f"ERROR: unusable variant name: {args.ffx_sdk_alt_name!r}"
+            )
+        alt_version = args.optiscaler_version + "-" + args.ffx_sdk_alt_name
+        aliases[args.ffx_sdk_alt_name] = alt_version
+        variants.append(
+            (
+                args.ffx_sdk_alt,
+                alt_version,
+                "amd_fidelityfx_upscaler_dx12.dll in this directory is NOT the "
+                "AMD-signed FidelityFX SDK binary.\n\n"
+                f"Origin: {args.ffx_sdk_alt_origin or 'unspecified'}\n"
+                f"SHA256: {digest(args.ffx_sdk_alt)}\n\n"
+                "It is a third-party modified build, selected explicitly by "
+                "PROTON_USE_OPTISCALER. The default payload ships AMD's signed "
+                "bridge instead.\n",
+            )
+        )
+
     with tempfile.TemporaryDirectory(prefix=".payload-") as temporary:
         staging = Path(temporary)
-        archive, optiscaler = optiscaler_artifact(args, staging)
-        shutil.copy2(archive, artifacts / Path(optiscaler["download_url"]).name)
+        entries = []
+        for ffx_sdk, version, provenance in variants:
+            archive, entry = optiscaler_artifact(
+                args, staging, ffx_sdk, version, provenance
+            )
+            shutil.copy2(archive, artifacts / Path(entry["download_url"]).name)
+            entries.append(entry)
     provider = provider_artifact(args, artifacts)
 
-    manifest = {"optiscaler": [optiscaler], "fsr_40_drv": [provider]}
+    manifest = {"optiscaler": entries, "fsr_40_drv": [provider]}
     (args.output / "upscaler-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
     preset = json.loads(args.preset.read_text())
@@ -222,6 +282,10 @@ def main() -> int:
             {
                 "schema": 1,
                 "optiscaler_version": args.optiscaler_version,
+                # Short names the wrapper resolves to a pinned version, so a
+                # tester types PROTON_USE_OPTISCALER=fsr411b rather than a
+                # version string nobody can remember.
+                "optiscaler_aliases": aliases,
                 "provider_version": args.provider_version,
                 "proxy": args.proxy,
                 "manifest": args.manifest_rel,
@@ -238,7 +302,9 @@ def main() -> int:
     for path in [args.output / "upscaler-manifest.json", args.config, *artifacts.iterdir()]:
         path.chmod(0o644)
     print("==> pinned OptiScaler " + args.optiscaler_version
-          + " (" + str(len(optiscaler["sha256_hash"])) + " verified files)")
+          + " (" + str(len(entries[0]["sha256_hash"])) + " verified files)")
+    for name, version in aliases.items():
+        print(f"==> pinned opt-in OptiScaler variant {name!r} as {version}")
     print("==> pinned FSR4 provider " + args.provider_version)
     return 0
 

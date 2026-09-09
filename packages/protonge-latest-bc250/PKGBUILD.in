@@ -45,6 +45,10 @@ source=(
     "amdxcffx64_v4.1.1.xz::@PAYLOAD_BASE@/amdxcffx64_v4.1.1.xz"
     # Pinned by commit, so these URLs are immutable and need no mirror.
     "amd_fidelityfx_upscaler_dx12.dll::https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/f4c1da8e92f3fe563b5c28c44e6267ce6b6b8eb2/Kits/FidelityFX/signedbin/amd_fidelityfx_upscaler_dx12.dll"
+    # Opt-in only, never the default: an unsigned third-party rebuild of the
+    # FidelityFX bridge, mirrored so a deleted upstream release cannot change
+    # what a rebuild produces. Selected with PROTON_USE_OPTISCALER=fsr411b.
+    "amd_fidelityfx_upscaler_dx12_v4.1.1b.dll::@PAYLOAD_BASE@/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll"
     "nvngx_dlss.dll::https://raw.githubusercontent.com/NVIDIA/DLSS/a291cc7d2cc642a51566f3dfd5376f635cd1b284/lib/Windows_x86_64/rel/nvngx_dlss.dll"
     '0001-pinned-upscaler-manifest.patch'
     'bc250-fsr4-launch.py'
@@ -79,6 +83,7 @@ sha256sums=(
     'fb12735bfcc0d47f534f2206d57ec34129dc3d22b6405a1c2ef86745ab48b2eb'
     '5de9b6d9f5475a0f2622e4cbce88cde46c68929d9bd0bbc353c70056997bb771'
     '241e6e5e4d848424eb8ec9a6b22c43fe34cf0cf52d30002ca435ba42e53a9ca0'
+    '0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75'
     'be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e'
     '@SHA_PATCH@'
     '@SHA_LAUNCH@'
@@ -148,6 +153,9 @@ build() {
         --provider "$srcdir/amdxcffx64_v4.1.1.xz" \
         --provider-version "$_provider_version" \
         --ffx-sdk "$srcdir/amd_fidelityfx_upscaler_dx12.dll" \
+        --ffx-sdk-alt "$srcdir/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \
+        --ffx-sdk-alt-name "fsr411b" \
+        --ffx-sdk-alt-origin "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \
         --dlss "$srcdir/nvngx_dlss.dll" \
         --licenses "$srcdir" \
         --preset "$srcdir/optiscaler-preset.json" \

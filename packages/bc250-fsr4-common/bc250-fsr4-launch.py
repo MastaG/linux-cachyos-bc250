@@ -111,6 +111,24 @@ def load_native(env, dll):
     env["WINEDLLOVERRIDES"] = ";".join(entries + [name + "=n,b"])
 
 
+def optiscaler_version(config, requested):
+    """Resolve what the caller asked for to a version the manifest pins.
+
+    The manifest carries more than one OptiScaler entry when the package ships
+    an opt-in variant, and protonfixes maps a bare "1" to "default", which then
+    matches none of them by name and refuses the launch. So "1" is resolved here
+    to the version this package actually defaults to, and a variant's short name
+    to its pinned version. Anything else is passed through untouched: an exact
+    version the manifest does not have must still fail loudly rather than be
+    quietly replaced with one that happens to be present.
+    """
+    if requested in ("0", ""):
+        return requested
+    if requested in ("1", "default"):
+        return config["optiscaler_version"]
+    return config.get("optiscaler_aliases", {}).get(requested, requested)
+
+
 def environment(config, inherited, *, game):
     env = dict(inherited)
     # /usr is read-only, so Proton's own imports cannot drop __pycache__ beside
@@ -140,6 +158,7 @@ def environment(config, inherited, *, game):
     # Otherwise OptiScaler can still discover a provider retained in a prefix.
     defaulted(env, "PROTON_USE_OPTISCALER",
               "0" if env["PROTON_FSR4_UPGRADE"] == "0" else config["optiscaler_version"])
+    env["PROTON_USE_OPTISCALER"] = optiscaler_version(config, env["PROTON_USE_OPTISCALER"])
 
     # Not shipped, and explicitly off rather than merely absent: leaving it to
     # the default would let a future Proton decide.
