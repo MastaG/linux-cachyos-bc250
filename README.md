@@ -288,7 +288,7 @@ Installing it does not remove the ability to manage those packages individually,
 Each of these is genuinely optional; the defaults are fine.
 
 - **[40 CU unlock](docs/PATCHES.md#optional-40-cu-unlock)** — enables the 4
-  disabled compute units with `amdgpu.bc250_unlock_cus=1`. **Read the thermal
+  disabled compute units with `amdgpu.bc250_cc_write_mode=3`. **Read the thermal
   notes first**: it raises power draw, and not every board is stable at 40 CUs.
 - **[AMDGPU scheduler tuning](#optional-amdgpu-scheduler-tuning)** — `sched_policy=2`
   helps some systems and hurts others. Workload-dependent; measure it.

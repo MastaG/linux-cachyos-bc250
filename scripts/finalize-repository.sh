@@ -306,6 +306,7 @@ cat > RELEASE_NOTES.md <<EOF_NOTES
 - Patch set: \`${rc_patch_set}\`
 - Built from the \`patches/linux-cachyos-rc\` set, which is maintained against the Linux 7.3-rc series independently of the 7.2 stable set.
 - Additionally carries \`0010\` ("Emit VTEM for HF-VSDB VRR on TMDS links", upstream \`640fd039dc8b\`), which fixes HDMI 2.1 VRR never engaging on TMDS links for sinks advertising VRR through the HDMI Forum VSDB. Merged to \`drm-next\` for Linux 7.4. The other seven patches of the original backport arrived in \`cachyos-7.3-rc2-1\` via CachyOS's \`7.3/hdmi\` merge and were dropped here.
+- Also carries \`0011\` ("drm/gud: bound the TV mode count"), which rejects a firmware-reported mode count larger than the array it is read into. Only reachable with a GUD USB display attached, and only built for the RC series because that is where the affected \`gud\` code landed.
 
 ### BORE: \`${bore_pkgbase}\`
 
@@ -332,7 +333,7 @@ All three kernels use:
 - CachyOS packaging commit: \`${mesa_cachyos_commit}\`
 - Version: \`${mesa_pkgver}-${mesa_pkgrel}\`${mesa_epoch:+ (epoch ${mesa_epoch})}
 - Applied patches: \`0001\` compute-queue fix, \`0002\` mesh/task support, \`0003\` mesh queries, \`0004\` RADV_GFX103 runtime override, \`0005\` BC-250 FSR4 EXP-042B (V3) deferred SDot lowering, \`0006\` FSR4 combined-unroll selection, \`0007\` FSR4 image-preparation and texture candidates, \`0008\` FSR4 resolution-variant coverage and 8K masked-store guard, \`0009\` FSR4 production defaults.
-- \`0006\`-\`0009\` are active by default since \`0009\` enables the candidates: set \`BC250_FSR4_IMAGEPREP=1\`, \`BC250_FSR4_TEXTURE=1\` or \`BC250_FSR4_RESOLUTION_VARIANTS=1\` to enable them. Every FSR4 rewrite is gated on exact shader identity, so an unmatched shader is left untouched.
+- \`0006\`-\`0009\` are all active by default: \`0009\` flips the \`0007\`/\`0008\` candidates on, so \`BC250_FSR4_IMAGEPREP\`, \`BC250_FSR4_TEXTURE\` and \`BC250_FSR4_RESOLUTION_VARIANTS\` default to enabled and are set to \`0\` to turn them off, not to \`1\` to turn them on. \`BC250_FSR4_DISABLE=1\` switches off the profile-specific rewrites entirely. Every FSR4 rewrite is gated on exact shader identity, so an unmatched shader is left untouched.
 - \`0006\`-\`0008\` are the work of fish / @iamastrangeloop, \`0009\` of daniel-h-0, rebased onto this tree. Their reported figure for \`0006\` is 8.015 ms to 5.843 ms per FSR4.1.1 INT8 upscale at 1440p Balanced (27.1%); the opt-in candidates measure around 1% each and are not independently verified here.
 - \`0001\` and \`0005\` are always active; GFX1013 mesh/task feature exposure remains disabled unless \`RADV_GFX103=1\` is set for the application.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
@@ -341,7 +342,7 @@ All three kernels use:
 
 - CachyOS packaging commit: \`${lib32_cachyos_commit}\`
 - Version: \`${lib32_pkgver}-${lib32_pkgrel}\`${lib32_epoch:+ (epoch ${lib32_epoch})}
-- Uses the same eight-patch series and runtime gating as stable 64-bit Mesa.
+- Uses the same patch series and runtime gating as stable 64-bit Mesa.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 
 ## Patched CachyOS mesa-git
@@ -350,8 +351,8 @@ All three kernels use:
 - Mesa main commit: \`${mesa_git_commit}\`
 - Package version: \`${mesa_git_pkgver}-${mesa_git_pkgrel}\`
 - Builds both \`mesa-git\` and \`lib32-mesa-git\` from the same pinned Mesa commit.
-- Applies separately rebased \`0001\` through \`0005\` patches in order.
-- \`0001\` and \`0005\` are always active; the experimental GFX1013 mesh/task path is opt-in with \`RADV_GFX103=1\`.
+- Applies the same separately rebased \`0001\`-\`0009\` series, in order, as the stable Mesa packages.
+- \`0001\`, \`0005\` and \`0006\`-\`0009\` are active; the experimental GFX1013 mesh/task path is opt-in with \`RADV_GFX103=1\`.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 
 ## BC-250 dual-output audio (opt-in)
