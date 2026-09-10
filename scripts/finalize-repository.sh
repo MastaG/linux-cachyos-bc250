@@ -11,8 +11,6 @@ REPO_NAME="bc250-cachyos"
 : "${MESA_FINGERPRINT:?MESA_FINGERPRINT is required}"
 : "${LIB32_MESA_FINGERPRINT:?LIB32_MESA_FINGERPRINT is required}"
 : "${MESA_GIT_FINGERPRINT:?MESA_GIT_FINGERPRINT is required}"
-: "${MESA_TESTING_FINGERPRINT:?MESA_TESTING_FINGERPRINT is required}"
-: "${LIB32_MESA_TESTING_FINGERPRINT:?LIB32_MESA_TESTING_FINGERPRINT is required}"
 : "${BC250_DUAL_AUDIO_FINGERPRINT:?BC250_DUAL_AUDIO_FINGERPRINT is required}"
 : "${LINUX_CACHYOS_BC250_META_FINGERPRINT:?LINUX_CACHYOS_BC250_META_FINGERPRINT is required}"
 : "${PROTONGE_LATEST_BC250_FINGERPRINT:?PROTONGE_LATEST_BC250_FINGERPRINT is required}"
@@ -24,8 +22,6 @@ BUILD_KERNEL_BORE="${BUILD_KERNEL_BORE:-false}"
 BUILD_MESA="${BUILD_MESA:-false}"
 BUILD_LIB32_MESA="${BUILD_LIB32_MESA:-false}"
 BUILD_MESA_GIT="${BUILD_MESA_GIT:-false}"
-BUILD_MESA_TESTING="${BUILD_MESA_TESTING:-false}"
-BUILD_LIB32_MESA_TESTING="${BUILD_LIB32_MESA_TESTING:-false}"
 BUILD_BC250_DUAL_AUDIO="${BUILD_BC250_DUAL_AUDIO:-false}"
 BUILD_LINUX_CACHYOS_BC250_META="${BUILD_LINUX_CACHYOS_BC250_META:-false}"
 BUILD_PROTONGE_LATEST_BC250="${BUILD_PROTONGE_LATEST_BC250:-false}"
@@ -38,8 +34,6 @@ required_metadata=(
     mesa-info.env
     lib32-mesa-info.env
     mesa-git-info.env
-    mesa-testing-info.env
-    lib32-mesa-testing-info.env
     bc250-dual-audio-info.env
     linux-cachyos-bc250-meta-info.env
     protonge-latest-bc250-info.env
@@ -102,13 +96,6 @@ mesa_git_pkgver="$(value "$mesa_git_info" MESA_GIT_PKGVER)"
 mesa_git_pkgrel="$(value "$mesa_git_info" MESA_GIT_PKGREL)"
 mesa_git_lib32="$(value "$mesa_git_info" MESA_GIT_LIB32)"
 
-mesa_testing_info="$OUT_DIR/mesa-testing-info.env"
-lib32_mesa_testing_info="$OUT_DIR/lib32-mesa-testing-info.env"
-mesa_testing_pkgver="$(value "$mesa_testing_info" MESA_TESTING_PKGVER)"
-mesa_testing_pkgrel="$(value "$mesa_testing_info" MESA_TESTING_PKGREL)"
-mesa_testing_patches="$(value "$mesa_testing_info" MESA_TESTING_APPLIED_PATCHES)"
-lib32_mesa_testing_pkgver="$(value "$lib32_mesa_testing_info" LIB32_MESA_TESTING_PKGVER)"
-lib32_mesa_testing_pkgrel="$(value "$lib32_mesa_testing_info" LIB32_MESA_TESTING_PKGREL)"
 
 bc250_dual_audio_info="$OUT_DIR/bc250-dual-audio-info.env"
 bc250_dual_audio_pkgver="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGVER)"
@@ -180,8 +167,6 @@ bore_count="$(pkgbase_count "$bore_pkgbase")"
 mesa_count="$(pkgbase_count mesa)"
 lib32_count="$(pkgbase_count lib32-mesa)"
 mesa_git_count="$(pkgbase_count mesa-git)"
-mesa_testing_count="$(pkgbase_count mesa-testing)"
-lib32_mesa_testing_count="$(pkgbase_count lib32-mesa-testing)"
 bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
 linux_cachyos_bc250_meta_count="$(pkgbase_count linux-cachyos-bc250-meta)"
 protonge_count="$(pkgbase_count protonge-latest-bc250)"
@@ -193,8 +178,6 @@ proton_native_count="$(pkgbase_count proton-cachyos-native-bc250)"
 (( mesa_count >= 1 )) || { printf 'ERROR: stable Mesa packages are missing\n' >&2; exit 1; }
 (( lib32_count >= 1 )) || { printf 'ERROR: lib32-mesa packages are missing\n' >&2; exit 1; }
 (( mesa_git_count == 2 )) || { printf 'ERROR: expected mesa-git + lib32-mesa-git; found %d package(s)\n' "$mesa_git_count" >&2; exit 1; }
-(( mesa_testing_count >= 1 )) || { printf 'ERROR: vulkan-radeon-testing package is missing\n' >&2; exit 1; }
-(( lib32_mesa_testing_count >= 1 )) || { printf 'ERROR: lib32-vulkan-radeon-testing package is missing\n' >&2; exit 1; }
 (( bc250_dual_audio_count == 1 )) || { printf 'ERROR: expected exactly one bc250-dual-audio package; found %d\n' "$bc250_dual_audio_count" >&2; exit 1; }
 (( linux_cachyos_bc250_meta_count == 1 )) || { printf 'ERROR: expected exactly one linux-cachyos-bc250-meta package; found %d\n' "$linux_cachyos_bc250_meta_count" >&2; exit 1; }
 (( protonge_count == 1 )) || { printf 'ERROR: expected exactly one protonge-latest-bc250 package; found %d\n' "$protonge_count" >&2; exit 1; }
@@ -233,8 +216,6 @@ KERNEL_BORE_FINGERPRINT="$(fingerprint_from "$bore_info" KERNEL_FINGERPRINT "$KE
 MESA_FINGERPRINT="$(fingerprint_from "$mesa_info" MESA_FINGERPRINT "$MESA_FINGERPRINT")"
 LIB32_MESA_FINGERPRINT="$(fingerprint_from "$lib32_info" LIB32_MESA_FINGERPRINT "$LIB32_MESA_FINGERPRINT")"
 MESA_GIT_FINGERPRINT="$(fingerprint_from "$mesa_git_info" MESA_GIT_FINGERPRINT "$MESA_GIT_FINGERPRINT")"
-MESA_TESTING_FINGERPRINT="$(fingerprint_from "$mesa_testing_info" MESA_TESTING_FINGERPRINT "$MESA_TESTING_FINGERPRINT")"
-LIB32_MESA_TESTING_FINGERPRINT="$(fingerprint_from "$lib32_mesa_testing_info" LIB32_MESA_TESTING_FINGERPRINT "$LIB32_MESA_TESTING_FINGERPRINT")"
 BC250_DUAL_AUDIO_FINGERPRINT="$(fingerprint_from "$bc250_dual_audio_info" BC250_DUAL_AUDIO_FINGERPRINT "$BC250_DUAL_AUDIO_FINGERPRINT")"
 LINUX_CACHYOS_BC250_META_FINGERPRINT="$(fingerprint_from "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_FINGERPRINT "$LINUX_CACHYOS_BC250_META_FINGERPRINT")"
 PROTONGE_LATEST_BC250_FINGERPRINT="$(fingerprint_from "$protonge_info" PROTONGE_LATEST_BC250_FINGERPRINT "$PROTONGE_LATEST_BC250_FINGERPRINT")"
@@ -243,7 +224,6 @@ PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$(fingerprint_from "$proton_native_info
 SOURCE_FINGERPRINT="$(printf '%s\n' \
     "$KERNEL_STABLE_FINGERPRINT" "$KERNEL_RC_FINGERPRINT" "$KERNEL_BORE_FINGERPRINT" \
     "$MESA_FINGERPRINT" "$LIB32_MESA_FINGERPRINT" "$MESA_GIT_FINGERPRINT" \
-    "$MESA_TESTING_FINGERPRINT" "$LIB32_MESA_TESTING_FINGERPRINT" \
     "$BC250_DUAL_AUDIO_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
     "$PROTONGE_LATEST_BC250_FINGERPRINT" "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" | \
     sha256sum | awk '{print $1}')"
@@ -256,8 +236,6 @@ KERNEL_BORE_FINGERPRINT=${KERNEL_BORE_FINGERPRINT}
 MESA_FINGERPRINT=${MESA_FINGERPRINT}
 LIB32_MESA_FINGERPRINT=${LIB32_MESA_FINGERPRINT}
 MESA_GIT_FINGERPRINT=${MESA_GIT_FINGERPRINT}
-MESA_TESTING_FINGERPRINT=${MESA_TESTING_FINGERPRINT}
-LIB32_MESA_TESTING_FINGERPRINT=${LIB32_MESA_TESTING_FINGERPRINT}
 BC250_DUAL_AUDIO_FINGERPRINT=${BC250_DUAL_AUDIO_FINGERPRINT}
 LINUX_CACHYOS_BC250_META_FINGERPRINT=${LINUX_CACHYOS_BC250_META_FINGERPRINT}
 PROTONGE_LATEST_BC250_FINGERPRINT=${PROTONGE_LATEST_BC250_FINGERPRINT}
@@ -268,8 +246,6 @@ LAST_RUN_KERNEL_BORE_BUILD=${BUILD_KERNEL_BORE}
 LAST_RUN_MESA_BUILD=${BUILD_MESA}
 LAST_RUN_LIB32_MESA_BUILD=${BUILD_LIB32_MESA}
 LAST_RUN_MESA_GIT_BUILD=${BUILD_MESA_GIT}
-LAST_RUN_MESA_TESTING_BUILD=${BUILD_MESA_TESTING}
-LAST_RUN_LIB32_MESA_TESTING_BUILD=${BUILD_LIB32_MESA_TESTING}
 LAST_RUN_BC250_DUAL_AUDIO_BUILD=${BUILD_BC250_DUAL_AUDIO}
 LAST_RUN_LINUX_CACHYOS_BC250_META_BUILD=${BUILD_LINUX_CACHYOS_BC250_META}
 LAST_RUN_PROTONGE_LATEST_BC250_BUILD=${BUILD_PROTONGE_LATEST_BC250}
@@ -377,24 +353,6 @@ All three kernels use:
 - Applies separately rebased \`0001\` through \`0005\` patches in order.
 - \`0001\` and \`0005\` are always active; the experimental GFX1013 mesh/task path is opt-in with \`RADV_GFX103=1\`.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
-
-## FSR4 isolation testing driver (opt-in)
-
-- Package version: \`${mesa_testing_pkgver}-${mesa_testing_pkgrel}\`
-- Emits only \`vulkan-radeon-testing\` and \`lib32-vulkan-radeon-testing\`, which
-  provide/conflict the real ones, so they swap in and out with a single command.
-- Patch set: \`${mesa_testing_patches}\`
-- Purpose: reverting the trimmed FSR4 V3 patch to upstream's full version restored
-  OptiScaler frame time from ~12 ms to ~8 ms, but four pieces were restored at once.
-  This driver carries the trimmed base plus exactly one of them, so the piece that
-  matters can be identified by measurement.
-
-\`\`\`bash
-sudo pacman -Syu vulkan-radeon-testing lib32-vulkan-radeon-testing   # try it
-sudo pacman -Syu vulkan-radeon lib32-vulkan-radeon                   # go back
-\`\`\`
-
-Everything else, including the kernels and the stable Mesa packages, is unaffected.
 
 ## BC-250 dual-output audio (opt-in)
 

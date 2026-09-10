@@ -13,7 +13,7 @@ MESA_BUILD_DIR="${MESA_BUILD_DIR:-${ROOT_DIR}/build/mesa}"
 CACHYOS_MESA_COMMIT="${CACHYOS_MESA_COMMIT:-}"
 MESA_PATCH_DIR="${ROOT_DIR}/patches/mesa"
 # The production directory is the ordered series, including the FSR4 v4
-# patches. Keep experiments in mesa-testing, not an unreferenced file here.
+# patches. An unreferenced file here is a patch that silently does nothing.
 MESA_PATCHES=("${MESA_PATCH_DIR}"/*.patch)
 MESA_MARCH="x86-64-v3"
 MESA_MTUNE="znver2"
