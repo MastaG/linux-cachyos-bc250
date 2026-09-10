@@ -173,7 +173,8 @@ Use it only per-game for titles that need the experimental GFX10.3 mesh-shader p
 
 Two packages, same idea: a Steam compatibility tool with everything FSR 4.1.1
 needs on this hardware already inside it — the AMD FSR4 provider, OptiScaler,
-OptiPatcher and a known-good OptiScaler configuration.
+OptiPatcher, [fakenvapi](https://github.com/optiscaler/fakenvapi) and a
+known-good OptiScaler configuration.
 
 | package | base | build |
 |---|---|---|
@@ -192,6 +193,14 @@ Compatibility.
 
 **That is the whole setup.** FSR4 and OptiScaler are on by default — no launch
 options, no DLLs to copy into game folders, no environment variables.
+
+**fakenvapi** is bundled and always active — there is no variable to enable it.
+It stands in for `nvapi64.dll` so OptiScaler can reach AntiLag 2, Vulkan
+AntiLag+, XeLL or LatencyFlex in games that would otherwise need NVIDIA Reflex.
+OptiScaler picks whichever of those the hardware supports; on the BC-250 that
+means the Reflex-shaped latency path works without an NVIDIA GPU. Unlike the
+pinned OptiScaler build, fakenvapi is **tracked live**: a new upstream release
+changes both packages' fingerprints and they rebuild with it.
 
 Both need the `vulkan-radeon` package from this repository: the provider calls
 into FSR4 support that lives in our patched RADV, not in stock Mesa. They also

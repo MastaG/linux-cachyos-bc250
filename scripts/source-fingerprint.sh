@@ -15,6 +15,7 @@ NCT6687D_COMMIT="${NCT6687D_COMMIT:-}"
 CACHYOS_MESA_COMMIT="${CACHYOS_MESA_COMMIT:-}"
 MESA_GIT_COMMIT="${MESA_GIT_COMMIT:-}"
 PROTONGE_TAG="${PROTONGE_TAG:-}"
+FAKENVAPI_TAG="${FAKENVAPI_TAG:-}"
 
 case "$COMPONENT" in
     kernel-stable)
@@ -142,6 +143,22 @@ case "$COMPONENT" in
         source "$ROOT_DIR/scripts/fsr4-payload-sources.sh"
 
         printf '%s\n' "$PROTONGE_TAG" > "$TMP/ge-tag"
+        # fakenvapi is tracked live, not pinned: a new upstream release has to
+        # change this fingerprint, or the package would keep shipping whatever
+        # version it was last built with. It releases rarely, so this costs one
+        # rebuild per actual release rather than the daily churn that made the
+        # OptiScaler build a pin.
+        if [[ -z "$FAKENVAPI_TAG" ]]; then
+            FAKENVAPI_TAG="$(
+                "$ROOT_DIR/scripts/resolve-fakenvapi.sh" |
+                    awk -F= '$1 == "FAKENVAPI_TAG" { print $2; exit }'
+            )"
+        fi
+        [[ "$FAKENVAPI_TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
+            printf 'ERROR: invalid FAKENVAPI_TAG: %s\n' "$FAKENVAPI_TAG" >&2
+            exit 1
+        }
+        printf '%s\n' "$FAKENVAPI_TAG" > "$TMP/fakenvapi-tag"
         {
             (cd "$TMP" && sha256sum *)
             mapfile -t payload_sources < <(fsr4_payload_source_paths "$ROOT_DIR" ge-proton)
@@ -149,6 +166,7 @@ case "$COMPONENT" in
             hash_files "$pkg_dir/PKGBUILD.in" "$pkg_dir/ntsync.conf"
             hash_files "$ROOT_DIR/scripts/build-protonge-latest-bc250-package.sh" \
                 "$ROOT_DIR/scripts/resolve-protonge.sh" \
+                "$ROOT_DIR/scripts/resolve-fakenvapi.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;
@@ -175,6 +193,21 @@ case "$COMPONENT" in
         done
         printf '%s\n' 'x86-64-v3' > "$TMP/march"
         printf '%s\n' 'znver2' > "$TMP/mtune"
+
+        # Same reasoning as protonge-latest-bc250: fakenvapi is tracked live, so
+        # a new upstream release has to move this fingerprint. It matters more
+        # here, because this package compiles Proton and Wine from source.
+        if [[ -z "$FAKENVAPI_TAG" ]]; then
+            FAKENVAPI_TAG="$(
+                "$ROOT_DIR/scripts/resolve-fakenvapi.sh" |
+                    awk -F= '$1 == "FAKENVAPI_TAG" { print $2; exit }'
+            )"
+        fi
+        [[ "$FAKENVAPI_TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
+            printf 'ERROR: invalid FAKENVAPI_TAG: %s\n' "$FAKENVAPI_TAG" >&2
+            exit 1
+        }
+        printf '%s\n' "$FAKENVAPI_TAG" > "$TMP/fakenvapi-tag"
         {
             (cd "$TMP" && sha256sum *)
             mapfile -t payload_sources < <(fsr4_payload_source_paths "$ROOT_DIR" proton-cachyos)
@@ -182,6 +215,7 @@ case "$COMPONENT" in
             hash_files "$ROOT_DIR/scripts/prepare-proton-cachyos-native-pkgbuild.sh" \
                 "$ROOT_DIR/scripts/build-proton-cachyos-native-bc250-package.sh" \
                 "$ROOT_DIR/scripts/resolve-cachyos-mesa.sh" \
+                "$ROOT_DIR/scripts/resolve-fakenvapi.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

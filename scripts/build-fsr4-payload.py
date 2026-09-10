@@ -142,6 +142,27 @@ def optiscaler_artifact(
             provenance, encoding="utf-8"
         )
 
+    # fakenvapi stands in for nvapi64.dll so OptiScaler can reach AntiLag 2,
+    # Vulkan AntiLag+, XeLL or LatencyFlex where a game would otherwise need
+    # NVIDIA Reflex. It goes beside the other bundled libraries rather than
+    # getting its own config key: OptiDllPath is "the main folder for OptiScaler
+    # to check dll files below", and the per-DLL Libraries.* keys only override
+    # that, so `NvapiPath=auto` finds it exactly the way libxell.dll is found
+    # today. OptiScaler's own [fakenvapi] UseFakenvapi defaults to on.
+    #
+    # The upstream README says fakenvapi ships inside OptiScaler 0.9+, but the
+    # nightly this package pins contains no nvapi DLL at all -- checked, not
+    # assumed -- so it is bundled here.
+    subprocess.run(
+        ["bsdtar", "-xf", str(args.fakenvapi), "--no-same-owner",
+         "--no-same-permissions", "-C", str(extracted / "OptiScaler"),
+         "fakenvapi.dll"],
+        check=True,
+    )
+    fakenvapi = extracted / "OptiScaler/fakenvapi.dll"
+    if not fakenvapi.is_file():
+        raise RuntimeError("fakenvapi archive contains no fakenvapi.dll")
+
     plugins = extracted / "OptiScaler/plugins"
     plugins.mkdir(parents=True, exist_ok=True)
     shutil.copy2(args.optipatcher, plugins / "OptiPatcher.asi")
@@ -198,6 +219,8 @@ def main() -> int:
     ap.add_argument("--optiscaler-version", required=True,
                     help="version string protonfixes must ask for by name")
     ap.add_argument("--optipatcher", type=Path, required=True, help="OptiPatcher .asi")
+    ap.add_argument("--fakenvapi", type=Path, required=True,
+                    help="fakenvapi release .7z, tracked live by resolve-fakenvapi.sh")
     ap.add_argument("--provider", type=Path, required=True, help="amdxcffx64 .xz")
     ap.add_argument("--provider-version", default="4.1.1")
     ap.add_argument("--ffx-sdk", type=Path, required=True,

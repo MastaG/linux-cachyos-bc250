@@ -75,8 +75,20 @@ class PreparationTests(unittest.TestCase):
 import os, sys
 from pathlib import Path
 args = sys.argv[1:]
-output = Path(args[args.index('-o') + 1])
 url = args[-1]
+# resolve-fakenvapi.sh reads the release API and hashes the asset, both without
+# -o, so this stub has to answer on stdout too -- and answer plausibly, because
+# the point is to exercise the real resolver's parsing rather than skip it.
+if 'api.github.com' in url and url.endswith('/releases/latest'):
+    sys.stdout.write(
+        '{"tag_name": "v1.4.1", "assets": '
+        '[{"name": "fakenvapi-v1.4.1.7z"}]}\\n'
+    )
+    sys.exit(0)
+if url.endswith('.7z') and 'fakenvapi' in url:
+    sys.stdout.write('fixture fakenvapi archive\\n')
+    sys.exit(0)
+output = Path(args[args.index('-o') + 1])
 if url.endswith('/PKGBUILD'):
     kind = 'native' if '/proton-cachyos-native/' in url else ('git' if '/mesa-git/' in url else 'stable')
     text = (Path(os.environ['BC250_TEST_UPSTREAM']) / kind).read_text()

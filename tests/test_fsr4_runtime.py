@@ -417,6 +417,104 @@ class RuntimeTests(unittest.TestCase):
 
 
 class PresetTests(unittest.TestCase):
+    def test_fakenvapi_is_bundled_beside_the_other_optiscaler_libraries(self):
+        # fakenvapi has to land inside OptiDllPath, because that is "the main
+        # folder for OptiScaler to check dll files below" and Libraries.NvapiPath
+        # is left at auto. Anywhere else and OptiScaler silently never finds it.
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            archive = work / "opti.tar"
+            with tarfile.open(archive, "w") as tar:
+                for name in ("OptiScaler", "Licenses"):
+                    entry = tarfile.TarInfo(name)
+                    entry.type = tarfile.DIRTYPE
+                    entry.mode = 0o755
+                    tar.addfile(entry)
+                for name, data in {
+                    "OptiScaler.ini": b"[FSR]\nFsr4ForceModel=auto\n",
+                    "OptiScaler.dll": b"p" * 2048,
+                }.items():
+                    entry = tarfile.TarInfo(name)
+                    entry.size = len(data)
+                    tar.addfile(entry, io.BytesIO(data))
+            # bsdtar detects the format from content, so a plain tar stands in
+            # for upstream's .7z without needing 7z tooling here.
+            fakenvapi_dll = b"f" * 4096
+            fakenvapi = work / "fakenvapi.7z"
+            with tarfile.open(fakenvapi, "w") as tar:
+                entry = tarfile.TarInfo("fakenvapi.dll")
+                entry.size = len(fakenvapi_dll)
+                tar.addfile(entry, io.BytesIO(fakenvapi_dll))
+            licenses = work / "licenses"
+            licenses.mkdir()
+            for name in ("NVIDIA-DLSS.txt", "FidelityFX-SDK-4.0.2.txt"):
+                (licenses / name).write_text("synthetic test notice")
+            payload = work / "payload.dll"
+            payload.write_bytes(b"s" * 2048)
+            preset = work / "preset.json"
+            preset.write_text(json.dumps({"FSR.Fsr4ForceModel": "2"}))
+            staging = work / "staging"
+            staging.mkdir()
+            args = types.SimpleNamespace(
+                optiscaler=archive,
+                preset=preset,
+                proxy="winmm.dll",
+                dlss=payload,
+                ffx_sdk=payload,
+                optipatcher=payload,
+                fakenvapi=fakenvapi,
+                licenses=licenses,
+                optiscaler_version="test-opti",
+            )
+            _, entry = builder.optiscaler_artifact(args, staging, payload, "test-opti")
+
+        self.assertIn("OptiScaler/fakenvapi.dll", entry["sha256_hash"])
+        self.assertEqual(
+            entry["sha256_hash"]["OptiScaler/fakenvapi.dll"], sha256(fakenvapi_dll)
+        )
+
+    def test_payload_assembly_fails_if_the_fakenvapi_archive_has_no_dll(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            archive = work / "opti.tar"
+            with tarfile.open(archive, "w") as tar:
+                for name in ("OptiScaler", "Licenses"):
+                    entry = tarfile.TarInfo(name)
+                    entry.type = tarfile.DIRTYPE
+                    entry.mode = 0o755
+                    tar.addfile(entry)
+                for name, data in {
+                    "OptiScaler.ini": b"[FSR]\nFsr4ForceModel=auto\n",
+                    "OptiScaler.dll": b"p" * 2048,
+                }.items():
+                    entry = tarfile.TarInfo(name)
+                    entry.size = len(data)
+                    tar.addfile(entry, io.BytesIO(data))
+            fakenvapi = work / "fakenvapi.7z"
+            with tarfile.open(fakenvapi, "w") as tar:
+                entry = tarfile.TarInfo("README.md")
+                entry.size = 4
+                tar.addfile(entry, io.BytesIO(b"nope"))
+            licenses = work / "licenses"
+            licenses.mkdir()
+            for name in ("NVIDIA-DLSS.txt", "FidelityFX-SDK-4.0.2.txt"):
+                (licenses / name).write_text("synthetic test notice")
+            payload = work / "payload.dll"
+            payload.write_bytes(b"s" * 2048)
+            preset = work / "preset.json"
+            preset.write_text(json.dumps({"FSR.Fsr4ForceModel": "2"}))
+            staging = work / "staging"
+            staging.mkdir()
+            args = types.SimpleNamespace(
+                optiscaler=archive, preset=preset, proxy="winmm.dll", dlss=payload,
+                ffx_sdk=payload, optipatcher=payload, fakenvapi=fakenvapi,
+                licenses=licenses, optiscaler_version="test-opti",
+            )
+            # An upstream rename must stop the build, not ship a payload that
+            # quietly lacks the DLL this package advertises.
+            with self.assertRaises(Exception):
+                builder.optiscaler_artifact(args, staging, payload, "test-opti")
+
     def test_fallback_payload_assembly_rejects_an_unknown_preset_key(self):
         with tempfile.TemporaryDirectory() as temporary:
             work = Path(temporary)

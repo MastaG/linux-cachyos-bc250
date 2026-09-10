@@ -65,6 +65,14 @@ fi
 optiscaler_env="$(python3 "${ROOT_DIR}/scripts/select-optiscaler.py" "${select_args[@]}")"
 eval "$optiscaler_env"
 
+# Which fakenvapi release to bundle. Tracked live rather than pinned, unlike
+# the OptiScaler build: fakenvapi releases rarely, and the point of shipping
+# it is that users get the current one without anyone editing a pin.
+printf '==> resolving the fakenvapi release\n'
+fakenvapi_env="$("$ROOT_DIR/scripts/resolve-fakenvapi.sh")"
+eval "$fakenvapi_env"
+printf '    %s (%s)\n' "$FAKENVAPI_TAG" "$FAKENVAPI_ASSET"
+
 stage_fsr4_payload_sources "$ROOT_DIR" "$BUILD_DIR" proton-cachyos
 
 : "${BC250_FSR4_PAYLOAD_BASE:=https://github.com/MastaG/linux-cachyos-bc250/releases/download/bc250-fsr4-payload}"
@@ -85,6 +93,7 @@ printf '    upstream source entries: %s\n' "$upstream_sources"
 python3 - \
     "$BUILD_DIR/PKGBUILD" "$PKGREL" "$MARCH" "$MTUNE" "$upstream_sources" \
     "$OPTISCALER_ASSET" "$OPTISCALER_URL" "$OPTISCALER_SHA256" "$OPTISCALER_VERSION" \
+    "$FAKENVAPI_ASSET" "$FAKENVAPI_URL" "$FAKENVAPI_SHA256" \
     "$BC250_FSR4_PAYLOAD_BASE" \
     "${FSR4_PAYLOAD_SHA256[SHA_PATCH]}" "${FSR4_PAYLOAD_SHA256[SHA_LAUNCH]}" \
     "${FSR4_PAYLOAD_SHA256[SHA_PAYLOAD_BUILDER]}" "${FSR4_PAYLOAD_SHA256[SHA_PRESET]}" \
@@ -93,8 +102,8 @@ from pathlib import Path
 import sys
 
 (path, pkgrel, march, mtune, upstream_n, opti_asset, opti_url, opti_sha,
- opti_version, payload_base, sha_patch, sha_launch, sha_builder, sha_preset,
- sha_shim) = sys.argv[1:16]
+ opti_version, fakenvapi_asset, fakenvapi_url, fakenvapi_sha, payload_base,
+ sha_patch, sha_launch, sha_builder, sha_preset, sha_shim) = sys.argv[1:19]
 upstream_n = int(upstream_n)
 
 path = Path(path)
@@ -158,6 +167,7 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     f'        --optiscaler "${{srcdir}}/{opti_asset}" \\\n'
     f'        --optiscaler-version "{opti_version}" \\\n'
     '        --optipatcher "${srcdir}/OptiPatcher_v0.41.asi" \\\n'
+    f'        --fakenvapi "${{srcdir}}/{fakenvapi_asset}" \\\n'
     '        --provider "${srcdir}/amdxcffx64_v4.1.1.xz" \\\n'
     '        --ffx-sdk "${srcdir}/amd_fidelityfx_upscaler_dx12.dll" \\\n'
     '        --ffx-sdk-alt "${srcdir}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \\\n'
@@ -203,6 +213,9 @@ payload_sources = [
     # what a rebuild produces. Selected with PROTON_USE_OPTISCALER=fsr411b.
     ("amd_fidelityfx_upscaler_dx12_v4.1.1b.dll", f"{payload_base}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll",
      "0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75", False),
+    # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
+    # a new upstream version changes this package's fingerprint and rebuilds it.
+    (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),
     ("nvngx_dlss.dll",
      "https://raw.githubusercontent.com/NVIDIA/DLSS/"
      "a291cc7d2cc642a51566f3dfd5376f635cd1b284/lib/Windows_x86_64/rel/nvngx_dlss.dll",
@@ -252,6 +265,8 @@ PROTON_MARCH=${MARCH}
 PROTON_MTUNE=${MTUNE}
 OPTISCALER_VERSION=${OPTISCALER_VERSION}
 OPTISCALER_TAG=${OPTISCALER_TAG}
+FAKENVAPI_VERSION=${FAKENVAPI_VERSION}
+FAKENVAPI_TAG=${FAKENVAPI_TAG}
 EOF_META
 
 printf '==> Prepared proton-cachyos-native-bc250 in %s\n' "$BUILD_DIR"

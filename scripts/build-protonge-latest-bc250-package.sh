@@ -42,6 +42,14 @@ eval "$optiscaler_env"
 printf '    %s (%s, %s)\n' "$OPTISCALER_TAG" "$OPTISCALER_VERSION" \
     "$([[ "$OPTISCALER_MIRRORED" == True ]] && printf mirrored || printf upstream)"
 
+# Which fakenvapi release to bundle. Tracked live rather than pinned, unlike the
+# OptiScaler build above: fakenvapi releases rarely, and the point of shipping it
+# is that users get the current one without anyone editing a pin.
+printf '==> resolving the fakenvapi release\n'
+fakenvapi_env="$("$ROOT_DIR/scripts/resolve-fakenvapi.sh")"
+eval "$fakenvapi_env"
+printf '    %s (%s)\n' "$FAKENVAPI_TAG" "$FAKENVAPI_ASSET"
+
 # Files we author, staged next to the rendered PKGBUILD so makepkg treats them
 # as ordinary local sources and checksums them like any other.
 stage_fsr4_payload_sources "$ROOT_DIR" "$BUILD_DIR" ge-proton
@@ -62,6 +70,9 @@ render() {
         [OPTISCALER_ASSET]="$OPTISCALER_ASSET"
         [OPTISCALER_URL]="$OPTISCALER_URL"
         [OPTISCALER_SHA256]="$OPTISCALER_SHA256"
+        [FAKENVAPI_ASSET]="$FAKENVAPI_ASSET"
+        [FAKENVAPI_URL]="$FAKENVAPI_URL"
+        [FAKENVAPI_SHA256]="$FAKENVAPI_SHA256"
         [OPTISCALER_VERSION]="$OPTISCALER_VERSION"
         [PAYLOAD_BASE]="$BC250_FSR4_PAYLOAD_BASE"
         [PKGREL]="$BC250_PKGREL"
@@ -143,6 +154,7 @@ PROTONGE_LATEST_BC250_PKGVER=${protonge_pkgver}
 PROTONGE_LATEST_BC250_PKGREL=${protonge_pkgrel}
 PROTONGE_LATEST_BC250_GE_TAG=${PROTONGE_TAG}
 PROTONGE_LATEST_BC250_OPTISCALER=${OPTISCALER_VERSION}
+PROTONGE_LATEST_BC250_FAKENVAPI=${FAKENVAPI_VERSION}
 EOF_INFO
 
 printf '==> protonge-latest-bc250 staged in %s\n' "$OUT_DIR"

@@ -110,11 +110,13 @@ protonge_pkgver="$(value "$protonge_info" PROTONGE_LATEST_BC250_PKGVER)"
 protonge_pkgrel="$(value "$protonge_info" PROTONGE_LATEST_BC250_PKGREL)"
 protonge_ge_tag="$(value "$protonge_info" PROTONGE_LATEST_BC250_GE_TAG)"
 protonge_optiscaler="$(value "$protonge_info" PROTONGE_LATEST_BC250_OPTISCALER)"
+protonge_fakenvapi="$(value "$protonge_info" PROTONGE_LATEST_BC250_FAKENVAPI)"
 
 proton_native_info="$OUT_DIR/proton-cachyos-native-bc250-info.env"
 proton_native_pkgver="$(value "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_PKGVER)"
 proton_native_pkgrel="$(value "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_PKGREL)"
 proton_native_optiscaler="$(value "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_OPTISCALER)"
+proton_native_fakenvapi="$(value "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_FAKENVAPI)"
 
 for field in \
     stable_pkgbase stable_pkgver stable_pkgrel \
@@ -376,9 +378,15 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - Package version: \`${protonge_pkgver}-${protonge_pkgrel}\` (\`${protonge_ge_tag}\`)
 - GE-Proton, installed system-wide as a Steam compatibility tool with everything
   FSR 4.1.1 needs on this hardware already pinned inside it: the AMD provider,
-  OptiScaler \`${protonge_optiscaler}\`, OptiPatcher, and a known-good OptiScaler
-  configuration. Nothing is downloaded when a game starts, and every artifact is
-  SHA256-verified before it reaches a prefix.
+  OptiScaler \`${protonge_optiscaler}\`, OptiPatcher, fakenvapi
+  \`${protonge_fakenvapi}\` and a known-good OptiScaler configuration. Nothing is
+  downloaded when a game starts, and every artifact is SHA256-verified before it
+  reaches a prefix.
+- [fakenvapi](https://github.com/optiscaler/fakenvapi) is bundled and always
+  active, with no variable to enable it: it stands in for \`nvapi64.dll\` so
+  OptiScaler can reach AntiLag 2, Vulkan AntiLag+, XeLL or LatencyFlex in games
+  that would otherwise require NVIDIA Reflex. It is tracked live rather than
+  pinned, so a new upstream release rebuilds this package.
 - Installs alongside the distro's own Proton packages rather than replacing them.
   It appears in Steam as **GE-Proton ${protonge_ge_tag#GE-Proton} (BC-250 FSR4)**;
   pick it per game under Properties -> Compatibility, or as the global default.
@@ -397,8 +405,12 @@ sudo pacman -S protonge-latest-bc250
 - Package version: \`${proton_native_pkgver}-${proton_native_pkgrel}\`
 - CachyOS's own Proton, rebuilt for Zen 2 (\`-march=x86-64-v3 -mtune=znver2\`) with
   the same pinned FSR4 payload as \`protonge-latest-bc250\`: the AMD provider,
-  OptiScaler \`${proton_native_optiscaler}\`, OptiPatcher and a known-good
-  OptiScaler configuration, all verified by SHA256 before they reach a prefix.
+  OptiScaler \`${proton_native_optiscaler}\`, OptiPatcher, fakenvapi
+  \`${proton_native_fakenvapi}\` and a known-good OptiScaler configuration, all
+  verified by SHA256 before they reach a prefix.
+- [fakenvapi](https://github.com/optiscaler/fakenvapi) is bundled and always
+  active, with no variable to enable it, and tracked live rather than pinned —
+  see the GE package above for what it does.
 - Installs **alongside** the official \`proton-cachyos-native\`, not over it:
   \`provides\` and \`replaces\` are cleared, and every installed path plus the
   Steam-internal tool name is derived from the package name. Both appear in
