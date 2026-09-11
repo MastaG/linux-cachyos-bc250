@@ -122,6 +122,16 @@ class RuntimeTests(unittest.TestCase):
                 entry = tarfile.TarInfo(name)
                 entry.size = len(data)
                 tar.addfile(entry, io.BytesIO(data))
+        # A second opt-in variant, because the packages now ship two and each
+        # alias has to resolve to its own payload rather than to whichever
+        # entry happens to come first.
+        self.second = dict(self.files, **{"winmm.dll": bytes(range(64)) * 64})
+        second_archive = artifacts / "opti-alt2.tar.xz"
+        with tarfile.open(second_archive, "w:xz") as tar:
+            for name, data in self.second.items():
+                entry = tarfile.TarInfo(name)
+                entry.size = len(data)
+                tar.addfile(entry, io.BytesIO(data))
         manifest = {
             "fsr_40_drv": [
                 {
@@ -156,6 +166,17 @@ class RuntimeTests(unittest.TestCase):
                         "OptiScaler.ini": "",
                     },
                 },
+                {
+                    "version": "test-opti-alt2",
+                    "is_dev_file": False,
+                    "download_url": "artifacts/opti-alt2.tar.xz",
+                    "zip_sha256_hash": sha256(second_archive.read_bytes()),
+                    "sha256_hash": {"winmm.dll": sha256(self.second["winmm.dll"])},
+                    "md5_hash": {
+                        "winmm.dll": hashlib.md5(self.second["winmm.dll"]).hexdigest(),
+                        "OptiScaler.ini": "",
+                    },
+                },
             ],
         }
         (self.work / "manifest.json").write_text(json.dumps(manifest))
@@ -164,7 +185,10 @@ class RuntimeTests(unittest.TestCase):
             "proxy": "winmm.dll",
             "provider_version": "4.1.1",
             "optiscaler_version": "test-opti",
-            "optiscaler_aliases": {"altbridge": "test-opti-alt"},
+            "optiscaler_aliases": {
+                "altbridge": "test-opti-alt",
+                "altbridge2": "test-opti-alt2",
+            },
             "preset": {"FSR.Fsr4ForceModel": "2"},
         }
 
@@ -362,6 +386,24 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(env["PROTON_USE_OPTISCALER"], "test-opti-alt")
                 proxy = self.prefix / "drive_c/windows/system32/umu/winmm.dll"
                 self.assertEqual(proxy.read_bytes(), self.variant["winmm.dll"])
+
+    def test_each_variant_selects_its_own_payload(self):
+        # Two opt-in variants ship now (fsr411b and fsr411f). Selecting one must
+        # install that one's files, not the first entry in the manifest.
+        for base in BASES:
+            for alias, version, expected in (
+                ("altbridge", "test-opti-alt", self.variant),
+                ("altbridge2", "test-opti-alt2", self.second),
+            ):
+                with self.subTest(base=base, alias=alias):
+                    env = self.run_upscalers(
+                        base,
+                        {"SteamAppId": "999999998", "PROTON_USE_OPTISCALER": alias},
+                        ["run"],
+                    )
+                    self.assertEqual(env["PROTON_USE_OPTISCALER"], version)
+                    proxy = self.prefix / "drive_c/windows/system32/umu/winmm.dll"
+                    self.assertEqual(proxy.read_bytes(), expected["winmm.dll"])
 
     def test_a_bare_one_still_means_this_packages_default(self):
         # protonfixes maps "1" to "default", which matches no entry by name once

@@ -170,9 +170,12 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     f'        --fakenvapi "${{srcdir}}/{fakenvapi_asset}" \\\n'
     '        --provider "${srcdir}/amdxcffx64_v4.1.1.xz" \\\n'
     '        --ffx-sdk "${srcdir}/amd_fidelityfx_upscaler_dx12.dll" \\\n'
-    '        --ffx-sdk-alt "${srcdir}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \\\n'
-    '        --ffx-sdk-alt-name "fsr411b" \\\n'
-    '        --ffx-sdk-alt-origin "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \\\n'
+    '        --ffx-sdk-alt fsr411b \\\n'
+    '            "${srcdir}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \\\n'
+    '            "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \\\n'
+    '        --ffx-sdk-alt fsr411f \\\n'
+    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc8.tar.xz" \\\n'
+    '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc8" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -213,6 +216,11 @@ payload_sources = [
     # what a rebuild produces. Selected with PROTON_USE_OPTISCALER=fsr411b.
     ("amd_fidelityfx_upscaler_dx12_v4.1.1b.dll", f"{payload_base}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll",
      "0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75", False),
+    # Opt-in only: the BC-250 FSR4 fork's RC8 bridge, mirrored from its
+    # release. Taken as the published archive rather than a bare DLL -- 10 MB
+    # against 112 MB, and it carries the notices that release asks be kept.
+    ("bc250-fsr4-dll-4.0.0-rc8.tar.xz", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc8.tar.xz",
+     "805a3df9cef931decd42d02eaffb375f95844afce2e13d78bad757a27c806da2", True),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),

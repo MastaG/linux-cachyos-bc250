@@ -395,6 +395,17 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - FSR4 and OptiScaler are on by default. They remain launch options, so
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- Two opt-in upscaler variants swap only the FidelityFX bridge, selected per
+  game and unsigned where the default is AMD-signed, each pinned by SHA256:
+  \`PROTON_USE_OPTISCALER=fsr411b %command%\` takes the third-party
+  [4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b)
+  rebuild aimed at RDNA2 ghosting, and \`PROTON_USE_OPTISCALER=fsr411f
+  %command%\` takes the BC-250 FSR4 fork's
+  [RC8](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc8)
+  bridge (\`4.1.1r8\`), which is the one tested on a BC-250 by its author and
+  which ships that release's licence notices into the prefix. Neither is a
+  provider bump: each carries its own embedded model. Leave the variable unset
+  for the signed default.
 
 \`\`\`bash
 sudo pacman -S protonge-latest-bc250
@@ -418,7 +429,8 @@ sudo pacman -S protonge-latest-bc250
 - Needs the \`vulkan-radeon\` package from this repository.
 - Same launch options as the GE package: \`PROTON_FSR4_UPGRADE=0 %command%\` to
   turn FSR4 off for one game, \`BC250_FSR4_DEBUG=1 %command%\` for the watermark
-  and logs.
+  and logs, and the same two opt-in bridge variants
+  \`PROTON_USE_OPTISCALER=fsr411b\` / \`fsr411f\` described above.
 
 \`\`\`bash
 sudo pacman -S proton-cachyos-native-bc250

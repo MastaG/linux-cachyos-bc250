@@ -221,23 +221,42 @@ PROTON_USE_OPTISCALER=fsr411b %command%   # experimental upscaler, see below
 puts the FSR4 watermark on screen and writes a Proton log, which turns "FSR4
 doesn't seem to work" into something diagnosable.
 
-### Experimental: `PROTON_USE_OPTISCALER=fsr411b`
+### Experimental upscaler variants
 
-If you see **ghosting**, this selects a second, opt-in payload that swaps one
-file — the FidelityFX bridge — for an unsigned third-party 4.1.1b rebuild that
-claims to fix ghosting on RDNA2. Leave the variable out and you get the normal,
-AMD-signed default.
+Two opt-in payloads swap a single file — the FidelityFX bridge,
+`amd_fidelityfx_upscaler_dx12.dll` — for an alternative build. Leave the
+variable out and you get the normal, AMD-signed default.
 
-It is genuinely an experiment, not a recommendation:
+```text
+PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
+PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork, RC8 (4.1.1r8)
+```
 
-- It is **not** a provider version bump. That binary carries its own embedded
-  model, so selecting it likely moves upscaling off the provider path the RADV
+| | `fsr411b` | `fsr411f` |
+|---|---|---|
+| Source | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) | [bc250-fsr4-fork v4.0.0-rc8](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc8) |
+| Aimed at | ghosting on RDNA2 | BC-250 specifically, 1440p performance |
+| Tested on a BC-250 by its author | no | yes |
+
+Both are genuine experiments, not recommendations:
+
+- Neither is a provider version bump. Each binary carries its own embedded
+  model, so selecting one likely moves upscaling off the provider path the RADV
   patches target, onto the model baked into the bridge.
-- It is unsigned, where the default is AMD-signed. The build pins it by SHA256
-  and the payload writes its origin into the prefix as
-  `Licenses/THIRD-PARTY-UPSCALER.txt`, so it is reproducible — not vouched for.
+- Both are unsigned, where the default is AMD-signed. The build pins each by
+  SHA256 and writes its origin into the prefix as
+  `Licenses/THIRD-PARTY-UPSCALER.txt`, so they are reproducible — not vouched
+  for. `fsr411f` additionally ships its author's licence notices into
+  `Licenses/<version>/`, as that release asks.
 
-Please report whether it helps or hurts.
+`fsr411f` needs no other change: every setting its `INSTALL.md` asks for —
+`Dx12Upscaler=ffx`, `Dx11Upscaler=ffx_12`, `VulkanUpscaler=ffx_12`,
+`UpscalerIndex=0`, `Fsr4ForceModel=2`, `FsrNonLinearColorSpace=false`,
+`FsrNonLinearSRGB=auto`, `FsrNonLinearPQ=auto`, `FrameGen.Enabled=false` — is
+already exactly what this package enforces. To confirm which build is running,
+add `BC250_FSR4_DEBUG=1`; the watermark identifies `4.1.1r8` for RC8.
+
+Please report whether either helps or hurts.
 
 Design and packaging details are in [docs/FSR4-PROTON.md](docs/FSR4-PROTON.md)
 and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md).

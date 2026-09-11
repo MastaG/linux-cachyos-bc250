@@ -87,8 +87,40 @@ def tar_tree(root: Path, output: Path) -> None:
                     )
 
 
+def bridge_from(source: Path, staging: Path, name: str) -> tuple[Path, Path | None]:
+    """Return the FidelityFX bridge DLL for a variant, and its notices if any.
+
+    A variant is given either as a bare .dll or as the release archive it was
+    published in. Taking the archive is preferable where upstream offers one:
+    it is far smaller over the wire (RC8 is 10 MB packed against a 112 MB DLL)
+    and it carries the licence notices whose retention that release asks for.
+    """
+    if source.suffix == ".dll":
+        return source, None
+
+    unpacked = staging / ("bridge-" + name)
+    unpacked.mkdir(parents=True)
+    subprocess.run(
+        ["bsdtar", "-xf", str(source), "--no-same-owner",
+         "--no-same-permissions", "-C", str(unpacked)],
+        check=True,
+    )
+    if any(p.is_symlink() or not (p.is_dir() or p.is_file())
+           for p in unpacked.rglob("*")):
+        raise RuntimeError(f"{name} archive contains a link or special file")
+
+    dll = unpacked / "amd_fidelityfx_upscaler_dx12.dll"
+    if not dll.is_file():
+        raise RuntimeError(
+            f"{name} archive has no amd_fidelityfx_upscaler_dx12.dll"
+        )
+    notices = unpacked / "notices"
+    return dll, notices if notices.is_dir() else None
+
+
 def optiscaler_artifact(
-    args, staging: Path, ffx_sdk: Path, version: str, provenance: str = ""
+    args, staging: Path, ffx_sdk: Path, version: str, provenance: str = "",
+    notices: Path | None = None
 ) -> tuple[Path, dict]:
     """Lay out the OptiScaler tree as it must land in the prefix, and describe it.
 
@@ -134,6 +166,15 @@ def optiscaler_artifact(
         args.licenses / "FidelityFX-SDK-4.0.2.txt",
         extracted / "Licenses/FidelityFX-SDK-4.0.2.txt",
     )
+    if notices is not None:
+        # Shipped into the prefix because the release that carries this bridge
+        # asks for its notices to be retained with it.
+        for notice in sorted(notices.rglob("*")):
+            if notice.is_file():
+                target = extracted / "Licenses" / version / notice.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(notice, target)
+
     if provenance:
         # Say in the prefix itself where a non-AMD binary came from. Anyone
         # looking at an unsigned DLL in their prefix deserves to find this
@@ -229,12 +270,11 @@ def main() -> int:
     # can be A/B'd against the shipped one on real hardware without a separate
     # package and without anyone hand-editing a prefix -- which pinning makes
     # impossible anyway, since every file is verified before launch.
-    ap.add_argument("--ffx-sdk-alt", type=Path,
-                    help="alternate amd_fidelityfx_upscaler_dx12.dll to offer as a variant")
-    ap.add_argument("--ffx-sdk-alt-name", default="",
-                    help="short name the wrapper accepts for the variant, e.g. fsr411b")
-    ap.add_argument("--ffx-sdk-alt-origin", default="",
-                    help="where the alternate bridge came from, recorded in the prefix")
+    ap.add_argument("--ffx-sdk-alt", action="append", default=[], nargs=3,
+                    metavar=("NAME", "PATH", "ORIGIN"),
+                    help="an opt-in bridge variant: the short name the wrapper "
+                         "accepts, the .dll or release archive to take it from, "
+                         "and the URL recorded in the prefix. Repeatable.")
     ap.add_argument("--dlss", type=Path, required=True, help="NVIDIA nvngx_dlss.dll surrogate")
     ap.add_argument("--licenses", type=Path, required=True, help="directory of license notices")
     ap.add_argument("--preset", type=Path, required=True, help="optiscaler-preset.json")
@@ -254,39 +294,37 @@ def main() -> int:
     artifacts = args.output / "artifacts"
     artifacts.mkdir(parents=True)
 
-    if bool(args.ffx_sdk_alt) != bool(args.ffx_sdk_alt_name):
-        raise SystemExit(
-            "ERROR: --ffx-sdk-alt and --ffx-sdk-alt-name must be given together"
-        )
     aliases = {}
-    variants = [(args.ffx_sdk, args.optiscaler_version, "")]
-    if args.ffx_sdk_alt:
-        if args.ffx_sdk_alt_name in ("", "default", "1", "0"):
-            raise SystemExit(
-                f"ERROR: unusable variant name: {args.ffx_sdk_alt_name!r}"
-            )
-        alt_version = args.optiscaler_version + "-" + args.ffx_sdk_alt_name
-        aliases[args.ffx_sdk_alt_name] = alt_version
-        variants.append(
-            (
-                args.ffx_sdk_alt,
-                alt_version,
-                "amd_fidelityfx_upscaler_dx12.dll in this directory is NOT the "
-                "AMD-signed FidelityFX SDK binary.\n\n"
-                f"Origin: {args.ffx_sdk_alt_origin or 'unspecified'}\n"
-                f"SHA256: {digest(args.ffx_sdk_alt)}\n\n"
-                "It is a third-party modified build, selected explicitly by "
-                "PROTON_USE_OPTISCALER. The default payload ships AMD's signed "
-                "bridge instead.\n",
-            )
-        )
+    variants = [(args.ffx_sdk, args.optiscaler_version, "", None)]
 
     with tempfile.TemporaryDirectory(prefix=".payload-") as temporary:
         staging = Path(temporary)
+        for name, path, origin in args.ffx_sdk_alt:
+            if name in ("", "default", "1", "0") or name in aliases:
+                raise SystemExit(f"ERROR: unusable variant name: {name!r}")
+            source = Path(path)
+            dll, notices = bridge_from(source, staging, name)
+            alt_version = args.optiscaler_version + "-" + name
+            aliases[name] = alt_version
+            variants.append(
+                (
+                    dll,
+                    alt_version,
+                    "amd_fidelityfx_upscaler_dx12.dll in this directory is NOT "
+                    "the AMD-signed FidelityFX SDK binary.\n\n"
+                    f"Origin: {origin or 'unspecified'}\n"
+                    f"SHA256: {digest(dll)}\n\n"
+                    "It is a third-party modified build, selected explicitly by "
+                    "PROTON_USE_OPTISCALER. The default payload ships AMD's "
+                    "signed bridge instead.\n",
+                    notices,
+                )
+            )
+
         entries = []
-        for ffx_sdk, version, provenance in variants:
+        for ffx_sdk, version, provenance, notices in variants:
             archive, entry = optiscaler_artifact(
-                args, staging, ffx_sdk, version, provenance
+                args, staging, ffx_sdk, version, provenance, notices
             )
             shutil.copy2(archive, artifacts / Path(entry["download_url"]).name)
             entries.append(entry)
