@@ -47,7 +47,7 @@ faaa05af2f7ce372f5e4a0494e66e64a7021441264d4bcea391014830548279d  ./patches/linu
 94c221aac12529e9a4f94eb06c71be531ca445f5e7d2b9b9c55ea2589d46cfc1  ./patches/linux-cachyos/0008-cyan-skillfish-sclk-range.patch
 e89ac4783de277b627749bf8351f6c64c434c467eaa18c0cbe0b9e2ace1a66ab  ./patches/linux-cachyos/0009-bc250-40cu-unlock.patch
 40928eb33765e8647361e62fabddcf8021e1d4b6396f61d31c9667d706ab1141  ./patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
-4d229a4f9998afcbaed1e5ed67b8e5ad3fb2bfe35fe8f3bde2f6cf8eee901b3b  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
+9f82913b0cadcf813abd2c1bad259632fa976ed2f029710657b48e513de94c8c  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 69bde6d9a1b37f15b96323abd7625a5b6d85d13821203c5a2eb0edebbcc86c9e  ./patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
 1323c45edff41cd69a1ddafefd74eff2b9d6c54f3e10e2cd46cd8a962a12d72f  ./patches/mesa-git/0004-radv-gfx103.patch
 d57ae6289f4c7896357698967da81f5416c70a669e986244dbc7079282e94bec  ./patches/mesa-git/0005-bc250-fsr4-v3.patch
@@ -75,7 +75,7 @@ e6332c58538e9634e63e9aa19f4268b097295e00d8a9a9d83b7b41c9f45c530d  ./scripts/buil
 d7561fc5f5b7f7e5e81aa2df59a137143e9dfa2bc28058d8b8d434cff114e132  ./scripts/build-proton-tarball.sh
 a740f16d49595dfc11cf8852c1e4ce27864e56f7bd4ef5f4eea11de935430675  ./scripts/build-protonge-latest-bc250-package.sh
 98c6dd179d47671451e1d5cb0a10571e86fc0d8064f2102a9abe23e7aaac909c  ./scripts/check-fsr4-driver.py
-a95306cc43b5b55e5096c7df7ad34a55129b63eec85fb779a97a65503c15db48  ./scripts/ci-build.sh
+583e5f5bf6ab38179106d9a9031a3532113dc8b26750caf7eb84ea2456c776de  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
 67260512546a4afec9eea1a72f007977ecf3d9af4817232a575d22dc988fc539  ./scripts/finalize-repository.sh
 18952c41e9072a51fcc8d66b28786868f03b1aedb9cc1a3d44bd4de200e9d95b  ./scripts/fsr4-payload-sources.sh

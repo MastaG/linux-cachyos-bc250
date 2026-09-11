@@ -426,12 +426,12 @@ index 5e8820c5cd6..c473014742f 100644
        uint32_t emulate_ngg_gs_query_pipeline_stat : 1;
        uint32_t primitives_generated_query : 1;
        uint32_t mesh_shader_queries : 1;
-@@ -580,7 +582,7 @@ struct radv_compiler_info {
-       uint32_t force_nan_preserve_min_max : 1;
+@@ -581,7 +583,7 @@ struct radv_compiler_info {
        uint32_t enable_custom_border_on_compute_queue : 1;
+       uint32_t gfx10_descriptor_alias_robust : 1;
        uint32_t nir_debug_info : 1;
--      uint32_t padding : 28;
-+      uint32_t padding : 26;
+-      uint32_t padding : 27;
++      uint32_t padding : 25;
  
        int32_t force_aniso;
  

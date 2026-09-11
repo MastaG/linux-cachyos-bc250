@@ -90,6 +90,15 @@ if ! pacman -Si lib32-clang >/dev/null 2>&1; then
     exit 1
 fi
 
+# A local signing key first: without one, archlinux-keyring's post-install
+# cannot locally sign the keys it imports and every run logs
+#
+#     ==> ERROR: There is no secret key available to sign with.
+#     error: command failed to execute correctly
+#
+# pacman exits 0 and the build is unaffected, but the line sits in the log
+# looking like the cause of whatever failed later.
+pacman-key --init >/dev/null 2>&1
 pacman -S --noconfirm --needed archlinux-keyring
 pacman -Syu --noconfirm --needed base-devel ccache curl git libarchive sudo
 
