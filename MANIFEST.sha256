@@ -2,7 +2,7 @@ b77b2d8cc67dba88a06f91d571e7f2612e547acc3fb685de4c12c4d2612db9d6  ./.github/work
 b13dc2c3218d23ed799a400e2a834463f5e1649b3824a74a17cb3b632fe8c4c7  ./.github/workflows/fsr4-checks.yml
 bb28f8adfdf313f530d184774d7978d1bd97a7b7ae55de5374162b3fb2c257c1  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-ca3a893d53217fbea1f8a948cffbc500e96bfcff104059d2612681cf3b1c82f4  ./README.md
+52ec4f6cb81f2f87518fa958e0587155d33d21370452f6aa913fcd5081acbd0d  ./README.md
 57f3458f451610851be7de1abc8b87b3cf2950231d0b0221dd090213f5bcfae8  ./docs/BUILDING.md
 2bab60d7adc18e07aa24895cf98b62a9caad8e004218cee36ab394b12430b13a  ./docs/FSR4-PROTON.md
 fca5b6b4bcf9b31e94376131e1c3596f380f8b13646fe9aec859075b80f34afa  ./docs/PATCHES.md
@@ -12,7 +12,7 @@ a3ef21828e07936ae930150427e1b3045bfd55d83de72b767b93d42a1e4f70e2  ./packages/bc2
 4330bb52894aa13d4fa62a642d61234b03bfa15cf9d9d12345e54ed05efda644  ./packages/bc250-dual-audio/bc250-dual-audio.install
 e9d41088edc8ae103b38ba218691336b64b5f6afaa021c35eb60ae3eb890e79e  ./packages/bc250-fsr4-common/README.md
 9c6834660b76482df0081d391a2c57baca9566b34a4231630765b4904f3bb5bb  ./packages/bc250-fsr4-common/VALIDATION.md
-94e3e410f672b16bb716ab3382358d60d5b4f216a8aab15de8a5986736264ed4  ./packages/bc250-fsr4-common/bc250-fsr4-launch.py
+d26d14aa43d80781f972c079b4b19dacd094914832a52fb187c9d212fee1351f  ./packages/bc250-fsr4-common/bc250-fsr4-launch.py
 be05d8cd5489deff924dbe91e0c5b8c0ff034d43cd11749bf9a67a0c38252b7b  ./packages/bc250-fsr4-common/licenses/FidelityFX-SDK-4.0.2.txt
 21b5daec892b12bea692e66bc8fe45cf5902ccaf3a7b831e78050d8859881c37  ./packages/bc250-fsr4-common/licenses/NVIDIA-DLSS.txt
 e2fbcbf16130da0e5ae3fee944d3659c9faed95b115ba38268c76617f648deef  ./packages/bc250-fsr4-common/optiscaler-preset.json
@@ -98,4 +98,4 @@ f39757d0abded757b134cb1236a9b76106f30ed70d08e03a8b608228a62de612  ./scripts/upda
 4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645  ./tests/fixtures/ge-proton11-6-upscalers.py
 29d0e7244cd46d66cff6d9be331123cc1903281b44af6ee61696edafa3310458  ./tests/fixtures/ge-to-cachyos-native.patch
 5ee7f675c3483faa9a405fc021fd78b581637834192ab3e9a815220801de92b7  ./tests/test_fsr4_packaging.py
-779c0d8528cbe2571795f4fe5d96e94112dc7db6d019b31f0c7bff4f6233af5c  ./tests/test_fsr4_runtime.py
+e7c8061472f97831bc09e32258a571fcdb0c523bee94aae0f34e095f971ff141  ./tests/test_fsr4_runtime.py

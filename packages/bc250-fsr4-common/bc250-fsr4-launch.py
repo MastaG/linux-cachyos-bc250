@@ -129,6 +129,34 @@ def optiscaler_version(config, requested):
     return config.get("optiscaler_aliases", {}).get(requested, requested)
 
 
+def extra_preset(value):
+    """Parse BC250_OPTISCALER_EXTRA into preset entries.
+
+    The preset is rewritten into OptiScaler.ini on every launch, so editing that
+    file in a prefix does nothing and answering "is it setting X?" otherwise
+    costs a package rebuild. This makes one game's settings a launch option:
+
+        BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=auto;FrameGen.Enabled=true" %command%
+
+    Deliberately not validated here against the shipped OptiScaler.ini, because
+    protonfixes already refuses to launch on a key that build does not define --
+    a typo stops the game with the offending name rather than being ignored.
+    """
+    extra = {}
+    for part in value.split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        key, separator, setting = part.partition("=")
+        key = key.strip()
+        if not separator or "." not in key:
+            raise RuntimeError(
+                "BC250_OPTISCALER_EXTRA entries look like Section.Option=value: "
+                + repr(part))
+        extra[key] = setting.strip()
+    return extra
+
+
 def environment(config, inherited, *, game):
     env = dict(inherited)
     # /usr is read-only, so Proton's own imports cannot drop __pycache__ beside
@@ -174,6 +202,7 @@ def environment(config, inherited, *, game):
     if inherited.get("BC250_FSR4_DEBUG") == "1":
         preset.update({"Log.LogToFile": "true", "FSR.Fsr4EnableWatermark": "true"})
         env["PROTON_LOG"] = "1"
+    preset.update(extra_preset(inherited.get("BC250_OPTISCALER_EXTRA", "")))
     env["PROTON_OPTISCALER_CONFIG"] = ";".join(k + "=" + v for k, v in preset.items())
 
     # Belt and braces since the preset turned Spoofing.VulkanExtensionSpoofing

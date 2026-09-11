@@ -215,7 +215,20 @@ Per game, if you want them:
 BC250_FSR4_DEBUG=1 %command%              # FSR4 watermark + OptiScaler log + PROTON_LOG
 PROTON_FSR4_UPGRADE=0 %command%           # turn the packaged FSR4 upgrade off
 PROTON_USE_OPTISCALER=fsr411b %command%   # experimental upscaler, see below
+BC250_OPTISCALER_EXTRA="A.B=c;D.E=f"      # override individual OptiScaler settings
 ```
+
+`BC250_OPTISCALER_EXTRA` exists because the packaged OptiScaler configuration is
+rewritten into the prefix on every launch — editing `OptiScaler.ini` by hand does
+nothing. It takes `Section.Option=value` pairs separated by `;` and merges them
+over the shipped preset for that game only:
+
+```text
+BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=auto;FrameGen.Enabled=true" %command%
+```
+
+A key the shipped OptiScaler build does not define stops the launch and names
+it, rather than being silently ignored.
 
 `BC250_FSR4_DEBUG=1` is the one to reach for when something looks wrong — it
 puts the FSR4 watermark on screen and writes a Proton log, which turns "FSR4

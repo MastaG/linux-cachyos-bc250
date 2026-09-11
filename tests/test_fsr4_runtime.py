@@ -327,6 +327,44 @@ class RuntimeTests(unittest.TestCase):
                     )
                 self.assertEqual(env["WINEDLLOVERRIDES"], expected)
 
+    def test_a_launch_option_can_override_individual_preset_keys(self):
+        with mock.patch.object(wrapper, "TOOL", self.work):
+            env = wrapper.environment(
+                self.config,
+                {
+                    "SteamAppId": "999999998",
+                    "BC250_OPTISCALER_EXTRA":
+                        "FSR.Fsr4ForceModel=3; Spoofing.Dxgi=auto ;",
+                },
+                game=True,
+            )
+        applied = dict(
+            part.split("=", 1) for part in env["PROTON_OPTISCALER_CONFIG"].split(";")
+        )
+        # overrides win over the preset, and unrelated keys survive untouched
+        self.assertEqual(applied["FSR.Fsr4ForceModel"], "3")
+        self.assertEqual(applied["Spoofing.Dxgi"], "auto")
+        for key, value in self.config["preset"].items():
+            if key not in ("FSR.Fsr4ForceModel", "Spoofing.Dxgi"):
+                self.assertEqual(applied[key], value)
+
+    def test_a_malformed_override_names_the_entry_rather_than_being_ignored(self):
+        for bad in ("Fsr4ForceModel=3", "FSR.Fsr4ForceModel", "nonsense"):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(RuntimeError, "Section.Option=value"):
+                    wrapper.extra_preset(bad)
+
+    def test_an_absent_or_empty_override_changes_nothing(self):
+        with mock.patch.object(wrapper, "TOOL", self.work):
+            plain = wrapper.environment(
+                self.config, {"SteamAppId": "999999998"}, game=True)
+            empty = wrapper.environment(
+                self.config,
+                {"SteamAppId": "999999998", "BC250_OPTISCALER_EXTRA": "  ;  "},
+                game=True)
+        self.assertEqual(
+            plain["PROTON_OPTISCALER_CONFIG"], empty["PROTON_OPTISCALER_CONFIG"])
+
     def test_the_documented_opt_out_leaves_wines_own_defaults_in_place(self):
         with mock.patch.object(wrapper, "TOOL", self.work):
             env = wrapper.environment(
