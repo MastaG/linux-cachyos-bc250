@@ -194,15 +194,32 @@ def optiscaler_artifact(
     # The upstream README says fakenvapi ships inside OptiScaler 0.9+, but the
     # nightly this package pins contains no nvapi DLL at all -- checked, not
     # assumed -- so it is bundled here.
-    subprocess.run(
-        ["bsdtar", "-xf", str(args.fakenvapi), "--no-same-owner",
-         "--no-same-permissions", "-C", str(extracted / "OptiScaler"),
-         "fakenvapi.dll"],
-        check=True,
-    )
-    fakenvapi = extracted / "OptiScaler/fakenvapi.dll"
-    if not fakenvapi.is_file():
-        raise RuntimeError("fakenvapi archive contains no fakenvapi.dll")
+    # If a future OptiScaler build starts bundling it after all, keep theirs:
+    # it is the copy matched to that build, and overwriting it silently would
+    # make this package quietly diverge from upstream on every nightly bump.
+    shipped = [
+        candidate
+        for candidate in (
+            extracted / "fakenvapi.dll",
+            extracted / "OptiScaler/fakenvapi.dll",
+            extracted / "nvapi64.dll",
+            extracted / "OptiScaler/nvapi64.dll",
+        )
+        if candidate.is_file()
+    ]
+    if shipped:
+        print("==> OptiScaler already bundles "
+              + ", ".join(str(c.relative_to(extracted)) for c in shipped)
+              + "; not adding ours", file=sys.stderr)
+    else:
+        subprocess.run(
+            ["bsdtar", "-xf", str(args.fakenvapi), "--no-same-owner",
+             "--no-same-permissions", "-C", str(extracted / "OptiScaler"),
+             "fakenvapi.dll"],
+            check=True,
+        )
+        if not (extracted / "OptiScaler/fakenvapi.dll").is_file():
+            raise RuntimeError("fakenvapi archive contains no fakenvapi.dll")
 
     plugins = extracted / "OptiScaler/plugins"
     plugins.mkdir(parents=True, exist_ok=True)

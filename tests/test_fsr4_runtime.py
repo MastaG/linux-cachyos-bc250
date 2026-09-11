@@ -515,6 +515,55 @@ class PresetTests(unittest.TestCase):
             entry["sha256_hash"]["OptiScaler/fakenvapi.dll"], sha256(fakenvapi_dll)
         )
 
+    def test_a_bundled_fakenvapi_wins_over_ours(self):
+        # Upstream says fakenvapi ships inside OptiScaler 0.9+; the nightly we
+        # pin does not, so we add it. If a later build does, theirs must be the
+        # one that survives -- ours overwriting it would diverge silently.
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            theirs = b"upstream fakenvapi" * 256
+            archive = work / "opti.tar"
+            with tarfile.open(archive, "w") as tar:
+                for name in ("OptiScaler", "Licenses"):
+                    entry = tarfile.TarInfo(name)
+                    entry.type = tarfile.DIRTYPE
+                    entry.mode = 0o755
+                    tar.addfile(entry)
+                for name, data in {
+                    "OptiScaler.ini": b"[FSR]\nFsr4ForceModel=auto\n",
+                    "OptiScaler.dll": b"p" * 2048,
+                    "OptiScaler/fakenvapi.dll": theirs,
+                }.items():
+                    entry = tarfile.TarInfo(name)
+                    entry.size = len(data)
+                    tar.addfile(entry, io.BytesIO(data))
+            fakenvapi = work / "fakenvapi.7z"
+            with tarfile.open(fakenvapi, "w") as tar:
+                ours = b"ours" * 1024
+                entry = tarfile.TarInfo("fakenvapi.dll")
+                entry.size = len(ours)
+                tar.addfile(entry, io.BytesIO(ours))
+            licenses = work / "licenses"
+            licenses.mkdir()
+            for name in ("NVIDIA-DLSS.txt", "FidelityFX-SDK-4.0.2.txt"):
+                (licenses / name).write_text("synthetic test notice")
+            payload = work / "payload.dll"
+            payload.write_bytes(b"s" * 2048)
+            preset = work / "preset.json"
+            preset.write_text(json.dumps({"FSR.Fsr4ForceModel": "2"}))
+            staging = work / "staging"
+            staging.mkdir()
+            args = types.SimpleNamespace(
+                optiscaler=archive, preset=preset, proxy="winmm.dll", dlss=payload,
+                ffx_sdk=payload, optipatcher=payload, fakenvapi=fakenvapi,
+                licenses=licenses, optiscaler_version="test-opti",
+            )
+            _, entry = builder.optiscaler_artifact(args, staging, payload, "test-opti")
+
+        self.assertEqual(
+            entry["sha256_hash"]["OptiScaler/fakenvapi.dll"], sha256(theirs)
+        )
+
     def test_payload_assembly_fails_if_the_fakenvapi_archive_has_no_dll(self):
         with tempfile.TemporaryDirectory() as temporary:
             work = Path(temporary)

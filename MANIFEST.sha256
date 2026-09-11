@@ -64,7 +64,7 @@ b19281863aa2b8465649d370a39bf436d65ae6f06c51fb8f79228d0277d848ec  ./patches/mesa
 517cf1be2d9e69031793121d9b80a1d968411cc06b982a3155de927690aa1d42  ./patches/mesa/0008-bc250-fsr4-resolution-variants.patch
 f0a38daa798f681b44ba07f6222ff3338726f64b78d4a33b3c04c9e424025496  ./patches/mesa/0009-bc250-fsr4-production-defaults.patch
 43231e45edc634a305fa273391c3c16e95215b36790bb0027d9dc24d89558859  ./scripts/build-bc250-dual-audio-package.sh
-30b03df723e489a57334ebaa710b0b368c9504dd9d303d36749c23bed88de98e  ./scripts/build-fsr4-payload.py
+9977fa964a2ba8edb28c72acfc601182dfbf52830afaf0b0537c6c32ad4e3d45  ./scripts/build-fsr4-payload.py
 86fac4bcb6ac78bbb5902438702fd3cf711c693e28728d3d32889ea7a7a5860c  ./scripts/build-lib32-mesa-package.sh
 2a4e2bd08b0c593d8dea9f6a8e0e627fb155504c7e1b5ad9e0d5b994f400a8ef  ./scripts/build-linux-cachyos-bc250-meta-package.sh
 967aa48b4cbeccd0d1cad330f25c22be45fa2c462d12cab2e081842c6804bf95  ./scripts/build-mesa-git-package.sh
@@ -98,4 +98,4 @@ f39757d0abded757b134cb1236a9b76106f30ed70d08e03a8b608228a62de612  ./scripts/upda
 4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645  ./tests/fixtures/ge-proton11-6-upscalers.py
 29d0e7244cd46d66cff6d9be331123cc1903281b44af6ee61696edafa3310458  ./tests/fixtures/ge-to-cachyos-native.patch
 5ee7f675c3483faa9a405fc021fd78b581637834192ab3e9a815220801de92b7  ./tests/test_fsr4_packaging.py
-75324761da6adcf41c37ad255878d5fcfcb2ccb9476b85ebc63ee0d9a27a17bf  ./tests/test_fsr4_runtime.py
+779c0d8528cbe2571795f4fe5d96e94112dc7db6d019b31f0c7bff4f6233af5c  ./tests/test_fsr4_runtime.py
