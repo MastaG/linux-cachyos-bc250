@@ -234,6 +234,16 @@ Nothing else changes: the payload is the same pinned OptiScaler either way, and
 the matching `WINEDLLOVERRIDES` entry follows the name automatically. Confirm it
 worked with `BC250_FSR4_DEBUG=1` and look for the watermark.
 
+OptiScaler answers to a fixed set of names — `dxgi.dll`, `winmm.dll`,
+`version.dll`, `dbghelp.dll`, `d3d12.dll`, `wininet.dll`, `winhttp.dll` — so pick
+one of those, and one the game does not already have a file for. Anything else
+just means OptiScaler never loads.
+
+This is unrelated to the `Spoofing.Dxgi` setting, despite the shared word. The
+proxy name decides which import the loader resolves to OptiScaler; `Spoofing.Dxgi`
+decides whether OptiScaler reports a spoofed GPU to the game once it is running.
+This package sets that one to `false`.
+
 `BC250_OPTISCALER_EXTRA` exists because the packaged OptiScaler configuration is
 rewritten into the prefix on every launch — editing `OptiScaler.ini` by hand does
 nothing. It takes `Section.Option=value` pairs separated by `;` and merges them

@@ -40,7 +40,16 @@ anyway. The value is normalised (a bare `dxgi` becomes `dxgi.dll`) and checked f
 shape, because it reaches Wine's loader as a name to match; the matching
 `WINEDLLOVERRIDES` entry is derived from whatever name ends up in effect, since a
 `winmm=n,b` left behind next to a `dxgi` proxy would load Wine's own builtin and
-reproduce the original bug.
+reproduce the original bug. OptiScaler itself accepts `dxgi.dll`, `winmm.dll`,
+`version.dll`, `dbghelp.dll`, `d3d12.dll`, `wininet.dll` and `winhttp.dll`; the
+value is not checked against that list, because it is OptiScaler's to grow and a
+name outside it fails visibly as "no upscaler" rather than dangerously.
+
+Note that this has nothing to do with `Spoofing.Dxgi`, which the preset sets to
+`false`. The proxy name decides which import resolves to OptiScaler; the spoofing
+key decides whether OptiScaler reports an NVIDIA vendor/device ID and GPU name to
+the game once loaded. The two are independent, and the shared word is a trap when
+reading a bug report.
 
 `PROTON_DLSS_UPGRADE`, `PROTON_XESS_UPGRADE`, `PROTON_FFX3_UPGRADE`, `PROTON_FFX4_UPGRADE`, the older `PROTON_FSR3_UPGRADE` spelling and `PROTON_MLFG_UPGRADE` are cleared: this package ships none of those upscalers, and in pinned mode a request for one that is absent stops the game from starting. A stale launch option left over from another Proton build would otherwise become a game that will not launch.
 
