@@ -329,7 +329,9 @@ patches/mesa-git/0009-bc250-fsr4-production-defaults.patch
 ```
 
 `0001` and `0005` remain active regardless of environment variables.  
-The experimental GFX1013 mesh/task path from `0002`/`0003` is opt-in through `RADV_GFX103=1`; `0004` provides that runtime override and defaults to disabled. The same limitations as stable Mesa apply: mesh shaders are the currently tested use case, while task shaders are still not working correctly.
+The experimental GFX1013 mesh/task path from `0002`/`0003` is opt-in through `RADV_GFX103=1`; `0004` provides that runtime override and defaults to disabled. Mesh shaders are the tested use case.
+
+**In the mesa-git series, task shaders are no longer exposed at all.** GFX1013 firmware 144 hangs on `DISPATCH_TASKMESH_INDIRECT_MULTI_ACE` with a zero indirect count, and `0002` used to extend RADV's driver-side workaround for that. Mesa main removed the workaround in [`5d95a8f141d`](https://gitlab.freedesktop.org/mesa/mesa/-/commit/5d95a8f141d), disabling task/mesh outright on affected firmware instead, so the rebase reports task shading unsupported rather than carrying deleted upstream code. Mesh shading is unaffected, and this is where task shaders already stood in practice. The stable `patches/mesa` series still carries the original form, because the CachyOS Mesa commit it patches predates that removal — it will need the same treatment when that pin moves past it.
 
 There is deliberately no separate `series` file. The build script explicitly applies the five numbered patches in order through CachyOS' `mesa-userpatches` mechanism.
 

@@ -1,7 +1,7 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From fe6a8d30fba5e8424212b9f9feda170f058f623a Mon Sep 17 00:00:00 2001
 From: David Moraza Sanchez <dmorazasanchezmendo@gmail.com>
-Date: Mon, 25 Aug 2026 00:00:00 +0000
-Subject: [PATCH 5/5] radv,nir,aco: BC-250 FSR4 deferred SDot lowering
+Date: Tue, 25 Aug 2026 00:00:00 +0000
+Subject: [PATCH 5/9] radv,nir,aco: BC-250 FSR4 deferred SDot lowering 
  (EXP-042B / V3)
 
 Speed up FSR4's INT8 path on GFX1013. The hardware has no working packed
@@ -48,9 +48,9 @@ Verified against a positive control: a testing driver built from a
 byte-identical copy of the full patch measured ~4.2 ms and ~89 fps,
 confirming the comparison harness reproduced the known-good result.
 ---
- .../instruction_selection/aco_select_nir_alu.cpp   |   17 +++
- src/amd/vulkan/radv_shader.c                       |  133 ++++++++++++++++++++
- src/compiler/nir/nir_opt_algebraic.py              |   54 +++++++-
+ .../aco_select_nir_alu.cpp                    |  17 +++
+ src/amd/vulkan/radv_shader.c                  | 133 +++++++++++++++++-
+ src/compiler/nir/nir_opt_algebraic.py         |  54 ++++++-
  3 files changed, 198 insertions(+), 6 deletions(-)
 
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
@@ -89,10 +89,10 @@ index d509130f4d8..4f5722b0404 100644
        if (dst.regClass() == s1) {
           Operand op1(get_alu_src(ctx, instr->src[0]));
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 563c25928f8..ec6470f27c5 100644
+index d64773e3216..21c7edeca9c 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
-@@ -169,6 +169,121 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
+@@ -170,6 +170,121 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
     return compiler_info->debug.dump_shader_stats && !is_meta_shader(nir);
  }
  
@@ -214,7 +214,7 @@ index 563c25928f8..ec6470f27c5 100644
  void
  radv_optimize_nir(struct nir_shader *shader, bool optimize_conservatively)
  {
-@@ -800,7 +915,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -801,7 +916,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        NIR_PASS(_, nir, nir_opt_find_array_copies);
        NIR_PASS(_, nir, nir_lower_vars_to_ssa);
  
@@ -237,10 +237,10 @@ index 563c25928f8..ec6470f27c5 100644
 +         radv_optimize_nir(nir, false);
 +      }
  
-       NIR_PASS(_, nir, nir_opt_memcpy);
-       NIR_PASS(_, nir, nir_opt_deref);
+       NIR_PASS(_, nir, nir_opt_scalar_array_vars_to_vec, nir_var_function_temp | nir_var_mem_shared);
+ 
 diff --git a/src/compiler/nir/nir_opt_algebraic.py b/src/compiler/nir/nir_opt_algebraic.py
-index 1f128e04c1e..ec78540bc07 100644
+index 118ea792f98..9116575ab10 100644
 --- a/src/compiler/nir/nir_opt_algebraic.py
 +++ b/src/compiler/nir/nir_opt_algebraic.py
 @@ -444,10 +444,47 @@ for sz in (16, 32, 64):
@@ -311,3 +311,6 @@ index 1f128e04c1e..ec78540bc07 100644
     (('udot_4x8_uadd', a, b, c), ('iadd', udot_4x8_a_b, c), '!options->has_udot_4x8'),
     (('sudot_4x8_iadd', a, b, c), ('iadd', sudot_4x8_a_b, c), '!options->has_sudot_4x8'),
     (('sdot_2x16_iadd', a, b, c), ('iadd', sdot_2x16_a_b, c), '!options->has_dot_2x16'),
+-- 
+2.55.0
+

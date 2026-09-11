@@ -1,29 +1,38 @@
-From 11a8d756ae11b687c9ca06f2364006ecf4c6082e Mon Sep 17 00:00:00 2001
+From a023ebc33d7444b380799291cf0328bbec6e9ba8 Mon Sep 17 00:00:00 2001
 From: DryhoppedIPA <DryhoppedIPA@users.noreply.github.com>
 Date: Sat, 8 Aug 2026 04:53:11 +0000
-Subject: [PATCH 3/4] radv: mesh/task pipeline-statistics queries on GFX1013
+Subject: [PATCH 3/9] radv: report mesh-shader queries on GFX1013
 
-Expose GFX1013 mesh-shader queries only through the opt-in GFX10.3 override. Once RADV_GFX103 promotes the software gfx_level, the existing GFX10.3 query emulation and 14-slot result layout are reused automatically; without the override the query path stays disabled.
+Expose meshShaderQueries alongside the opt-in GFX1013 mesh/task path.
+
+Rebased onto Mesa main: the capability follows has_gfx1013_task_shading, which
+is now false after 5d95a8f141d removed the workaround that path depended on, so
+the feature reports false exactly as upstream does by default. The plumbing is
+kept so it returns with task shading rather than having to be rebuilt.
 ---
- src/amd/common/ac_gpu_info.c          | 1 +
+ src/amd/common/ac_gpu_info.c          | 5 +++++
  src/amd/common/ac_gpu_info.h          | 1 +
  src/amd/vulkan/radv_physical_device.c | 4 +++-
- 3 files changed, 5 insertions(+), 1 deletion(-)
+ 3 files changed, 9 insertions(+), 1 deletion(-)
 
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
-index b8d10d7dd2d..3d237e615ed 100644
+index 21a497082a7..109578195a3 100644
 --- a/src/amd/common/ac_gpu_info.c
 +++ b/src/amd/common/ac_gpu_info.c
-@@ -1041,6 +1041,7 @@ void ac_fill_bug_info(struct radeon_info *info)
-    /* Hardware capabilities used by RADV's opt-in GFX1013 mesh/task path. */
+@@ -1056,6 +1056,11 @@ void ac_fill_bug_info(struct radeon_info *info)
+     */
     info->has_gfx1013_mesh_shading = info->family == CHIP_GFX1013;
-    info->has_gfx1013_task_shading = info->has_gfx1013_mesh_shading;
+    info->has_gfx1013_task_shading = false;
++   /* Mesh-shader pipeline statistics follow task shading, so this is off too.
++    * That restores the value upstream reports by default; the plumbing stays so
++    * it returns with task shading if the firmware situation ever changes.
++    */
 +   info->has_gfx1013_mesh_queries = info->has_gfx1013_task_shading;
  
     info->has_export_conflict_bug = info->gfx_level == GFX11;
  
 diff --git a/src/amd/common/ac_gpu_info.h b/src/amd/common/ac_gpu_info.h
-index f17679d232d..2f7c067d0e3 100644
+index 8556f61b23c..3f3390076ba 100644
 --- a/src/amd/common/ac_gpu_info.h
 +++ b/src/amd/common/ac_gpu_info.h
 @@ -314,6 +314,7 @@ struct radeon_info {
@@ -35,10 +44,10 @@ index f17679d232d..2f7c067d0e3 100644
     bool sdma_supports_compression; /* Whether SDMA supports DCC and HTILE. */
     bool has_set_context_pairs;
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 7790c084a32..a4eb7b7424a 100644
+index 5e900208c6d..a95230f5042 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -1361,7 +1361,9 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
+@@ -1370,7 +1370,9 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
        .taskShader = task_en,
        .multiviewMeshShader = full_mesh_features,
        .primitiveFragmentShadingRateMeshShader = full_mesh_features,
@@ -49,3 +58,6 @@ index 7790c084a32..a4eb7b7424a 100644
  
        /* VK_EXT_depth_clip_control */
        .depthClipControl = true,
+-- 
+2.55.0
+
