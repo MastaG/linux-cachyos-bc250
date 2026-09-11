@@ -18,6 +18,7 @@ build that would break a pinned launch. The user's own choices are left alone.
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -39,7 +40,11 @@ UNSHIPPED = (
 
 # These address the pinned payload by path and by name. A caller cannot supply a
 # meaningful value for any of them, and a wrong one either breaks the launch or
-# silently swaps in an unverified DLL.
+# silently swaps in an unverified DLL. They are cleared and then set here.
+#
+# PROTON_OPTISCALER_NAME is the one a caller may still ask for: it does not
+# choose which DLL is loaded -- the manifest pins that -- only which import the
+# game resolves to OptiScaler. See proxy_name().
 OWNED = (
     "PROTON_UPSCALER_MANIFEST",
     "PROTON_OPTISCALER_NAME",
@@ -109,6 +114,30 @@ def load_native(env, dll):
     ):
         return
     env["WINEDLLOVERRIDES"] = ";".join(entries + [name + "=n,b"])
+
+
+def proxy_name(requested, default):
+    """Which DLL name OptiScaler answers to, as the caller asked for it.
+
+    The package proxies winmm because that is what has been tested here, but the
+    name is not free: a game that already uses winmm for something of its own --
+    a mod or ASI loader, most often -- gets its loader back instead of
+    OptiScaler, and the upscaler silently never appears. Such a game needs a
+    different import, usually dxgi, which is also upstream protonfixes' default.
+
+    Unlike everything else in OWNED this changes no pinned file: the payload is
+    the same either way, so the worst a wrong name can do is leave OptiScaler
+    unloaded. It is still checked for shape, because it reaches Wine's loader as
+    a name to match and a path fragment has no business there.
+    """
+    name = (requested or "").strip() or default
+    if not name.lower().endswith(".dll"):
+        name += ".dll"
+    if not re.fullmatch(r"[A-Za-z0-9_+-]+\.dll", name):
+        raise RuntimeError(
+            "PROTON_OPTISCALER_NAME must be a bare DLL name such as dxgi.dll: "
+            + repr(requested))
+    return name
 
 
 def optiscaler_version(config, requested):
@@ -194,9 +223,10 @@ def environment(config, inherited, *, game):
     # Xalia inherits the global proxy below and can keep a closed game alive.
     env["PROTON_USE_XALIA"] = "0"
 
-    env["PROTON_OPTISCALER_NAME"] = config["proxy"]
+    proxy = proxy_name(inherited.get("PROTON_OPTISCALER_NAME"), config["proxy"])
+    env["PROTON_OPTISCALER_NAME"] = proxy
     if env["PROTON_USE_OPTISCALER"] != "0":
-        load_native(env, config["proxy"])
+        load_native(env, proxy)
 
     preset = dict(config["preset"])
     if inherited.get("BC250_FSR4_DEBUG") == "1":

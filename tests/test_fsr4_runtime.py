@@ -240,6 +240,21 @@ class RuntimeTests(unittest.TestCase):
                     self.provider,
                 )
 
+    def test_the_requested_proxy_reaches_wine_through_real_protonfixes(self):
+        # The wrapper setting the variable is only half of it: upstream is what
+        # turns PROTON_OPTISCALER_NAME into the name Wine matches, and it
+        # defaults to dxgi.dll on its own, so this has to be checked against the
+        # real module rather than inferred.
+        for base in BASES:
+            with self.subTest(base=base):
+                env = self.run_upscalers(
+                    base,
+                    {"SteamAppId": "999999998", "PROTON_OPTISCALER_NAME": "dxgi"},
+                    ["run"],
+                )
+                self.assertEqual(env["WINE_OPTISCALER_NAME"], "dxgi.dll")
+                self.assertEqual(env["WINEDLLOVERRIDES"], "dxgi=n,b")
+
     def test_documented_opt_out_stops_hooks_without_erasing_retained_files(self):
         for base in BASES:
             with self.subTest(base=base):
@@ -364,6 +379,39 @@ class RuntimeTests(unittest.TestCase):
                 game=True)
         self.assertEqual(
             plain["PROTON_OPTISCALER_CONFIG"], empty["PROTON_OPTISCALER_CONFIG"])
+
+    def test_a_game_that_needs_another_proxy_can_ask_for_one(self):
+        # Reported from the field: a game that already uses winmm for a mod or
+        # ASI loader gets its own loader back and OptiScaler never loads. Such a
+        # game needs a different import, usually dxgi.
+        for requested, expected in (("dxgi.dll", "dxgi.dll"), ("dxgi", "dxgi.dll")):
+            with self.subTest(requested=requested):
+                with mock.patch.object(wrapper, "TOOL", self.work):
+                    env = wrapper.environment(
+                        self.config,
+                        {
+                            "SteamAppId": "999999998",
+                            "PROTON_OPTISCALER_NAME": requested,
+                        },
+                        game=True,
+                    )
+                self.assertEqual(env["PROTON_OPTISCALER_NAME"], expected)
+                # The override has to follow the name, or Wine loads its own
+                # builtin dxgi and the proxy is bypassed exactly as before.
+                self.assertEqual(env["WINEDLLOVERRIDES"], "dxgi=n,b")
+
+    def test_the_packaged_proxy_is_still_what_an_ordinary_launch_gets(self):
+        with mock.patch.object(wrapper, "TOOL", self.work):
+            env = wrapper.environment(
+                self.config, {"SteamAppId": "999999998"}, game=True)
+        self.assertEqual(env["PROTON_OPTISCALER_NAME"], self.config["proxy"])
+        self.assertEqual(env["WINEDLLOVERRIDES"], "winmm=n,b")
+
+    def test_a_proxy_name_that_is_not_a_bare_dll_stops_the_launch(self):
+        for bad in ("../../evil", "C:\\windows\\dxgi.dll", "dxgi.dll;winmm.dll"):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(RuntimeError, "bare DLL name"):
+                    wrapper.proxy_name(bad, "winmm.dll")
 
     def test_the_documented_opt_out_leaves_wines_own_defaults_in_place(self):
         with mock.patch.object(wrapper, "TOOL", self.work):

@@ -2,9 +2,9 @@ b77b2d8cc67dba88a06f91d571e7f2612e547acc3fb685de4c12c4d2612db9d6  ./.github/work
 b13dc2c3218d23ed799a400e2a834463f5e1649b3824a74a17cb3b632fe8c4c7  ./.github/workflows/fsr4-checks.yml
 1ebadcbf9cce8745ce6560f4ef8e2414c0bc5b910471898d46ab9cde32938a4f  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-b9577e35524ee5763a10fd32ba6bd4d5765938e4ecb488c339884574407b558c  ./README.md
+8f5c4b025bc73f16cb9769ad33e440ed4c554c7222355f60f7776561ccdfb8ed  ./README.md
 026eedbe493ae631b7fb931af492d33fd8b7915ce51b0e242674f6e14ef05081  ./docs/BUILDING.md
-4e19657a87e705baac77c5223eb86210c63c73ac8a3fd6d0f95e4045188a6759  ./docs/FSR4-PROTON.md
+bfa13d054d26a6ad973180a2d53b731db28ebdaaf52e35b8085e82e09fd56504  ./docs/FSR4-PROTON.md
 fca5b6b4bcf9b31e94376131e1c3596f380f8b13646fe9aec859075b80f34afa  ./docs/PATCHES.md
 37cfe169230fa08d3e91b058821dd09c3b95d1b0c361c2039ac66a25805542b2  ./docs/ROCM.md
 3b0e0fddc0f40c51720aa25fa9836254c3595b71f0cd228e2b2e9e512b4e7629  ./local-patches/README.md
@@ -13,7 +13,7 @@ a3ef21828e07936ae930150427e1b3045bfd55d83de72b767b93d42a1e4f70e2  ./packages/bc2
 4330bb52894aa13d4fa62a642d61234b03bfa15cf9d9d12345e54ed05efda644  ./packages/bc250-dual-audio/bc250-dual-audio.install
 e9d41088edc8ae103b38ba218691336b64b5f6afaa021c35eb60ae3eb890e79e  ./packages/bc250-fsr4-common/README.md
 9c6834660b76482df0081d391a2c57baca9566b34a4231630765b4904f3bb5bb  ./packages/bc250-fsr4-common/VALIDATION.md
-d26d14aa43d80781f972c079b4b19dacd094914832a52fb187c9d212fee1351f  ./packages/bc250-fsr4-common/bc250-fsr4-launch.py
+f23a56eefac90ab86cb85620fdb0f6389e5abd522cf9502fb82146ecd90b09ca  ./packages/bc250-fsr4-common/bc250-fsr4-launch.py
 be05d8cd5489deff924dbe91e0c5b8c0ff034d43cd11749bf9a67a0c38252b7b  ./packages/bc250-fsr4-common/licenses/FidelityFX-SDK-4.0.2.txt
 21b5daec892b12bea692e66bc8fe45cf5902ccaf3a7b831e78050d8859881c37  ./packages/bc250-fsr4-common/licenses/NVIDIA-DLSS.txt
 e2fbcbf16130da0e5ae3fee944d3659c9faed95b115ba38268c76617f648deef  ./packages/bc250-fsr4-common/optiscaler-preset.json
@@ -101,4 +101,4 @@ f39757d0abded757b134cb1236a9b76106f30ed70d08e03a8b608228a62de612  ./scripts/upda
 4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645  ./tests/fixtures/ge-proton11-6-upscalers.py
 29d0e7244cd46d66cff6d9be331123cc1903281b44af6ee61696edafa3310458  ./tests/fixtures/ge-to-cachyos-native.patch
 4e4c875a572a40e7dfb4a5af391ef88e8e5e3bc4dcc70df1b3823a3a7b438f22  ./tests/test_fsr4_packaging.py
-e7c8061472f97831bc09e32258a571fcdb0c523bee94aae0f34e095f971ff141  ./tests/test_fsr4_runtime.py
+4b240c5b804b55980c80e153007987c35992ae24bea1355d5043e192904bbc6f  ./tests/test_fsr4_runtime.py

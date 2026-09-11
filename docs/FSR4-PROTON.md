@@ -18,12 +18,29 @@ FSR4 and OptiScaler are on by default, but they are still yours to set per game:
 ```text
 PROTON_FSR4_UPGRADE=0 %command%      # disable the packaged FSR4 upgrade and default proxy
 BC250_FSR4_DEBUG=1 %command%         # FSR4 watermark + OptiScaler log + PROTON_LOG
+PROTON_OPTISCALER_NAME=dxgi.dll      # proxy OptiScaler as dxgi, for games that use winmm
 ```
 
 The opt-out also defaults OptiScaler to off, so it cannot load a provider retained
 from a prior launch. Explicit `PROTON_USE_OPTISCALER` choices remain available;
 prefix payloads and saves are preserved. Steam utility calls use the local
 manifest with both upgrades disabled, including when game settings are inherited.
+
+`PROTON_OPTISCALER_NAME` is the one variable in the owned set a caller may still
+supply. Everything else there addresses the pinned payload by path or by name, so
+a caller-supplied value would either break the launch or swap in something
+unverified; the proxy name does neither. It selects which import the game resolves
+to OptiScaler, not which DLL is loaded — the manifest pins that either way — so the
+worst a wrong name can do is leave OptiScaler unloaded. The package proxies
+`winmm` because that is what has been tested on the BC-250, but a game that ships
+its own `winmm.dll` (mod loaders and ASI loaders do) gets its own file back and
+the upscaler silently never appears; `PROTON_OPTISCALER_NAME=dxgi.dll` moves it to
+an import such a game does not use, and upstream protonfixes defaults to that name
+anyway. The value is normalised (a bare `dxgi` becomes `dxgi.dll`) and checked for
+shape, because it reaches Wine's loader as a name to match; the matching
+`WINEDLLOVERRIDES` entry is derived from whatever name ends up in effect, since a
+`winmm=n,b` left behind next to a `dxgi` proxy would load Wine's own builtin and
+reproduce the original bug.
 
 `PROTON_DLSS_UPGRADE`, `PROTON_XESS_UPGRADE`, `PROTON_FFX3_UPGRADE`, `PROTON_FFX4_UPGRADE`, the older `PROTON_FSR3_UPGRADE` spelling and `PROTON_MLFG_UPGRADE` are cleared: this package ships none of those upscalers, and in pinned mode a request for one that is absent stops the game from starting. A stale launch option left over from another Proton build would otherwise become a game that will not launch.
 

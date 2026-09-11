@@ -216,7 +216,23 @@ BC250_FSR4_DEBUG=1 %command%              # FSR4 watermark + OptiScaler log + PR
 PROTON_FSR4_UPGRADE=0 %command%           # turn the packaged FSR4 upgrade off
 PROTON_USE_OPTISCALER=fsr411b %command%   # experimental upscaler, see below
 BC250_OPTISCALER_EXTRA="A.B=c;D.E=f"      # override individual OptiScaler settings
+PROTON_OPTISCALER_NAME=dxgi.dll %command% # load OptiScaler as dxgi instead of winmm
 ```
+
+`PROTON_OPTISCALER_NAME` is for one specific symptom: FSR4 quietly does nothing
+in a game that has a mod loader, an ASI loader, or anything else of its own
+installed as `winmm.dll`. OptiScaler is proxied as `winmm` here, so in that game
+the game's own file wins and the upscaler never loads. Point it at another
+import the game does not use — `dxgi.dll` is the usual one, and is upstream
+protonfixes' own default:
+
+```text
+PROTON_OPTISCALER_NAME=dxgi.dll %command%
+```
+
+Nothing else changes: the payload is the same pinned OptiScaler either way, and
+the matching `WINEDLLOVERRIDES` entry follows the name automatically. Confirm it
+worked with `BC250_FSR4_DEBUG=1` and look for the watermark.
 
 `BC250_OPTISCALER_EXTRA` exists because the packaged OptiScaler configuration is
 rewritten into the prefix on every launch — editing `OptiScaler.ini` by hand does
