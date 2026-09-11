@@ -335,3 +335,133 @@ class PackageGateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LocalPatchGateTests(unittest.TestCase):
+    """local-patches/ must reach a local build and nothing else.
+
+    The hook exists so a private build can carry a patch that has no business
+    in a published package. That is only true while the gate holds, so the gate
+    is tested rather than trusted: the same block of shell that ships inside
+    each PKGBUILD is executed here, with and without the variable set.
+    """
+
+    MARKER = "# Local private builds only"
+
+    def hook(self, text):
+        """The shipped hook, lifted verbatim out of a PKGBUILD."""
+        start = text.index(self.MARKER)
+        end = text.index("\n    fi\n", start) + len("\n    fi\n")
+        block = text[start:end]
+        self.assertIn("BC250_LOCAL_PATCHES", block)
+        return block
+
+    def sources(self):
+        generated = tempfile.TemporaryDirectory(prefix="fsr4 local patches ")
+        self.addCleanup(generated.cleanup)
+        subprocess.run(
+            ["bash", str(ROOT / "scripts/prepare-proton-cachyos-native-pkgbuild.sh")],
+            env=dict(
+                os.environ,
+                PROTON_CACHYOS_NATIVE_BUILD_DIR=str(Path(generated.name) / "native"),
+                BC250_SKIP_MESA_PREFETCH="1",
+            ),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return {
+            "proton-cachyos-native": (Path(generated.name) / "native/PKGBUILD").read_text(),
+            "protonge-latest": (
+                ROOT / "packages/protonge-latest-bc250/PKGBUILD.in"
+            ).read_text(),
+        }
+
+    def run_hook(self, block, tree, patches, **environment):
+        # `return 1` is what the hook uses to abort a pkgfunc, so it has to run
+        # inside one here as well.
+        return subprocess.run(
+            ["bash", "-c", "_hook() {\n" + block + "\n}\n_hook"],
+            cwd=tree,
+            env=dict(os.environ, BC250_LOCAL_PATCHES_DIR=str(patches), **environment),
+            capture_output=True,
+            text=True,
+        )
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="fsr4 local patches run ")
+        self.addCleanup(self.temporary.cleanup)
+        self.work = Path(self.temporary.name)
+
+    def patch_set(self, name, body):
+        directory = self.work / "patches" / name
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "0001-test.patch").write_text(body)
+        return self.work / "patches"
+
+    def tree(self, name):
+        tree = self.work / "tree" / name
+        tree.mkdir(parents=True, exist_ok=True)
+        (tree / "target.txt").write_text("original\n")
+        return tree
+
+    GOOD = """--- a/target.txt
++++ b/target.txt
+@@ -1 +1 @@
+-original
++patched
+"""
+    BAD = """--- a/target.txt
++++ b/target.txt
+@@ -1 +1 @@
+-something that is not there
++patched
+"""
+
+    def test_an_unset_variable_leaves_the_tree_alone(self):
+        for name, text in self.sources().items():
+            with self.subTest(package=name):
+                tree = self.tree(name)
+                patches = self.patch_set(name, self.GOOD)
+                result = self.run_hook(self.hook(text), tree, patches)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual((tree / "target.txt").read_text(), "original\n")
+
+    def test_a_local_build_applies_them_in_order(self):
+        for name, text in self.sources().items():
+            with self.subTest(package=name):
+                tree = self.tree(name)
+                patches = self.patch_set(name, self.GOOD)
+                result = self.run_hook(
+                    self.hook(text), tree, patches, BC250_LOCAL_PATCHES="1"
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual((tree / "target.txt").read_text(), "patched\n")
+
+    def test_a_patch_that_does_not_apply_stops_the_build(self):
+        for name, text in self.sources().items():
+            with self.subTest(package=name):
+                tree = self.tree(name)
+                patches = self.patch_set(name, self.BAD)
+                result = self.run_hook(
+                    self.hook(text), tree, patches, BC250_LOCAL_PATCHES="1"
+                )
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+
+    def test_nothing_in_ci_turns_the_gate_on(self):
+        # The gate is only worth anything while CI never sets it. Everything
+        # that runs a build in this repository is searched, rather than the one
+        # workflow that happens to build Proton today.
+        setters = []
+        for path in list((ROOT / ".github").rglob("*.y*ml")) + sorted(
+            (ROOT / "scripts").glob("*.sh")
+        ):
+            if path.name in ("build-proton-tarball.sh", "local-build-inside.sh"):
+                continue
+            # An assignment, not a mention: the preparation script quotes the
+            # variable into the PKGBUILD it generates, which is the hook itself
+            # rather than something turning the hook on. `:-` is a default, so
+            # ${BC250_LOCAL_PATCHES:-0} does not count either.
+            if re.search(r"BC250_LOCAL_PATCHES(?:_DIR)?\s*(?:=|:(?!-))", path.read_text()):
+                setters.append(str(path.relative_to(ROOT)))
+        self.assertEqual(setters, [])

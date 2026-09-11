@@ -151,6 +151,91 @@ scripts/build-mesa-git-package.sh
 
 For reproducible full repository builds, CI remains the recommended path because it configures multilib, ccache, the clean build user, source fingerprints and previous-release preservation.
 
+## Local Proton builds for private distribution
+
+`scripts/build-proton-tarball.sh` builds either Proton package the way CI builds
+it — the same package scripts, in the same `archlinux:base-devel` container —
+but hands back a tarball instead of a pacman package:
+
+```bash
+./scripts/build-proton-tarball.sh --suffix test1 ge
+./scripts/build-proton-tarball.sh --suffix test1 native
+./scripts/build-proton-tarball.sh --suffix test1 both     # the default
+```
+
+Each tarball lands in `dist/` and unpacks straight into a user's Steam:
+
+```bash
+mkdir -p ~/.local/share/Steam/compatibilitytools.d
+tar -C ~/.local/share/Steam/compatibilitytools.d -xzf proton-cachyos-native-bc250-test1.tar.gz
+```
+
+No pacman, no repository, no root — which is the point: a build can be handed to
+one tester without publishing it.
+
+`--suffix` renames the tool so it sits *beside* whatever is already installed.
+The directory becomes `proton-cachyos-native-bc250-test1`, and both the internal
+name and the display name in `compatibilitytool.vdf` are rewritten to match, so
+Steam lists it as its own entry with its own per-game selection and the packaged
+version keeps working. Steam keys the per-game choice on the internal name, so a
+tarball built with a different suffix is a different tool as far as Steam is
+concerned.
+
+Options and environment:
+
+```text
+--suffix NAME               appended to the tool name; [A-Za-z0-9._-], default none
+--out DIR                   where the tarballs go (default: dist/)
+--image REF                 base image (default: docker.io/library/archlinux:base-devel)
+BC250_CONTAINER_ENGINE      default podman; split on whitespace, so "sudo podman"
+                            and "flatpak-spawn --host podman" both work
+BC250_PKGREL                pkgrel for the build (default 1)
+```
+
+Two container details worth knowing. Rootless podman gets `--userns=keep-id` so
+the build user inside can be created with the uid that already owns the
+checkout: without it every file the build writes into `out/` and `build/` would
+come back owned by a subuid, leaving the user locked out of their own working
+tree. And the checkout is mounted with `--security-opt label=disable` rather
+than `:Z`, because `:Z` would recursively relabel the working tree for SELinux —
+a persistent change to the user's files for the sake of a container they started
+themselves. Both are no-ops on the Arch host this normally runs on.
+
+ccache is shared with a named volume (`bc250-local-ccache`), which is what makes
+a second native build minutes rather than hours. It survives between runs and
+between suffixes.
+
+### Custom patches
+
+Anything in `local-patches/` is applied to a local build and only to a local
+build. CI never sets `BC250_LOCAL_PATCHES`, so nothing here can reach a
+published package.
+
+```text
+local-patches/proton-cachyos-native/   applied to the Proton source tree
+local-patches/protonge-latest/         applied to the unpacked GE-Proton release
+```
+
+They are applied in sorted order with `patch --batch -Np1`, after everything
+this repository already applies, and a failure stops the build. The two are not
+equivalent: `proton-cachyos-native` compiles from source, so a patch there can
+change Proton, Wine, dxvk or vkd3d-proton themselves, while `protonge-latest`
+repacks an already-built release, so a patch there can only edit files that ship
+inside it — in practice the Python under `protonfixes/` and the launch scripts.
+
+Both directories are git-ignored, so private patches stay private.
+
+### What a tarball leaves behind
+
+A tarball is only the compatibility tool. The packaged
+`/usr/lib/modules-load.d` entry that loads `ntsync` at boot is not part of it,
+so on a machine with neither Proton package installed from the repository:
+
+```bash
+echo ntsync | sudo tee /etc/modules-load.d/ntsync.conf
+sudo modprobe ntsync
+```
+
 ## Package signing
 
 Packages and the repository database are currently unsigned, hence:

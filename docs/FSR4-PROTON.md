@@ -42,3 +42,9 @@ payload integrity, preset validation and the generated production patch series.
 
 The design notes, including why the OptiScaler payload is rearranged the way it is and why two separate copies of the protonfixes patch exist, are in [packages/bc250-fsr4-common/README.md](../packages/bc250-fsr4-common/README.md).
 
+Either package can also be built locally into a tarball that unpacks into
+`~/.local/share/Steam/compatibilitytools.d`, under its own name and with your own
+patches applied, for handing to a tester without publishing anything: see
+[Local Proton builds for private distribution](BUILDING.md#local-proton-builds-for-private-distribution).
+
+

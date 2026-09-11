@@ -154,6 +154,18 @@ prepare() {
     # Byte-compiled from whatever Python built the release; regenerated per user
     # at runtime anyway, and never useful inside a read-only package.
     find . -type d -name __pycache__ -prune -exec rm -rf -- {} +
+
+    # Local private builds only (scripts/build-proton-tarball.sh). Never set in
+    # CI, so the published package cannot pick up anything from here. This is a
+    # prebuilt GE tree, so patches here hit shipped files -- protonfixes and the
+    # other Python under files/ are the realistic targets, not Wine sources.
+    if [[ "${BC250_LOCAL_PATCHES:-0}" == 1 && -d "${BC250_LOCAL_PATCHES_DIR:-/workspace/local-patches}/protonge-latest" ]]; then
+        for _local_patch in "${BC250_LOCAL_PATCHES_DIR:-/workspace/local-patches}/protonge-latest"/*.patch; do
+            [[ -e "$_local_patch" ]] || continue
+            printf '==> applying local patch %s\n' "$(basename "$_local_patch")"
+            patch --batch --fuzz=0 -Np1 -i "$_local_patch" || return 1
+        done
+    fi
 }
 
 build() {

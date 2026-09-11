@@ -3,4 +3,7 @@
 /previous/
 *.pkg.tar.zst
 /rebase/
+/dist/
+/local-patches/*
+!/local-patches/README.md
 __pycache__/
