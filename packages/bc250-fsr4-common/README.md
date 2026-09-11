@@ -199,7 +199,7 @@ filename and its manifest entry.
 
 ## `optiscaler-preset.json`
 
-The 23-key OptiScaler configuration, applied via `PROTON_OPTISCALER_CONFIG`.
+The 24-key OptiScaler configuration, applied via `PROTON_OPTISCALER_CONFIG`.
 
 **This file is coupled to the OptiScaler build.** The patch above makes an
 unknown key *fatal* in pinned mode, so a build that renames or drops an option

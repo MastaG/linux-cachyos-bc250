@@ -176,10 +176,12 @@ def environment(config, inherited, *, game):
         env["PROTON_LOG"] = "1"
     env["PROTON_OPTISCALER_CONFIG"] = ";".join(k + "=" + v for k, v in preset.items())
 
-    # OptiScaler advertises these to unlock a game's DLSS input path. The BC-250
-    # cannot use them in vkd3d's separate D3D12 device, whose creation otherwise
-    # fails once Vulkan extension spoofing is on independently of vendor
-    # spoofing. Keep any exclusions the caller already asked for.
+    # Belt and braces since the preset turned Spoofing.VulkanExtensionSpoofing
+    # off: OptiScaler used to advertise these to unlock a game's DLSS input
+    # path, and vkd3d's separate D3D12 device then failed to create -- the
+    # "DX12 not supported" report. Nothing should advertise them now, but the
+    # BC-250 cannot use them either way, so the exclusion stays. Keep any
+    # exclusions the caller already asked for.
     disabled = env.get("VKD3D_DISABLE_EXTENSIONS", "")
     env["VKD3D_DISABLE_EXTENSIONS"] = ";".join(
         part

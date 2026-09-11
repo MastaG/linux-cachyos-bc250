@@ -8,7 +8,7 @@ hashes, source comparisons and Windows probe outcomes.
 
 The existing Proton integration already carries the substantial shared work:
 the pinned local manifest patch, all 18 OptiScaler-side critical file hashes,
-the exact FSR4 provider, and the 23-key preset match the reference. Both normal
+the exact FSR4 provider, and the 24-key preset match the reference. Both normal
 game routes set up these payloads successfully with network access forbidden.
 The stable Steam-internal tool names also already contain `proton`, so they
 satisfy the Windows save-root registration requirement repaired by RC6.
