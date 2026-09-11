@@ -86,10 +86,10 @@ d835e69e1e8dcb68a732c2a66709b25cfcbd2e27d2589cec8cf4bc6bc9c682f4  ./scripts/prep
 e42abba9e94ce76c02c2a2ed2cea0ae3a2d16fdb903cc5c5e244a403c3d08765  ./scripts/prepare-proton-cachyos-native-pkgbuild.sh
 65d897599a9f43cd0b3f06f0041819bff274146518c8541bb8e64b230fd1c3a4  ./scripts/publish-repo-delta.sh
 cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo-package-helpers.sh
-eeb453358d62271e629355af4bff424160d2af4b0d41e413f347466144805e4c  ./scripts/resolve-cachyos-mesa.sh
+3521e3cb780c45377fae426da98cfb25e6f629d4a91dc29cd55dd396497d961a  ./scripts/resolve-cachyos-mesa.sh
 9b1f221916b751c34dc1d5692bb419aa266d48949d0fe69be590a7a2c455659d  ./scripts/resolve-fakenvapi.sh
-d54dc6ec221b5e8b4f594a891b8bb77b61e101837e3277918f50aad558b71ba7  ./scripts/resolve-mesa-git.sh
-42d362d8154f29600842ad05297d35a4d4191b81c4e87138a10e4b44aae011f9  ./scripts/resolve-nct6687d.sh
+69ddcdcc1422363f6deda90c3762266582241f9b6ffacb81c83b9bcfc6c44ab2  ./scripts/resolve-mesa-git.sh
+75b45b1d79e2d32572c664864746105cb7c3526e1e3a6786c89002fd36ec75d5  ./scripts/resolve-nct6687d.sh
 c44bbaa08033932b0ed3dcec234b52b3628f2e80fa8364253d5ff454fc552907  ./scripts/resolve-protonge.sh
 cc39fdd5d404427f0cca83f37c86d4e99b8e0a71f1a2c30cf25b29df2ce75cb0  ./scripts/select-optiscaler.py
 86cb3181b8237996df58705cbfb145ad7c8cf9a87ff29bc3dacee6c0f9a4d512  ./scripts/source-fingerprint.sh
