@@ -1,4 +1,4 @@
-From ef66857a599e1d93753125ba6bdb923ccbfe0215 Mon Sep 17 00:00:00 2001
+From 97c52029e4a392738e1cb2430504de9118856b47 Mon Sep 17 00:00:00 2001
 From: fish <fish@bc250-fsr4-research>
 Date: Sun, 6 Sep 2026 00:00:00 +0000
 Subject: [PATCH 6/9] radv: BC-250 FSR4 combined-unroll selection (2.84)
@@ -44,10 +44,10 @@ index 1f57984b58c..8682e6042ea 100644
 +   return nir_shader_intrinsics_pass(nir, fixup_smem_loads_null_prt, nir_metadata_control_flow, &s);
  }
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 26480ea4f70..1af1706631c 100644
+index be2676e7c01..cfdf14d9033 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -357,6 +357,11 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -361,6 +361,11 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
        return -1;
  #endif
  

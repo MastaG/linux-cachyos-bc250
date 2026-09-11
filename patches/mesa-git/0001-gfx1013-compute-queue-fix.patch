@@ -1,4 +1,4 @@
-From 5d2b4799f08b0794c42945575d8a20f3bd8e4702 Mon Sep 17 00:00:00 2001
+From aa945c1eff1267535a1df668e1b8d2a8e5f43fe1 Mon Sep 17 00:00:00 2001
 From: DryhoppedIPA <DryhoppedIPA@users.noreply.github.com>
 Date: Sat, 8 Aug 2026 04:53:11 +0000
 Subject: [PATCH 1/9] radv,ac: GFX1013 compute queue fix (identity, exposure, 

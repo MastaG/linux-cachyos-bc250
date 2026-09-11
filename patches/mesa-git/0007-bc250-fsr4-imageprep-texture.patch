@@ -1,4 +1,4 @@
-From 27bbd70dfadaa471601986dea0115bfc85fa0636 Mon Sep 17 00:00:00 2001
+From 00b95193290855025dbd87347d96fda79d3cd5c9 Mon Sep 17 00:00:00 2001
 From: fish <fish@bc250-fsr4-research>
 Date: Sun, 6 Sep 2026 00:00:00 +0000
 Subject: [PATCH 7/9] radv: BC-250 FSR4 image-preparation and texture
@@ -31,10 +31,10 @@ Origin: bc250-fsr4-20260906 research kit, source/composed-over-2.84.patch
  2 files changed, 4176 insertions(+), 5 deletions(-)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 1af1706631c..47e785c2254 100644
+index cfdf14d9033..c353d77c40d 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -361,6 +361,14 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -365,6 +365,14 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
     const char *bc250_fsr4_cache = debug_get_bool_option("BC250_FSR4_DISABLE", false) ?
        "bc250-fsr4-integrated-v2-disabled" : "bc250-fsr4-integrated-v2";
     _mesa_blake3_update(&ctx, bc250_fsr4_cache, strlen(bc250_fsr4_cache));

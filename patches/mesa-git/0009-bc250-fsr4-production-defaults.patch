@@ -1,4 +1,4 @@
-From a661e57575296e954bf47753bf0dc86abc1bd226 Mon Sep 17 00:00:00 2001
+From cbfeaa607ef6b745893594253f5ecd953218fe4e Mon Sep 17 00:00:00 2001
 From: daniel-h-0 <daniel-h-0@bc250-fsr4-fork>
 Date: Tue, 8 Sep 2026 00:00:00 +0000
 Subject: [PATCH 9/9] radv: BC-250 FSR4 production defaults
@@ -35,10 +35,10 @@ Origin: https://github.com/daniel-h-0/bc250-fsr4-fork
  2 files changed, 11 insertions(+), 11 deletions(-)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 2dd7f721db2..a2c5efc0ece 100644
+index b7af9587aa5..33f8fae249b 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -359,17 +359,17 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -363,17 +363,17 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
  
     /* Separate production and fallback disk/application pipeline caches. */
     const char *bc250_fsr4_cache = debug_get_bool_option("BC250_FSR4_DISABLE", false) ?
@@ -60,7 +60,7 @@ index 2dd7f721db2..a2c5efc0ece 100644
        const char *lowres_version = "bc250-fsr4-resolution-families-24-v2-safe-mask";
        _mesa_blake3_update(&ctx, lowres_version, strlen(lowres_version));
     }
-@@ -377,8 +377,8 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -381,8 +381,8 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
  
  
  

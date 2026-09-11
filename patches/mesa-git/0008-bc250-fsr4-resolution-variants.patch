@@ -1,4 +1,4 @@
-From e754f1177073daaa4f4dcef5b21c7688a9e793ca Mon Sep 17 00:00:00 2001
+From bc35e51b382222e1ca02b0d794f28401e898c683 Mon Sep 17 00:00:00 2001
 From: fish <fish@bc250-fsr4-research>
 Date: Mon, 7 Sep 2026 00:00:00 +0000
 Subject: [PATCH 8/9] radv: BC-250 FSR4 resolution-variant coverage and 8K
@@ -40,10 +40,10 @@ upgrade-from-previous/0003-resolution-over-composed.patch
  2 files changed, 96 insertions(+)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 47e785c2254..2dd7f721db2 100644
+index c353d77c40d..b7af9587aa5 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -369,7 +369,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -373,7 +373,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
     unsigned bc250_imageprep_mode = debug_get_num_option("BC250_FSR4_IMAGEPREP", 0);
     _mesa_blake3_update(&ctx, bc250_imageprep_version, strlen(bc250_imageprep_version));
     _mesa_blake3_update(&ctx, &bc250_imageprep_mode, sizeof(bc250_imageprep_mode));

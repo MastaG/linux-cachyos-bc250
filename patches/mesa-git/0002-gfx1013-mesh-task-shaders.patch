@@ -1,55 +1,55 @@
-From d72f3e654b664c0c60844539bcc3c29052c617ed Mon Sep 17 00:00:00 2001
+From 138827e4642bf2e7b2b6df0cfd0ab246214a0a57 Mon Sep 17 00:00:00 2001
 From: DryhoppedIPA <DryhoppedIPA@users.noreply.github.com>
 Date: Sat, 8 Aug 2026 04:53:11 +0000
 Subject: [PATCH 2/9] radv,aco: native mesh and task shaders on GFX1013
 
-Rebase the experimental GFX1013 mesh/task path. Keep the GFX1013 hardware
-workarounds from the original patch, but require a GFX10.3 software level for
-exposing mesh/task features so the path stays dormant until RADV_GFX103 is
-explicitly enabled.
+Rebase the experimental GFX1013 mesh/task path. Keep the GFX1013 hardware workarounds from the original patch, but require a GFX10.3 software level for exposing mesh/task features so the path stays dormant until RADV_GFX103 is explicitly enabled.
 
-Rebased onto Mesa main after 5d95a8f141d removed the driver-side workaround for
-has_taskmesh_indirect0_bug. That workaround was what this patch extended for
-GFX1013's extra zero-dimensional ACE hang, so the four hunks refining it are
-gone. Mesh shading is kept; task shading is now reported unsupported on GFX1013
-rather than exposed on top of a workaround upstream no longer carries, which
-matches where it already stood in practice.
+Rebased onto Mesa main after 5d95a8f141d ("radv: remove the workaround for
+has_taskmesh_indirect0_bug") deleted the driver-side indirect-count workaround
+and disabled task/mesh outright on affected firmware instead. This series
+carries that workaround forward, restored verbatim from 5d95a8f141d^, because
+it is what makes the GFX1013 task path usable -- Final Fantasy VII Rebirth runs
+on it. The GFX1013 zero-dimensional ACE refinement applies on top as before.
+
+radv_task_enabled() judges GFX1013 on has_gfx1013_task_shading rather than on
+has_taskmesh_indirect0_bug, which this path sets deliberately to select that
+workaround. Every other device keeps upstream's newer, stricter behaviour.
 ---
- src/amd/common/ac_gpu_info.c                  | 14 ++++++
+ src/amd/common/ac_gpu_info.c                  | 13 +++
  src/amd/common/ac_gpu_info.h                  |  2 +
  src/amd/compiler/aco_shader_info.h            |  1 +
- .../instruction_selection/aco_isel_setup.cpp  |  6 ++-
- src/amd/vulkan/radv_cmd_buffer.c              | 12 +++--
- src/amd/vulkan/radv_device.c                  |  4 ++
- src/amd/vulkan/radv_physical_device.c         | 47 ++++++++++++++-----
+ .../instruction_selection/aco_isel_setup.cpp  |  6 +-
+ src/amd/vulkan/radv_cmd_buffer.c              | 87 +++++++++++++++++--
+ src/amd/vulkan/radv_device.c                  |  4 +
+ src/amd/vulkan/radv_physical_device.c         | 51 ++++++++---
  src/amd/vulkan/radv_pipeline.c                |  4 +-
  src/amd/vulkan/radv_queue.c                   |  4 +-
  src/amd/vulkan/radv_shader.c                  |  2 +
  src/amd/vulkan/radv_shader.h                  |  4 +-
  src/amd/vulkan/radv_shader_args.c             |  3 +-
- 12 files changed, 80 insertions(+), 23 deletions(-)
+ 12 files changed, 154 insertions(+), 27 deletions(-)
 
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
-index 6e69702f30f..21a497082a7 100644
+index 6e69702f30f..9ba756efa1b 100644
 --- a/src/amd/common/ac_gpu_info.c
 +++ b/src/amd/common/ac_gpu_info.c
-@@ -1043,6 +1043,20 @@ void ac_fill_bug_info(struct radeon_info *info)
+@@ -1043,6 +1043,19 @@ void ac_fill_bug_info(struct radeon_info *info)
        }
     }
  
-+   /* Hardware capabilities used by RADV's opt-in GFX1013 mesh/task path.
-+    *
-+    * Mesh shading is offered; task shading is not. GFX1013 firmware 144 hangs
-+    * on DISPATCH_TASKMESH_INDIRECT_MULTI_ACE with a zero indirect count, and
-+    * the driver-side workaround this path used to extend was removed upstream
-+    * in 5d95a8f141d ("radv: remove the workaround for
-+    * has_taskmesh_indirect0_bug"), which disables task/mesh outright on
-+    * affected firmware instead. Rather than carry deleted upstream code, this
-+    * keeps the mesh half -- the part that was actually working here -- and
-+    * leaves task shading off, which is where it already stood in practice.
++   /* GFX1013 firmware 144 exhibits the same hang despite retaining GFX10.1
++    * identity, so its firmware version is not governed by the GFX10.3 cutoff
++    * above. Setting it here is deliberate: it selects the indirect-count
++    * workaround in radv_emit_indirect_taskmesh_draw_packets(), which the
++    * GFX1013 path extends rather than being blocked by.
 +    */
++   if (info->family == CHIP_GFX1013)
++      info->has_taskmesh_indirect0_bug = true;
++
++   /* Hardware capabilities used by RADV's opt-in GFX1013 mesh/task path. */
 +   info->has_gfx1013_mesh_shading = info->family == CHIP_GFX1013;
-+   info->has_gfx1013_task_shading = false;
++   info->has_gfx1013_task_shading = info->has_gfx1013_mesh_shading;
 +
     info->has_export_conflict_bug = info->gfx_level == GFX11;
  
@@ -98,7 +98,7 @@ index dc7c7a9b3a7..f024506a7cd 100644
     setup_tcs_info(&ctx);
  
 diff --git a/src/amd/vulkan/radv_cmd_buffer.c b/src/amd/vulkan/radv_cmd_buffer.c
-index 7149d4ef109..22f7dd9fc5f 100644
+index 7149d4ef109..289fabf04d6 100644
 --- a/src/amd/vulkan/radv_cmd_buffer.c
 +++ b/src/amd/vulkan/radv_cmd_buffer.c
 @@ -3496,7 +3496,8 @@ radv_emit_hw_ngg(struct radv_cmd_buffer *cmd_buffer, const struct radv_shader *e
@@ -128,6 +128,123 @@ index 7149d4ef109..22f7dd9fc5f 100644
     }
  
     if (cmd_buffer->state.force_vrs_per_vertex != shader->info.force_vrs_per_vertex) {
+@@ -12224,19 +12228,58 @@ radv_emit_direct_taskmesh_draw_packets(const struct radv_device *device, struct
+ static void
+ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struct radv_cmd_state *cmd_state,
+                                          struct radv_cmd_stream *cs, struct radv_cmd_stream *ace_cs,
+-                                         const struct radv_draw_info *info)
++                                         const struct radv_draw_info *info, uint64_t workaround_cond_va)
+ {
+    const struct radv_physical_device *pdev = radv_device_physical(device);
+    const uint32_t view_mask = cmd_state->render.view_mask;
+    const unsigned num_views = MAX2(1, util_bitcount(view_mask));
+-   const unsigned ace_predication_size = num_views * 11; /* DISPATCH_TASKMESH_INDIRECT_MULTI_ACE size */
++   const bool gfx1013_skip_zero_pair = workaround_cond_va && pdev->info.family == CHIP_GFX1013;
++   unsigned ace_predication_size = num_views * 11; /* DISPATCH_TASKMESH_INDIRECT_MULTI_ACE size */
++
++   if (pdev->info.has_taskmesh_indirect0_bug && info->count_va) {
++      /* MEC firmware bug workaround.
++       * When the count buffer contains zero, DISPATCH_TASKMESH_INDIRECT_MULTI_ACE hangs.
++       * - We must ensure that DISPATCH_TASKMESH_INDIRECT_MULTI_ACE
++       *   is only executed when the count buffer contains non-zero.
++       * - Furthermore, we must also ensure that each DISPATCH_TASKMESH_GFX packet
++       *   has a matching ACE packet.
++       *
++       * As a workaround:
++       * - Reserve a dword in the upload buffer and initialize it to 1 for the workaround
++       * - When count != 0, write 0 to the workaround BO and execute the indirect dispatch
++       * - When workaround BO != 0 (count was 0), execute an empty direct dispatch
++       */
++      ac_emit_cp_copy_data(ace_cs->b, COPY_DATA_IMM, COPY_DATA_DST_MEM, 1, workaround_cond_va,
++                           AC_CP_COPY_DATA_WR_CONFIRM, false);
++
++      if (gfx1013_skip_zero_pair) {
++         /* GFX1013 also hangs on the zero-dimensional direct ACE fallback.
++          * Predicate the normal ACE and matching GFX packets on count instead.
++          */
++         ace_predication_size += 5 + 6; /* 1x COND_EXEC + 1x COPY_DATA */
++      } else {
++         /* 2x COND_EXEC + 1x COPY_DATA + Nx DISPATCH_TASKMESH_DIRECT_ACE */
++         ace_predication_size += 2 * 5 + 6 + 6 * num_views;
++      }
++   }
+ 
+    radv_cs_emit_compute_predication(device, cmd_state, ace_cs, cmd_state->cond_render.mec_inv_pred_va,
+                                     &cmd_state->cond_render.mec_inv_pred_emitted, ace_predication_size);
+ 
++   if (workaround_cond_va) {
++      ac_emit_cp_cond_exec(ace_cs->b, pdev->info.gfx_level, info->count_va,
++                           6 + 11 * num_views /* 1x COPY_DATA + Nx DISPATCH_TASKMESH_INDIRECT_MULTI_ACE */);
++
++      ac_emit_cp_copy_data(ace_cs->b, COPY_DATA_IMM, COPY_DATA_DST_MEM, 0, workaround_cond_va,
++                           AC_CP_COPY_DATA_WR_CONFIRM, false);
++   }
++
+    if (!view_mask) {
+       radv_cs_emit_dispatch_taskmesh_indirect_multi_ace_packet(device, cmd_state, ace_cs, info->indirect_va,
+                                                                info->count, info->count_va, info->stride);
++      if (gfx1013_skip_zero_pair)
++         ac_emit_cp_cond_exec(cs->b, pdev->info.gfx_level, info->count_va,
++                              4 /* DISPATCH_TASKMESH_GFX size */);
+       radv_cs_emit_dispatch_taskmesh_gfx_packet(device, cmd_state, cs);
+    } else {
+       u_foreach_bit (view, view_mask) {
+@@ -12244,9 +12287,21 @@ radv_emit_indirect_taskmesh_draw_packets(const struct radv_device *device, struc
+ 
+          radv_cs_emit_dispatch_taskmesh_indirect_multi_ace_packet(device, cmd_state, ace_cs, info->indirect_va,
+                                                                   info->count, info->count_va, info->stride);
++         if (gfx1013_skip_zero_pair)
++            ac_emit_cp_cond_exec(cs->b, pdev->info.gfx_level, info->count_va,
++                                 4 /* DISPATCH_TASKMESH_GFX size */);
+          radv_cs_emit_dispatch_taskmesh_gfx_packet(device, cmd_state, cs);
+       }
+    }
++
++   if (workaround_cond_va && !gfx1013_skip_zero_pair) {
++      ac_emit_cp_cond_exec(ace_cs->b, pdev->info.gfx_level, workaround_cond_va,
++                           6 * num_views /* Nx DISPATCH_TASKMESH_DIRECT_ACE */);
++
++      for (unsigned v = 0; v < num_views; ++v) {
++         radv_cs_emit_dispatch_taskmesh_direct_ace_packet(device, cmd_state, ace_cs, 0, 0, 0);
++      }
++   }
+ }
+ 
+ static void
+@@ -14718,7 +14773,7 @@ radv_CmdDrawMeshTasksIndirect2EXT(VkCommandBuffer commandBuffer, const VkDrawInd
+       return;
+ 
+    if (radv_cmdbuf_has_stage(cmd_buffer, MESA_SHADER_TASK)) {
+-      radv_emit_indirect_taskmesh_draw_packets(device, &cmd_buffer->state, cs, cmd_buffer->gang.cs, &info);
++      radv_emit_indirect_taskmesh_draw_packets(device, &cmd_buffer->state, cs, cmd_buffer->gang.cs, &info, 0);
+    } else {
+       radv_emit_indirect_mesh_draw_packets(pdev, cmd_buffer, &info);
+    }
+@@ -14773,7 +14828,23 @@ radv_CmdDrawMeshTasksIndirectCount2EXT(VkCommandBuffer commandBuffer, const VkDr
+       return;
+ 
+    if (radv_cmdbuf_has_stage(cmd_buffer, MESA_SHADER_TASK)) {
+-      radv_emit_indirect_taskmesh_draw_packets(device, &cmd_buffer->state, cs, cmd_buffer->gang.cs, &info);
++      uint64_t workaround_cond_va = 0;
++
++      if (pdev->info.has_taskmesh_indirect0_bug && info.count_va) {
++         /* Allocate a 32-bit value for the MEC firmware bug workaround. */
++         uint32_t workaround_cond_init = 0;
++         uint32_t workaround_cond_off;
++
++         if (!radv_cmd_buffer_upload_data(cmd_buffer, 4, &workaround_cond_init, &workaround_cond_off)) {
++            vk_command_buffer_set_error(&cmd_buffer->vk, VK_ERROR_OUT_OF_HOST_MEMORY);
++            return;
++         }
++
++         workaround_cond_va = radv_buffer_get_va(cmd_buffer->upload.upload_bo) + workaround_cond_off;
++      }
++
++      radv_emit_indirect_taskmesh_draw_packets(device, &cmd_buffer->state, cs, cmd_buffer->gang.cs, &info,
++                                               workaround_cond_va);
+    } else {
+       radv_emit_indirect_mesh_draw_packets(pdev, cmd_buffer, &info);
+    }
 diff --git a/src/amd/vulkan/radv_device.c b/src/amd/vulkan/radv_device.c
 index 423c8876c99..04af6a1d72a 100644
 --- a/src/amd/vulkan/radv_device.c
@@ -144,10 +261,10 @@ index 423c8876c99..04af6a1d72a 100644
              .primitives_generated_query = primitives_generated_query,
              .mesh_shader_queries = mesh_shader_queries && pdev->emulate_mesh_shader_queries,
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 96e730e9984..5e900208c6d 100644
+index 96e730e9984..18e261adb7a 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -64,15 +64,34 @@ radv_perf_query_supported(const struct radv_physical_device *pdev)
+@@ -64,15 +64,38 @@ radv_perf_query_supported(const struct radv_physical_device *pdev)
  }
  
  static bool
@@ -175,8 +292,12 @@ index 96e730e9984..5e900208c6d 100644
 +   if (!radv_mesh_enabled(pdev) || !radv_compute_queue_enabled(pdev))
 +      return false;
 +
-+   /* has_gfx1013_task_shading is false, so GFX1013 gets mesh without task.
-+    * Every other device keeps upstream's behaviour exactly.
++   /* GFX1013 sets has_taskmesh_indirect0_bug on purpose: it selects the
++    * indirect-count workaround this series carries forward, which the GFX1013
++    * path then extends for the zero-dimensional ACE hang. Upstream's blanket
++    * refusal on that bit would disable the very path it is meant to protect,
++    * so GFX1013 is judged on its own capability bit instead. Every other
++    * device keeps upstream's behaviour exactly.
 +    */
 +   if (pdev->info.family == CHIP_GFX1013)
 +      return pdev->info.has_gfx1013_task_shading;
@@ -185,7 +306,7 @@ index 96e730e9984..5e900208c6d 100644
  }
  
  bool
-@@ -887,7 +906,7 @@ radv_physical_device_get_supported_extensions(const struct radv_physical_device
+@@ -887,7 +910,7 @@ radv_physical_device_get_supported_extensions(const struct radv_physical_device
        .EXT_map_memory_placed = true,
        .EXT_memory_budget = true,
        .EXT_memory_priority = true,
@@ -194,7 +315,7 @@ index 96e730e9984..5e900208c6d 100644
        .EXT_multi_draw = true,
        .EXT_multisampled_render_to_single_sampled = radv_msrtss_enabled(pdev),
        .EXT_mutable_descriptor_type = true, /* Trivial promotion from VALVE. */
-@@ -988,7 +1007,10 @@ static void
+@@ -988,7 +1011,10 @@ static void
  radv_physical_device_get_features(const struct radv_physical_device *pdev, struct vk_features *features)
  {
     const struct radv_instance *instance = radv_physical_device_instance(pdev);
@@ -206,7 +327,7 @@ index 96e730e9984..5e900208c6d 100644
     bool has_perf_query = radv_perf_query_supported(pdev);
     bool has_shader_image_float_minmax = pdev->info.gfx_level <= GFX7 || pdev->info.gfx_level == GFX10 ||
                                          pdev->info.gfx_level == GFX10_3 || pdev->info.gfx_level >= GFX12;
-@@ -1344,10 +1366,10 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
+@@ -1344,10 +1370,10 @@ radv_physical_device_get_features(const struct radv_physical_device *pdev, struc
        .minLod = true,
  
        /* VK_EXT_mesh_shader */
@@ -221,7 +342,7 @@ index 96e730e9984..5e900208c6d 100644
        .meshShaderQueries = false,
  
        /* VK_EXT_depth_clip_control */
-@@ -1785,8 +1807,9 @@ radv_get_physical_device_properties(struct radv_physical_device *pdev)
+@@ -1785,8 +1811,9 @@ radv_get_physical_device_properties(struct radv_physical_device *pdev)
     const bool has_fp16 = radv_shader_fp16_enabled(pdev);
     const bool enable_sparse = radv_sparse_enabled(pdev);
  
@@ -233,7 +354,7 @@ index 96e730e9984..5e900208c6d 100644
     VkShaderStageFlags rt_stages = radv_enable_rt(pdev) ? RADV_RT_STAGE_BITS : 0;
  
     bool accel_dot = pdev->info.compiler_info.has_accelerated_dot_product;
-@@ -2342,7 +2365,7 @@ radv_get_physical_device_properties(struct radv_physical_device *pdev)
+@@ -2342,7 +2369,7 @@ radv_get_physical_device_properties(struct radv_physical_device *pdev)
        .pipelineBinaryCompressedData = false,
  
        /* VK_KHR_compute_shader_derivatives */
