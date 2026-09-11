@@ -9,6 +9,12 @@
 # produced, plus whatever is in local-patches/.
 set -Eeuo pipefail
 
+# Silence is what made the first failure here hard to read: the pacman steps
+# below hide their stdout, so errexit would otherwise abort with nothing but a
+# non-zero status to go on. Name the line and the command instead.
+trap 'status=$?; printf "\nERROR: %s failed at line %s (exit %s): %s\n" \
+    "${BASH_SOURCE[0]:-$0}" "$LINENO" "$status" "$BASH_COMMAND" >&2' ERR
+
 COMPONENTS=("$@")
 (( ${#COMPONENTS[@]} )) || { printf 'ERROR: no components given\n' >&2; exit 1; }
 
@@ -27,6 +33,11 @@ fi
 
 printf '==> installing build dependencies\n'
 pacman -Syy --noconfirm >/dev/null
+# Give the image a local signing key before touching the keyring. Without one,
+# archlinux-keyring's post-install cannot locally sign the keys it imports and
+# prints "error: command failed to execute correctly" -- alarming, non-fatal
+# (pacman still exits 0), and impossible to place because the step is silenced.
+pacman-key --init >/dev/null 2>&1
 # The base image's keyring is as old as the image, which is what breaks a
 # container that has sat unused for a few months.
 pacman -S --noconfirm --needed archlinux-keyring >/dev/null

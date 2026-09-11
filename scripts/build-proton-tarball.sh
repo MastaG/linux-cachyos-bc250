@@ -36,6 +36,12 @@
 # there can only edit files that already exist in it.
 set -Eeuo pipefail
 
+# Silence is what made the first failure here hard to read: the pacman steps
+# below hide their stdout, so errexit would otherwise abort with nothing but a
+# non-zero status to go on. Name the line and the command instead.
+trap 'status=$?; printf "\nERROR: %s failed at line %s (exit %s): %s\n" \
+    "${BASH_SOURCE[0]:-$0}" "$LINENO" "$status" "$BASH_COMMAND" >&2' ERR
+
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="${BC250_BUILD_IMAGE:-docker.io/library/archlinux:base-devel}"
 ENGINE_SPEC="${BC250_CONTAINER_ENGINE:-podman}"
