@@ -92,7 +92,7 @@ def bridge_from(source: Path, staging: Path, name: str) -> tuple[Path, Path | No
 
     A variant is given either as a bare .dll or as the release archive it was
     published in. Taking the archive is preferable where upstream offers one:
-    it is far smaller over the wire (RC8 is 10 MB packed against a 112 MB DLL)
+    it is far smaller over the wire (RC9 is 10 MB packed against a 112 MB DLL)
     and it carries the licence notices whose retention that release asks for.
     """
     if source.suffix == ".dll":

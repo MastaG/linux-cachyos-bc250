@@ -242,12 +242,12 @@ variable out and you get the normal, AMD-signed default.
 
 ```text
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
-PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork, RC8 (4.1.1r8)
+PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork, RC9 (4.1.1r9)
 ```
 
 | | `fsr411b` | `fsr411f` |
 |---|---|---|
-| Source | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) | [bc250-fsr4-fork v4.0.0-rc8](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc8) |
+| Source | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) | [bc250-fsr4-fork v4.0.0-rc9](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc9) |
 | Aimed at | ghosting on RDNA2 | BC-250 specifically, 1440p performance |
 | Tested on a BC-250 by its author | no | yes |
 
@@ -262,12 +262,12 @@ Both are genuine experiments, not recommendations:
   for. `fsr411f` additionally ships its author's licence notices into
   `Licenses/<version>/`, as that release asks.
 
-`fsr411f` needs no other change: every setting its `INSTALL.md` asks for —
+`fsr411f` needs no other change: every setting the RC9 archive's README asks for —
 `Dx12Upscaler=ffx`, `Dx11Upscaler=ffx_12`, `VulkanUpscaler=ffx_12`,
 `UpscalerIndex=0`, `Fsr4ForceModel=2`, `FsrNonLinearColorSpace=false`,
 `FsrNonLinearSRGB=auto`, `FsrNonLinearPQ=auto`, `FrameGen.Enabled=false` — is
 already exactly what this package enforces. To confirm which build is running,
-add `BC250_FSR4_DEBUG=1`; the watermark identifies `4.1.1r8` for RC8.
+add `BC250_FSR4_DEBUG=1`; the watermark identifies `4.1.1r9` for RC9.
 
 Please report whether either helps or hurts.
 

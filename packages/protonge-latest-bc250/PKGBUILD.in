@@ -49,10 +49,10 @@ source=(
     # FidelityFX bridge, mirrored so a deleted upstream release cannot change
     # what a rebuild produces. Selected with PROTON_USE_OPTISCALER=fsr411b.
     "amd_fidelityfx_upscaler_dx12_v4.1.1b.dll::@PAYLOAD_BASE@/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll"
-    # Opt-in only: the BC-250 FSR4 fork's RC8 bridge, mirrored from its release.
+    # Opt-in only: the BC-250 FSR4 fork's RC9 bridge, mirrored from its release.
     # Taken as the published archive rather than a bare DLL -- 10 MB against
     # 112 MB, and it carries the notices that release asks to be retained.
-    "bc250-fsr4-dll-4.0.0-rc8.tar.xz::@PAYLOAD_BASE@/bc250-fsr4-dll-4.0.0-rc8.tar.xz"
+    "bc250-fsr4-dll-4.0.0-rc9.tar.xz::@PAYLOAD_BASE@/bc250-fsr4-dll-4.0.0-rc9.tar.xz"
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     "@FAKENVAPI_ASSET@::@FAKENVAPI_URL@"
@@ -76,7 +76,7 @@ noextract=(
     # leave it alone.
     "@FAKENVAPI_ASSET@"
     # build-fsr4-payload.py unpacks this itself.
-    "bc250-fsr4-dll-4.0.0-rc8.tar.xz"
+    "bc250-fsr4-dll-4.0.0-rc9.tar.xz"
 )
 
 # Two checksum arrays, because the two kinds of source are pinned differently.
@@ -96,7 +96,7 @@ sha256sums=(
     '5de9b6d9f5475a0f2622e4cbce88cde46c68929d9bd0bbc353c70056997bb771'
     '241e6e5e4d848424eb8ec9a6b22c43fe34cf0cf52d30002ca435ba42e53a9ca0'
     '0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75'
-    '805a3df9cef931decd42d02eaffb375f95844afce2e13d78bad757a27c806da2'
+    'e7b53b1f1aa7aa4b767c3f73e72a33a9a3c5563eefd1edf48bf165fcb0feac89'
     '@FAKENVAPI_SHA256@'
     'be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e'
     '@SHA_PATCH@'
@@ -182,8 +182,8 @@ build() {
         --ffx-sdk "$srcdir/amd_fidelityfx_upscaler_dx12.dll" \
         --ffx-sdk-alt fsr411b "$srcdir/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \
             "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \
-        --ffx-sdk-alt fsr411f "$srcdir/bc250-fsr4-dll-4.0.0-rc8.tar.xz" \
-            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc8" \
+        --ffx-sdk-alt fsr411f "$srcdir/bc250-fsr4-dll-4.0.0-rc9.tar.xz" \
+            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc9" \
         --dlss "$srcdir/nvngx_dlss.dll" \
         --licenses "$srcdir" \
         --preset "$srcdir/optiscaler-preset.json" \

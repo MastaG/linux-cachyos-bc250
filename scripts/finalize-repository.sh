@@ -401,8 +401,8 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   [4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b)
   rebuild aimed at RDNA2 ghosting, and \`PROTON_USE_OPTISCALER=fsr411f
   %command%\` takes the BC-250 FSR4 fork's
-  [RC8](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc8)
-  bridge (\`4.1.1r8\`), which is the one tested on a BC-250 by its author and
+  [RC9](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc9)
+  bridge (\`4.1.1r9\`), which is the one tested on a BC-250 by its author and
   which ships that release's licence notices into the prefix. Neither is a
   provider bump: each carries its own embedded model. Leave the variable unset
   for the signed default.

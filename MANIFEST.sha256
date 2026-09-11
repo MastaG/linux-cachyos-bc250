@@ -2,7 +2,7 @@ b77b2d8cc67dba88a06f91d571e7f2612e547acc3fb685de4c12c4d2612db9d6  ./.github/work
 b13dc2c3218d23ed799a400e2a834463f5e1649b3824a74a17cb3b632fe8c4c7  ./.github/workflows/fsr4-checks.yml
 1ebadcbf9cce8745ce6560f4ef8e2414c0bc5b910471898d46ab9cde32938a4f  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-52ec4f6cb81f2f87518fa958e0587155d33d21370452f6aa913fcd5081acbd0d  ./README.md
+b9577e35524ee5763a10fd32ba6bd4d5765938e4ecb488c339884574407b558c  ./README.md
 026eedbe493ae631b7fb931af492d33fd8b7915ce51b0e242674f6e14ef05081  ./docs/BUILDING.md
 4e19657a87e705baac77c5223eb86210c63c73ac8a3fd6d0f95e4045188a6759  ./docs/FSR4-PROTON.md
 fca5b6b4bcf9b31e94376131e1c3596f380f8b13646fe9aec859075b80f34afa  ./docs/PATCHES.md
@@ -23,7 +23,7 @@ e2fbcbf16130da0e5ae3fee944d3659c9faed95b115ba38268c76617f648deef  ./packages/bc2
 fd2b33cb4813216bab255ed2c881bb18c04b99f03627a0387fadf911be19d078  ./packages/bc250-fsr4-common/validation-20260908.json
 765f7886102162bc105d3f78fca6ddebeb1a924261cdfbfc074bbf516736f554  ./packages/linux-cachyos-bc250-meta/.SRCINFO
 82fea2527e054d390e74b47b86a28a8c259c9c2fb9e372da28ec7cb861b53979  ./packages/linux-cachyos-bc250-meta/PKGBUILD
-f854fff74996580da7f6d80c7cc9a557dd32459d446e0ce8b3c994ac5a778aef  ./packages/protonge-latest-bc250/PKGBUILD.in
+13ce0db2c3827517d8ee8baaddef463347c03ad737a806caf2aa77e7d7395d1c  ./packages/protonge-latest-bc250/PKGBUILD.in
 395217d29d14bc11a166592978248614c2d1ded0d23f4807abbd79b003e53c6e  ./packages/protonge-latest-bc250/ntsync.conf
 a7e0a4c24b1c1e2adcae0c0c00e7775cc79d13db9b79774c043cd465ee5c6882  ./pacman/rc.conf.example
 dfbb5f2ca3a3258856751d75e075a8ddebec09c7dd76a2f3f899de4a1bf18d4b  ./pacman/repo.conf.example
@@ -65,7 +65,7 @@ b19281863aa2b8465649d370a39bf436d65ae6f06c51fb8f79228d0277d848ec  ./patches/mesa
 517cf1be2d9e69031793121d9b80a1d968411cc06b982a3155de927690aa1d42  ./patches/mesa/0008-bc250-fsr4-resolution-variants.patch
 f0a38daa798f681b44ba07f6222ff3338726f64b78d4a33b3c04c9e424025496  ./patches/mesa/0009-bc250-fsr4-production-defaults.patch
 43231e45edc634a305fa273391c3c16e95215b36790bb0027d9dc24d89558859  ./scripts/build-bc250-dual-audio-package.sh
-9977fa964a2ba8edb28c72acfc601182dfbf52830afaf0b0537c6c32ad4e3d45  ./scripts/build-fsr4-payload.py
+155e13f7f16d2e53ea2a8ee3d1e2c00ed7814caf845d38697666a8729f589fa8  ./scripts/build-fsr4-payload.py
 86fac4bcb6ac78bbb5902438702fd3cf711c693e28728d3d32889ea7a7a5860c  ./scripts/build-lib32-mesa-package.sh
 2a4e2bd08b0c593d8dea9f6a8e0e627fb155504c7e1b5ad9e0d5b994f400a8ef  ./scripts/build-linux-cachyos-bc250-meta-package.sh
 967aa48b4cbeccd0d1cad330f25c22be45fa2c462d12cab2e081842c6804bf95  ./scripts/build-mesa-git-package.sh
@@ -77,7 +77,7 @@ a740f16d49595dfc11cf8852c1e4ce27864e56f7bd4ef5f4eea11de935430675  ./scripts/buil
 98c6dd179d47671451e1d5cb0a10571e86fc0d8064f2102a9abe23e7aaac909c  ./scripts/check-fsr4-driver.py
 583e5f5bf6ab38179106d9a9031a3532113dc8b26750caf7eb84ea2456c776de  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
-67260512546a4afec9eea1a72f007977ecf3d9af4817232a575d22dc988fc539  ./scripts/finalize-repository.sh
+dc9197b02b6223705dffbba4812bb4b3497dfb1912151ac74fc0386f1fabb206  ./scripts/finalize-repository.sh
 18952c41e9072a51fcc8d66b28786868f03b1aedb9cc1a3d44bd4de200e9d95b  ./scripts/fsr4-payload-sources.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 286b3762a66fe287e36f793753b4028c1bbd8a4a11467ca7e3ef0b91dc34454f  ./scripts/install-proton-build-deps.sh
@@ -86,7 +86,7 @@ f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetc
 3119e06122a203d672551767325c3573f6958c949e9d7a327460229c4914008f  ./scripts/prepare-mesa-git-pkgbuild.sh
 d835e69e1e8dcb68a732c2a66709b25cfcbd2e27d2589cec8cf4bc6bc9c682f4  ./scripts/prepare-mesa-pkgbuild.sh
 41cbd2dc27b21a2e961ad7a79ce4a089acc6616e78a0b3b3358442a901d2e760  ./scripts/prepare-pkgbuild.sh
-c20caf080fd5c3049347def12ea119eb89225a43867f7a5590b24f5bb2fa13a7  ./scripts/prepare-proton-cachyos-native-pkgbuild.sh
+c90700db6dad921046a0537aa3fbeb53f013f9ddbd09a58cabf601a67f021527  ./scripts/prepare-proton-cachyos-native-pkgbuild.sh
 65d897599a9f43cd0b3f06f0041819bff274146518c8541bb8e64b230fd1c3a4  ./scripts/publish-repo-delta.sh
 cbdf7bda95285b54a0930ee7fd09858a78903a0a3bfb22d874a50c32aba835e9  ./scripts/repo-package-helpers.sh
 3521e3cb780c45377fae426da98cfb25e6f629d4a91dc29cd55dd396497d961a  ./scripts/resolve-cachyos-mesa.sh
