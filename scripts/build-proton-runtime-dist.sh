@@ -67,7 +67,12 @@ BUILD_CC="${BC250_PROTON_CC:-gcc}"
 MTUNE="${BC250_PROTON_MTUNE:-znver2}"
 JOBS="${BC250_PROTON_JOBS:-$(nproc)}"
 REPO="" TAG="" NAME="" OUT="" SRC="" KEEP_BUILD=false
-CCACHE_DIR_HOST="${BC250_PROTON_CCACHE:-${HOME}/.cache/bc250-proton-ccache}"
+# A named volume, not a host path. $HOME is not a safe assumption where this
+# runs: on the CI runner the container engine could not create /root/.cache and
+# the whole build died before it started. A volume is the engine's to create,
+# survives between runs the way the rest of CI's caches do, and needs no
+# permissions on the host at all. Override with a path only if you want one.
+CCACHE_VOLUME="${BC250_PROTON_CCACHE:-bc250-proton-ccache}"
 
 usage() {
     awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
@@ -214,19 +219,23 @@ BUILD="$SRC/../build-$NAME"
 if [[ "$KEEP_BUILD" != true ]]; then
     rm -rf -- "$BUILD"
 fi
-mkdir -p -- "$BUILD" "$CCACHE_DIR_HOST"
+mkdir -p -- "$BUILD"
 BUILD="$(cd -- "$BUILD" && pwd)"
-CCACHE_DIR_HOST="$(cd -- "$CCACHE_DIR_HOST" && pwd)"
+# A path is mounted as one; a bare name is a volume the engine manages.
+if [[ "$CCACHE_VOLUME" == */* ]]; then
+    mkdir -p -- "$CCACHE_VOLUME"
+    CCACHE_VOLUME="$(cd -- "$CCACHE_VOLUME" && pwd)"
+fi
 
 "${ENGINE[@]}" run --rm \
     "${userns[@]}" \
     --security-opt label=disable \
     -v "$SRC:$SRC" \
     -v "$BUILD:$BUILD" \
-    -v "$CCACHE_DIR_HOST:$CCACHE_DIR_HOST" \
+    -v "$CCACHE_VOLUME:/ccache" \
     -w "$BUILD" \
     -e HOME="$BUILD" \
-    -e CCACHE_DIR="$CCACHE_DIR_HOST" \
+    -e CCACHE_DIR=/ccache \
     "$IMAGE" bash -euo pipefail -c "
         # Proton's Makefile asks `cc` which compiler this is, once, and derives
         # the whole matched set from the answer. So answer it here.

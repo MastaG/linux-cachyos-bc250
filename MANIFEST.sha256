@@ -1,4 +1,4 @@
-698c129b49ef44fd2f74226ce12f3771c7646ab5df1db9cb7a9fac17d5b881b1  ./.github/workflows/build-release.yml
+d7eb7dafd4aa772db64a38bba890554282193ae7fac25c4dda8ca0bfc487d4b8  ./.github/workflows/build-release.yml
 b13dc2c3218d23ed799a400e2a834463f5e1649b3824a74a17cb3b632fe8c4c7  ./.github/workflows/fsr4-checks.yml
 1ebadcbf9cce8745ce6560f4ef8e2414c0bc5b910471898d46ab9cde32938a4f  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
@@ -75,13 +75,13 @@ e6332c58538e9634e63e9aa19f4268b097295e00d8a9a9d83b7b41c9f45c530d  ./scripts/buil
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 4239b6eb5941bb38a6b6c1509d53d5918ea7ee3aa67c00d90eb82e939c00915b  ./scripts/build-proton-cachyos-native-bc250-package.sh
 8ff7b8930bb53510449743ce9f13313ae605c8f166b529ccf97deb3e940a449f  ./scripts/build-proton-cachyos-slr-bc250-package.sh
-dc8b6a38f74323bde4f680a49a2fa35acc13e81e98e2193d5af741bef19b4a59  ./scripts/build-proton-runtime-dist.sh
+315784a6d74b2bc786c2f1362bc008ce1675d332983818a051e809bc2a8a3a24  ./scripts/build-proton-runtime-dist.sh
 4dcb189796c2ce66b41d30dcb965ba77e4739469f93f74cb1c21065c029b368c  ./scripts/build-proton-tarball.sh
 a740f16d49595dfc11cf8852c1e4ce27864e56f7bd4ef5f4eea11de935430675  ./scripts/build-protonge-latest-bc250-package.sh
 98c6dd179d47671451e1d5cb0a10571e86fc0d8064f2102a9abe23e7aaac909c  ./scripts/check-fsr4-driver.py
 f92c742f28b92475e648b275a10fc30fb7abf6cae6bb745c778e76d369429104  ./scripts/ci-build.sh
 f16f2181429befe85ea6394c60b59b7fed02d83fdcccf9e8e774e254b5190e5b  ./scripts/fetch-mesa-tarball.sh
-6402bf74931007bf78170a38ba5284c0228fa0dd1052a4ce6fa4e668051e3bc5  ./scripts/finalize-repository.sh
+d51071e50ae7896c4baee973aefb295919a1433147a56be3e0339e0022bbbb3e  ./scripts/finalize-repository.sh
 18952c41e9072a51fcc8d66b28786868f03b1aedb9cc1a3d44bd4de200e9d95b  ./scripts/fsr4-payload-sources.sh
 7f4789b4fa16f2a0288c6b140b94665feb62edadfabbcf6388469cc701767d4e  ./scripts/gh-release-state.sh
 286b3762a66fe287e36f793753b4028c1bbd8a4a11467ca7e3ef0b91dc34454f  ./scripts/install-proton-build-deps.sh

@@ -555,6 +555,11 @@ jobs:
               echo "::error title=proton-cachyos-slr-bc250 source build failed::the Proton tree did not compile; its previous package is kept"
               BUILD_PROTON_CACHYOS_SLR_BC250=false
             fi
+            # This step runs as the runner, inside the same workspace the build
+            # container works in as `builder`, so anything it created belongs to
+            # the wrong user -- which is how a failed source build went on to
+            # break the metapackage with a bare "Permission denied".
+            docker exec "$container" chown -R builder:builder /workspace/build /workspace/out
           fi
 
           # Cheap components first, so a run that is cut short has published as
