@@ -275,6 +275,18 @@ matters if you specifically want the game's DLSS path, for Reflex or because
 DLSS input measures better in that game. If you try it, the overlay's frame-time
 and upscaler graphs make the comparison, and we would like to hear the numbers.
 
+Two follow-ups, both seen on a BC-250 in The Last of Us Part II:
+
+- The game may then warn that no graphics card was found, or that your RTX 4090
+  is on the wrong driver version. DXGI spoofing only changes what the adapter
+  reports; that game also reads the registry. Add `;Spoofing.Registry=true`,
+  which spoofs vendor, device and driver version there, and `;Spoofing.User32=true`
+  if the first complaint survives. The game runs either way — these are warnings,
+  not failures.
+- If spoofing brings back "DX12 not supported" in an Unreal Engine game, that is
+  the error `Spoofing.UEIntelAtomics=true` exists for. Try it before giving the
+  spoofing up.
+
 `BC250_FSR4_DEBUG=1` is the one to reach for when something looks wrong — it
 puts the FSR4 watermark on screen and writes a Proton log, which turns "FSR4
 doesn't seem to work" into something diagnosable.
