@@ -299,6 +299,16 @@ Two follow-ups, both seen on a BC-250 in The Last of Us Part II:
 puts the FSR4 watermark on screen and writes a Proton log, which turns "FSR4
 doesn't seem to work" into something diagnosable.
 
+Without it the package writes no logs at all. That now includes fakenvapi, which
+logs to `fakenvapi.log` beside its own DLL by default; the package ships a
+`fakenvapi.ini` that turns it off. If you are chasing a Reflex or latency problem
+and want it back, edit that file in the prefix — it is not checksummed, so the
+change sticks:
+
+```text
+<prefix>/drive_c/windows/system32/umu/OptiScaler/fakenvapi.ini
+```
+
 ### Experimental upscaler variants
 
 Two opt-in payloads swap a single file — the FidelityFX bridge,

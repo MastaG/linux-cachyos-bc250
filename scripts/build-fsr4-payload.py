@@ -126,6 +126,46 @@ def bridge_from(source: Path, staging: Path, name: str) -> tuple[Path, Path | No
     return dll, notices if notices.is_dir() else None
 
 
+def seed_fakenvapi_settings(extracted: Path) -> Path | None:
+    """Stop fakenvapi logging on every launch, unless it brought its own settings.
+
+    fakenvapi writes fakenvapi.log beside its own DLL and its compiled default is
+    enable_logs=true (config.h). It reads that setting from a fakenvapi.ini in
+    the same directory -- one upstream's archive ships and this package did not
+    extract -- so the package logged by default while presenting
+    BC250_FSR4_DEBUG as the way to ask for logs.
+
+    Only written when there is none: a future OptiScaler that bundles fakenvapi
+    brings settings matched to that build. The file lands in the prefix and stays
+    editable there, because .ini files are left out of the per-file checksums, so
+    setting enable_logs=1 to diagnose something survives the next launch.
+    """
+    dll = next(
+        (candidate for candidate in (
+            extracted / "fakenvapi.dll", extracted / "OptiScaler/fakenvapi.dll",
+            extracted / "nvapi64.dll", extracted / "OptiScaler/nvapi64.dll")
+         if candidate.is_file()),
+        None,
+    )
+    if dll is None:
+        return None
+    settings = dll.parent / "fakenvapi.ini"
+    if settings.is_file():
+        return settings
+    settings.write_text(
+        "; Written by the BC-250 package. fakenvapi logs to fakenvapi.log beside\n"
+        "; this file unless told otherwise, and its own default is to do so.\n"
+        "; Set enable_logs=1 (and enable_trace_logs=1 for more) to diagnose a\n"
+        "; latency or Reflex problem -- this file is yours to edit and is not\n"
+        "; checksummed, so the change survives the next launch.\n"
+        "[fakenvapi]\n"
+        "enable_logs=0\n"
+        "enable_trace_logs=0\n",
+        encoding="utf-8",
+    )
+    return settings
+
+
 def optiscaler_artifact(
     args, staging: Path, ffx_sdk: Path, version: str, provenance: str = "",
     notices: Path | None = None
@@ -228,6 +268,8 @@ def optiscaler_artifact(
         )
         if not (extracted / "OptiScaler/fakenvapi.dll").is_file():
             raise RuntimeError("fakenvapi archive contains no fakenvapi.dll")
+
+    seed_fakenvapi_settings(extracted)
 
     plugins = extracted / "OptiScaler/plugins"
     plugins.mkdir(parents=True, exist_ok=True)

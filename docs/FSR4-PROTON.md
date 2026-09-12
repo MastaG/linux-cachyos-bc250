@@ -68,6 +68,17 @@ reading a bug report.
 
 `PROTON_DLSS_UPGRADE`, `PROTON_XESS_UPGRADE`, `PROTON_FFX3_UPGRADE`, `PROTON_FFX4_UPGRADE`, the older `PROTON_FSR3_UPGRADE` spelling and `PROTON_MLFG_UPGRADE` are cleared: this package ships none of those upscalers, and in pinned mode a request for one that is absent stops the game from starting. A stale launch option left over from another Proton build would otherwise become a game that will not launch.
 
+Logging is off unless `BC250_FSR4_DEBUG=1` asks for it. OptiScaler's own
+`LogLevel` default is Trace, but no sink is enabled — the preset pins
+`Log.LogToFile=false` and console, NGX and debug output all default off — so it
+writes nothing. fakenvapi was the exception until the package started shipping a
+`fakenvapi.ini` beside its DLL: its compiled default is `enable_logs=true`, it
+reads that key from an ini in its own directory, and this package extracted only
+the DLL from upstream's archive, so every launch wrote a `fakenvapi.log`. The
+shipped ini sets `enable_logs=0` and `enable_trace_logs=0`, is only written when
+fakenvapi did not bring settings of its own, and stays editable in the prefix
+because `.ini` files are excluded from the payload's per-file checksums.
+
 ### Which Proton, and which OptiScaler
 
 `protonge-latest-bc250` tracks the newest GE-Proton release automatically; `pkgver` follows it (`GE-Proton11-6` → `11.6`). The Steam-internal tool name stays `protonge-latest-bc250` across upgrades on purpose — Steam stores that name per game, so a name carrying the version would reset everyone's per-game choice on every update.

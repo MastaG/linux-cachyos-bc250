@@ -873,6 +873,42 @@ class PresetTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     builder.validate_preset(preset, ini)
 
+    def test_fakenvapi_does_not_log_unless_asked(self):
+        # fakenvapi's compiled default is enable_logs=true, and it reads
+        # fakenvapi.ini from its own directory -- one this package did not ship.
+        # So it logged on every launch while BC250_FSR4_DEBUG was presented as
+        # the way to ask for logs.
+        with tempfile.TemporaryDirectory() as temporary:
+            extracted = Path(temporary) / "extracted"
+            (extracted / "OptiScaler").mkdir(parents=True)
+            (extracted / "OptiScaler/fakenvapi.dll").write_bytes(b"f" * 16)
+            settings = builder.seed_fakenvapi_settings(extracted)
+            self.assertEqual(settings, extracted / "OptiScaler/fakenvapi.ini")
+            parser = configparser.ConfigParser()
+            parser.read(settings)
+            self.assertEqual(parser["fakenvapi"]["enable_logs"], "0")
+            self.assertEqual(parser["fakenvapi"]["enable_trace_logs"], "0")
+
+    def test_a_bundled_fakenvapi_keeps_its_own_settings(self):
+        # If OptiScaler starts shipping fakenvapi, its ini belongs to that build.
+        with tempfile.TemporaryDirectory() as temporary:
+            extracted = Path(temporary) / "extracted"
+            (extracted / "OptiScaler").mkdir(parents=True)
+            (extracted / "OptiScaler/nvapi64.dll").write_bytes(b"f" * 16)
+            (extracted / "OptiScaler/fakenvapi.ini").write_text(
+                "[fakenvapi]\nenable_logs=1\n")
+            builder.seed_fakenvapi_settings(extracted)
+            parser = configparser.ConfigParser()
+            parser.read(extracted / "OptiScaler/fakenvapi.ini")
+            self.assertEqual(parser["fakenvapi"]["enable_logs"], "1")
+
+    def test_no_fakenvapi_means_no_settings_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            extracted = Path(temporary) / "extracted"
+            (extracted / "OptiScaler").mkdir(parents=True)
+            self.assertIsNone(builder.seed_fakenvapi_settings(extracted))
+            self.assertFalse((extracted / "OptiScaler/fakenvapi.ini").exists())
+
     def test_a_seed_once_key_the_preset_does_not_set_fails_the_build(self):
         # The launcher looks these up in the preset it was handed. A name that
         # is not there would quietly seed nothing, and the packaged spoofing

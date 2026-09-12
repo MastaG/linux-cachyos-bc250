@@ -2,9 +2,9 @@ b77b2d8cc67dba88a06f91d571e7f2612e547acc3fb685de4c12c4d2612db9d6  ./.github/work
 b13dc2c3218d23ed799a400e2a834463f5e1649b3824a74a17cb3b632fe8c4c7  ./.github/workflows/fsr4-checks.yml
 1ebadcbf9cce8745ce6560f4ef8e2414c0bc5b910471898d46ab9cde32938a4f  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-58ee947b88481b1e36320a70b5c11ea74f1d25a662a602174596934595800664  ./README.md
+9facf032daaa8ff4c458398a82da31d29309f7274ab7c107e8264c1ca2028a59  ./README.md
 2cc6a9610fa5a1178c0804dae567f61f194daff04f51b04d6946e5e936a80fe2  ./docs/BUILDING.md
-9916340a2ed4117cb2df1530bca989e8dbf662dd74496700262d0c1fb2ab0a91  ./docs/FSR4-PROTON.md
+8da37c66a2c07945e640ab59fc8a2b3cec057252f764af32ca6bea18ae2489e7  ./docs/FSR4-PROTON.md
 fca5b6b4bcf9b31e94376131e1c3596f380f8b13646fe9aec859075b80f34afa  ./docs/PATCHES.md
 37cfe169230fa08d3e91b058821dd09c3b95d1b0c361c2039ac66a25805542b2  ./docs/ROCM.md
 b36bdb334d22d99096bd71b985c9383e87ffdd8a39cfab19b5eae9c4b1061495  ./local-patches/README.md
@@ -65,7 +65,7 @@ b19281863aa2b8465649d370a39bf436d65ae6f06c51fb8f79228d0277d848ec  ./patches/mesa
 517cf1be2d9e69031793121d9b80a1d968411cc06b982a3155de927690aa1d42  ./patches/mesa/0008-bc250-fsr4-resolution-variants.patch
 f0a38daa798f681b44ba07f6222ff3338726f64b78d4a33b3c04c9e424025496  ./patches/mesa/0009-bc250-fsr4-production-defaults.patch
 43231e45edc634a305fa273391c3c16e95215b36790bb0027d9dc24d89558859  ./scripts/build-bc250-dual-audio-package.sh
-63ffc41b36ff840cf5b6a1c9a79073faf0476e0967d3e4b9fd69261fe8ee97e7  ./scripts/build-fsr4-payload.py
+60031eff9ddd5b2e1394c92e87da641ed74645eb08192c14001dc15a23dce291  ./scripts/build-fsr4-payload.py
 86fac4bcb6ac78bbb5902438702fd3cf711c693e28728d3d32889ea7a7a5860c  ./scripts/build-lib32-mesa-package.sh
 2a4e2bd08b0c593d8dea9f6a8e0e627fb155504c7e1b5ad9e0d5b994f400a8ef  ./scripts/build-linux-cachyos-bc250-meta-package.sh
 967aa48b4cbeccd0d1cad330f25c22be45fa2c462d12cab2e081842c6804bf95  ./scripts/build-mesa-git-package.sh
@@ -101,4 +101,4 @@ f39757d0abded757b134cb1236a9b76106f30ed70d08e03a8b608228a62de612  ./scripts/upda
 4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645  ./tests/fixtures/ge-proton11-6-upscalers.py
 29d0e7244cd46d66cff6d9be331123cc1903281b44af6ee61696edafa3310458  ./tests/fixtures/ge-to-cachyos-native.patch
 5e8f5d89f9929567476d715c19d6eabccf7f2d15318d642b60905a1f43d0ee5c  ./tests/test_fsr4_packaging.py
-435a2085679170859f67d45cb385c39f7b3953a5b5abc8aa8061fa7692615da3  ./tests/test_fsr4_runtime.py
+8f56d9d6f0171cdaa67f3965327480a7ce59ae1b480d47326be6330ccd09c8e8  ./tests/test_fsr4_runtime.py
