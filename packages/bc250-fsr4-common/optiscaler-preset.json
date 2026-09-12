@@ -24,5 +24,9 @@
     "Upscalers.Dx11Upscaler": "ffx_12",
     "Upscalers.Dx12Upscaler": "ffx",
     "Upscalers.VulkanUpscaler": "ffx_12"
-  }
+  },
+  "seed_once": [
+    "Spoofing.Dxgi",
+    "Spoofing.VulkanExtensionSpoofing"
+  ]
 }

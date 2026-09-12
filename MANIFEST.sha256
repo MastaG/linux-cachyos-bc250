@@ -2,9 +2,9 @@ b77b2d8cc67dba88a06f91d571e7f2612e547acc3fb685de4c12c4d2612db9d6  ./.github/work
 b13dc2c3218d23ed799a400e2a834463f5e1649b3824a74a17cb3b632fe8c4c7  ./.github/workflows/fsr4-checks.yml
 1ebadcbf9cce8745ce6560f4ef8e2414c0bc5b910471898d46ab9cde32938a4f  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
-e7140ca7b79dd5e30e1509683c62a863b599bee8ab45dfea9e7fdd0c66c42ccc  ./README.md
+58ee947b88481b1e36320a70b5c11ea74f1d25a662a602174596934595800664  ./README.md
 026eedbe493ae631b7fb931af492d33fd8b7915ce51b0e242674f6e14ef05081  ./docs/BUILDING.md
-7794b36fe9454966213919095d1e725352439840d18a9e3bcb57f2704a5d6665  ./docs/FSR4-PROTON.md
+9916340a2ed4117cb2df1530bca989e8dbf662dd74496700262d0c1fb2ab0a91  ./docs/FSR4-PROTON.md
 fca5b6b4bcf9b31e94376131e1c3596f380f8b13646fe9aec859075b80f34afa  ./docs/PATCHES.md
 37cfe169230fa08d3e91b058821dd09c3b95d1b0c361c2039ac66a25805542b2  ./docs/ROCM.md
 3b0e0fddc0f40c51720aa25fa9836254c3595b71f0cd228e2b2e9e512b4e7629  ./local-patches/README.md
@@ -13,10 +13,10 @@ a3ef21828e07936ae930150427e1b3045bfd55d83de72b767b93d42a1e4f70e2  ./packages/bc2
 4330bb52894aa13d4fa62a642d61234b03bfa15cf9d9d12345e54ed05efda644  ./packages/bc250-dual-audio/bc250-dual-audio.install
 e9d41088edc8ae103b38ba218691336b64b5f6afaa021c35eb60ae3eb890e79e  ./packages/bc250-fsr4-common/README.md
 9c6834660b76482df0081d391a2c57baca9566b34a4231630765b4904f3bb5bb  ./packages/bc250-fsr4-common/VALIDATION.md
-f23a56eefac90ab86cb85620fdb0f6389e5abd522cf9502fb82146ecd90b09ca  ./packages/bc250-fsr4-common/bc250-fsr4-launch.py
+7ecbb849b944ad8f6c198aa38e2c4e54082d808fdc0472b05650f52f9a84aaa1  ./packages/bc250-fsr4-common/bc250-fsr4-launch.py
 be05d8cd5489deff924dbe91e0c5b8c0ff034d43cd11749bf9a67a0c38252b7b  ./packages/bc250-fsr4-common/licenses/FidelityFX-SDK-4.0.2.txt
 21b5daec892b12bea692e66bc8fe45cf5902ccaf3a7b831e78050d8859881c37  ./packages/bc250-fsr4-common/licenses/NVIDIA-DLSS.txt
-e2fbcbf16130da0e5ae3fee944d3659c9faed95b115ba38268c76617f648deef  ./packages/bc250-fsr4-common/optiscaler-preset.json
+511008c803b51e9c3b7b5cd93ae1e355cc033697ad97b5dd8f038a2560e5c20e  ./packages/bc250-fsr4-common/optiscaler-preset.json
 815241b3ca44c8c5236cfa7eb3c3d325ae21c12d712122578699e992c737ecec  ./packages/bc250-fsr4-common/patches/ge-proton/0001-pinned-upscaler-manifest.patch
 953e63810731521c2afc28328c0de41353277f18e43cefdb16cdc35807f32dd7  ./packages/bc250-fsr4-common/patches/proton-cachyos/0001-pinned-upscaler-manifest.patch
 01662752fa904bd91233c5159e1a1a8dd9cfa42e9eef5cb88bb5860ee58aa2ce  ./packages/bc250-fsr4-common/proton-shim.sh
@@ -65,7 +65,7 @@ b19281863aa2b8465649d370a39bf436d65ae6f06c51fb8f79228d0277d848ec  ./patches/mesa
 517cf1be2d9e69031793121d9b80a1d968411cc06b982a3155de927690aa1d42  ./patches/mesa/0008-bc250-fsr4-resolution-variants.patch
 f0a38daa798f681b44ba07f6222ff3338726f64b78d4a33b3c04c9e424025496  ./patches/mesa/0009-bc250-fsr4-production-defaults.patch
 43231e45edc634a305fa273391c3c16e95215b36790bb0027d9dc24d89558859  ./scripts/build-bc250-dual-audio-package.sh
-155e13f7f16d2e53ea2a8ee3d1e2c00ed7814caf845d38697666a8729f589fa8  ./scripts/build-fsr4-payload.py
+63ffc41b36ff840cf5b6a1c9a79073faf0476e0967d3e4b9fd69261fe8ee97e7  ./scripts/build-fsr4-payload.py
 86fac4bcb6ac78bbb5902438702fd3cf711c693e28728d3d32889ea7a7a5860c  ./scripts/build-lib32-mesa-package.sh
 2a4e2bd08b0c593d8dea9f6a8e0e627fb155504c7e1b5ad9e0d5b994f400a8ef  ./scripts/build-linux-cachyos-bc250-meta-package.sh
 967aa48b4cbeccd0d1cad330f25c22be45fa2c462d12cab2e081842c6804bf95  ./scripts/build-mesa-git-package.sh
@@ -101,4 +101,4 @@ f39757d0abded757b134cb1236a9b76106f30ed70d08e03a8b608228a62de612  ./scripts/upda
 4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645  ./tests/fixtures/ge-proton11-6-upscalers.py
 29d0e7244cd46d66cff6d9be331123cc1903281b44af6ee61696edafa3310458  ./tests/fixtures/ge-to-cachyos-native.patch
 4e4c875a572a40e7dfb4a5af391ef88e8e5e3bc4dcc70df1b3823a3a7b438f22  ./tests/test_fsr4_packaging.py
-4b240c5b804b55980c80e153007987c35992ae24bea1355d5043e192904bbc6f  ./tests/test_fsr4_runtime.py
+435a2085679170859f67d45cb385c39f7b3953a5b5abc8aa8061fa7692615da3  ./tests/test_fsr4_runtime.py

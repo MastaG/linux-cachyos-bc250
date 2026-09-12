@@ -53,6 +53,14 @@ def validate_preset(preset_path: Path, ini_path: Path) -> dict:
         if section not in parser or option not in parser[section]:
             raise RuntimeError("Unknown OptiScaler preset option: " + key)
         parser[section][option] = value
+
+    # seed_once names preset keys the launcher stops enforcing once the prefix
+    # has a value of its own. A name that is not in the preset would silently
+    # do nothing, so it fails the build instead.
+    document = json.loads(preset_path.read_text())
+    for key in document.get("seed_once", []) if isinstance(document, dict) else []:
+        if key not in preset:
+            raise RuntimeError("seed_once names a key the preset does not set: " + key)
     return preset
 
 
@@ -350,8 +358,9 @@ def main() -> int:
     manifest = {"optiscaler": entries, "fsr_40_drv": [provider]}
     (args.output / "upscaler-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
-    preset = json.loads(args.preset.read_text())
-    preset = preset["preset"] if "preset" in preset else preset
+    document = json.loads(args.preset.read_text())
+    preset = document["preset"] if "preset" in document else document
+    seed_once = document.get("seed_once", []) if isinstance(document, dict) else []
     # The wrapper asks protonfixes for these versions by name, and the manifest
     # answers with exactly one entry each. Writing both from here is what keeps
     # them from drifting apart.
@@ -369,6 +378,9 @@ def main() -> int:
                 "manifest": args.manifest_rel,
                 "proton": args.proton_rel,
                 "preset": preset,
+                # Enforced into a fresh prefix and then left to the user, so the
+                # OptiScaler overlay can own them from that point on.
+                "seed_once": seed_once,
             },
             indent=2,
         )

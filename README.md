@@ -275,6 +275,14 @@ matters if you specifically want the game's DLSS path, for Reflex or because
 DLSS input measures better in that game. If you try it, the overlay's frame-time
 and upscaler graphs make the comparison, and we would like to hear the numbers.
 
+The spoofing keys are also the two the OptiScaler overlay is allowed to own.
+Everything else in the preset is written into `OptiScaler.ini` on every launch —
+so editing it, or using the overlay's *Save Settings*, does nothing for the rest
+— but `Spoofing.Dxgi` and `Spoofing.VulkanExtensionSpoofing` are written only
+into a prefix that has no answer yet. Change either in the overlay, save, and it
+sticks from then on. A package update that ships a new OptiScaler build resets
+the file and seeds them again. A launch option still beats both.
+
 Two follow-ups, both seen on a BC-250 in The Last of Us Part II:
 
 - The game may then warn that no graphics card was found, or that your RTX 4090

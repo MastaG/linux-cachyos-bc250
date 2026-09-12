@@ -16,6 +16,7 @@ OptiScaler proxy name, the preset) or a stale setting from some other Proton
 build that would break a pinned launch. The user's own choices are left alone.
 """
 
+import configparser
 import json
 import os
 import re
@@ -140,6 +141,62 @@ def proxy_name(requested, default):
     return name
 
 
+def prefix_ini(inherited):
+    """Where protonfixes keeps this game's OptiScaler.ini, if it can be located.
+
+    protonfixes writes it beside the payload it installs, at the fixed path it
+    uses for every upscaler it manages. Proton has not run yet when this is
+    called, so the prefix comes from the environment: umu and Heroic export
+    WINEPREFIX, Steam exports the compat data path with the prefix below it.
+    """
+    prefix = inherited.get("WINEPREFIX", "").strip()
+    if not prefix:
+        data = inherited.get("STEAM_COMPAT_DATA_PATH", "").strip()
+        prefix = str(Path(data) / "pfx") if data else ""
+    if not prefix:
+        return None
+    return Path(prefix) / "drive_c/windows/system32/umu/OptiScaler.ini"
+
+
+def seed_once(preset, config, inherited):
+    """Drop the seeded keys once this prefix has an answer of its own.
+
+    Most of the preset is enforced on every launch on purpose: it is what makes
+    a launch reproducible from its launch options, with no invisible state in a
+    prefix deciding what you get. The spoofing keys are the exception, because
+    they are the ones a player legitimately wants to toggle for one game -- and
+    toggling them in the OptiScaler overlay used to do nothing, since the next
+    launch wrote the preset back over the top.
+
+    OptiScaler ships every one of them as "auto", so a value that is not "auto"
+    means somebody decided: us on the first launch into a fresh prefix, or the
+    player afterwards. Either way it is left alone from then on. A new packaged
+    OptiScaler re-extracts the ini, which resets it to "auto" and re-seeds.
+
+    Anything unreadable keeps the enforced value. Being wrong in that direction
+    is a launch that behaves like the package says it does.
+    """
+    # A copy in every case: the caller merges debug and BC250_OPTISCALER_EXTRA
+    # over the result, and that must not reach back into the loaded config.
+    kept = dict(preset)
+    keys = config.get("seed_once", [])
+    ini = prefix_ini(inherited) if keys else None
+    if not ini or not ini.is_file():
+        return kept
+    parser = configparser.ConfigParser()
+    try:
+        with ini.open() as stream:
+            parser.read_file(stream)
+    except (OSError, UnicodeDecodeError, configparser.Error):
+        return kept
+    for key in keys:
+        section, _, option = key.partition(".")
+        value = parser.get(section, option, fallback="auto").strip().lower()
+        if value and value != "auto":
+            kept.pop(key, None)
+    return kept
+
+
 def optiscaler_version(config, requested):
     """Resolve what the caller asked for to a version the manifest pins.
 
@@ -228,7 +285,7 @@ def environment(config, inherited, *, game):
     if env["PROTON_USE_OPTISCALER"] != "0":
         load_native(env, proxy)
 
-    preset = dict(config["preset"])
+    preset = seed_once(config["preset"], config, inherited)
     if inherited.get("BC250_FSR4_DEBUG") == "1":
         preset.update({"Log.LogToFile": "true", "FSR.Fsr4EnableWatermark": "true"})
         env["PROTON_LOG"] = "1"

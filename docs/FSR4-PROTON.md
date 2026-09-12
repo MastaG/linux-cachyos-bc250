@@ -26,6 +26,21 @@ from a prior launch. Explicit `PROTON_USE_OPTISCALER` choices remain available;
 prefix payloads and saves are preserved. Steam utility calls use the local
 manifest with both upgrades disabled, including when game settings are inherited.
 
+The preset is rewritten into `OptiScaler.ini` on every launch, which is what
+makes a launch reproducible from its launch options alone, with no invisible
+state in a prefix deciding what you get. `Spoofing.Dxgi` and
+`Spoofing.VulkanExtensionSpoofing` are the exception, declared as `seed_once` in
+`optiscaler-preset.json`: they are written into a prefix that has no answer of
+its own, and left alone afterwards, so a player can own them from the OptiScaler
+overlay. OptiScaler ships every spoofing key as `auto`, so "not auto" is what
+marks a prefix as having been decided — by this package on the first launch, or
+by the player after that. A packaged OptiScaler bump re-extracts the ini, which
+resets it to `auto` and re-seeds. Anything unreadable keeps the enforced value,
+because the safe way to be wrong is a launch that behaves as documented.
+`BC250_OPTISCALER_EXTRA` is merged last and so still wins over both. The
+`seed_once` list is checked against the preset at build time: a name the preset
+does not set would quietly hand the default to OptiScaler instead of us.
+
 `PROTON_OPTISCALER_NAME` is the one variable in the owned set a caller may still
 supply. Everything else there addresses the pinned payload by path or by name, so
 a caller-supplied value would either break the launch or swap in something
