@@ -256,6 +256,25 @@ BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=auto;FrameGen.Enabled=true" %command%
 A key the shipped OptiScaler build does not define stops the launch and names
 it, rather than being silently ignored.
 
+**No DLSS option in a game's menu?** That is this package's doing, and it is
+deliberate. The preset sets `Spoofing.Dxgi=false`, so the game is told what GPU
+it is actually running on — a BC-250 — and games gate their DLSS row on seeing
+an NVIDIA GPU. The OptiScaler overlay says `Spoof: Off` when this is why.
+Spoofing was turned off because turning it on produced "DX12 not supported" for
+a user after enabling frame generation, and because it costs performance. To
+trade that back per game:
+
+```text
+BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=true" %command%
+```
+
+FSR4 itself does not need this. With spoofing off the game's own FSR option is
+the input and OptiScaler translates it, which is the normal path here — the
+overlay shows `Input: FFX` and the FSR 4.1.1 upscaler running. Spoofing only
+matters if you specifically want the game's DLSS path, for Reflex or because
+DLSS input measures better in that game. If you try it, the overlay's frame-time
+and upscaler graphs make the comparison, and we would like to hear the numbers.
+
 `BC250_FSR4_DEBUG=1` is the one to reach for when something looks wrong — it
 puts the FSR4 watermark on screen and writes a Proton log, which turns "FSR4
 doesn't seem to work" into something diagnosable.
