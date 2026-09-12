@@ -270,10 +270,22 @@ BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=true" %command%
 
 FSR4 itself does not need this. With spoofing off the game's own FSR option is
 the input and OptiScaler translates it, which is the normal path here — the
-overlay shows `Input: FFX` and the FSR 4.1.1 upscaler running. Spoofing only
-matters if you specifically want the game's DLSS path, for Reflex or because
-DLSS input measures better in that game. If you try it, the overlay's frame-time
-and upscaler graphs make the comparison, and we would like to hear the numbers.
+overlay shows `Input: FFX` and the FSR 4.1.1 upscaler running.
+
+**Worth trying, though.** Turning spoofing on gives the game its DLSS path,
+which OptiScaler still translates to FSR4, and brings NVIDIA Reflex with it. It
+has measured faster than the game's own FSR input on a BC-250, and it is
+reported working in The Last of Us Part II and A Plague Tale: Innocence. The
+fuller version, which also answers the driver-version question below:
+
+```text
+BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=true;Spoofing.Registry=true" %command%
+```
+
+Then pick DLSS in the game's own graphics menu. The overlay's frame-time and
+upscaler graphs are what settle whether it helped — same save, same spot, both
+ways — and we would like to hear the numbers, because if this behaves it is a
+candidate for the default.
 
 The spoofing keys are also the two the OptiScaler overlay is allowed to own.
 Everything else in the preset is written into `OptiScaler.ini` on every launch —
