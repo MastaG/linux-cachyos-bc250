@@ -151,10 +151,23 @@ sub('-e "s|##DISPLAY_NAME##|proton-cachyos-${_srctag} (native)|" \\\n',
 sub("    cd proton-cachyos\n",
     "    cd proton-cachyos\n"
     "\n"
+    "    # BC-250: pinned FSR4 upscaler manifest, applied by the Makefile's own\n"
+    "    # sorted patches/protonfixes glob after upstream's 0002-upscalers set.\n"
+    "    install -Dm644 \"$srcdir/0001-pinned-upscaler-manifest.patch\" \\\n"
+    "        patches/protonfixes/0003-bc250-fsr4/0001-pinned-upscaler-manifest.patch\n",
+    "the `cd proton-cachyos` in prepare()")
+
+# Apply a private local build's own patches once the tree is whole.
+sub("    for rustlib in gst-plugins-rs; do\n",
     "    # Local private builds only (scripts/build-proton-tarball.sh). Never set in\n"
     "    # CI, so the published package cannot pick up anything from here. The path\n"
     "    # points outside srcdir because these are the user's own files rather than\n"
     "    # a pinned source, which is also why it is gated instead of always on.\n"
+    "    #\n"
+    "    # Last in prepare() on purpose: wine, dxvk and vkd3d-proton are submodules,\n"
+    "    # and before the update above none of their files exist. A patch against one\n"
+    "    # of them then finds nothing to patch while its new-file hunks still apply,\n"
+    "    # which is a half-patched tree that builds.\n"
     "    if [[ \"${BC250_LOCAL_PATCHES:-0}\" == 1 && -d \"${BC250_LOCAL_PATCHES_DIR:-/workspace/local-patches}/proton-cachyos-native\" ]]; then\n"
     "        for _local_patch in \"${BC250_LOCAL_PATCHES_DIR:-/workspace/local-patches}/proton-cachyos-native\"/*.patch; do\n"
     "            [[ -e \"$_local_patch\" ]] || continue\n"
@@ -163,11 +176,8 @@ sub("    cd proton-cachyos\n",
     "        done\n"
     "    fi\n"
     "\n"
-    "    # BC-250: pinned FSR4 upscaler manifest, applied by the Makefile's own\n"
-    "    # sorted patches/protonfixes glob after upstream's 0002-upscalers set.\n"
-    "    install -Dm644 \"$srcdir/0001-pinned-upscaler-manifest.patch\" \\\n"
-    "        patches/protonfixes/0003-bc250-fsr4/0001-pinned-upscaler-manifest.patch\n",
-    "the `cd proton-cachyos` in prepare()")
+    "    for rustlib in gst-plugins-rs; do\n",
+    "the rustlib loop at the end of prepare()")
 
 # Lay the payload into dist/ so package()'s existing rsync carries it, and point
 # Steam at our shim instead of Proton's own launcher.

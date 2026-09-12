@@ -49,6 +49,12 @@ provides=('proton-cachyos' 'proton')
 replaces=('proton-cachyos')
 prepare() {
     cd proton-cachyos
+    git submodule update --init --filter=tree:0 --recursive ${_submodules[@]}
+    for rustlib in gst-plugins-rs; do
+    pushd $rustlib
+        cargo fetch --locked --target x86_64-unknown-linux-gnu
+    popd
+    done
 }
 build() {
     local march="nocona"
@@ -417,6 +423,23 @@ class LocalPatchGateTests(unittest.TestCase):
 -something that is not there
 +patched
 """
+
+    def test_local_patches_run_only_once_the_submodules_are_there(self):
+        """Ordering is the whole bug: wine is a submodule.
+
+        Run before `git submodule update`, a patch against an existing file in
+        wine, dxvk or vkd3d-proton finds nothing to patch and is skipped, while
+        its new-file hunks apply anyway -- a half-patched tree that still builds.
+        Reported from a local build, where every wine/ hunk was ignored.
+        """
+        text = self.sources()["proton-cachyos-native"]
+        self.assertLess(
+            text.index("git submodule update --init"),
+            text.index(self.MARKER),
+            "local patches must be applied after the submodules are checked out",
+        )
+        # ...and still inside prepare(), not stranded in build().
+        self.assertLess(text.index(self.MARKER), text.index("\nbuild() {"))
 
     def test_an_unset_variable_leaves_the_tree_alone(self):
         for name, text in self.sources().items():

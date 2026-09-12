@@ -217,7 +217,12 @@ local-patches/protonge-latest/         applied to the unpacked GE-Proton release
 ```
 
 They are applied in sorted order with `patch --batch -Np1`, after everything
-this repository already applies, and a failure stops the build. The two are not
+this repository already applies, and a failure stops the build. For
+`proton-cachyos-native` that is the very end of `prepare()`, once
+`git submodule update` has brought in wine, dxvk, vkd3d-proton and the rest —
+run any earlier and a patch against an existing file in one of those submodules
+silently finds nothing to patch while its new-file hunks still apply, leaving a
+half-patched tree that builds. The two are not
 equivalent: `proton-cachyos-native` compiles from source, so a patch there can
 change Proton, Wine, dxvk or vkd3d-proton themselves, while `protonge-latest`
 repacks an already-built release, so a patch there can only edit files that ship

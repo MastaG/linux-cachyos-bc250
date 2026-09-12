@@ -9,7 +9,9 @@ directory.
     protonge-latest/         applied to the unpacked GE-Proton release
 
 Patches are applied in sorted order with `patch --batch -Np1`, after everything
-this repository already applies, and a failure stops the build. Name them so
+this repository already applies, and a failure stops the build. In the native
+package that happens at the end of `prepare()`, after the submodules are checked
+out, so paths like `wine/dlls/...` and `dxvk/src/...` are there to patch. Name them so
 the order reads correctly: `0001-something.patch`, `0002-something-else.patch`.
 
 The two directories are not equivalent. `proton-cachyos-native` is compiled
