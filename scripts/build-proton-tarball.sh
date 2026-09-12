@@ -91,6 +91,34 @@ if [[ -n "$SUFFIX" && ! "$SUFFIX" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     exit 1
 fi
 
+# Resolve the extractor before anything expensive starts. This step runs on the
+# host, not in the container, and a native build that dies here has already
+# burned an hour: the first report of this was exactly that, on a Fedora host
+# where bsdtar is not installed by default. bsdtar is the one that needs no
+# helper binary; GNU tar can do it too, but shells out to zstd, so both halves
+# of that route are checked here rather than assumed.
+EXTRACT=()
+if command -v bsdtar >/dev/null 2>&1; then
+    EXTRACT=(bsdtar -xf)
+elif tar --help 2>/dev/null | grep -q -- --zstd && command -v zstd >/dev/null 2>&1; then
+    EXTRACT=(tar --zstd -xf)
+else
+    printf 'ERROR: need bsdtar, or GNU tar with a zstd binary, to unpack the package.\n' >&2
+    printf '       Fedora: sudo dnf install bsdtar   (or zstd, for the tar route)\n' >&2
+    printf '       Arch/CachyOS: sudo pacman -S --needed libarchive\n' >&2
+    exit 1
+fi
+
+# Same reasoning for the rest of the post-build step: it rewrites the tool's vdf
+# and writes the tarball, and finding any of that missing afterwards is finding
+# it at the worst possible moment.
+for tool in python3 tar; do
+    command -v "$tool" >/dev/null 2>&1 || {
+        printf 'ERROR: %s is needed to repack the built package.\n' "$tool" >&2
+        exit 1
+    }
+done
+
 if [[ "$REPACK_ONLY" == true ]]; then
     printf '==> repacking the last local build, without rebuilding\n'
 else
@@ -140,7 +168,10 @@ mkdir -p -- "$OUT_DIR"
 for component in "${COMPONENTS[@]}"; do
     # Newest by mtime: version strings do not sort usefully, and a stale
     # package from an earlier run is exactly the thing not to ship.
-    package="$(ls -t -- "${ROOT_DIR}/out/repo/${component}"-*.pkg.tar.zst 2>/dev/null | head -n1)"
+    # `|| true` because pipefail turns the empty case into a hard failure before
+    # the message below can explain it -- which is precisely the case where an
+    # explanation is wanted, e.g. --repack-only with nothing built yet.
+    package="$(ls -t -- "${ROOT_DIR}/out/repo/${component}"-*.pkg.tar.zst 2>/dev/null | head -n1 || true)"
     [[ -n "$package" ]] || {
         printf 'ERROR: %s produced no package\n' "$component" >&2
         exit 1
@@ -152,7 +183,7 @@ for component in "${COMPONENTS[@]}"; do
     # The licences come along because packaging moves them out of the tool
     # directory into /usr/share/licenses, which a tarball has no equivalent of;
     # upstream Proton ships them inside the tool, so put them back there.
-    bsdtar -xf "$package" -C "$staging" \
+    "${EXTRACT[@]}" "$package" -C "$staging" \
         "usr/share/steam/compatibilitytools.d/${component}" \
         "usr/share/licenses/${component}"
     mv -- "$staging/usr/share/steam/compatibilitytools.d/${component}" \

@@ -192,6 +192,12 @@ BC250_CONTAINER_ENGINE      default podman; split on whitespace, so "sudo podman
 BC250_PKGREL                pkgrel for the build (default 1)
 ```
 
+The build runs in an Arch container, but the repacking at the end runs on the
+host, so the host needs `bsdtar` — or GNU `tar` plus a `zstd` binary, which is
+the usual case on Fedora, where `bsdtar` is not installed by default. Both are
+checked before the container starts rather than after the build, since a native
+build that fails at the repack has already cost an hour.
+
 Two container details worth knowing. Rootless podman gets `--userns=keep-id` so
 the build user inside can be created with the uid that already owns the
 checkout: without it every file the build writes into `out/` and `build/` would

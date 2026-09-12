@@ -3,7 +3,7 @@ b13dc2c3218d23ed799a400e2a834463f5e1649b3824a74a17cb3b632fe8c4c7  ./.github/work
 1ebadcbf9cce8745ce6560f4ef8e2414c0bc5b910471898d46ab9cde32938a4f  ./.gitignore
 edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
 58ee947b88481b1e36320a70b5c11ea74f1d25a662a602174596934595800664  ./README.md
-7b5aed2cc2830ca6c5a2fbce4f32f093a2ea90e2e130dbf9e2e3d21c901d90ab  ./docs/BUILDING.md
+2cc6a9610fa5a1178c0804dae567f61f194daff04f51b04d6946e5e936a80fe2  ./docs/BUILDING.md
 9916340a2ed4117cb2df1530bca989e8dbf662dd74496700262d0c1fb2ab0a91  ./docs/FSR4-PROTON.md
 fca5b6b4bcf9b31e94376131e1c3596f380f8b13646fe9aec859075b80f34afa  ./docs/PATCHES.md
 37cfe169230fa08d3e91b058821dd09c3b95d1b0c361c2039ac66a25805542b2  ./docs/ROCM.md
@@ -72,7 +72,7 @@ f0a38daa798f681b44ba07f6222ff3338726f64b78d4a33b3c04c9e424025496  ./patches/mesa
 e6332c58538e9634e63e9aa19f4268b097295e00d8a9a9d83b7b41c9f45c530d  ./scripts/build-mesa-package.sh
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 4239b6eb5941bb38a6b6c1509d53d5918ea7ee3aa67c00d90eb82e939c00915b  ./scripts/build-proton-cachyos-native-bc250-package.sh
-d7561fc5f5b7f7e5e81aa2df59a137143e9dfa2bc28058d8b8d434cff114e132  ./scripts/build-proton-tarball.sh
+9c947c441b1161925357e63ba735400e603de83909612b25efbcc3e17c0125eb  ./scripts/build-proton-tarball.sh
 a740f16d49595dfc11cf8852c1e4ce27864e56f7bd4ef5f4eea11de935430675  ./scripts/build-protonge-latest-bc250-package.sh
 98c6dd179d47671451e1d5cb0a10571e86fc0d8064f2102a9abe23e7aaac909c  ./scripts/check-fsr4-driver.py
 583e5f5bf6ab38179106d9a9031a3532113dc8b26750caf7eb84ea2456c776de  ./scripts/ci-build.sh
