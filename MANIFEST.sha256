@@ -13,7 +13,7 @@ a3ef21828e07936ae930150427e1b3045bfd55d83de72b767b93d42a1e4f70e2  ./packages/bc2
 4330bb52894aa13d4fa62a642d61234b03bfa15cf9d9d12345e54ed05efda644  ./packages/bc250-dual-audio/bc250-dual-audio.install
 e9d41088edc8ae103b38ba218691336b64b5f6afaa021c35eb60ae3eb890e79e  ./packages/bc250-fsr4-common/README.md
 9c6834660b76482df0081d391a2c57baca9566b34a4231630765b4904f3bb5bb  ./packages/bc250-fsr4-common/VALIDATION.md
-d09f82503119a57b16997db6ba637aa98be19a7c1ba01f38e839cb965f13ad77  ./packages/bc250-fsr4-common/bc250-fsr4-launch.py
+ecd5f2408a9d54f4d98b401a0ff318f0663643975fc46aaef9d39d4651df81d7  ./packages/bc250-fsr4-common/bc250-fsr4-launch.py
 be05d8cd5489deff924dbe91e0c5b8c0ff034d43cd11749bf9a67a0c38252b7b  ./packages/bc250-fsr4-common/licenses/FidelityFX-SDK-4.0.2.txt
 21b5daec892b12bea692e66bc8fe45cf5902ccaf3a7b831e78050d8859881c37  ./packages/bc250-fsr4-common/licenses/NVIDIA-DLSS.txt
 511008c803b51e9c3b7b5cd93ae1e355cc033697ad97b5dd8f038a2560e5c20e  ./packages/bc250-fsr4-common/optiscaler-preset.json
@@ -72,6 +72,7 @@ f0a38daa798f681b44ba07f6222ff3338726f64b78d4a33b3c04c9e424025496  ./patches/mesa
 e6332c58538e9634e63e9aa19f4268b097295e00d8a9a9d83b7b41c9f45c530d  ./scripts/build-mesa-package.sh
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 4239b6eb5941bb38a6b6c1509d53d5918ea7ee3aa67c00d90eb82e939c00915b  ./scripts/build-proton-cachyos-native-bc250-package.sh
+dc8b6a38f74323bde4f680a49a2fa35acc13e81e98e2193d5af741bef19b4a59  ./scripts/build-proton-runtime-dist.sh
 4dcb189796c2ce66b41d30dcb965ba77e4739469f93f74cb1c21065c029b368c  ./scripts/build-proton-tarball.sh
 a740f16d49595dfc11cf8852c1e4ce27864e56f7bd4ef5f4eea11de935430675  ./scripts/build-protonge-latest-bc250-package.sh
 98c6dd179d47671451e1d5cb0a10571e86fc0d8064f2102a9abe23e7aaac909c  ./scripts/check-fsr4-driver.py
@@ -101,4 +102,4 @@ f39757d0abded757b134cb1236a9b76106f30ed70d08e03a8b608228a62de612  ./scripts/upda
 4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645  ./tests/fixtures/ge-proton11-6-upscalers.py
 29d0e7244cd46d66cff6d9be331123cc1903281b44af6ee61696edafa3310458  ./tests/fixtures/ge-to-cachyos-native.patch
 db4cf6e8e41a44fe3ffd9000a28b37c25ea25c8d181cd698c74e415984c30d91  ./tests/test_fsr4_packaging.py
-f9fdbdd8271f39cdd0c7297b575765aaf48a86c2a6dbe87e0efc5942486a2f83  ./tests/test_fsr4_runtime.py
+a0e15f52b8cbe63b0735ab46f9cac03011f59ade2678d6f106c41db0950eda22  ./tests/test_fsr4_runtime.py

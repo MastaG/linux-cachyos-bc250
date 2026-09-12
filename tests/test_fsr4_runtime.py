@@ -5,6 +5,7 @@ import configparser
 import hashlib
 import importlib.util
 import io
+import itertools
 import json
 import lzma
 import subprocess
@@ -103,6 +104,7 @@ class RuntimeTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.work = Path(self.temporary.name)
+        self.game_dirs = itertools.count()
         self.compat = self.work / "compat"
         self.prefix = self.compat / "pfx"
         self.prefix.mkdir(parents=True)
@@ -440,7 +442,15 @@ class RuntimeTests(unittest.TestCase):
         return ini
 
     def game_dir(self, *relative):
-        root = self.work / "game"
+        """A fresh install root per call.
+
+        These used to share one directory and delete only the files between
+        subtests, which left the marker *directories* behind -- so every case
+        after the first passed on the previous case's leftovers rather than on
+        its own layout, and a real gap in the scan went unnoticed until it was
+        run against a game on hardware.
+        """
+        root = self.work / f"game-{next(self.game_dirs)}"
         for path in relative:
             target = root / path
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -453,9 +463,12 @@ class RuntimeTests(unittest.TestCase):
         # package injects by default, so it steps aside when it sees one.
         for marker in (
             "EasyAntiCheat/easyanticheat_x64.dll",
+            # The Unreal Engine layout, four levels down -- the common case.
+            "Game/Binaries/Win64/EasyAntiCheat/easyanticheat_x64.dll",
             "Game/Binaries/Win64/EasyAntiCheat_EOS/marker.txt",
             "Game/Binaries/Win64/start_protected_game.exe",
             "BattlEye/BEService.exe",
+            "Game/Binaries/Win64/BEClient_x64.dll",
         ):
             with self.subTest(marker=marker):
                 root = self.game_dir(marker)
@@ -470,9 +483,6 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(env["PROTON_USE_OPTISCALER"], "0")
                 # and no proxy override, so nothing is loaded from the prefix
                 self.assertNotIn("WINEDLLOVERRIDES", env)
-                for path in root.rglob("*"):
-                    if path.is_file():
-                        path.unlink()
 
     def test_steams_layered_runtimes_are_enough_on_their_own(self):
         for inherited in (

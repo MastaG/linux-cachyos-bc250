@@ -103,12 +103,17 @@ ANTICHEAT_NAMES = (
     "beclient_x64.dll",
 )
 
-# Where those names live: EAC and BattlEye sit next to the executable, which is
-# usually a couple of directories below the install root. Bounded because this
-# runs on every launch and a game library can be enormous -- a miss costs a
-# game its upscaler, a slow launch costs every game.
-ANTICHEAT_SCAN_DEPTH = 3
-ANTICHEAT_SCAN_DIRS = 400
+# How deep to look. A directory at level N is scanned, so entries are seen at
+# level N+1; 4 means a marker as deep as
+#
+#     <install>/Game/Binaries/Win64/EasyAntiCheat/
+#
+# is found, which is where Unreal Engine games put it -- the common case, and
+# the one a shallower bound silently missed on real hardware. Bounded in both
+# directions because this runs on every launch: a miss costs one game its
+# upscaler, a slow scan costs every game its start-up time.
+ANTICHEAT_SCAN_DEPTH = 4
+ANTICHEAT_SCAN_DIRS = 2000
 
 
 def anticheat_reason(inherited):
