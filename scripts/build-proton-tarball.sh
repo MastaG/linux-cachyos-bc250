@@ -10,9 +10,13 @@
 # CI runs -- the same package scripts in the same archlinux container -- so a
 # tarball built here contains the same payload as the published package.
 #
-#   scripts/build-proton-tarball.sh --suffix test1 native
-#   scripts/build-proton-tarball.sh --suffix test1 both
-#   scripts/build-proton-tarball.sh --suffix test2 --repack-only native
+#   scripts/build-proton-tarball.sh --suffix test1
+#   scripts/build-proton-tarball.sh --suffix test2 --repack-only
+#
+# Only proton-cachyos-native-bc250 is built this way. The other two are Steam
+# Linux Runtime builds, and a private local build of one exists to carry patches
+# into a runtime that anti-cheat trusts -- which is not something this
+# repository is going to make convenient.
 #
 # --repack-only skips the container entirely and re-wraps whatever that
 # component last built into out/repo. It is how you hand the same build out
@@ -50,7 +54,6 @@ ENGINE_SPEC="${BC250_CONTAINER_ENGINE:-podman}"
 read -r -a ENGINE <<< "$ENGINE_SPEC"
 SUFFIX=""
 OUT_DIR="${ROOT_DIR}/dist"
-TARGETS=()
 REPACK_ONLY=false
 
 usage() {
@@ -66,22 +69,14 @@ while (( $# )); do
         --image)  IMAGE="${2:?--image needs a value}"; shift 2 ;;
         --repack-only) REPACK_ONLY=true; shift ;;
         -h|--help) usage 0 ;;
-        ge|native|both) TARGETS+=("$1"); shift ;;
+        native) shift ;;
+        ge|both) printf 'ERROR: local builds are proton-cachyos-native-bc250 only\n' >&2
+                 exit 1 ;;
         *) printf 'ERROR: unexpected argument: %s\n\n' "$1" >&2; usage 1 ;;
     esac
 done
 
-(( ${#TARGETS[@]} )) || TARGETS=(both)
-COMPONENTS=()
-for target in "${TARGETS[@]}"; do
-    case "$target" in
-        both)   COMPONENTS+=(protonge-latest-bc250 proton-cachyos-native-bc250) ;;
-        ge)     COMPONENTS+=(protonge-latest-bc250) ;;
-        native) COMPONENTS+=(proton-cachyos-native-bc250) ;;
-    esac
-done
-# `ge native` and `both ge` both name GE once as far as the build is concerned.
-readarray -t COMPONENTS < <(printf '%s\n' "${COMPONENTS[@]}" | awk '!seen[$0]++')
+COMPONENTS=(proton-cachyos-native-bc250)
 
 # A suffix has to survive being a directory name, a Steam-internal tool name and
 # a tarball name, so keep it to what all three accept without quoting.

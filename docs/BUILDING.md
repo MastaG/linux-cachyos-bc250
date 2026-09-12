@@ -158,10 +158,13 @@ it — the same package scripts, in the same `archlinux:base-devel` container �
 but hands back a tarball instead of a pacman package:
 
 ```bash
-./scripts/build-proton-tarball.sh --suffix test1 ge
-./scripts/build-proton-tarball.sh --suffix test1 native
-./scripts/build-proton-tarball.sh --suffix test1 both     # the default
+./scripts/build-proton-tarball.sh --suffix test1
 ```
+
+Only `proton-cachyos-native-bc250` builds this way. The other two Proton
+packages are Steam Linux Runtime builds — the environment anti-cheat trusts —
+and this repository is not going to make it convenient to carry private patches
+into one of those.
 
 Each tarball lands in `dist/` and unpacks straight into a user's Steam:
 
@@ -219,22 +222,16 @@ published package.
 
 ```text
 local-patches/proton-cachyos-native/   applied to the Proton source tree
-local-patches/protonge-latest/         applied to the unpacked GE-Proton release
 ```
 
 They are applied in sorted order with `patch --batch -Np1`, after everything
-this repository already applies, and a failure stops the build. For
-`proton-cachyos-native` that is the very end of `prepare()`, once
-`git submodule update` has brought in wine, dxvk, vkd3d-proton and the rest —
-run any earlier and a patch against an existing file in one of those submodules
-silently finds nothing to patch while its new-file hunks still apply, leaving a
-half-patched tree that builds. The two are not
-equivalent: `proton-cachyos-native` compiles from source, so a patch there can
-change Proton, Wine, dxvk or vkd3d-proton themselves, while `protonge-latest`
-repacks an already-built release, so a patch there can only edit files that ship
-inside it — in practice the Python under `protonfixes/` and the launch scripts.
+this repository already applies, and a failure stops the build. That happens at
+the very end of `prepare()`, once `git submodule update` has brought in wine,
+dxvk, vkd3d-proton and the rest — run any earlier and a patch against an
+existing file in one of those submodules silently finds nothing to patch while
+its new-file hunks still apply, leaving a half-patched tree that builds.
 
-Both directories are git-ignored, so private patches stay private.
+The directory is git-ignored, so private patches stay private.
 
 ### What a tarball leaves behind
 

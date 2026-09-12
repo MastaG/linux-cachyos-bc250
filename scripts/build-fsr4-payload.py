@@ -337,6 +337,10 @@ def main() -> int:
     # can be A/B'd against the shipped one on real hardware without a separate
     # package and without anyone hand-editing a prefix -- which pinning makes
     # impossible anyway, since every file is verified before launch.
+    ap.add_argument("--ffx-sdk-default", default="",
+                    help="name of an --ffx-sdk-alt variant to ship as the default; "
+                         "the AMD-signed --ffx-sdk bridge then becomes the "
+                         "'signed' variant")
     ap.add_argument("--ffx-sdk-alt", action="append", default=[], nargs=3,
                     metavar=("NAME", "PATH", "ORIGIN"),
                     help="an opt-in bridge variant: the short name the wrapper "
@@ -362,30 +366,59 @@ def main() -> int:
     artifacts.mkdir(parents=True)
 
     aliases = {}
-    variants = [(args.ffx_sdk, args.optiscaler_version, "", None)]
+    variants = []
+
+    # SIGNED_NAME is what the AMD-signed bridge is called once something else is
+    # the default. It has to be reachable by name either way: a player comparing
+    # an unsigned bridge against the signed one is the whole point of having
+    # variants, and "what this package used to do" has to stay one launch option
+    # away.
+    SIGNED_NAME = "signed"
+    if args.ffx_sdk_default and args.ffx_sdk_default not in {
+        name for name, _, _ in args.ffx_sdk_alt
+    }:
+        raise SystemExit(
+            f"ERROR: --ffx-sdk-default names no variant: {args.ffx_sdk_default!r}")
+
+    def unsigned_provenance(dll: Path, origin: str, is_default: bool) -> str:
+        return (
+            "amd_fidelityfx_upscaler_dx12.dll in this directory is NOT the "
+            "AMD-signed FidelityFX SDK binary.\n\n"
+            f"Origin: {origin or 'unspecified'}\n"
+            f"SHA256: {digest(dll)}\n\n"
+            + ("It is a third-party modified build, and it is what this package "
+               "ships by default. AMD's signed bridge remains available with "
+               f"PROTON_USE_OPTISCALER={SIGNED_NAME}.\n"
+               if is_default else
+               "It is a third-party modified build, selected explicitly by "
+               "PROTON_USE_OPTISCALER.\n")
+        )
 
     with tempfile.TemporaryDirectory(prefix=".payload-") as temporary:
         staging = Path(temporary)
+        signed_is_default = not args.ffx_sdk_default
+        if signed_is_default:
+            variants.append((args.ffx_sdk, args.optiscaler_version, "", None))
+        else:
+            # Same treatment the alternates get, so the signed build is a normal
+            # variant rather than a special case with its own code path.
+            signed_version = args.optiscaler_version + "-" + SIGNED_NAME
+            aliases[SIGNED_NAME] = signed_version
+            variants.append((args.ffx_sdk, signed_version, "", None))
+
         for name, path, origin in args.ffx_sdk_alt:
-            if name in ("", "default", "1", "0") or name in aliases:
+            if name in ("", "default", "1", "0", SIGNED_NAME) or name in aliases:
                 raise SystemExit(f"ERROR: unusable variant name: {name!r}")
             source = Path(path)
             dll, notices = bridge_from(source, staging, name)
-            alt_version = args.optiscaler_version + "-" + name
-            aliases[name] = alt_version
+            is_default = name == args.ffx_sdk_default
+            version = (args.optiscaler_version if is_default
+                       else args.optiscaler_version + "-" + name)
+            # The default's own short name resolves too, so the launch option
+            # documented for it keeps working once it becomes the default.
+            aliases[name] = version
             variants.append(
-                (
-                    dll,
-                    alt_version,
-                    "amd_fidelityfx_upscaler_dx12.dll in this directory is NOT "
-                    "the AMD-signed FidelityFX SDK binary.\n\n"
-                    f"Origin: {origin or 'unspecified'}\n"
-                    f"SHA256: {digest(dll)}\n\n"
-                    "It is a third-party modified build, selected explicitly by "
-                    "PROTON_USE_OPTISCALER. The default payload ships AMD's "
-                    "signed bridge instead.\n",
-                    notices,
-                )
+                (dll, version, unsigned_provenance(dll, origin, is_default), notices)
             )
 
         entries = []

@@ -8,6 +8,7 @@ import io
 import json
 import lzma
 import subprocess
+import sys
 import tarfile
 import tempfile
 import types
@@ -437,6 +438,89 @@ class RuntimeTests(unittest.TestCase):
         ini.parent.mkdir(parents=True, exist_ok=True)
         ini.write_text(text)
         return ini
+
+    def game_dir(self, *relative):
+        root = self.work / "game"
+        for path in relative:
+            target = root / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("marker")
+        root.mkdir(parents=True, exist_ok=True)
+        return root
+
+    def test_an_anticheat_game_gets_the_documented_opt_out(self):
+        # Injecting into EAC or BattlEye is what gets accounts banned, and this
+        # package injects by default, so it steps aside when it sees one.
+        for marker in (
+            "EasyAntiCheat/easyanticheat_x64.dll",
+            "Game/Binaries/Win64/EasyAntiCheat_EOS/marker.txt",
+            "Game/Binaries/Win64/start_protected_game.exe",
+            "BattlEye/BEService.exe",
+        ):
+            with self.subTest(marker=marker):
+                root = self.game_dir(marker)
+                with mock.patch.object(wrapper, "TOOL", self.work):
+                    env = wrapper.environment(
+                        self.config,
+                        {"SteamAppId": "999999998",
+                         "STEAM_COMPAT_INSTALL_PATH": str(root)},
+                        game=True,
+                    )
+                self.assertEqual(env["PROTON_FSR4_UPGRADE"], "0")
+                self.assertEqual(env["PROTON_USE_OPTISCALER"], "0")
+                # and no proxy override, so nothing is loaded from the prefix
+                self.assertNotIn("WINEDLLOVERRIDES", env)
+                for path in root.rglob("*"):
+                    if path.is_file():
+                        path.unlink()
+
+    def test_steams_layered_runtimes_are_enough_on_their_own(self):
+        for inherited in (
+            {"PROTON_EAC_RUNTIME": "/steam/eac"},
+            {"PROTON_BATTLEYE_RUNTIME": "/steam/be"},
+            {"STEAM_COMPAT_TOOL_PATHS": "/steam/Proton EasyAntiCheat Runtime/:/x"},
+        ):
+            with self.subTest(inherited=inherited):
+                with mock.patch.object(wrapper, "TOOL", self.work):
+                    env = wrapper.environment(
+                        self.config, dict(inherited, SteamAppId="999999998"), game=True)
+                self.assertEqual(env["PROTON_FSR4_UPGRADE"], "0")
+
+    def test_an_ordinary_game_is_untouched_by_the_guard(self):
+        root = self.game_dir("Game/Binaries/Win64/game.exe", "steam_api64.dll")
+        with mock.patch.object(wrapper, "TOOL", self.work):
+            env = wrapper.environment(
+                self.config,
+                {"SteamAppId": "999999998", "STEAM_COMPAT_INSTALL_PATH": str(root)},
+                game=True,
+            )
+        self.assertNotEqual(env["PROTON_FSR4_UPGRADE"], "0")
+        self.assertNotEqual(env["PROTON_USE_OPTISCALER"], "0")
+
+    def test_the_player_can_still_force_it_on(self):
+        # Detection can be wrong -- a game that ships EAC files without running
+        # them would otherwise lose its upscaler with no way back.
+        root = self.game_dir("EasyAntiCheat/easyanticheat_x64.dll")
+        with mock.patch.object(wrapper, "TOOL", self.work):
+            env = wrapper.environment(
+                self.config,
+                {"SteamAppId": "999999998",
+                 "STEAM_COMPAT_INSTALL_PATH": str(root),
+                 "PROTON_FSR4_UPGRADE": "1"},
+                game=True,
+            )
+        self.assertNotEqual(env["PROTON_FSR4_UPGRADE"], "0")
+        self.assertNotEqual(env["PROTON_USE_OPTISCALER"], "0")
+
+    def test_the_scan_does_not_walk_a_whole_game_library(self):
+        # Every launch pays for this, so it is bounded in both directions.
+        root = self.work / "deep"
+        path = root
+        for level in range(8):
+            path = path / f"level{level}"
+        (path / "EasyAntiCheat").mkdir(parents=True)
+        self.assertIsNone(
+            wrapper.anticheat_reason({"STEAM_COMPAT_INSTALL_PATH": str(root)}))
 
     def test_a_prefix_with_no_opinion_gets_the_packaged_spoofing(self):
         # Nothing written yet: the package decides, as it always has.
@@ -872,6 +956,104 @@ class PresetTests(unittest.TestCase):
                 preset.write_text(json.dumps({key: value}))
                 with self.assertRaises(RuntimeError):
                     builder.validate_preset(preset, ini)
+
+    def payload_inputs(self, work):
+        """The smallest set of real inputs build-fsr4-payload.py accepts."""
+        archive = work / "opti.tar"
+        with tarfile.open(archive, "w") as tar:
+            for name in ("OptiScaler", "Licenses"):
+                entry = tarfile.TarInfo(name)
+                entry.type = tarfile.DIRTYPE
+                entry.mode = 0o755
+                tar.addfile(entry)
+            for name, data in {"OptiScaler.ini": STUB_INI,
+                               "OptiScaler.dll": b"p" * 2048}.items():
+                entry = tarfile.TarInfo(name)
+                entry.size = len(data)
+                tar.addfile(entry, io.BytesIO(data))
+        fork = work / "fork.tar.xz"
+        with tarfile.open(fork, "w:xz") as tar:
+            for name, data in {
+                "amd_fidelityfx_upscaler_dx12.dll": self.FORK_BRIDGE,
+                "notices/PROVENANCE.md": b"fork notices",
+            }.items():
+                entry = tarfile.TarInfo(name)
+                entry.size = len(data)
+                tar.addfile(entry, io.BytesIO(data))
+        fakenvapi = work / "fn.7z"
+        with tarfile.open(fakenvapi, "w") as tar:
+            entry = tarfile.TarInfo("fakenvapi.dll")
+            entry.size = 64
+            tar.addfile(entry, io.BytesIO(b"f" * 64))
+        signed = work / "signed.dll"
+        signed.write_bytes(self.SIGNED_BRIDGE)
+        provider = work / "prov.xz"
+        provider.write_bytes(lzma.compress(b"provider" * 64))
+        licenses = work / "lic"
+        licenses.mkdir()
+        for name in ("NVIDIA-DLSS.txt", "FidelityFX-SDK-4.0.2.txt"):
+            (licenses / name).write_text("notice")
+        preset = work / "preset.json"
+        preset.write_text(json.dumps({"preset": {"FSR.Fsr4ForceModel": "2"}}))
+        return archive, fork, fakenvapi, signed, provider, licenses, preset
+
+    SIGNED_BRIDGE = b"signed-amd-bridge" * 512
+    FORK_BRIDGE = b"bc250-fork-bridge" * 512
+
+    def build_payload(self, default_name):
+        with tempfile.TemporaryDirectory(prefix="payload-default-") as temporary:
+            work = Path(temporary)
+            archive, fork, fakenvapi, signed, provider, licenses, preset = \
+                self.payload_inputs(work)
+            output = work / "out"
+            output.mkdir()
+            command = [
+                sys.executable, str(ROOT / "scripts/build-fsr4-payload.py"),
+                "--optiscaler", str(archive), "--optiscaler-version", "test-opti",
+                "--optipatcher", str(signed), "--fakenvapi", str(fakenvapi),
+                "--provider", str(provider), "--ffx-sdk", str(signed),
+                "--ffx-sdk-alt", "fsr411f", str(fork), "https://example/rc9",
+                "--dlss", str(signed), "--licenses", str(licenses),
+                "--preset", str(preset), "--manifest-rel", "upscaler-manifest.json",
+                "--proton-rel", "proton", "--output", str(output),
+                "--config", str(output / "cfg.json"),
+            ]
+            if default_name:
+                command += ["--ffx-sdk-default", default_name]
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            config = json.loads((output / "cfg.json").read_text())
+            manifest = json.loads((output / "upscaler-manifest.json").read_text())
+            bridges = {}
+            for entry in manifest["optiscaler"]:
+                artifact = output / "artifacts" / Path(entry["download_url"]).name
+                with tarfile.open(artifact) as tar:
+                    data = tar.extractfile(
+                        "OptiScaler/amd_fidelityfx_upscaler_dx12.dll").read()
+                bridges[entry["version"]] = data
+            return config, bridges
+
+    def test_the_shipped_default_bridge_is_the_one_that_was_asked_for(self):
+        # Which DLL a player gets without setting anything is the single most
+        # consequential thing this builder decides, so it is checked by content
+        # rather than by which flag was passed.
+        config, bridges = self.build_payload("fsr411f")
+        default = config["optiscaler_version"]
+        self.assertEqual(bridges[default], self.FORK_BRIDGE)
+        # The signed build stays reachable, and the variant's own name still
+        # resolves now that it is the default.
+        aliases = config["optiscaler_aliases"]
+        self.assertEqual(aliases["fsr411f"], default)
+        self.assertEqual(bridges[aliases["signed"]], self.SIGNED_BRIDGE)
+
+    def test_without_the_flag_the_signed_bridge_is_still_the_default(self):
+        config, bridges = self.build_payload("")
+        self.assertEqual(bridges[config["optiscaler_version"]], self.SIGNED_BRIDGE)
+        self.assertNotIn("signed", config["optiscaler_aliases"])
+
+    def test_a_default_naming_no_variant_fails_the_build(self):
+        with self.assertRaises(AssertionError):
+            self.build_payload("nosuchvariant")
 
     def test_fakenvapi_does_not_log_unless_asked(self):
         # fakenvapi's compiled default is enable_logs=true, and it reads

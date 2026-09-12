@@ -95,11 +95,11 @@ fi
 
 for component in "${COMPONENTS[@]}"; do
     case "$component" in
-        protonge-latest-bc250)
-            script=/workspace/scripts/build-protonge-latest-bc250-package.sh ;;
         proton-cachyos-native-bc250)
             script=/workspace/scripts/build-proton-cachyos-native-bc250-package.sh ;;
-        *) printf 'ERROR: unknown component: %s\n' "$component" >&2; exit 1 ;;
+        *) printf 'ERROR: %s is not built locally; only proton-cachyos-native-bc250 is\n' \
+               "$component" >&2
+           exit 1 ;;
     esac
 
     printf '==> building %s\n' "$component"

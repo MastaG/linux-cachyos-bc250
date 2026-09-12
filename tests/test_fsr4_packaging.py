@@ -376,11 +376,10 @@ class LocalPatchGateTests(unittest.TestCase):
             capture_output=True,
             text=True,
         )
+        # Only the native package: the Steam Linux Runtime builds are not built
+        # locally, so they carry no hook to test.
         return {
             "proton-cachyos-native": (Path(generated.name) / "native/PKGBUILD").read_text(),
-            "protonge-latest": (
-                ROOT / "packages/protonge-latest-bc250/PKGBUILD.in"
-            ).read_text(),
         }
 
     def run_hook(self, block, tree, patches, **environment):

@@ -89,6 +89,73 @@ def game_launch(arguments, inherited):
     return bool(inherited.get("UMU_ID", "").strip())
 
 
+# Names both anti-cheats put in a game's install directory. Matched
+# case-insensitively against file and directory names, because games ship them
+# with whatever capitalisation they like.
+ANTICHEAT_NAMES = (
+    "easyanticheat",
+    "easyanticheat_eos",
+    "start_protected_game.exe",
+    "battleye",
+    "beservice.exe",
+    "beservice_x64.exe",
+    "beclient.dll",
+    "beclient_x64.dll",
+)
+
+# Where those names live: EAC and BattlEye sit next to the executable, which is
+# usually a couple of directories below the install root. Bounded because this
+# runs on every launch and a game library can be enormous -- a miss costs a
+# game its upscaler, a slow launch costs every game.
+ANTICHEAT_SCAN_DEPTH = 3
+ANTICHEAT_SCAN_DIRS = 400
+
+
+def anticheat_reason(inherited):
+    """Say why this game looks anti-cheat protected, or None if it does not.
+
+    Injecting a DLL into a game running EasyAntiCheat or BattlEye is the kind
+    of thing accounts get banned for, and this package injects by default. So
+    the payload steps aside when it sees one, and says so rather than silently
+    doing nothing.
+
+    This is a safety net, not a guarantee. A game whose anti-cheat arrives on
+    first launch, or that lays its files out differently, will not be caught --
+    so a player who cares still has to set PROTON_FSR4_UPGRADE=0 themselves. It
+    can also be wrong the other way: a game that ships EAC files without using
+    them loses its upscaler until PROTON_USE_OPTISCALER is set explicitly.
+    """
+    for name in ("PROTON_EAC_RUNTIME", "PROTON_BATTLEYE_RUNTIME"):
+        if inherited.get(name, "").strip():
+            return name + " is set"
+
+    # Steam layers the EasyAntiCheat and BattlEye runtimes as compatibility
+    # tools of their own, and passes the whole chain down in this variable.
+    tools = inherited.get("STEAM_COMPAT_TOOL_PATHS", "").lower()
+    for needle in ("easyanticheat", "battleye"):
+        if needle in tools:
+            return "STEAM_COMPAT_TOOL_PATHS names " + needle
+
+    install = inherited.get("STEAM_COMPAT_INSTALL_PATH", "").strip()
+    if not install:
+        return None
+    pending = [(Path(install), 0)]
+    seen = 0
+    while pending and seen < ANTICHEAT_SCAN_DIRS:
+        directory, depth = pending.pop(0)
+        seen += 1
+        try:
+            entries = list(os.scandir(directory))
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.name.lower() in ANTICHEAT_NAMES:
+                return entry.name + " in the game directory"
+            if depth + 1 < ANTICHEAT_SCAN_DEPTH and entry.is_dir(follow_symlinks=False):
+                pending.append((Path(entry.path), depth + 1))
+    return None
+
+
 def defaulted(env, name, value):
     """Set `name` unless the caller chose something. Empty counts as unset."""
     env[name] = env.get(name, "").strip() or value
@@ -267,7 +334,16 @@ def environment(config, inherited, *, game):
     # so an explicit "0" cleanly turns a feature off and an explicit "1" still
     # resolves to what we ship. A specific version we do not have fails the
     # launch with a message naming it, rather than running something unpinned.
-    defaulted(env, "PROTON_FSR4_UPGRADE", config["provider_version"])
+    # An anti-cheat game gets the documented opt-out as its default instead:
+    # both payload steps off, still overridable by anyone who insists.
+    guard = anticheat_reason(inherited)
+    defaulted(env, "PROTON_FSR4_UPGRADE",
+              "0" if guard else config["provider_version"])
+    if guard and env["PROTON_FSR4_UPGRADE"] == "0":
+        sys.stderr.write(
+            "bc250-fsr4: anti-cheat detected (" + guard + "); FSR4 and OptiScaler\n"
+            "bc250-fsr4: are off for this game. Injecting into a protected game\n"
+            "bc250-fsr4: risks a ban. PROTON_FSR4_UPGRADE=1 overrides this.\n")
     # The documented opt-out disables the package's default proxy as well.
     # Otherwise OptiScaler can still discover a provider retained in a prefix.
     defaulted(env, "PROTON_USE_OPTISCALER",
