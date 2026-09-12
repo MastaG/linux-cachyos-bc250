@@ -38,6 +38,7 @@ case "$COMPONENT" in
     linux-cachyos-bc250-meta) ;;
     protonge-latest-bc250) ;;
     proton-cachyos-native-bc250) ;;
+    proton-cachyos-slr-bc250) ;;
     *)
         printf 'ERROR: unsupported fingerprint component: %s\n' "$COMPONENT" >&2
         exit 1
@@ -214,6 +215,58 @@ case "$COMPONENT" in
             hash_files "${payload_sources[@]}"
             hash_files "$ROOT_DIR/scripts/prepare-proton-cachyos-native-pkgbuild.sh" \
                 "$ROOT_DIR/scripts/build-proton-cachyos-native-bc250-package.sh" \
+                "$ROOT_DIR/scripts/resolve-cachyos-mesa.sh" \
+                "$ROOT_DIR/scripts/resolve-fakenvapi.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    proton-cachyos-slr-bc250)
+        # The Steam Linux Runtime sibling of proton-cachyos-native-bc250: same
+        # fork, same commit pin, same payload, different build environment. It
+        # rebuilds when any of that moves.
+        #
+        # The tag comes from CachyOS's own proton-cachyos-slr PKGBUILD rather
+        # than from a pin here, so their release and this package cannot drift.
+        # build-proton-runtime-dist.sh is hashed too: it decides the toolchain,
+        # the tuning and the container this tree is compiled in, so a change
+        # there is a different binary even from an identical source tag.
+        if [[ -z "$CACHYOS_MESA_COMMIT" ]]; then
+            CACHYOS_MESA_COMMIT="$("$ROOT_DIR/scripts/resolve-cachyos-mesa.sh")"
+        fi
+        [[ "$CACHYOS_MESA_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+            printf 'ERROR: invalid CACHYOS_MESA_COMMIT: %s\n' "$CACHYOS_MESA_COMMIT" >&2
+            exit 1
+        }
+        # shellcheck disable=SC1091
+        source "$ROOT_DIR/scripts/fsr4-payload-sources.sh"
+
+        slr_env="$("$ROOT_DIR/scripts/resolve-proton-cachyos-slr.sh")"
+        eval "$slr_env"
+        printf '%s\n' "$SLR_TAG" > "$TMP/slr-tag"
+        printf '%s\n' 'x86-64-v3' > "$TMP/march"
+        printf '%s\n' 'znver2' > "$TMP/mtune"
+
+        if [[ -z "$FAKENVAPI_TAG" ]]; then
+            FAKENVAPI_TAG="$(
+                "$ROOT_DIR/scripts/resolve-fakenvapi.sh" |
+                    awk -F= '$1 == "FAKENVAPI_TAG" { print $2; exit }'
+            )"
+        fi
+        [[ "$FAKENVAPI_TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
+            printf 'ERROR: invalid FAKENVAPI_TAG: %s\n' "$FAKENVAPI_TAG" >&2
+            exit 1
+        }
+        printf '%s\n' "$FAKENVAPI_TAG" > "$TMP/fakenvapi-tag"
+        {
+            (cd "$TMP" && sha256sum *)
+            mapfile -t payload_sources < <(fsr4_payload_source_paths "$ROOT_DIR" proton-cachyos)
+            hash_files "${payload_sources[@]}"
+            hash_files "$ROOT_DIR/packages/proton-cachyos-slr-bc250/PKGBUILD.in" \
+                "$ROOT_DIR/packages/proton-cachyos-slr-bc250/ntsync.conf" \
+                "$ROOT_DIR/scripts/build-proton-cachyos-slr-bc250-package.sh" \
+                "$ROOT_DIR/scripts/build-proton-runtime-dist.sh" \
+                "$ROOT_DIR/scripts/resolve-proton-cachyos-slr.sh" \
                 "$ROOT_DIR/scripts/resolve-cachyos-mesa.sh" \
                 "$ROOT_DIR/scripts/resolve-fakenvapi.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"

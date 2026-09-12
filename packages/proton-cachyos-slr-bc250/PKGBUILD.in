@@ -1,0 +1,212 @@
+# Maintainer: MastaG
+#
+# Template. scripts/build-proton-cachyos-slr-bc250-package.sh resolves the
+# CachyOS release and the OptiScaler build, then substitutes the @...@
+# placeholders. Do not run makepkg on this file directly.
+#
+# CachyOS's Proton, Steam Linux Runtime flavour, built from source for this
+# hardware and packaged with the FSR4 payload the BC-250 needs.
+#
+# Unlike the other two this is not a repack of someone's release binaries: the
+# tree it packages is compiled by scripts/build-proton-runtime-dist.sh in
+# Valve's Steam Runtime SDK image, with -O3 -march=x86-64-v3 -mtune=znver2. That
+# compile cannot happen here -- it needs a container of its own, and makepkg
+# cannot start one -- so it runs first and hands the result over as a source.
+#
+# Why it exists alongside proton-cachyos-native-bc250, which is the same Proton
+# from the same tag: this one keeps require_tool_appid, so it runs inside the
+# Steam Linux Runtime. That is the environment games with EasyAntiCheat or
+# BattlEye require, and the native build cannot offer it.
+
+pkgname=proton-cachyos-slr-bc250
+_srctag=@SLR_TAG@
+_optiscaler_version=@OPTISCALER_VERSION@
+_provider_version=4.1.1
+pkgver=@SLR_VERSION@
+pkgrel=@PKGREL@
+epoch=1
+pkgdesc="CachyOS Proton ${_srctag} (Steam Linux Runtime) for the AMD BC-250, Zen 2 tuned, with a pinned FSR4 provider, OptiScaler and preset"
+arch=('x86_64')
+url="https://github.com/CachyOS/proton-cachyos"
+license=('custom')
+
+# python3 runs both the wrapper and Proton itself. Everything else is inside the
+# tree's own files/, which is what the Steam Linux Runtime then runs.
+depends=('python')
+
+optdepends=('steam: the client that runs this compatibility tool')
+
+# Deliberately no provides=, conflicts= or replaces=. This sits alongside the
+# distro's own Proton packages and our other two, not in place of them.
+
+# !strip because the tree was already stripped where the build wanted it, and
+# the PE objects in it are not ours to rewrite. Stripping would also change
+# files whose SHA256 the pinned manifest describes.
+options=('!strip' '!debug' '!lto' '!staticlibs' 'emptydirs')
+
+source=(
+    # Built by scripts/build-proton-runtime-dist.sh and staged beside this file.
+    "@DIST_ASSET@"
+    "@OPTISCALER_ASSET@::@OPTISCALER_URL@"
+    "OptiPatcher_v0.41.asi::@PAYLOAD_BASE@/OptiPatcher_v0.41.asi"
+    "amdxcffx64_v4.1.1.xz::@PAYLOAD_BASE@/amdxcffx64_v4.1.1.xz"
+    "amd_fidelityfx_upscaler_dx12.dll::https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/f4c1da8e92f3fe563b5c28c44e6267ce6b6b8eb2/Kits/FidelityFX/signedbin/amd_fidelityfx_upscaler_dx12.dll"
+    "amd_fidelityfx_upscaler_dx12_v4.1.1b.dll::@PAYLOAD_BASE@/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll"
+    "bc250-fsr4-dll-4.0.0-rc9.tar.xz::@PAYLOAD_BASE@/bc250-fsr4-dll-4.0.0-rc9.tar.xz"
+    "@FAKENVAPI_ASSET@::@FAKENVAPI_URL@"
+    "nvngx_dlss.dll::https://raw.githubusercontent.com/NVIDIA/DLSS/a291cc7d2cc642a51566f3dfd5376f635cd1b284/lib/Windows_x86_64/rel/nvngx_dlss.dll"
+    '0001-pinned-upscaler-manifest.patch'
+    'bc250-fsr4-launch.py'
+    'build-fsr4-payload.py'
+    'optiscaler-preset.json'
+    'proton-shim.sh'
+    'ntsync.conf'
+    'FidelityFX-SDK-4.0.2.txt'
+    'NVIDIA-DLSS.txt'
+)
+
+# build-fsr4-payload.py unpacks these itself, so makepkg must leave them alone.
+noextract=(
+    "@OPTISCALER_ASSET@"
+    'amdxcffx64_v4.1.1.xz'
+    "@FAKENVAPI_ASSET@"
+    'bc250-fsr4-dll-4.0.0-rc9.tar.xz'
+)
+
+sha256sums=(
+    '@SHA_DIST@'
+    '@OPTISCALER_SHA256@'
+    'fb12735bfcc0d47f534f2206d57ec34129dc3d22b6405a1c2ef86745ab48b2eb'
+    '5de9b6d9f5475a0f2622e4cbce88cde46c68929d9bd0bbc353c70056997bb771'
+    '241e6e5e4d848424eb8ec9a6b22c43fe34cf0cf52d30002ca435ba42e53a9ca0'
+    '0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75'
+    'e7b53b1f1aa7aa4b767c3f73e72a33a9a3c5563eefd1edf48bf165fcb0feac89'
+    '@FAKENVAPI_SHA256@'
+    'be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e'
+    '@SHA_PATCH@'
+    '@SHA_LAUNCH@'
+    '@SHA_PAYLOAD_BUILDER@'
+    '@SHA_PRESET@'
+    '@SHA_SHIM@'
+    '@SHA_NTSYNC@'
+    'be05d8cd5489deff924dbe91e0c5b8c0ff034d43cd11749bf9a67a0c38252b7b'
+    '21b5daec892b12bea692e66bc8fe45cf5902ccaf3a7b831e78050d8859881c37'
+)
+
+prepare() {
+    cd "$srcdir/dist"
+
+    # Teach protonfixes to read a local, checksum-verified manifest.
+    #
+    # This is the proton-cachyos-rooted copy of the patch: CachyOS patch the
+    # same file several times before we see it, so the GE-rooted one does not
+    # apply. It is rooted inside protonfixes/ because that is where Proton's own
+    # build applies it in the source tree.
+    #
+    # Two gates, because an unpatched upscalers.py ignores
+    # PROTON_UPSCALER_MANIFEST and downloads from the network at game launch
+    # instead -- silently, defeating the point of this package.
+    if ! ( cd protonfixes && patch --batch --fuzz=0 -Np1 \
+              -i "$srcdir/0001-pinned-upscaler-manifest.patch" ); then
+        printf 'ERROR: the pinned-manifest patch does not apply to %s\n' "$_srctag" >&2
+        printf '       protonfixes/upscalers.py has moved; rebase the proton-cachyos patch.\n' >&2
+        return 1
+    fi
+    if ! grep -q 'PROTON_UPSCALER_MANIFEST' protonfixes/upscalers.py; then
+        printf 'ERROR: upscalers.py has no pinned-manifest support after patching\n' >&2
+        return 1
+    fi
+
+    # The reason this package exists. Without require_tool_appid Steam runs the
+    # tool outside the Steam Linux Runtime, which is the one thing this offers
+    # over proton-cachyos-native-bc250 -- so a build that lost it should fail
+    # here rather than ship as a slower duplicate of the native package.
+    if ! grep -q '"require_tool_appid"' toolmanifest.vdf; then
+        printf 'ERROR: %s is not a Steam Linux Runtime build: no require_tool_appid\n' \
+            "$_srctag" >&2
+        cat toolmanifest.vdf >&2
+        return 1
+    fi
+
+    find . -type d -name __pycache__ -prune -exec rm -rf -- {} +
+}
+
+build() {
+    # Writes upscaler-manifest.json plus artifacts/ into the tree, and the
+    # wrapper's config beside it. Both come out of the same run so the versions
+    # the wrapper asks for and the versions the manifest offers cannot drift.
+    python3 "$srcdir/build-fsr4-payload.py" \
+        --optiscaler "$srcdir/@OPTISCALER_ASSET@" \
+        --optiscaler-version "$_optiscaler_version" \
+        --optipatcher "$srcdir/OptiPatcher_v0.41.asi" \
+        --fakenvapi "$srcdir/@FAKENVAPI_ASSET@" \
+        --provider "$srcdir/amdxcffx64_v4.1.1.xz" \
+        --provider-version "$_provider_version" \
+        --ffx-sdk "$srcdir/amd_fidelityfx_upscaler_dx12.dll" \
+        --ffx-sdk-default fsr411f \
+        --ffx-sdk-alt fsr411b "$srcdir/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \
+            "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \
+        --ffx-sdk-alt fsr411f "$srcdir/bc250-fsr4-dll-4.0.0-rc9.tar.xz" \
+            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc9" \
+        --dlss "$srcdir/nvngx_dlss.dll" \
+        --licenses "$srcdir" \
+        --preset "$srcdir/optiscaler-preset.json" \
+        --manifest-rel "upscaler-manifest.json" \
+        --proton-rel "proton" \
+        --output "$srcdir/dist" \
+        --config "$srcdir/dist/bc250-fsr4-config.json"
+}
+
+package() {
+    local _tool="$pkgdir/usr/share/steam/compatibilitytools.d/$pkgname"
+    install -d "$_tool"
+
+    # -a to keep the tree's symlinks and executable bits exactly as built.
+    cp -a "$srcdir/dist/." "$_tool/"
+
+    install -Dm755 "$srcdir/proton-shim.sh" "$_tool/bc250-fsr4-proton"
+    install -Dm644 "$srcdir/bc250-fsr4-launch.py" "$_tool/bc250-fsr4-launch.py"
+
+    # Steam runs whatever toolmanifest.vdf names. Point it at the shim so the
+    # pinned payload is selected before Proton starts; upstream's launcher stays
+    # at ./proton, which is what the shim goes on to run.
+    if ! grep -q '"commandline" "/proton ' "$_tool/toolmanifest.vdf"; then
+        printf 'ERROR: toolmanifest.vdf no longer runs /proton; the shim would be bypassed\n' >&2
+        cat "$_tool/toolmanifest.vdf" >&2
+        return 1
+    fi
+    sed -i 's|"commandline" "/proton |"commandline" "/bc250-fsr4-proton |' \
+        "$_tool/toolmanifest.vdf"
+
+    # The internal name is the package name and never carries the version: Steam
+    # stores it per game, so a name that moved with each release would silently
+    # reset everyone's per-game compatibility choice on upgrade.
+    cat > "$_tool/compatibilitytool.vdf" <<EOF_VDF
+"compatibilitytools"
+{
+  "compat_tools"
+  {
+    "$pkgname"
+    {
+      "install_path" "."
+      "display_name" "proton-cachyos ${_srctag#cachyos-} (BC-250 FSR4)"
+      "from_oslist"  "windows"
+      "to_oslist"    "linux"
+    }
+  }
+}
+EOF_VDF
+
+    install -Dm644 "$srcdir/ntsync.conf" "$pkgdir/usr/lib/modules-load.d/10-$pkgname.conf"
+
+    install -d "$pkgdir/usr/share/licenses/$pkgname"
+    # Checked rather than assumed: this package redistributes third-party
+    # binaries, so a build that stopped shipping a notice must fail here.
+    if ! mv "$_tool"/{PATENTS.AV1,LICENSE,LICENSE.OFL} \
+            "$pkgdir/usr/share/licenses/$pkgname/"; then
+        printf 'ERROR: %s no longer ships the licence files this expects\n' "$_srctag" >&2
+        return 1
+    fi
+    install -m644 "$srcdir/FidelityFX-SDK-4.0.2.txt" "$srcdir/NVIDIA-DLSS.txt" \
+        "$pkgdir/usr/share/licenses/$pkgname/"
+}

@@ -171,25 +171,46 @@ Use it only per-game for titles that need the experimental GFX10.3 mesh-shader p
 
 ## FSR4-capable Proton (opt-in)
 
-Two packages, same idea: a Steam compatibility tool with everything FSR 4.1.1
+Three packages, same idea: a Steam compatibility tool with everything FSR 4.1.1
 needs on this hardware already inside it — the AMD FSR4 provider, OptiScaler,
 OptiPatcher, [fakenvapi](https://github.com/optiscaler/fakenvapi) and a
 known-good OptiScaler configuration.
 
-| package | base | build |
-|---|---|---|
-| `protonge-latest-bc250` | GE-Proton, repacked | minutes; tracks the newest GE release |
-| `proton-cachyos-native-bc250` | CachyOS's Proton, rebuilt from source | hours; Zen 2-tuned |
+| package | base | anti-cheat games | notes |
+|---|---|---|---|
+| `proton-cachyos-native-bc250` | CachyOS's Proton, from source | no | the fastest: no runtime container |
+| `proton-cachyos-slr-bc250` | the same Proton, from source | **yes** | Steam Linux Runtime build |
+| `protonge-latest-bc250` | GE-Proton, repacked | yes | tracks GE's own releases within hours |
+
+Both CachyOS packages are compiled for this hardware (`-O3 -march=x86-64-v3
+-mtune=znver2`) rather than repacked from someone's generic release. They differ
+only in where they run: the native one talks to the system directly, which is
+quicker, while the SLR one runs inside the Steam Linux Runtime — the environment
+games with EasyAntiCheat or BattlEye require, and the one the native build cannot
+offer.
 
 ```bash
-sudo pacman -S protonge-latest-bc250            # or
-sudo pacman -S proton-cachyos-native-bc250
+sudo pacman -S proton-cachyos-native-bc250      # or
+sudo pacman -S proton-cachyos-slr-bc250         # or
+sudo pacman -S protonge-latest-bc250
 ```
 
-Both can be installed at once, and both sit alongside the distro's own Proton
-packages. Restart Steam, then pick **GE-Proton 11-6 (BC-250 FSR4)** or
-**proton-cachyos-… (native, BC-250 FSR4)** under a game's Properties →
+All three can be installed at once — `linux-cachyos-bc250-meta` pulls in all of
+them — and all sit alongside the distro's own Proton packages. Restart Steam,
+then pick **proton-cachyos-… (native, BC-250 FSR4)**, **proton-cachyos-…
+(BC-250 FSR4)** or **GE-Proton 11-6 (BC-250 FSR4)** under a game's Properties →
 Compatibility.
+
+**Anti-cheat, and why it needs saying.** These packages inject DLLs into the
+prefix, which is exactly what anti-cheat software is built to notice, and
+accounts have been banned for less. FSR4 and OptiScaler therefore switch
+themselves off when a game is detected as using EasyAntiCheat or BattlEye. That
+detection looks for Steam's layered anti-cheat runtimes and for the files both
+products leave in a game directory — it is a safety net, not a guarantee. A game
+whose anti-cheat arrives on first launch, or that lays its files out unusually,
+will not be caught, and VAC leaves nothing to find at all. **If you play a game
+with anti-cheat, set `PROTON_FSR4_UPGRADE=0 %command%` yourself rather than
+relying on the detection**, or use a Proton without this payload in it.
 
 **That is the whole setup.** FSR4 and OptiScaler are on by default — no launch
 options, no DLLs to copy into game folders, no environment variables.

@@ -343,6 +343,73 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class SlrPackageTests(unittest.TestCase):
+    """The Steam Linux Runtime package's promises, checked at the source.
+
+    This one exists for a single reason -- it runs inside the Steam Linux
+    Runtime, which is what a game with EasyAntiCheat or BattlEye needs and what
+    proton-cachyos-native-bc250 cannot do. Everything else about it duplicates
+    the native package, so the checks here are about not losing that.
+    """
+
+    TEMPLATE = ROOT / "packages/proton-cachyos-slr-bc250/PKGBUILD.in"
+
+    def test_the_build_refuses_a_tree_without_the_runtime_manifest(self):
+        text = self.TEMPLATE.read_text()
+        self.assertIn('grep -q \'"require_tool_appid"\' toolmanifest.vdf', text)
+        # ...and says why, rather than failing with a bare grep exit code.
+        self.assertIn("not a Steam Linux Runtime build", text)
+
+    def test_it_uses_the_cachyos_rooted_protonfixes_patch(self):
+        # CachyOS patch upscalers.py several times before this package sees it,
+        # so the GE-rooted copy does not apply. Picking the wrong one would
+        # leave the launch fetching its upscaler manifest from the network.
+        script = (ROOT / "scripts/build-proton-cachyos-slr-bc250-package.sh").read_text()
+        self.assertIn("stage_fsr4_payload_sources \"$ROOT_DIR\" \"$BUILD_DIR\" proton-cachyos",
+                      script)
+
+    def test_the_package_wraps_a_tree_it_did_not_build_itself(self):
+        # The compile needs Valve's SDK image, which makepkg cannot start. The
+        # script must therefore fail with instructions rather than silently
+        # packaging nothing.
+        script = (ROOT / "scripts/build-proton-cachyos-slr-bc250-package.sh").read_text()
+        self.assertIn("build-proton-runtime-dist.sh", script)
+        self.assertIn("has not been built yet", script)
+
+    def test_every_proton_package_ships_the_same_payload_inputs(self):
+        # Three packages, one payload. A variant that reached only two of them
+        # would be a silent difference in what users get.
+        templates = {
+            "slr": self.TEMPLATE.read_text(),
+            "ge": (ROOT / "packages/protonge-latest-bc250/PKGBUILD.in").read_text(),
+            "native": (ROOT / "scripts/prepare-proton-cachyos-native-pkgbuild.sh").read_text(),
+        }
+        for name, text in templates.items():
+            with self.subTest(package=name):
+                self.assertIn("--ffx-sdk-default fsr411f", text)
+                self.assertIn("--ffx-sdk-alt fsr411b", text)
+                self.assertIn("--ffx-sdk-alt fsr411f", text)
+                self.assertIn("bc250-fsr4-dll-4.0.0-rc9.tar.xz", text)
+
+    def test_the_metapackage_pulls_in_all_three(self):
+        pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()
+        for package in ("protonge-latest-bc250", "proton-cachyos-native-bc250",
+                        "proton-cachyos-slr-bc250"):
+            self.assertIn(f"'{package}'", pkgbuild)
+
+    def test_the_component_is_wired_into_ci(self):
+        # A package nothing builds is a package nobody gets.
+        for path, needle in (
+            ("scripts/ci-build.sh", "build-proton-cachyos-slr-bc250-package.sh"),
+            ("scripts/source-fingerprint.sh", "proton-cachyos-slr-bc250)"),
+            ("scripts/finalize-repository.sh", "proton-cachyos-slr-bc250-info.env"),
+            (".github/workflows/build-release.yml", "BUILD_PROTON_CACHYOS_SLR_BC250"),
+            (".github/workflows/build-release.yml", "build-proton-runtime-dist.sh"),
+        ):
+            with self.subTest(path=path):
+                self.assertIn(needle, (ROOT / path).read_text())
+
+
 class LocalPatchGateTests(unittest.TestCase):
     """local-patches/ must reach a local build and nothing else.
 

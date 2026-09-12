@@ -118,6 +118,7 @@ jobs:
           linux_cachyos_bc250_meta="$(./scripts/source-fingerprint.sh linux-cachyos-bc250-meta)"
           protonge_latest_bc250="$(./scripts/source-fingerprint.sh protonge-latest-bc250)"
           proton_cachyos_native_bc250="$(./scripts/source-fingerprint.sh proton-cachyos-native-bc250)"
+          proton_cachyos_slr_bc250="$(./scripts/source-fingerprint.sh proton-cachyos-slr-bc250)"
           aggregate="$(printf '%s\n' \
             "$kernel_stable" "$kernel_rc" "$kernel_bore" \
             "$mesa" "$lib32_mesa" "$mesa_git" \
@@ -135,6 +136,7 @@ jobs:
           echo "linux_cachyos_bc250_meta=$linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
           echo "protonge_latest_bc250=$protonge_latest_bc250" >> "$GITHUB_OUTPUT"
           echo "proton_cachyos_native_bc250=$proton_cachyos_native_bc250" >> "$GITHUB_OUTPUT"
+          echo "proton_cachyos_slr_bc250=$proton_cachyos_slr_bc250" >> "$GITHUB_OUTPUT"
           echo "aggregate=$aggregate" >> "$GITHUB_OUTPUT"
 
           printf 'Stable kernel fingerprint: %s\n' "$kernel_stable"
@@ -147,6 +149,7 @@ jobs:
           printf 'linux-cachyos-bc250-meta fp: %s\n' "$linux_cachyos_bc250_meta"
           printf 'protonge-latest-bc250 fp:  %s\n' "$protonge_latest_bc250"
           printf 'proton-cachyos-native fp:  %s\n' "$proton_cachyos_native_bc250"
+          printf 'proton-cachyos-slr fp:     %s\n' "$proton_cachyos_slr_bc250"
 
       - name: Determine components to build
         id: build
@@ -162,6 +165,7 @@ jobs:
           LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
           PROTONGE_LATEST_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.protonge_latest_bc250 }}
           PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_native_bc250 }}
+          PROTON_CACHYOS_SLR_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_slr_bc250 }}
         shell: bash
         run: |
           set -euo pipefail
@@ -263,6 +267,7 @@ jobs:
           build_linux_cachyos_bc250_meta=false
           build_protonge_latest_bc250=false
           build_proton_cachyos_native_bc250=false
+          build_proton_cachyos_slr_bc250=false
 
           [[ "$(previous_value kernel-stable-info.env KERNEL_FINGERPRINT KERNEL_STABLE_FINGERPRINT)" == "$KERNEL_STABLE_FINGERPRINT" ]] || build_kernel_stable=true
           [[ "$(previous_value kernel-rc-info.env KERNEL_FINGERPRINT KERNEL_RC_FINGERPRINT)" == "$KERNEL_RC_FINGERPRINT" ]] || build_kernel_rc=true
@@ -274,6 +279,7 @@ jobs:
           [[ "$(previous_value linux-cachyos-bc250-meta-info.env LINUX_CACHYOS_BC250_META_FINGERPRINT LINUX_CACHYOS_BC250_META_FINGERPRINT)" == "$LINUX_CACHYOS_BC250_META_FINGERPRINT" ]] || build_linux_cachyos_bc250_meta=true
           [[ "$(previous_value protonge-latest-bc250-info.env PROTONGE_LATEST_BC250_FINGERPRINT PROTONGE_LATEST_BC250_FINGERPRINT)" == "$PROTONGE_LATEST_BC250_FINGERPRINT" ]] || build_protonge_latest_bc250=true
           [[ "$(previous_value proton-cachyos-native-bc250-info.env PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT)" == "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" ]] || build_proton_cachyos_native_bc250=true
+          [[ "$(previous_value proton-cachyos-slr-bc250-info.env PROTON_CACHYOS_SLR_BC250_FINGERPRINT PROTON_CACHYOS_SLR_BC250_FINGERPRINT)" == "$PROTON_CACHYOS_SLR_BC250_FINGERPRINT" ]] || build_proton_cachyos_slr_bc250=true
 
           if [[ '${{ github.event_name }}' == workflow_dispatch && '${{ inputs.force }}' == true ]]; then
             build_kernel_stable=true
@@ -286,6 +292,7 @@ jobs:
             build_linux_cachyos_bc250_meta=true
             build_protonge_latest_bc250=true
             build_proton_cachyos_native_bc250=true
+            build_proton_cachyos_slr_bc250=true
           fi
 
           # Restoring means the release did not match our known-good state --
@@ -302,7 +309,8 @@ jobs:
                 "$build_lib32_mesa" == true || "$build_mesa_git" == true || \
                 "$build_bc250_dual_audio" == true || "$build_linux_cachyos_bc250_meta" == true || \
                 "$build_protonge_latest_bc250" == true || \
-                "$build_proton_cachyos_native_bc250" == true ]]; then
+                "$build_proton_cachyos_native_bc250" == true || \
+                "$build_proton_cachyos_slr_bc250" == true ]]; then
             any=true
           fi
 
@@ -316,6 +324,7 @@ jobs:
           echo "linux_cachyos_bc250_meta=$build_linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
           echo "protonge_latest_bc250=$build_protonge_latest_bc250" >> "$GITHUB_OUTPUT"
           echo "proton_cachyos_native_bc250=$build_proton_cachyos_native_bc250" >> "$GITHUB_OUTPUT"
+          echo "proton_cachyos_slr_bc250=$build_proton_cachyos_slr_bc250" >> "$GITHUB_OUTPUT"
           echo "any=$any" >> "$GITHUB_OUTPUT"
 
           echo "Build stable kernel: $build_kernel_stable"
@@ -328,6 +337,7 @@ jobs:
           echo "Build linux-cachyos-bc250-meta: $build_linux_cachyos_bc250_meta"
           echo "Build protonge-latest-bc250:    $build_protonge_latest_bc250"
           echo "Build proton-cachyos-native-bc250: $build_proton_cachyos_native_bc250"
+          echo "Build proton-cachyos-slr-bc250: $build_proton_cachyos_slr_bc250"
 
       - name: Seed previous repository
         if: steps.build.outputs.any == 'true'
@@ -441,6 +451,7 @@ jobs:
           LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
           PROTONGE_LATEST_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.protonge_latest_bc250 }}
           PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_native_bc250 }}
+          PROTON_CACHYOS_SLR_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_slr_bc250 }}
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
           CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
           MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
@@ -454,6 +465,7 @@ jobs:
           BUILD_LINUX_CACHYOS_BC250_META: ${{ steps.build.outputs.linux_cachyos_bc250_meta }}
           BUILD_PROTONGE_LATEST_BC250: ${{ steps.build.outputs.protonge_latest_bc250 }}
           BUILD_PROTON_CACHYOS_NATIVE_BC250: ${{ steps.build.outputs.proton_cachyos_native_bc250 }}
+          BUILD_PROTON_CACHYOS_SLR_BC250: ${{ steps.build.outputs.proton_cachyos_slr_bc250 }}
           PROTONGE_TAG: ${{ steps.protonge.outputs.tag }}
           # Empty unless the repository variable pins it, in which case
           # ci-build.sh sizes the cache from the runner's own free space.
@@ -497,6 +509,7 @@ jobs:
             -e BUILD_LINUX_CACHYOS_BC250_META \
             -e BUILD_PROTONGE_LATEST_BC250 \
             -e BUILD_PROTON_CACHYOS_NATIVE_BC250 \
+            -e BUILD_PROTON_CACHYOS_SLR_BC250 \
             -e BC250_PKGREL='${{ github.run_number }}' \
             -e SOURCE_FINGERPRINT \
             -e KERNEL_STABLE_FINGERPRINT \
@@ -509,6 +522,7 @@ jobs:
             -e LINUX_CACHYOS_BC250_META_FINGERPRINT \
             -e PROTONGE_LATEST_BC250_FINGERPRINT \
             -e PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT \
+            -e PROTON_CACHYOS_SLR_BC250_FINGERPRINT \
             -e NCT6687D_COMMIT \
             -e CACHYOS_MESA_COMMIT \
             -e MESA_GIT_COMMIT \
@@ -518,6 +532,30 @@ jobs:
             archlinux:base-devel sleep infinity
 
           docker exec "$container" bash /workspace/scripts/ci-build.sh setup
+
+          # The Steam Linux Runtime Proton is compiled before its package is
+          # built, and not in the container above: it needs Valve's SDK image,
+          # and makepkg cannot start a container of its own. This runs on the
+          # runner, writes the tree into out/dist, and the component build picks
+          # it up from there. Skipped entirely unless that component is building.
+          if [[ "$BUILD_PROTON_CACHYOS_SLR_BC250" == true ]]; then
+            echo "::group::compile the Steam Linux Runtime Proton tree"
+            eval "$(./scripts/resolve-proton-cachyos-slr.sh)"
+            mkdir -p out/dist
+            if BC250_CONTAINER_ENGINE=docker ./scripts/build-proton-runtime-dist.sh \
+                 --repo https://github.com/CachyOS/proton-cachyos.git \
+                 --tag "$SLR_TAG" \
+                 --name proton-cachyos-slr-bc250 \
+                 --out "out/dist/proton-cachyos-slr-bc250-${SLR_VERSION}-dist.tar.xz"; then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              # Same contract as a failed component: say so, keep the previously
+              # published package, and let everything else in this run publish.
+              echo "::error title=proton-cachyos-slr-bc250 source build failed::the Proton tree did not compile; its previous package is kept"
+              BUILD_PROTON_CACHYOS_SLR_BC250=false
+            fi
+          fi
 
           # Cheap components first, so a run that is cut short has published as
           # much as possible. linux-cachyos-bc250-meta is deliberately last:
@@ -533,6 +571,7 @@ jobs:
             "mesa-git:$BUILD_MESA_GIT"
             "protonge-latest-bc250:$BUILD_PROTONGE_LATEST_BC250"
             "proton-cachyos-native-bc250:$BUILD_PROTON_CACHYOS_NATIVE_BC250"
+            "proton-cachyos-slr-bc250:$BUILD_PROTON_CACHYOS_SLR_BC250"
             "linux-cachyos-bc250-meta:$BUILD_LINUX_CACHYOS_BC250_META"
           )
 
@@ -631,6 +670,7 @@ jobs:
             bc250-dual-audio-info.env
             protonge-latest-bc250-info.env
             proton-cachyos-native-bc250-info.env
+            proton-cachyos-slr-bc250-info.env
             linux-cachyos-bc250-meta-info.env
             bc250-cachyos.db bc250-cachyos.db.tar.zst
             bc250-cachyos.files bc250-cachyos.files.tar.zst

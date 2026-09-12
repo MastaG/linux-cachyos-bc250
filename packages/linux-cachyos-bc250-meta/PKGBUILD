@@ -10,7 +10,7 @@
 # and update independently through their own versions as always.
 pkgname=linux-cachyos-bc250-meta
 pkgver=1
-pkgrel=2
+pkgrel=3
 pkgdesc="Metapackage for the recommended BC-250 CachyOS software set (kernel + headers + BC-250 extras)"
 arch=('any')
 url="https://github.com/MastaG/linux-cachyos-bc250"
@@ -19,17 +19,24 @@ depends=(
     'linux-cachyos-bc250'
     'linux-cachyos-bc250-headers'
     'bc250-dual-audio'
-    # Both FSR4 Proton packages. They are alternatives rather than complements
-    # -- same pinned payload, different Proton base -- so this is deliberately
-    # more than a minimal set: it costs roughly 3 GB and puts two compatibility
-    # tools in Steam, and the point is that a BC-250 owner gets whichever one a
-    # given game prefers without having to know the difference in advance.
+    # All three FSR4 Proton packages. They are alternatives rather than
+    # complements -- same pinned payload, different Proton underneath -- so this
+    # is deliberately more than a minimal set: it costs roughly 4.5 GB and puts
+    # three compatibility tools in Steam, and the point is that a BC-250 owner
+    # gets whichever one a given game prefers without having to know the
+    # difference in advance.
+    #
+    # native is the fastest, having no runtime container; slr is the same Proton
+    # built for the Steam Linux Runtime, which is the only one of the three that
+    # can run a game with EasyAntiCheat or BattlEye; GE tracks GE-Proton's own
+    # releases for the games that want a GE-specific fix.
     #
     # Nothing here can dangle: finalize-repository.sh refuses to publish unless
     # every component produced a package, so a new dependency and the package it
     # names always reach the repository in the same release.
     'protonge-latest-bc250'
     'proton-cachyos-native-bc250'
+    'proton-cachyos-slr-bc250'
 )
 
 package() {

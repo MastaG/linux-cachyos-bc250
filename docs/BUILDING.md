@@ -244,6 +244,51 @@ echo ntsync | sudo tee /etc/modules-load.d/ntsync.conf
 sudo modprobe ntsync
 ```
 
+## The Steam Linux Runtime Proton is built in two stages
+
+`proton-cachyos-slr-bc250` is the only component that cannot be built by a single
+`makepkg` run, because the tree it packages has to be compiled inside Valve's
+Steam Runtime SDK image and makepkg cannot start a container of its own.
+
+```bash
+# stage one: compile the tree (runs on the host, needs podman or docker)
+eval "$(./scripts/resolve-proton-cachyos-slr.sh)"
+./scripts/build-proton-runtime-dist.sh \
+    --repo https://github.com/CachyOS/proton-cachyos.git \
+    --tag "$SLR_TAG" --name proton-cachyos-slr-bc250 \
+    --out "out/dist/proton-cachyos-slr-bc250-${SLR_VERSION}-dist.tar.xz"
+
+# stage two: package it (runs under makepkg, in the Arch container as usual)
+./scripts/build-proton-cachyos-slr-bc250-package.sh
+```
+
+Stage two refuses to run without stage one's output and prints the command
+above, so the two cannot get out of step silently. In CI the workflow runs stage
+one on the runner before the component build, and treats a failure there like
+any other failed component: the previously published package is kept and the
+rest of the run still publishes.
+
+What the harness supplies that the fork's own CI does implicitly:
+
+- `--container-engine=none`, so `configure.sh` does not try to start the SDK
+  image from inside it. CachyOS's configure already accepts this; GE's does not,
+  which is one reason GE is not built from source here.
+- `ROOTLESS_CONTAINER=""`, because `configure.sh` runs under `set -u` and only
+  assigns it while probing for an engine.
+- `BASE_SOURCE_DATE_EPOCH`, which Proton's Makefile normally passes inward when
+  it re-enters the container — the half that is skipped by building with
+  `CONTAINER=1` directly. Without it every per-arch timestamp is computed from
+  an empty string, which fails an hour later inside a spirv-tools generator.
+- A fresh build directory per run. The source rule rsyncs each component from
+  its pristine submodule with `--delete`, so a second run through the same
+  directory removes the autoreconf output while the configure stamps still look
+  satisfied.
+
+Tuning goes in as `CFLAGS`/`RUSTFLAGS` before `configure`, exactly as the fork's
+own release workflow does it, never as make-time overrides of `i386_CFLAGS` or
+`x86_64_CFLAGS`: those variables also carry each component's include paths, and
+overriding them cost a vrclient build its Vulkan headers.
+
 ## Package signing
 
 Packages and the repository database are currently unsigned, hence:

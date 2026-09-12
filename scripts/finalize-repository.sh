@@ -38,6 +38,7 @@ required_metadata=(
     linux-cachyos-bc250-meta-info.env
     protonge-latest-bc250-info.env
     proton-cachyos-native-bc250-info.env
+    proton-cachyos-slr-bc250-info.env
 )
 for file in "${required_metadata[@]}"; do
     [[ -f "$OUT_DIR/$file" ]] || {
@@ -118,6 +119,13 @@ proton_native_pkgrel="$(value "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_
 proton_native_optiscaler="$(value "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_OPTISCALER)"
 proton_native_fakenvapi="$(value "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_FAKENVAPI)"
 
+proton_slr_info="$OUT_DIR/proton-cachyos-slr-bc250-info.env"
+proton_slr_pkgver="$(value "$proton_slr_info" PROTON_CACHYOS_SLR_BC250_PKGVER)"
+proton_slr_pkgrel="$(value "$proton_slr_info" PROTON_CACHYOS_SLR_BC250_PKGREL)"
+proton_slr_srctag="$(value "$proton_slr_info" PROTON_CACHYOS_SLR_BC250_SRCTAG)"
+proton_slr_optiscaler="$(value "$proton_slr_info" PROTON_CACHYOS_SLR_BC250_OPTISCALER)"
+proton_slr_fakenvapi="$(value "$proton_slr_info" PROTON_CACHYOS_SLR_BC250_FAKENVAPI)"
+
 for field in \
     stable_pkgbase stable_pkgver stable_pkgrel \
     rc_pkgbase rc_pkgver rc_pkgrel \
@@ -173,6 +181,7 @@ bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
 linux_cachyos_bc250_meta_count="$(pkgbase_count linux-cachyos-bc250-meta)"
 protonge_count="$(pkgbase_count protonge-latest-bc250)"
 proton_native_count="$(pkgbase_count proton-cachyos-native-bc250)"
+proton_slr_count="$(pkgbase_count proton-cachyos-slr-bc250)"
 
 (( stable_count >= 2 )) || { printf 'ERROR: expected stable kernel + headers; found %d package(s)\n' "$stable_count" >&2; exit 1; }
 (( rc_count >= 2 )) || { printf 'ERROR: expected RC kernel + headers; found %d package(s)\n' "$rc_count" >&2; exit 1; }
@@ -184,6 +193,7 @@ proton_native_count="$(pkgbase_count proton-cachyos-native-bc250)"
 (( linux_cachyos_bc250_meta_count == 1 )) || { printf 'ERROR: expected exactly one linux-cachyos-bc250-meta package; found %d\n' "$linux_cachyos_bc250_meta_count" >&2; exit 1; }
 (( protonge_count == 1 )) || { printf 'ERROR: expected exactly one protonge-latest-bc250 package; found %d\n' "$protonge_count" >&2; exit 1; }
 (( proton_native_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-native-bc250 package; found %d\n' "$proton_native_count" >&2; exit 1; }
+(( proton_slr_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-slr-bc250 package; found %d\n' "$proton_slr_count" >&2; exit 1; }
 
 # The database is rebuilt after every component so the runner can publish each
 # one as it lands; do it once more here so the final release is built from the
@@ -434,6 +444,31 @@ sudo pacman -S protonge-latest-bc250
 
 \`\`\`bash
 sudo pacman -S proton-cachyos-native-bc250
+\`\`\`
+
+## proton-cachyos-slr-bc250 (opt-in)
+
+- Package version: \`${proton_slr_pkgver}-${proton_slr_pkgrel}\` (\`${proton_slr_srctag}\`)
+- The same CachyOS Proton as \`proton-cachyos-native-bc250\`, from the same
+  release, but built as a **Steam Linux Runtime** tool — so games that need the
+  runtime work with it, including the ones with EasyAntiCheat or BattlEye that
+  will not run on the native build at all.
+- Compiled from source for this hardware rather than repacked:
+  \`-O3 -march=x86-64-v3 -mtune=znver2\` through every component, in Valve's
+  Steam Runtime SDK image, by \`scripts/build-proton-runtime-dist.sh\`.
+- Same pinned FSR4 payload as the other two: the AMD provider, OptiScaler
+  \`${proton_slr_optiscaler}\`, OptiPatcher, fakenvapi \`${proton_slr_fakenvapi}\`
+  and the shared preset, all verified by SHA256 before they reach a prefix.
+- Installs **alongside** the official \`proton-cachyos-slr\`, not over it. Both
+  appear in Steam; this one as **proton-cachyos-… (BC-250 FSR4)**.
+- Same launch options as the other two. Note that FSR4 and OptiScaler disable
+  themselves when a game is detected as using EasyAntiCheat or BattlEye —
+  injecting into those games risks a ban. That detection is a safety net rather
+  than a guarantee: set \`PROTON_FSR4_UPGRADE=0 %command%\` yourself when in
+  doubt.
+
+\`\`\`bash
+sudo pacman -S proton-cachyos-slr-bc250
 \`\`\`
 
 ## linux-cachyos-bc250-meta
