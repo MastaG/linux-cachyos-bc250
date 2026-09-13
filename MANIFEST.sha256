@@ -5,7 +5,7 @@ edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  ./LICENSE
 fee28e5aa8bbb79b1ec1ab52f557bd03bf9baecec101a666cb8a86612821c4ec  ./README.md
 18680c7d66559c3d964a495950c26900ae89b6b7c4b3fae369f36df4172e4c83  ./docs/BUILDING.md
 8da37c66a2c07945e640ab59fc8a2b3cec057252f764af32ca6bea18ae2489e7  ./docs/FSR4-PROTON.md
-fca5b6b4bcf9b31e94376131e1c3596f380f8b13646fe9aec859075b80f34afa  ./docs/PATCHES.md
+ac7d5fbbe799bb6aa44d659a1e177ef9c83e6af978e03f10b308be9e56adbee8  ./docs/PATCHES.md
 37cfe169230fa08d3e91b058821dd09c3b95d1b0c361c2039ac66a25805542b2  ./docs/ROCM.md
 e041afb10aa2878ebf607ac76a9ac9d84daac3a84e616877215d1913da0afdc0  ./local-patches/README.md
 6347acfdb4e36f6107974736fb818bde0dcb9de45a07fa5941eba124af079fd0  ./packages/bc250-dual-audio/.SRCINFO
@@ -48,6 +48,7 @@ faaa05af2f7ce372f5e4a0494e66e64a7021441264d4bcea391014830548279d  ./patches/linu
 3ebe3dbdf29211a2b42980c5afdc0141f4bb275ad01d7a756e2118633321580c  ./patches/linux-cachyos/0007-amdgpu-ttm-null-page-guard.patch
 94c221aac12529e9a4f94eb06c71be531ca445f5e7d2b9b9c55ea2589d46cfc1  ./patches/linux-cachyos/0008-cyan-skillfish-sclk-range.patch
 e89ac4783de277b627749bf8351f6c64c434c467eaa18c0cbe0b9e2ace1a66ab  ./patches/linux-cachyos/0009-bc250-40cu-unlock.patch
+dc70044447502b828985498902cf9c2312d865c50ef90ed790b047f7d279ce31  ./patches/linux-cachyos/0011-gud-bound-tv-mode-count.patch
 40928eb33765e8647361e62fabddcf8021e1d4b6396f61d31c9667d706ab1141  ./patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
 9f82913b0cadcf813abd2c1bad259632fa976ed2f029710657b48e513de94c8c  ./patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
 69bde6d9a1b37f15b96323abd7625a5b6d85d13821203c5a2eb0edebbcc86c9e  ./patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
@@ -105,5 +106,5 @@ f39757d0abded757b134cb1236a9b76106f30ed70d08e03a8b608228a62de612  ./scripts/upda
 283253eef97376a4b8ca036e8d56aa54fdeaf4beeff262e81ed3062c58915942  ./tests/fixtures/README.md
 4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645  ./tests/fixtures/ge-proton11-6-upscalers.py
 29d0e7244cd46d66cff6d9be331123cc1903281b44af6ee61696edafa3310458  ./tests/fixtures/ge-to-cachyos-native.patch
-60607fe9389f745a15c33e07c627d35101b7fe7be19f27c6468828d616986d2a  ./tests/test_fsr4_packaging.py
+be8d003134700c22eaf13d1420c4957eeab83ef1375c2e5b78077c8166898ea0  ./tests/test_fsr4_packaging.py
 a0e15f52b8cbe63b0735ab46f9cac03011f59ade2678d6f106c41db0950eda22  ./tests/test_fsr4_runtime.py

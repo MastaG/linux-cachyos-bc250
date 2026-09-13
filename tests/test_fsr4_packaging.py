@@ -343,6 +343,53 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class KernelPatchSetTests(unittest.TestCase):
+    """The two kernel patch sets must not drift apart silently.
+
+    They are anchored to different kernel series, so they are separate
+    directories -- but everything except the series-specific carries is meant to
+    be in both. When 7.2.5 backported the drm/gud change, the stable kernel
+    stopped building because its set was missing a patch the RC set had had for
+    weeks, and nothing said so until CI went red.
+    """
+
+    STABLE = ROOT / "patches/linux-cachyos"
+    RC = ROOT / "patches/linux-cachyos-rc"
+
+    # Patches that legitimately exist in one set only, with the reason.
+    RC_ONLY = {"0010-hdmi21-vtem-on-tmds.patch": "backport that applies only to 7.3"}
+
+    def test_the_sets_differ_only_by_documented_carries(self):
+        stable = {p.name for p in self.STABLE.glob("*.patch")}
+        rc = {p.name for p in self.RC.glob("*.patch")}
+        self.assertEqual(sorted(rc - stable), sorted(self.RC_ONLY),
+                         "a patch is in the RC set but not in the stable one")
+        self.assertEqual(sorted(stable - rc), [],
+                         "a patch is in the stable set but not in the RC one")
+
+    @staticmethod
+    def substance(path):
+        """What a patch does, without where it happens to land.
+
+        The two sets are regenerated against different kernels on purpose, so
+        blob hashes in `index` lines and hunk offsets differ by design. What
+        must not differ is the files touched and the lines changed.
+        """
+        touched, changed = [], []
+        for line in path.read_text().splitlines():
+            if line.startswith("diff --git"):
+                touched.append(line)
+            elif line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
+                changed.append(line)
+        return touched, changed
+
+    def test_shared_patches_do_the_same_thing_in_both_sets(self):
+        for name in sorted({p.name for p in self.STABLE.glob("*.patch")}):
+            with self.subTest(patch=name):
+                self.assertEqual(self.substance(self.STABLE / name),
+                                 self.substance(self.RC / name))
+
+
 class SlrPackageTests(unittest.TestCase):
     """The Steam Linux Runtime package's promises, checked at the source.
 

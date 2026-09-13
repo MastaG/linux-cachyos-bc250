@@ -1,0 +1,56 @@
+From: MastaG <badouri.g@gmail.com>
+Subject: [PATCH] drm/gud: bound the TV mode loop so FORTIFY can see it
+
+Since commit da1ea35fea67 ("drm/gud: validate TV mode names before creating
+enum property"), gud_connector_add_tv_mode() performs a fortified read inside
+its loop:
+
+	if (!memchr(mode, '\0', GUD_CONNECTOR_TV_MODE_NAME_LEN))
+
+num_modes is derived from the USB transfer length and is never bounded by
+GUD_CONNECTOR_TV_MODE_MAX_NUM, even though the loop indexes a stack array of
+exactly that many pointers and walks a buffer of exactly that many slots.
+
+At -O3 the loop is unrolled far enough that clang constant-folds
+__builtin_dynamic_object_size(mode, 0) to zero in the copies past the end of
+the 256-byte allocation. __compiletime_lessthan() then folds to true and the
+build dies on the __read_overflow() trap. With LTO it surfaces at link time
+with no call site to point at:
+
+  ld.lld: error: call to __read_overflow marked "dontcall-error": detected
+  read beyond size of object (1st parameter)
+
+Reject a response claiming more modes than the protocol allows, and bound the
+loop itself. Both are needed: the rejection is what keeps the oversized
+num_modes from reaching drm_mode_create_tv_properties_legacy() and reading
+uninitialised entries of modes[], while only the bound in the loop condition
+gives LLVM's induction-variable range the information it needs -- an earlier
+branch on num_modes alone does not silence the trap.
+
+Verified against cachyos-7.3-rc2-1 with clang 22.1.8 and CachyOS's kernel
+config: -O3 fails with or without LTO, -O2 does not fail either way, and this
+change builds in all four combinations.
+
+Signed-off-by: MastaG <badouri.g@gmail.com>
+---
+ drivers/gpu/drm/gud/gud_connector.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/gud/gud_connector.c b/drivers/gpu/drm/gud/gud_connector.c
+index 8141c3a1e30a..c0eab66857d3 100644
+--- a/drivers/gpu/drm/gud/gud_connector.c
++++ b/drivers/gpu/drm/gud/gud_connector.c
+@@ -396,7 +396,12 @@ static int gud_connector_add_tv_mode(struct gud_device *gdrm, struct drm_connect
+ 	}
+ 
+ 	num_modes = ret / GUD_CONNECTOR_TV_MODE_NAME_LEN;
+-	for (i = 0; i < num_modes; i++) {
++	if (num_modes > GUD_CONNECTOR_TV_MODE_MAX_NUM) {
++		ret = -EIO;
++		goto free;
++	}
++
++	for (i = 0; i < num_modes && i < GUD_CONNECTOR_TV_MODE_MAX_NUM; i++) {
+ 		char *mode = &buf[i * GUD_CONNECTOR_TV_MODE_NAME_LEN];
+ 
+ 		if (!memchr(mode, '\0', GUD_CONNECTOR_TV_MODE_NAME_LEN)) {

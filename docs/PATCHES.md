@@ -18,11 +18,11 @@ patches/linux-cachyos-rc/
 `patches/linux-cachyos` is applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`, since `linux-cachyos` and `linux-cachyos-bore` are built from the same upstream source series.  
 `patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`, and the two sets are now anchored to different kernels: `patches/linux-cachyos` targets the **Linux 7.2** series, `patches/linux-cachyos-rc` targets **Linux 7.3-rc**. That is exactly why the directory was split.
 
-The two sets currently contain the same eight patches with the same content — all of them applied to 7.3-rc1 unmodified. Only the hunk offsets and blob hashes differ, because each set is regenerated against its own base so that future rebases are measured from the right kernel.
+The two sets currently contain the same nine patches with the same content — all of them applied to 7.3-rc1 unmodified. Only the hunk offsets and blob hashes differ, because each set is regenerated against its own base so that future rebases are measured from the right kernel.
 
 ### Kernel patch set
 
-Both sets share these eight BC-250 patches — `patches/linux-cachyos` for `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2), `patches/linux-cachyos-rc` for `linux-cachyos-rc-bc250` (7.3-rc):
+Both sets share these nine BC-250 patches — `patches/linux-cachyos` for `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2), `patches/linux-cachyos-rc` for `linux-cachyos-rc-bc250` (7.3-rc):
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -33,7 +33,22 @@ Both sets share these eight BC-250 patches — `patches/linux-cachyos` for `linu
 0007-amdgpu-ttm-null-page-guard.patch
 0008-cyan-skillfish-sclk-range.patch
 0009-bc250-40cu-unlock.patch
+0011-gud-bound-tv-mode-count.patch
 ```
+
+`0011` was written for 7.3-rc and lived only in the RC set until 7.2.5 backported
+the `drm/gud` change that needs it. It is not optional on either series: without
+it the build dies at link time, in a driver this hardware does not even use —
+
+```text
+ld.lld: error: call to __read_overflow marked "dontcall-error": detected
+read beyond size of object (1st parameter)
+```
+
+— which is what happened to `linux-cachyos-bc250` the day 7.2.5 landed. Both the
+failure and the fix were reproduced against 7.2.5 with CachyOS's own config
+before this was moved across, because the trap only appears at `-O3` with
+ThinLTO; a `defconfig` build of the same tree passes.
 
 `patches/linux-cachyos-rc` additionally carries one [HDMI 2.1 patch](#hdmi-21-vrr-and-allm-backport-rc-kernel-only) (`0010`), which applies only to the 7.3 series.
 
