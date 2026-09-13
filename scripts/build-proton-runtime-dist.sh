@@ -101,10 +101,12 @@ OUT="$(cd -- "$(dirname -- "$OUT")" 2>/dev/null && pwd)/$(basename -- "$OUT")" |
     OUT="$(cd -- "$(dirname -- "$OUT")" && pwd)/$(basename -- "$OUT")"
 }
 
-command -v "${ENGINE[0]}" >/dev/null 2>&1 || {
-    printf 'ERROR: %s is not installed\n' "${ENGINE[0]}" >&2
-    exit 1
-}
+for tool in "${ENGINE[0]}" git tar; do
+    command -v "$tool" >/dev/null 2>&1 || {
+        printf 'ERROR: %s is needed to build the Proton tree and is not installed.\n' "$tool" >&2
+        exit 1
+    }
+done
 
 # --- source ----------------------------------------------------------------
 #
@@ -185,10 +187,23 @@ EOF_PATCH
 fi
 
 # --- build -----------------------------------------------------------------
-IMAGE="$(make --silent "SRCDIR=$SRC" --file "$SRC/Makefile.in" TARGET_ARCH=x86_64 \
-    get-steamrt-image 2>/dev/null || true)"
+# Which SDK image the tree wants. `make get-steamrt-image` is the tree's own
+# answer and is used when make is available -- but it is not on a runner where
+# everything is built inside containers, so fall back to reading the pin out of
+# Makefile.in. The x86_64 line specifically: the file also pins an arm64 image.
+IMAGE=""
+if command -v make >/dev/null 2>&1; then
+    IMAGE="$(make --silent "SRCDIR=$SRC" --file "$SRC/Makefile.in" TARGET_ARCH=x86_64 \
+        get-steamrt-image 2>/dev/null || true)"
+fi
 if [[ -z "$IMAGE" ]]; then
-    printf 'ERROR: could not read STEAMRT_IMAGE out of %s/Makefile.in\n' "$SRC" >&2
+    IMAGE="$(grep -oE '[a-z0-9.-]+/[a-z0-9./_-]*sdk/x86_64:[A-Za-z0-9._-]+' \
+        "$SRC/Makefile.in" | head -1 || true)"
+fi
+if [[ -z "$IMAGE" ]]; then
+    printf 'ERROR: could not work out which Steam Runtime SDK image %s wants.\n' "$SRC" >&2
+    printf '       Neither `make get-steamrt-image` nor the STEAMRT_IMAGE pin in\n' >&2
+    printf '       Makefile.in produced one; check whether upstream moved it.\n' >&2
     exit 1
 fi
 # Proton's Makefile passes this inward when it re-enters the container, which is
