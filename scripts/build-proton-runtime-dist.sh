@@ -65,7 +65,24 @@ MARCH="${BC250_PROTON_MARCH:-x86-64-v3}"
 # GE-Proton is not built from source here.
 BUILD_CC="${BC250_PROTON_CC:-gcc}"
 MTUNE="${BC250_PROTON_MTUNE:-znver2}"
-JOBS="${BC250_PROTON_JOBS:-$(nproc)}"
+# Parallelism, bounded by memory rather than by core count alone.
+#
+# Proton builds several components at once and each runs its own parallel make,
+# so the real job count is a multiple of this. At -j$(nproc) on a 51-minute-old
+# build the step died mid-compile with no error at all, which is what an
+# out-of-memory kill looks like from the outside. Roughly 3 GB per job keeps
+# the heavy C++ (gstreamer, ffmpeg, spirv-tools, wine) from stacking up.
+if [[ -n "${BC250_PROTON_JOBS:-}" ]]; then
+    JOBS="$BC250_PROTON_JOBS"
+else
+    JOBS="$(nproc)"
+    mem_gb="$(awk '/MemTotal/ { print int($2 / 1024 / 1024) }' /proc/meminfo 2>/dev/null || echo 0)"
+    if (( mem_gb > 0 )); then
+        by_memory=$(( mem_gb / 3 ))
+        (( by_memory < 2 )) && by_memory=2
+        (( JOBS > by_memory )) && JOBS="$by_memory"
+    fi
+fi
 REPO="" TAG="" NAME="" OUT="" SRC="" KEEP_BUILD=false
 # A named volume, not a host path. $HOME is not a safe assumption where this
 # runs: on the CI runner the container engine could not create /root/.cache and
@@ -217,6 +234,7 @@ fi
 EPOCH="$(git -C "$SRC" show -s --format=%ct HEAD 2>/dev/null || date +%s)"
 
 printf '==> building %s in %s\n' "$NAME" "$IMAGE"
+printf '    %s parallel jobs\n' "$JOBS"
 
 userns=()
 if [[ "$ENGINE_SPEC" == *podman* ]] \
@@ -252,7 +270,7 @@ fi
     -e HOME="$BUILD" \
     -e CCACHE_DIR=/ccache \
     "$IMAGE" bash -euo pipefail -c "
-        # Proton's Makefile asks `cc` which compiler this is, once, and derives
+        # Proton's Makefile asks 'cc' which compiler this is, once, and derives
         # the whole matched set from the answer. So answer it here.
         # /usr/bin, not whatever is first on PATH: the image puts ccache
         # wrappers ahead of it, and a ccache wrapper dispatches on the name it

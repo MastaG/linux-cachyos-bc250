@@ -75,7 +75,7 @@ e6332c58538e9634e63e9aa19f4268b097295e00d8a9a9d83b7b41c9f45c530d  ./scripts/buil
 9f46aa663f2e7929e748230f31d356b28b58e98bd2c10b8798d4eecc1637c60c  ./scripts/build-package.sh
 4239b6eb5941bb38a6b6c1509d53d5918ea7ee3aa67c00d90eb82e939c00915b  ./scripts/build-proton-cachyos-native-bc250-package.sh
 8ff7b8930bb53510449743ce9f13313ae605c8f166b529ccf97deb3e940a449f  ./scripts/build-proton-cachyos-slr-bc250-package.sh
-1c723d033d8589326b2414773cdd17d5d771a7e815ad3c58cae095bdf970339a  ./scripts/build-proton-runtime-dist.sh
+3885187bc25ef491061d67de75ae0c12cb29b9e6fff6c570d5d1a135e38336fd  ./scripts/build-proton-runtime-dist.sh
 4dcb189796c2ce66b41d30dcb965ba77e4739469f93f74cb1c21065c029b368c  ./scripts/build-proton-tarball.sh
 a740f16d49595dfc11cf8852c1e4ce27864e56f7bd4ef5f4eea11de935430675  ./scripts/build-protonge-latest-bc250-package.sh
 98c6dd179d47671451e1d5cb0a10571e86fc0d8064f2102a9abe23e7aaac909c  ./scripts/check-fsr4-driver.py
