@@ -535,18 +535,27 @@ jobs:
 
           # The Steam Linux Runtime Proton is compiled before its package is
           # built, and not in the container above: it needs Valve's SDK image,
-          # and makepkg cannot start a container of its own. This runs on the
-          # runner, writes the tree into out/dist, and the component build picks
-          # it up from there. Skipped entirely unless that component is building.
+          # and makepkg cannot start a container of its own.
+          #
+          # It builds outside the workspace and the result is copied in. The
+          # workspace belongs to `builder` inside the container and to the
+          # runner outside it, and the two cannot both write there: handing it
+          # back and forth broke the metapackage one run and this step the next.
           if [[ "$BUILD_PROTON_CACHYOS_SLR_BC250" == true ]]; then
             echo "::group::compile the Steam Linux Runtime Proton tree"
             eval "$(./scripts/resolve-proton-cachyos-slr.sh)"
-            mkdir -p out/dist
+            slr_work="${RUNNER_TEMP}/bc250-proton"
+            slr_tarball="${slr_work}/proton-cachyos-slr-bc250-${SLR_VERSION}-dist.tar.xz"
+            mkdir -p "$slr_work"
             if BC250_CONTAINER_ENGINE=docker ./scripts/build-proton-runtime-dist.sh \
                  --repo https://github.com/CachyOS/proton-cachyos.git \
                  --tag "$SLR_TAG" \
                  --name proton-cachyos-slr-bc250 \
-                 --out "out/dist/proton-cachyos-slr-bc250-${SLR_VERSION}-dist.tar.xz"; then
+                 --src "${slr_work}/src" \
+                 --out "$slr_tarball"; then
+              docker exec "$container" install -d -o builder -g builder /workspace/out/dist
+              docker cp "$slr_tarball" "$container:/workspace/out/dist/"
+              docker exec "$container" chown -R builder:builder /workspace/out/dist
               echo "::endgroup::"
             else
               echo "::endgroup::"
@@ -555,11 +564,6 @@ jobs:
               echo "::error title=proton-cachyos-slr-bc250 source build failed::the Proton tree did not compile; its previous package is kept"
               BUILD_PROTON_CACHYOS_SLR_BC250=false
             fi
-            # This step runs as the runner, inside the same workspace the build
-            # container works in as `builder`, so anything it created belongs to
-            # the wrong user -- which is how a failed source build went on to
-            # break the metapackage with a bare "Permission denied".
-            docker exec "$container" chown -R builder:builder /workspace/build /workspace/out
           fi
 
           # Cheap components first, so a run that is cut short has published as
