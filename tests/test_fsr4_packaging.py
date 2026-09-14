@@ -404,14 +404,17 @@ class KernelPatchSetTests(unittest.TestCase):
         self.assertIn(self.number_word(len(shipped)) + " patches", text)
         self.assertIn(self.number_word(len(shipped)) + " BC-250 patches", text)
 
-    def test_hdmi21_patches_stay_opt_in(self):
-        """0012/0013 must be gated by amdgpu.bc250_hdmi21, never unconditional.
+    def test_hdmi21_patches_stay_switchable_and_default_on(self):
+        """0012/0013 are on by default but must keep amdgpu.bc250_hdmi21 as an
+        off switch that gives an unpatched kernel back.
 
-        The first release shipped them enabled for everyone and a user reported
-        a dark display. The gist they come from is unconditional, so a careless
-        re-import would silently undo the switch: the removed line
-        `.num_dsc = 0,` and an unguarded `dp_hdmi21_pcon_support = true` are
-        the two signatures of that.
+        They shipped unconditional, then opt-in after a dark-display report,
+        then on again once that report proved unrelated. The gist they come
+        from has no switch at all, so a careless re-import would drop it: the
+        removed line `.num_dsc = 0,` and an unguarded
+        `dp_hdmi21_pcon_support = true` are the two signatures of that. The
+        default is pinned too, because users asked for it and it decides what
+        everyone gets.
         """
         for patch_set in (self.STABLE, self.RC):
             for name in ("0012-dcn201-hdmi21-pcon.patch", "0013-dcn201-enable-dsc.patch"):
@@ -423,6 +426,8 @@ class KernelPatchSetTests(unittest.TestCase):
             self.assertIn("+\tif (dc->config.bc250_hdmi21)\n"
                           "+\t\tdc->caps.dp_hdmi21_pcon_support = true;", pcon)
             self.assertIn('module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);', pcon)
+            self.assertIn("+int amdgpu_bc250_hdmi21 = 1;\n", pcon,
+                          "the switch must default to on")
 
     @staticmethod
     def number_word(n):

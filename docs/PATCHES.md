@@ -123,24 +123,30 @@ path than anything `0010` touches.
 
 Two patches, `0012` and `0013`. Together they make 3840x2160@120Hz at full 4:4:4
 chroma reachable on a BC-250 through a DisplayPort 1.4 → HDMI 2.1 FRL protocol
-converter. **Both are off by default** and enabled together with
+converter. **Both are on by default**, behind one parameter that exists as an
+off switch:
 
 ```text
-amdgpu.bc250_hdmi21=1
+amdgpu.bc250_hdmi21=0
 ```
 
-The first release carried them unconditionally; a user reported a dark display
-after that update and, as is the way with such reports, nothing else. A display
-patch has exactly one failure mode and this project cannot try every adapter
-and TV, so the change became a switch. `0012` defines the parameter in
-`amdgpu_drv.c`, `amdgpu_dm.c` copies it into `dc_init_data.flags`, and it
-arrives in the resource pool as `dc->config.bc250_hdmi21` — the same route DC
-already uses for its other OS-side switches. With the parameter at its default
-every touched path is identical to an unpatched kernel: the stock
-`res_cap_dnc201` (num_dsc = 0) is selected, the DSC create and destroy loops
-run zero times, `.add_dsc_to_stream_resource` stays NULL, `dcn201_ip.num_dsc`
-is assigned the zero it already held, and `dp_hdmi21_pcon_support` is never
-set.
+History, briefly: the first release carried them unconditionally, a user
+reported a dark display after that update, and the change became opt-in for a
+day. The report turned out to be unrelated (a locally patched kernel with a
+forced mode, replaced by the update), and a controlled test on a BC-250 into an
+LG G5 through a UGREEN 8K adapter then showed the patches doing exactly what
+they claim — FRL PCON negotiated, DSC at 12 bpp, 3840x2160@120 RGB with HDR,
+against 4:2:0 on the same hardware with the switch off — so they went back to
+on. The parameter stayed, because it costs nothing and gives anyone a way back.
+
+`0012` defines the parameter in `amdgpu_drv.c` (default 1), `amdgpu_dm.c`
+copies it into `dc_init_data.flags`, and it arrives in the resource pool as
+`dc->config.bc250_hdmi21` — the same route DC already uses for its other
+OS-side switches. With it set to `0` every touched path is identical to an
+unpatched kernel: the stock `res_cap_dnc201` (num_dsc = 0) is selected, the DSC
+create and destroy loops run zero times, `.add_dsc_to_stream_resource` stays
+NULL, `dcn201_ip.num_dsc` is assigned the zero it already held, and
+`dp_hdmi21_pcon_support` is never set.
 
 Both are the work of **TeleBooth**, who published them at
 <https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e> along with
@@ -241,8 +247,8 @@ mode is a dark screen rather than an oops.
 - An **active** DP 1.4 → HDMI 2.1 FRL protocol converter. A passive DP++ adapter
   cannot do FRL and is unaffected by these patches.
 - A sink that reports DSC and FEC support — any HDMI 2.1 TV, in practice.
-- `amdgpu.bc250_hdmi21=1` on the kernel command line. With it set there is
-  nothing else to configure: DC uses DSC when a mode needs it.
+- Nothing on the kernel command line. DC uses DSC when a mode needs it, and
+  only then: with a stream that fits uncompressed, DSC stays off.
 
 To confirm it engaged, with debugfs mounted:
 
@@ -251,9 +257,53 @@ sudo grep -H . /sys/kernel/debug/dri/*/DP-1/dsc_clock_en \
                 /sys/kernel/debug/dri/*/DP-1/dsc_bits_per_pixel
 ```
 
-`dsc_clock_en: 1` and a `dsc_bits_per_pixel` of `224` (14 bpp) is the working
-state. If DSC is not engaged the mode simply falls back to what fits — 4K120
-4:2:0 or 4K60 4:4:4 — rather than failing visibly.
+`dsc_clock_en: 1` with a `dsc_bits_per_pixel` of `192` (12 bpp, the HDMI-spec
+value for a CTA 4K120 timing) is the working state seen on the LG G5; the gist's
+LG CX capture shows `224` (14 bpp). If DSC is not engaged the mode simply falls
+back to what fits — 4K120 4:2:0 or 4K60 4:4:4 — rather than failing visibly.
+
+### Known issue: black screen from kernel takeover until a hotplug
+
+Not caused by these patches, but found while testing them, and anyone with a
+DP→HDMI 2.1 adapter may hit it. On a BC-250 into an LG G5 through a UGREEN 8K
+adapter, the BIOS logo and Limine display fine, then the screen goes black the
+moment amdgpu takes over and stays black until the HDMI cable is re-seated. The
+system is up throughout: the link is trained, the compositor has set 4K120, and
+a *simulated* hotplug through debugfs brings the picture just as a physical one
+does.
+
+Established from four instrumented boots (`drm.debug=0x11e`):
+
+- It happens with `amdgpu.bc250_hdmi21=0` too, where fbcon's first stream is an
+  ordinary 4K60 RGB 8-bit signal any HDMI 2.0 adapter carries. FRL and DSC are
+  bystanders.
+- The DPCD write sequence of the boot-time modeset and the post-hotplug modeset
+  is byte-identical (sink D3/D0, link training, FEC, DSC enable, PPS). The
+  adapter's reported capabilities are identical too. The source does the same
+  thing twice; the adapter ends up in a different state — which points at the
+  BIOS/GOP → amdgpu handover.
+- It never happened on a native DisplayPort monitor.
+
+Prime suspect, not yet tested: `cachyos-7.2.5-1` merged two CachyOS-only
+branches that upstream 7.2.5 lacks, `7.2/hdmi` ("Enable HDMI VRR over PCON",
+"Merge HDMI and PCON paths", ...) and `7.2/vesa-dsc-bpp`. The next steps are an
+A/B against the 7.2.4 build and against CachyOS's stock 7.2.5 kernel.
+
+Until it is understood, a one-file workaround restores the picture ~15 s after
+boot at the cost of the boot splash — a oneshot that fires the simulated
+hotplug once the compositor has a mode:
+
+```bash
+# /usr/local/bin/bc250-hdmi-hotplug
+for c in /sys/class/drm/card*-DP-*; do
+    [ "$(cat "$c/status")" = connected ] && [ "$(cat "$c/enabled")" = enabled ] || continue
+    n=${c##*/card?-}; d=$(ls -d /sys/kernel/debug/dri/*/"$n" | head -1)
+    sleep 3; echo 0 > "$d/trigger_hotplug"; sleep 2; echo 1 > "$d/trigger_hotplug"; exit 0
+done
+```
+
+with a `Type=oneshot` unit `After=multi-user.target` that runs it. Remove both
+once the cause is fixed.
 
 
 ## Optional 40 CU unlock

@@ -170,16 +170,12 @@ Use it only per-game for titles that need the experimental GFX10.3 mesh-shader p
 
 ---
 
-## 4K120 at 4:4:4 over an HDMI 2.1 adapter (opt-in)
+## 4K120 at 4:4:4 over an HDMI 2.1 adapter
 
 All three kernels carry two DCN201 display patches that let the BC-250 drive
 **3840x2160 at 120 Hz with full 4:4:4 chroma** through a DisplayPort 1.4 → HDMI
-2.1 FRL adapter. They are **off by default** and switched on with one kernel
-parameter:
-
-```text
-amdgpu.bc250_hdmi21=1
-```
+2.1 FRL adapter. They are **on by default**. There is nothing to enable: boot the
+kernel and the mode is offered if your hardware can carry it.
 
 The board could always reach 4K120, but not at full colour. A TV's 4K120 timing
 runs a 1188 MHz pixel clock, so RGB/4:4:4 needs 28.5 Gbit/s at 8-bit and 35.6 at
@@ -190,34 +186,48 @@ two DSC engines on-die; the Linux driver simply declared it had none. It also
 validated every mode through an HDMI 2.1 adapter against the adapter's *HDMI
 2.0* pixel-clock limit, never reading its FRL bandwidth — so even an adapter
 that was doing FRL on its own HDMI side was held to 600 MHz on the DisplayPort
-side, which is exactly 4K120 at 4:2:0 8-bit and nothing more. With the parameter
-set, the driver reads the adapter's real FRL bandwidth and has DSC to fill it.
+side, which is exactly 4K120 at 4:2:0 8-bit and nothing more. The patches fix
+both.
 
-**Why opt-in.** A first release shipped this enabled for everyone and one user
-reported a dark display after updating. That is the one failure mode a display
-patch has, it is not something this project can reproduce on every adapter and
-TV out there, and nobody on a plain DisplayPort monitor gets anything from the
-change. So it is a switch: with the parameter absent, every code path is
-identical to an unpatched kernel — not "disabled", *absent*.
-
-Set it on CachyOS with Limine the same way as any other kernel parameter, then
-reboot:
-
-```bash
-printf '%s\n' 'KERNEL_CMDLINE[default]+=amdgpu.bc250_hdmi21=1' | \
-  sudo tee -a /etc/default/limine >/dev/null
-sudo limine-mkinitcpio
-```
-
-Remove that line again and rebuild to go back. If the screen stays dark after
-enabling it, boot the previous Limine snapshot entry — CachyOS takes one before
-every upgrade — or edit the boot entry and delete the parameter for that boot.
+**Verified on hardware.** On a BC-250 into an LG G5 through a UGREEN 8K DP→HDMI
+2.1 adapter, this repository's kernel negotiates the FRL PCON, engages DSC at
+12 bpp and drives 3840x2160@120 **RGB** with HDR — where the same kernel with
+the feature off sends the same mode as 4:2:0. The debugfs capture that shows it
+is in the commit that turned the feature on by default.
 
 What you need for it to do anything:
 
-- an **active** DP 1.4 → HDMI 2.1 FRL protocol converter (reported working:
-  Cable Matters 102101). A passive DP++ adapter cannot do FRL and is unaffected;
+- an **active** DP 1.4 → HDMI 2.1 FRL protocol converter (confirmed: Cable
+  Matters 102101, UGREEN 8K). A passive DP++ adapter cannot do FRL and is
+  unaffected;
 - a sink advertising DSC and FEC — any HDMI 2.1 TV in practice.
+
+Nobody on a native DisplayPort monitor or a passive adapter gets anything from
+the change, and nothing changes for them either: the code paths are only ever
+reached through an HDMI downstream port that reports FRL.
+
+**Switching it off.** The feature sits behind a kernel parameter that defaults
+to on. Set it to `0` and every touched code path is identical to an unpatched
+kernel — not "disabled", *absent*:
+
+```bash
+sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 amdgpu.bc250_hdmi21=0"|' /etc/default/limine
+sudo limine-mkinitcpio
+```
+
+That appends the parameter inside the quotes of the existing
+`KERNEL_CMDLINE[default]+="…"` line, which is the only form
+`limine-mkinitcpio` reads — a separate `KERNEL_CMDLINE[default]+=…` line is
+silently ignored. To go back:
+
+```bash
+sudo sed -i 's| amdgpu.bc250_hdmi21=0||' /etc/default/limine
+sudo limine-mkinitcpio
+```
+
+If a screen ever stays dark after an update, boot the previous Limine snapshot
+entry — CachyOS takes one before every upgrade — or edit the boot entry and add
+the parameter for that boot.
 
 To check it engaged:
 
@@ -228,6 +238,14 @@ sudo grep -H . /sys/kernel/debug/dri/*/DP-1/dsc_clock_en
 `1` means the DSC engine is running. If it does not engage, nothing breaks — the
 mode falls back to what fits, which is the 4K120 4:2:0 or 4K60 4:4:4 you had
 before.
+
+**A known issue that is not this.** Some DP→HDMI 2.1 adapters show a black
+screen from the moment the kernel takes over the display at boot until the cable
+is re-seated, even though the link is up and the compositor is running. It
+happens with the feature off as well, with an ordinary 4K60 signal, so it is not
+these patches; it is under investigation (see
+[docs/PATCHES.md](docs/PATCHES.md#4k120-444-through-an-hdmi-21-pcon) for the
+current state and a one-file workaround).
 
 Credit goes to **TeleBooth**, who did the work of finding that the DSC engines
 were there, getting them running on a real BC-250 and
@@ -525,9 +543,9 @@ Each of these is genuinely optional; the defaults are fine.
 - **[40 CU unlock](docs/PATCHES.md#optional-40-cu-unlock)** — enables the 4
   disabled compute units with `amdgpu.bc250_cc_write_mode=3`. **Read the thermal
   notes first**: it raises power draw, and not every board is stable at 40 CUs.
-- **[4K120 at 4:4:4 over HDMI 2.1](#4k120-at-444-over-an-hdmi-21-adapter-opt-in)** —
-  `amdgpu.bc250_hdmi21=1` enables DSC and HDMI 2.1 PCON negotiation. Only does
-  anything with an active DP→HDMI 2.1 FRL adapter.
+- **[4K120 at 4:4:4 over HDMI 2.1](#4k120-at-444-over-an-hdmi-21-adapter)** —
+  on by default; `amdgpu.bc250_hdmi21=0` switches DSC and HDMI 2.1 PCON
+  negotiation off. Only does anything with an active DP→HDMI 2.1 FRL adapter.
 - **[AMDGPU scheduler tuning](#optional-amdgpu-scheduler-tuning)** — `sched_policy=2`
   helps some systems and hurts others. Workload-dependent; measure it.
 - **[GPU telemetry cache](docs/PATCHES.md#bc-250-apu-telemetry)** — tunables for
@@ -548,22 +566,27 @@ cat /proc/cmdline | grep -o 'amdgpu.sched_policy=[^ ]*'
 
 If no value is printed, the normal kernel default (`0`) is in use.
 
-If you previously followed an older version of this README that added `sched_policy=2` as a required setting, remove that dedicated line and rebuild Limine before comparing policies:
+If you previously followed an older version of this README that appended a separate `KERNEL_CMDLINE[default]+=amdgpu.sched_policy=2` line: that line never did anything — `limine-mkinitcpio` only reads the quoted `KERNEL_CMDLINE[default]+="…"` line, and a second one is silently ignored (verified against the tool on a BC-250) — so you were on the default all along. Delete it to avoid confusion:
 
 ```bash
 sudo sed -i '/^[[:space:]]*KERNEL_CMDLINE\[default\]+=[[:space:]]*amdgpu\.sched_policy=2[[:space:]]*$/d' /etc/default/limine
 sudo limine-mkinitcpio
 ```
 
-To test `sched_policy=2` on CachyOS with Limine, add it to `/etc/default/limine` and regenerate the Limine initramfs configuration:
+To test `sched_policy=2` on CachyOS with Limine, append it inside the quotes of the existing line and regenerate the boot entry:
 
 ```bash
-printf '%s\n' 'KERNEL_CMDLINE[default]+=amdgpu.sched_policy=2' | \
-  sudo tee -a /etc/default/limine >/dev/null
+sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 amdgpu.sched_policy=2"|' /etc/default/limine
 sudo limine-mkinitcpio
 ```
 
-Remove that line again to return to the default HWS policy.  
+To return to the default HWS policy:
+
+```bash
+sudo sed -i 's| amdgpu.sched_policy=2||' /etc/default/limine
+sudo limine-mkinitcpio
+```
+
 The optional ROCm/KFD runlist-TLB workaround documented below requires hardware scheduling and therefore does **not** operate with `sched_policy=2`.
 
 ---
