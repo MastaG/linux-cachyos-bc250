@@ -451,7 +451,7 @@ PROTON_USE_OPTISCALER=fsr411f %command%   # the default, by name
 | | default (`fsr411f`) | `signed` | `fsr411b` |
 |---|---|---|---|
 | Source | [bc250-fsr4-fork v4.0.0-rc10](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10) | [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) |
-| Identifies as | `4.1.1r10` | `4.0.2` | `4.1.1b` |
+| Watermark shows | `4.1.1r10` | `4.1.1 / SOURCE: DRIVER` (the provider; the bridge file itself is 4.0.2) | `4.1.1b` |
 | Aimed at | the BC-250 specifically | the reference | ghosting on RDNA2 |
 | Tested on a BC-250 by its author | yes | — | no |
 | Signed | no | AMD | no |
@@ -473,7 +473,12 @@ Two things to know about the alternatives:
 - Neither the default nor `fsr411b` is a provider version bump. Each binary
   carries its own embedded model, so either likely moves upscaling off the
   provider path the RADV patches target, onto the model baked into the bridge.
-  `signed` is the one that leaves the provider in charge.
+  `signed` is the one that leaves the provider in charge: AMD's 4.0.2 bridge is
+  a shim that hands off to the payload's 4.1.1 `amdxcffx64.dll` provider, so
+  with it the upscaling runs on AMD's own 4.1.1 INT8 model. None of the three
+  ever uses a DLL from the game's own folder — the bridge and provider always
+  come from the pinned payload, and the game's FSR/DLSS DLLs are only the API
+  it talks to.
 - The default and `fsr411b` are unsigned. The build pins each by SHA256 and
   writes its origin into the prefix as `Licenses/THIRD-PARTY-UPSCALER.txt`, so
   they are reproducible — not vouched for. The fork's build additionally ships
