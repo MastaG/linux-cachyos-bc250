@@ -46,7 +46,7 @@ entry_for() {
     local wanted="$1" entry name
     while IFS= read -r entry; do
         name="$(bsdtar -xOf "$work/db.tar.zst" "${entry}desc" 2>/dev/null |
-            awk '/^%NAME%$/ { getline; print; exit }')"
+            awk '/^%NAME%$/ && !done { getline; print; done = 1 }')"
         if [[ "$name" == "$wanted" ]]; then
             printf '%s' "$entry"
             return 0
@@ -55,9 +55,15 @@ entry_for() {
     return 1
 }
 
+# awk must read to end of stream rather than `exit` on the first match: an
+# early exit closes the pipe under bsdtar, bsdtar takes EPIPE on whatever it
+# still had to write and exits nonzero, and under `pipefail` that turns a
+# successful lookup into a silent failure of the assignment it feeds --
+# whether it happens depends on how bsdtar chunks that particular desc in
+# that particular database build, so it worked for weeks and then did not.
 field_of() {
     bsdtar -xOf "$work/db.tar.zst" "${1}desc" 2>/dev/null |
-        awk -v key="%${2}%" '$0 == key { getline; print; exit }'
+        awk -v key="%${2}%" '$0 == key && !done { getline; print; done = 1 }'
 }
 
 downloaded=()

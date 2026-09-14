@@ -540,6 +540,22 @@ class SlrPackageTests(unittest.TestCase):
                         "proton-cachyos-slr-bc250"):
             self.assertIn(f"'{package}'", pkgbuild)
 
+    def test_dependency_installer_never_lets_awk_close_the_pipe_on_bsdtar(self):
+        """install-proton-build-deps.sh reads package metadata through
+        `bsdtar -xOf ... | awk`. An awk that `exit`s on its first match closes
+        the pipe while bsdtar may still be writing; bsdtar then exits nonzero
+        on EPIPE, and under the script's `set -Eeuo pipefail` the assignment
+        it feeds fails silently. It depends on how bsdtar chunks a given desc
+        in a given database build, so it worked for weeks and then took
+        proton-cachyos-native-bc250 down with no error line. awk has to read
+        to end of stream.
+        """
+        text = (ROOT / "scripts/install-proton-build-deps.sh").read_text()
+        for line in text.splitlines():
+            if "awk" in line and "bsdtar" in text:
+                self.assertNotIn("exit }", line, line)
+        self.assertIn("!done", text)
+
     def test_the_component_is_wired_into_ci(self):
         # A package nothing builds is a package nobody gets.
         for path, needle in (
