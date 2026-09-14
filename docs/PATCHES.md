@@ -152,11 +152,24 @@ repository's.
 
 ### Why it needs both
 
-4K120 at 4:4:4 8bpc needs roughly 28 Gbit/s of payload. DP 1.4 HBR3 x4 carries
-25.92 Gbit/s raw, about 20.7 Gbit/s after 8b/10b, so the mode does not fit
-uncompressed — which is why the BC-250 has only ever offered 4K120 at 4:2:0, or
-4K60 at 4:4:4. DSC compresses roughly 1.7:1 (the working capture runs at
-224/16 = 14 bpp) and the mode fits.
+DP 1.4 HBR3 x4 is 8.1 Gbit/s per lane raw, 32.4 Gbit/s over four lanes, and
+25.92 Gbit/s after 8b/10b. A TV advertises 4K120 as CTA-861 VIC 118, a 1188 MHz
+pixel clock, which costs:
+
+| 4K120 encoding | 8-bit | 10-bit | fits 25.92 Gbit/s? |
+|---|---:|---:|---|
+| RGB / 4:4:4 | 28.5 | 35.6 | **no, at any depth** |
+| 4:2:2 | 19.0 | 23.8 | yes |
+| 4:2:0 | 14.3 | 17.8 | yes |
+
+So uncompressed 4K120 over this link is 4:2:2 at best, and full-colour 4K120
+needs DSC no matter the bit depth. DSC compresses roughly 1.7:1 (the working
+capture runs at 224/16 = 14 bpp) and RGB fits.
+
+That table is the DisplayPort link's own limit, which is what applies when the
+adapter presents as a plain DP sink. A DP→HDMI converter that reports itself as
+an HDMI downstream port is held to a second, tighter check — its TMDS clock cap
+— and that is what `0012` is about.
 
 `0012`, when enabled, sets `dc->caps.dp_hdmi21_pcon_support = true`. DCN201 is the only
 DCN2-class resource pool in the tree that leaves it false. What the flag gates

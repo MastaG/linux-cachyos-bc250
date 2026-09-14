@@ -181,9 +181,11 @@ parameter:
 amdgpu.bc250_hdmi21=1
 ```
 
-The board could always reach 4K120, but only by halving the chroma (4:2:0) —
-4K120 at 4:4:4 needs about 28 Gbit/s and DP 1.4 carries roughly 20.7 Gbit/s of
-payload. Display Stream Compression fits it in at about 1.7:1. Cyan Skillfish has
+The board could always reach 4K120, but not at full colour. A TV's 4K120 timing
+runs a 1188 MHz pixel clock, so RGB/4:4:4 needs 28.5 Gbit/s at 8-bit and 35.6 at
+10-bit, and DP 1.4 HBR3 x4 carries 25.92 Gbit/s. Without compression that leaves
+4:2:2 or 4:2:0 — and through a DP→HDMI converter it is less than that, see
+below. Display Stream Compression fits RGB in at about 1.7:1. Cyan Skillfish has
 two DSC engines on-die; the Linux driver simply declared it had none. It also
 validated every mode through an HDMI 2.1 adapter against the adapter's *HDMI
 2.0* pixel-clock limit, never reading its FRL bandwidth — so even an adapter
