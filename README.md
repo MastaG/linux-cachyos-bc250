@@ -15,8 +15,9 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `linux-cachyos-bc250` | Stable BC-250 kernel (`-rc` and `-bore` variants also built) |
 | `mesa` / `lib32-mesa` | Patched Mesa: GFX1013 async compute on by default, FSR4 support |
 | `mesa-git` / `lib32-mesa-git` | Same patches on Mesa main, optional |
-| `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `proton-cachyos-native-bc250` | CachyOS Proton with FSR4, built for Zen 2 |
+| `proton-cachyos-slr-bc250` | The same, on the Steam Linux Runtime: the one for anti-cheat games |
+| `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 | `nct6687d-dkms` | Fan and temperature sensors |
@@ -81,7 +82,7 @@ The stable kernel is the recommended default:
 sudo pacman -Syu linux-cachyos-bc250 linux-cachyos-bc250-headers
 ```
 
-Or install [`linux-cachyos-bc250-meta`](#linux-cachyos-bc250-meta) instead, which pulls in the stable kernel, its headers, and the other BC-250 extras (currently `bc250-dual-audio` and both FSR4 Proton packages) together, and picks up any new ones added to it in the future on a normal `pacman -Syu`.
+Or install [`linux-cachyos-bc250-meta`](#linux-cachyos-bc250-meta) instead, which pulls in the stable kernel, its headers, and the other BC-250 extras (currently `bc250-dual-audio` and all three FSR4 Proton packages) together, and picks up any new ones added to it in the future on a normal `pacman -Syu`.
 
 Optional RC/testing kernel:
 
@@ -417,14 +418,15 @@ A pure metapackage — it installs no files of its own, it just depends on the r
 - `linux-cachyos-bc250`
 - `linux-cachyos-bc250-headers`
 - `bc250-dual-audio`
-- `protonge-latest-bc250`
 - `proton-cachyos-native-bc250`
+- `proton-cachyos-slr-bc250`
+- `protonge-latest-bc250`
 
 ```bash
 sudo pacman -S linux-cachyos-bc250-meta
 ```
 
-The two Proton packages are alternatives rather than complements — the same pinned FSR4 payload over a different Proton — so having both costs roughly 3 GB and puts two entries in Steam's compatibility list. That is deliberate: a BC-250 owner gets whichever one a given game prefers without having to know the difference up front. If you would rather pick one, install it directly and skip the metapackage.
+The three Proton packages are alternatives rather than complements — the same pinned FSR4 payload over a different Proton — so having all of them costs roughly 4.5 GB and puts three entries in Steam's compatibility list. That is deliberate: a BC-250 owner gets whichever one a given game prefers without having to know the difference up front — `proton-cachyos-native-bc250` is the fastest, `proton-cachyos-slr-bc250` is the only one that can run a game with EasyAntiCheat or BattlEye, and `protonge-latest-bc250` follows GE-Proton's own releases for the games that want a GE-specific fix. If you would rather pick one, install it directly and skip the metapackage.
 
 The point of it is future-proofing: as more BC-250-specific extras land in this repository (for example a VCN unlock, once upstream support for that exists), they get added to this package's `depends=` array instead of requiring users to notice and install each one by hand. Once you have `linux-cachyos-bc250-meta` installed, a plain `sudo pacman -Syu` picks up any newly added extra the next time this package's version is bumped for that — the same mechanism that already updates every other package in this repository, extended to cover the set as a whole.
 

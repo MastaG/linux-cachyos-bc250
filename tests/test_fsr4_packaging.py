@@ -390,6 +390,55 @@ class KernelPatchSetTests(unittest.TestCase):
                                  self.substance(self.RC / name))
 
 
+class MetapackageDocsTests(unittest.TestCase):
+    """The README's metapackage list must match what the metapackage installs.
+
+    The list is the only place a user can see what `-meta` pulls in before
+    installing it, so a stale one is a user-facing lie. It went stale once
+    already: `proton-cachyos-slr-bc250` was added to `depends=` and the README
+    kept describing "the two Proton packages", sizes and Steam entries included.
+    """
+
+    PKGBUILD = ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD"
+    README = ROOT / "README.md"
+
+    def depends(self):
+        text = self.PKGBUILD.read_text()
+        body = text.split("depends=(", 1)[1].split(")", 1)[0]
+        names = []
+        for line in body.splitlines():
+            line = line.split("#", 1)[0].strip().strip("'\"")
+            if line:
+                names.append(line)
+        return names
+
+    def documented(self):
+        lines = self.README.read_text().splitlines()
+        start = lines.index("## linux-cachyos-bc250-meta")
+        names, seen_list = [], False
+        for line in lines[start:]:
+            if line.startswith("- `"):
+                seen_list = True
+                names.append(line.split("`")[1])
+            elif seen_list and not line.strip():
+                break
+        return names
+
+    def test_readme_lists_exactly_what_the_metapackage_depends_on(self):
+        self.assertEqual(sorted(self.documented()), sorted(self.depends()))
+
+    def test_readme_does_not_miscount_the_proton_packages(self):
+        protons = [d for d in self.depends() if "proton" in d]
+        text = self.README.read_text()
+        wrong = [phrase for phrase in ("The two Proton packages",
+                                       "both FSR4 Proton packages",
+                                       "two entries in Steam")
+                 if phrase in text]
+        self.assertEqual(wrong, [],
+                         "README still describes a different number of Proton "
+                         "packages than the %d the metapackage installs" % len(protons))
+
+
 class SlrPackageTests(unittest.TestCase):
     """The Steam Linux Runtime package's promises, checked at the source.
 
