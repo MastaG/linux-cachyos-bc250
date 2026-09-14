@@ -147,21 +147,28 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
-### The opt-in `fsr411b` variant
+### The bridge variants: `fsr411f` (default), `signed`, `fsr411b`
 
 OptiScaler loads two separate things: `amdxcffx64.dll`, the FSR4 provider our
 patched RADV drives, and `amd_fidelityfx_upscaler_dx12.dll`, the FidelityFX
 bridge. OptiScaler bundles a 4.1.1 bridge that would shadow the equally
-versioned provider, so the default payload lays AMD's signed **4.0.2** bridge
-over it and lets the provider win.
+versioned provider. The payload is built three times, identical except for
+that one file, and `PROTON_USE_OPTISCALER` picks one:
 
-`PROTON_USE_OPTISCALER=fsr411b` selects a second pinned payload, identical
-except for that one file, which is instead an unsigned third-party 4.1.1b
-rebuild claiming to fix RDNA2 ghosting. It is not a provider bump: that binary
-carries its own embedded model — 768 model passes against 4.0.2's 216, plus
-`FSR4_Int8` provider classes — so selecting it most likely hands upscaling to
-that model rather than to the provider path the RADV work targets. That is the
-thing worth measuring, and why it is opt-in rather than default.
+- **default / `fsr411f`** — the BC-250 FSR4 fork's build (RC10, `4.1.1r10`),
+  passed to the builder with `--ffx-sdk-default fsr411f`. Unsigned, made for
+  and measured on this hardware, and it ships its author's notices.
+- **`signed`** — AMD's signed **4.0.2** bridge laid over OptiScaler's, which
+  lets the provider win. This was the default until fsr411f became it; the
+  alias is how the builder keeps it reachable.
+- **`fsr411b`** — an unsigned third-party 4.1.1b rebuild claiming to fix RDNA2
+  ghosting.
+
+Neither unsigned build is a provider bump: each carries its own embedded model
+— 4.1.1b has 768 model passes against 4.0.2's 216, plus `FSR4_Int8` provider
+classes — so selecting one most likely hands upscaling to that model rather
+than to the provider path the RADV work targets. That is the thing worth
+measuring.
 
 Two consequences of pinning are worth stating, because they are what make this
 mechanism necessary at all:
@@ -176,8 +183,9 @@ mechanism necessary at all:
   costs about 78 MB in each package. The default archive is bit-for-bit what it
   was before.
 
-The variant ships `Licenses/THIRD-PARTY-UPSCALER.txt` into the prefix naming the
-origin URL and SHA256, so an unsigned DLL is never sitting there unexplained.
+Each unsigned variant ships `Licenses/THIRD-PARTY-UPSCALER.txt` into the prefix
+naming the origin URL and SHA256, so an unsigned DLL is never sitting there
+unexplained.
 
 ## `../../scripts/build-fsr4-payload.py`
 

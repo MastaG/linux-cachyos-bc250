@@ -14,6 +14,7 @@ import tarfile
 import tempfile
 import types
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -981,15 +982,19 @@ class PresetTests(unittest.TestCase):
                 entry = tarfile.TarInfo(name)
                 entry.size = len(data)
                 tar.addfile(entry, io.BytesIO(data))
-        fork = work / "fork.tar.xz"
-        with tarfile.open(fork, "w:xz") as tar:
+        # Laid out like the fork's RC10 release: a zip (RC9 also offered a
+        # tar.xz, RC10 does not) with the DLL and notices at the root plus files
+        # the builder must ignore rather than trip over.
+        fork = work / "fork.zip"
+        with zipfile.ZipFile(fork, "w") as archive_zip:
             for name, data in {
                 "amd_fidelityfx_upscaler_dx12.dll": self.FORK_BRIDGE,
                 "notices/PROVENANCE.md": b"fork notices",
+                "README.md": b"fork readme",
+                "SHA256SUMS": b"",
+                "linux/shared-cache.sh": b"#!/bin/sh\n",
             }.items():
-                entry = tarfile.TarInfo(name)
-                entry.size = len(data)
-                tar.addfile(entry, io.BytesIO(data))
+                archive_zip.writestr(name, data)
         fakenvapi = work / "fn.7z"
         with tarfile.open(fakenvapi, "w") as tar:
             entry = tarfile.TarInfo("fakenvapi.dll")
@@ -1022,7 +1027,7 @@ class PresetTests(unittest.TestCase):
                 "--optiscaler", str(archive), "--optiscaler-version", "test-opti",
                 "--optipatcher", str(signed), "--fakenvapi", str(fakenvapi),
                 "--provider", str(provider), "--ffx-sdk", str(signed),
-                "--ffx-sdk-alt", "fsr411f", str(fork), "https://example/rc9",
+                "--ffx-sdk-alt", "fsr411f", str(fork), "https://example/rc10",
                 "--dlss", str(signed), "--licenses", str(licenses),
                 "--preset", str(preset), "--manifest-rel", "upscaler-manifest.json",
                 "--proton-rel", "proton", "--output", str(output),

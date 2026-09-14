@@ -526,7 +526,8 @@ class SlrPackageTests(unittest.TestCase):
                 self.assertIn("--ffx-sdk-default fsr411f", text)
                 self.assertIn("--ffx-sdk-alt fsr411b", text)
                 self.assertIn("--ffx-sdk-alt fsr411f", text)
-                self.assertIn("bc250-fsr4-dll-4.0.0-rc9.tar.xz", text)
+                self.assertIn("bc250-fsr4-dll-4.0.0-rc10.zip", text)
+                self.assertNotIn("rc9", text)
 
     def test_the_metapackage_pulls_in_all_three(self):
         pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()

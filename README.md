@@ -311,7 +311,7 @@ Per game, if you want them:
 ```text
 BC250_FSR4_DEBUG=1 %command%              # FSR4 watermark + OptiScaler log + PROTON_LOG
 PROTON_FSR4_UPGRADE=0 %command%           # turn the packaged FSR4 upgrade off
-PROTON_USE_OPTISCALER=fsr411b %command%   # experimental upscaler, see below
+PROTON_USE_OPTISCALER=signed %command%    # AMD's signed bridge instead of the default, see below
 BC250_OPTISCALER_EXTRA="A.B=c;D.E=f"      # override individual OptiScaler settings
 PROTON_OPTISCALER_NAME=dxgi.dll %command% # load OptiScaler as dxgi instead of winmm
 ```
@@ -418,42 +418,51 @@ change sticks:
 <prefix>/drive_c/windows/system32/umu/OptiScaler/fakenvapi.ini
 ```
 
-### Experimental upscaler variants
+### Which FidelityFX bridge you get, and the alternatives
 
-Two opt-in payloads swap a single file — the FidelityFX bridge,
-`amd_fidelityfx_upscaler_dx12.dll` — for an alternative build. Leave the
-variable out and you get the normal, AMD-signed default.
+One file in the payload — the FidelityFX bridge, `amd_fidelityfx_upscaler_dx12.dll`
+— exists in three pinned builds. Each package ships all three and swaps only that
+file; `PROTON_USE_OPTISCALER` picks one per game:
 
 ```text
+                                          # (unset) BC-250 FSR4 fork RC10, 4.1.1r10 — the default
+PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
-PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork, RC9 (4.1.1r9)
+PROTON_USE_OPTISCALER=fsr411f %command%   # the default, by name
 ```
 
-| | `fsr411b` | `fsr411f` |
-|---|---|---|
-| Source | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) | [bc250-fsr4-fork v4.0.0-rc9](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc9) |
-| Aimed at | ghosting on RDNA2 | BC-250 specifically, 1440p performance |
-| Tested on a BC-250 by its author | no | yes |
+| | default (`fsr411f`) | `signed` | `fsr411b` |
+|---|---|---|---|
+| Source | [bc250-fsr4-fork v4.0.0-rc10](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10) | [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) |
+| Identifies as | `4.1.1r10` | `4.0.2` | `4.1.1b` |
+| Aimed at | the BC-250 specifically | the reference | ghosting on RDNA2 |
+| Tested on a BC-250 by its author | yes | — | no |
+| Signed | no | AMD | no |
 
-Both are genuine experiments, not recommendations:
-
-- Neither is a provider version bump. Each binary carries its own embedded
-  model, so selecting one likely moves upscaling off the provider path the RADV
-  patches target, onto the model baked into the bridge.
-- Both are unsigned, where the default is AMD-signed. The build pins each by
-  SHA256 and writes its origin into the prefix as
-  `Licenses/THIRD-PARTY-UPSCALER.txt`, so they are reproducible — not vouched
-  for. `fsr411f` additionally ships its author's licence notices into
-  `Licenses/<version>/`, as that release asks.
-
-`fsr411f` needs no other change: every setting the RC9 archive's README asks for —
-`Dx12Upscaler=ffx`, `Dx11Upscaler=ffx_12`, `VulkanUpscaler=ffx_12`,
+**The default is the BC-250 fork's build**, by daniel-h-0, because it is the one
+made for and measured on this hardware. RC10 keeps RC9's model, packed
+arithmetic, weight guards and synchronisation repair, and trims the cold shader
+compile — its author measured synthetic cold upscaler setup from 22.24 s to
+19.38 s, about 13%, with the changed shaders producing the same native
+instructions as RC9. That is setup time, not FPS. Every setting its README asks
+for — `Dx12Upscaler=ffx`, `Dx11Upscaler=ffx_12`, `VulkanUpscaler=ffx_12`,
 `UpscalerIndex=0`, `Fsr4ForceModel=2`, `FsrNonLinearColorSpace=false`,
 `FsrNonLinearSRGB=auto`, `FsrNonLinearPQ=auto`, `FrameGen.Enabled=false` — is
-already exactly what this package enforces. To confirm which build is running,
-add `BC250_FSR4_DEBUG=1`; the watermark identifies `4.1.1r9` for RC9.
+already what this package enforces. To confirm which build is running, add
+`BC250_FSR4_DEBUG=1`; the watermark identifies `4.1.1r10`.
 
-Please report whether either helps or hurts.
+Two things to know about the alternatives:
+
+- Neither the default nor `fsr411b` is a provider version bump. Each binary
+  carries its own embedded model, so either likely moves upscaling off the
+  provider path the RADV patches target, onto the model baked into the bridge.
+  `signed` is the one that leaves the provider in charge.
+- The default and `fsr411b` are unsigned. The build pins each by SHA256 and
+  writes its origin into the prefix as `Licenses/THIRD-PARTY-UPSCALER.txt`, so
+  they are reproducible — not vouched for. The fork's build additionally ships
+  its author's licence notices into `Licenses/<version>/`, as that release asks.
+
+Please report whether any of them helps or hurts.
 
 Design and packaging details are in [docs/FSR4-PROTON.md](docs/FSR4-PROTON.md)
 and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md).
