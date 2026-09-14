@@ -170,11 +170,16 @@ Use it only per-game for titles that need the experimental GFX10.3 mesh-shader p
 
 ---
 
-## 4K120 at 4:4:4 over an HDMI 2.1 adapter
+## 4K120 at 4:4:4 over an HDMI 2.1 adapter (opt-in)
 
-All three kernels now carry two DCN201 display patches that let the BC-250 drive
+All three kernels carry two DCN201 display patches that let the BC-250 drive
 **3840x2160 at 120 Hz with full 4:4:4 chroma** through a DisplayPort 1.4 → HDMI
-2.1 FRL adapter.
+2.1 FRL adapter. They are **off by default** and switched on with one kernel
+parameter:
+
+```text
+amdgpu.bc250_hdmi21=1
+```
 
 The board could always reach 4K120, but only by halving the chroma (4:2:0) —
 4K120 at 4:4:4 needs about 28 Gbit/s and DP 1.4 carries roughly 20.7 Gbit/s of
@@ -183,12 +188,30 @@ two DSC engines on-die; the Linux driver simply declared it had none. It also
 validated every mode through an HDMI 2.1 adapter against the adapter's *HDMI
 2.0* pixel-clock limit, never reading its FRL bandwidth — so even an adapter
 that was doing FRL on its own HDMI side was held to 600 MHz on the DisplayPort
-side, which is exactly 4K120 at 4:2:0 8-bit and nothing more. The patches fix
-both.
+side, which is exactly 4K120 at 4:2:0 8-bit and nothing more. With the parameter
+set, the driver reads the adapter's real FRL bandwidth and has DSC to fill it.
 
-**There is nothing to enable.** No module parameter, no kernel command line. Boot
-the new kernel and the mode is offered if your hardware can carry it. What you
-need:
+**Why opt-in.** A first release shipped this enabled for everyone and one user
+reported a dark display after updating. That is the one failure mode a display
+patch has, it is not something this project can reproduce on every adapter and
+TV out there, and nobody on a plain DisplayPort monitor gets anything from the
+change. So it is a switch: with the parameter absent, every code path is
+identical to an unpatched kernel — not "disabled", *absent*.
+
+Set it on CachyOS with Limine the same way as any other kernel parameter, then
+reboot:
+
+```bash
+printf '%s\n' 'KERNEL_CMDLINE[default]+=amdgpu.bc250_hdmi21=1' | \
+  sudo tee -a /etc/default/limine >/dev/null
+sudo limine-mkinitcpio
+```
+
+Remove that line again and rebuild to go back. If the screen stays dark after
+enabling it, boot the previous Limine snapshot entry — CachyOS takes one before
+every upgrade — or edit the boot entry and delete the parameter for that boot.
+
+What you need for it to do anything:
 
 - an **active** DP 1.4 → HDMI 2.1 FRL protocol converter (reported working:
   Cable Matters 102101). A passive DP++ adapter cannot do FRL and is unaffected;
@@ -211,10 +234,10 @@ with the debugfs evidence to back them up — several other owners have reported
 them working since. (The patch files themselves are signed "Anonymous".)
 
 They are **not upstream**, and the DSC power islands are never explicitly
-ungated by the DCN201 code — it works
-because they come up powered on this part. Every call site was checked to
-NULL-guard before this was carried, so the failure mode if a future kernel
-changes that is a mode that does not appear, not a crash. Details in
+ungated by the DCN201 code — it works because they come up powered on this
+part. Every call site was checked to NULL-guard before this was carried, so the
+failure mode if a future kernel changes that is a mode that does not appear, not
+a crash. Details in
 [docs/PATCHES.md](docs/PATCHES.md#4k120-444-through-an-hdmi-21-pcon).
 
 
@@ -491,6 +514,9 @@ Each of these is genuinely optional; the defaults are fine.
 - **[40 CU unlock](docs/PATCHES.md#optional-40-cu-unlock)** — enables the 4
   disabled compute units with `amdgpu.bc250_cc_write_mode=3`. **Read the thermal
   notes first**: it raises power draw, and not every board is stable at 40 CUs.
+- **[4K120 at 4:4:4 over HDMI 2.1](#4k120-at-444-over-an-hdmi-21-adapter-opt-in)** —
+  `amdgpu.bc250_hdmi21=1` enables DSC and HDMI 2.1 PCON negotiation. Only does
+  anything with an active DP→HDMI 2.1 FRL adapter.
 - **[AMDGPU scheduler tuning](#optional-amdgpu-scheduler-tuning)** — `sched_policy=2`
   helps some systems and hurts others. Workload-dependent; measure it.
 - **[GPU telemetry cache](docs/PATCHES.md#bc-250-apu-telemetry)** — tunables for

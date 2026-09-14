@@ -1,20 +1,27 @@
 From: Anonymous
-Subject: [PATCH] drm/amd/display: Enable the two DSC engines on DCN201
+Subject: [PATCH] drm/amd/display: Opt-in DSC engines on DCN201 (amdgpu.bc250_hdmi21)
 
 Cyan Skillfish (gfx1013, BC-250) carries two DCN200-compatible DSC
 engines on-die, but the DCN201 resource pool ships with num_dsc = 0, no
 DSC objects and no .add_dsc_to_stream_resource, so DC can never select
 DSC and every mode that needs it is rejected.
 
+With amdgpu.bc250_hdmi21=1 the pool selects a second resource_caps with
+num_dsc = 2, creates the two DSC objects with dcn20_dsc_create(), wires
+dcn20_add_dsc_to_stream_resource, and propagates num_dsc into dcn201_ip
+before dml_init_instance(). The last one is the non-obvious half: DML
+reads NumberOfDSC from there, so without it every DSC mode is rejected
+with "Not enough DSC Units" while the objects sit unused.
+
 DCN201 and DCN200 share the same display register base
 (DMU_BASE__INST0_SEG2 == DCN_BASE__INST0_SEG2 == 0x34C0) and the DSC
 engines sit at the standard DCN200 offsets, so DCN200's register tables
 address the real hardware and dcn20_dsc_create() can be reused as-is.
 
-Both halves are required. The hardware objects alone are not enough: DML
-reads NumberOfDSC from dcn201_ip, so without propagating num_dsc it
-rejects every DSC mode with "Not enough DSC Units" while the objects
-exist and go unused.
+With the parameter at its default: res_cap_dnc201 (num_dsc = 0) is used
+as before, the create and destroy loops run zero times,
+.add_dsc_to_stream_resource stays NULL, and dcn201_ip.num_dsc is
+assigned the 0 it already held. Nothing observable changes.
 
 Author: TeleBooth, published at
 https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e
@@ -30,19 +37,30 @@ kernel starts gating them, this patch goes dark rather than crashing.
 
 Carried here until it lands upstream.
 diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
-index 02b7dc07ad53..cabb32c9d029 100644
+index 523a9aa5658b..c1ba48c9c9d6 100644
 --- a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
 +++ b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
-@@ -568,7 +568,7 @@ static const struct resource_caps res_cap_dnc201 = {
- 		.num_stream_encoder = 2,
- 		.num_pll = 2,
- 		.num_dwb = 0,
--		.num_dsc = 0,
-+		.num_dsc = 2,
+@@ -572,6 +572,19 @@ static const struct resource_caps res_cap_dnc201 = {
  		.num_ddc = 2,
  };
  
-@@ -940,6 +940,11 @@ static void dcn201_resource_destruct(struct dcn201_resource_pool *pool)
++/* BC-250 with amdgpu.bc250_hdmi21=1: the two on-die DSC engines enabled. */
++static const struct resource_caps res_cap_dnc201_dsc = {
++		.num_timing_generator = 2,
++		.num_opp = 2,
++		.num_video_plane = 4,
++		.num_audio = 2,
++		.num_stream_encoder = 2,
++		.num_pll = 2,
++		.num_dwb = 0,
++		.num_dsc = 2,
++		.num_ddc = 2,
++};
++
+ static const struct dc_plane_cap plane_cap = {
+ 	.type = DC_PLANE_TYPE_DCN_UNIVERSAL,
+ 	.per_pixel_alpha = true,
+@@ -940,6 +953,11 @@ static void dcn201_resource_destruct(struct dcn201_resource_pool *pool)
  {
  	unsigned int i;
  
@@ -54,16 +72,19 @@ index 02b7dc07ad53..cabb32c9d029 100644
  	for (i = 0; i < pool->base.stream_enc_count; i++) {
  		if (pool->base.stream_enc[i] != NULL) {
  			kfree(DCN10STRENC_FROM_STRENC(pool->base.stream_enc[i]));
-@@ -1106,7 +1111,7 @@ static struct resource_funcs dcn201_res_pool_funcs = {
- 	.validate_bandwidth = dcn20_validate_bandwidth,
- 	.populate_dml_pipes = dcn20_populate_dml_pipes_from_context,
- 	.add_stream_to_ctx = dcn20_add_stream_to_ctx,
--	.add_dsc_to_stream_resource = NULL,
-+	.add_dsc_to_stream_resource = dcn20_add_dsc_to_stream_resource,
- 	.remove_stream_from_ctx = dcn20_remove_stream_from_ctx,
- 	.acquire_free_pipe_as_secondary_dpp_pipe = dcn201_acquire_free_pipe_for_layer,
- 	.release_pipe = dcn20_release_pipe,
-@@ -1229,6 +1234,7 @@ static bool dcn201_resource_construct(
+@@ -1129,6 +1147,11 @@ static bool dcn201_resource_construct(
+ 	ctx->dc_bios->regs = &bios_regs;
+ 
+ 	pool->base.res_cap = &res_cap_dnc201;
++	if (dc->config.bc250_hdmi21) {
++		pool->base.res_cap = &res_cap_dnc201_dsc;
++		dcn201_res_pool_funcs.add_dsc_to_stream_resource =
++			dcn20_add_dsc_to_stream_resource;
++	}
+ 	pool->base.funcs = &dcn201_res_pool_funcs;
+ 
+ 	/*************************************************
+@@ -1229,6 +1252,7 @@ static bool dcn201_resource_construct(
  
  	dcn201_ip.max_num_otg = pool->base.res_cap->num_timing_generator;
  	dcn201_ip.max_num_dpp = pool->base.pipe_count;
@@ -71,11 +92,11 @@ index 02b7dc07ad53..cabb32c9d029 100644
  	dml_init_instance(&dc->dml, &dcn201_soc, &dcn201_ip, DML_PROJECT_DCN201);
  	{
  		struct irq_service_init_data init_data;
-@@ -1318,6 +1324,16 @@ static bool dcn201_resource_construct(
+@@ -1318,6 +1342,16 @@ static bool dcn201_resource_construct(
  		goto create_fail;
  	}
  
-+	/* DSC compression engines (2 on Cyan Skillfish, same silicon as DCN200) */
++	/* DSC engines: zero unless amdgpu.bc250_hdmi21=1 selected the DSC caps */
 +	for (i = 0; i < pool->base.res_cap->num_dsc; i++) {
 +		pool->base.dscs[i] = dcn20_dsc_create(ctx, i);
 +		if (!pool->base.dscs[i]) {

@@ -404,6 +404,26 @@ class KernelPatchSetTests(unittest.TestCase):
         self.assertIn(self.number_word(len(shipped)) + " patches", text)
         self.assertIn(self.number_word(len(shipped)) + " BC-250 patches", text)
 
+    def test_hdmi21_patches_stay_opt_in(self):
+        """0012/0013 must be gated by amdgpu.bc250_hdmi21, never unconditional.
+
+        The first release shipped them enabled for everyone and a user reported
+        a dark display. The gist they come from is unconditional, so a careless
+        re-import would silently undo the switch: the removed line
+        `.num_dsc = 0,` and an unguarded `dp_hdmi21_pcon_support = true` are
+        the two signatures of that.
+        """
+        for patch_set in (self.STABLE, self.RC):
+            for name in ("0012-dcn201-hdmi21-pcon.patch", "0013-dcn201-enable-dsc.patch"):
+                text = (patch_set / name).read_text()
+                with self.subTest(patch=f"{patch_set.name}/{name}"):
+                    self.assertIn("dc->config.bc250_hdmi21", text)
+                    self.assertNotIn("-\t\t.num_dsc = 0,", text)
+            pcon = (patch_set / "0012-dcn201-hdmi21-pcon.patch").read_text()
+            self.assertIn("+\tif (dc->config.bc250_hdmi21)\n"
+                          "+\t\tdc->caps.dp_hdmi21_pcon_support = true;", pcon)
+            self.assertIn('module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);', pcon)
+
     @staticmethod
     def number_word(n):
         words = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve",

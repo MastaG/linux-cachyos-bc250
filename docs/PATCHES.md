@@ -121,18 +121,34 @@ path than anything `0010` touches.
 
 ## 4K120 4:4:4 through an HDMI 2.1 PCON
 
-Two patches, `0012` and `0013`, both against
-`drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c`. Together they
-make 3840x2160@120Hz at full 4:4:4 chroma reachable on a BC-250 through a
-DisplayPort 1.4 → HDMI 2.1 FRL protocol converter.
+Two patches, `0012` and `0013`. Together they make 3840x2160@120Hz at full 4:4:4
+chroma reachable on a BC-250 through a DisplayPort 1.4 → HDMI 2.1 FRL protocol
+converter. **Both are off by default** and enabled together with
+
+```text
+amdgpu.bc250_hdmi21=1
+```
+
+The first release carried them unconditionally; a user reported a dark display
+after that update and, as is the way with such reports, nothing else. A display
+patch has exactly one failure mode and this project cannot try every adapter
+and TV, so the change became a switch. `0012` defines the parameter in
+`amdgpu_drv.c`, `amdgpu_dm.c` copies it into `dc_init_data.flags`, and it
+arrives in the resource pool as `dc->config.bc250_hdmi21` — the same route DC
+already uses for its other OS-side switches. With the parameter at its default
+every touched path is identical to an unpatched kernel: the stock
+`res_cap_dnc201` (num_dsc = 0) is selected, the DSC create and destroy loops
+run zero times, `.add_dsc_to_stream_resource` stays NULL, `dcn201_ip.num_dsc`
+is assigned the zero it already held, and `dp_hdmi21_pcon_support` is never
+set.
 
 Both are the work of **TeleBooth**, who published them at
 <https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e> along with
 the debugfs capture proving DSC engaged on real hardware — a Cable Matters 102101
 PCON into an LG CX — and several other BC-250 owners have reported them working
-since. The patch files themselves are signed "Anonymous". They are not upstream,
-and they are carried here unchanged apart from one stray blank line and a commit
-message.
+since. The patch files themselves are signed "Anonymous". They are not upstream.
+The logic is theirs unchanged; the parameter gating around it is this
+repository's.
 
 ### Why it needs both
 
@@ -142,7 +158,7 @@ uncompressed — which is why the BC-250 has only ever offered 4K120 at 4:2:0, o
 4K60 at 4:4:4. DSC compresses roughly 1.7:1 (the working capture runs at
 224/16 = 14 bpp) and the mode fits.
 
-`0012` sets `dc->caps.dp_hdmi21_pcon_support = true`. DCN201 is the only
+`0012`, when enabled, sets `dc->caps.dp_hdmi21_pcon_support = true`. DCN201 is the only
 DCN2-class resource pool in the tree that leaves it false. What the flag gates
 is more specific than "FRL on or off": it decides **which ceiling the driver
 validates modes against**. With it set, `link_dp_capability.c` reads the
@@ -162,12 +178,13 @@ looks correct, since the metadata does not depend on wire depth — and 4K60 HDR
 is most likely riding 4:2:2 to get its 10 bits. `0012` removes that ceiling for
 the adapter; `0013` then supplies the bandwidth to use the headroom at 4:4:4.
 
-`0013` enables the DSC hardware. Cyan Skillfish carries two DSC engines on-die,
-but the DCN201 pool ships with `num_dsc = 0`, creates no DSC objects and leaves
-`.add_dsc_to_stream_resource` NULL, so DC can never select DSC. The patch does
-four things, and all four are required:
+`0013`, when enabled, turns on the DSC hardware. Cyan Skillfish carries two DSC
+engines on-die, but the DCN201 pool ships with `num_dsc = 0`, creates no DSC
+objects and leaves `.add_dsc_to_stream_resource` NULL, so DC can never select
+DSC. The patch does four things, and all four are required:
 
-- `num_dsc = 2` in the resource caps;
+- select a second `resource_caps` with `num_dsc = 2` (the stock one is left
+  untouched for the default case);
 - create the two DSC objects with `dcn20_dsc_create()`, and destroy them in
   `dcn201_resource_destruct()`;
 - wire `.add_dsc_to_stream_resource = dcn20_add_dsc_to_stream_resource`;
@@ -211,8 +228,8 @@ mode is a dark screen rather than an oops.
 - An **active** DP 1.4 → HDMI 2.1 FRL protocol converter. A passive DP++ adapter
   cannot do FRL and is unaffected by these patches.
 - A sink that reports DSC and FEC support — any HDMI 2.1 TV, in practice.
-- Nothing to configure. There is no module parameter: the capability is simply
-  present, and DC uses DSC when a mode needs it.
+- `amdgpu.bc250_hdmi21=1` on the kernel command line. With it set there is
+  nothing else to configure: DC uses DSC when a mode needs it.
 
 To confirm it engaged, with debugfs mounted:
 

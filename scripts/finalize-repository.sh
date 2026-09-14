@@ -386,7 +386,7 @@ All three kernels use:
 - Opt-in KFD/HWS runlist TLB workaround (\`amdgpu.bc250_flush_by_runlist=1\`)
 - AMDGPU TTM NULL-page cleanup guard for partially populated BOs
 - Widened Cyan Skillfish SMU SCLK range (350-2230 MHz) for userspace SMU governors
-- DCN201 display: HDMI 2.1 PCON support (\`0012\`) and the two on-die DSC engines enabled (\`0013\`), which together make 3840x2160@120Hz at 4:4:4 reachable through an active DP 1.4 -> HDMI 2.1 FRL adapter. Nothing to enable; a passive DP++ adapter is unaffected. Not upstream -- the work of TeleBooth (https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e), reported working by several BC-250 owners.
+- Opt-in 4K120 at 4:4:4 over HDMI 2.1 (\`amdgpu.bc250_hdmi21=1\`, off by default): HDMI 2.1 PCON negotiation (\`0012\`) and the two on-die DCN201 DSC engines (\`0013\`) through an active DP 1.4 -> HDMI 2.1 FRL adapter. With the parameter absent every code path is identical to an unpatched kernel; a passive DP++ adapter or a native DisplayPort monitor gets nothing from it either way. Not upstream -- the work of TeleBooth (https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e), reported working by several BC-250 owners; gated after a dark-display report against the release that shipped it unconditionally.
 - Opt-in 40 CU unlock (\`amdgpu.bc250_cc_write_mode=3\`), off by default; cap clocks to ~1500 MHz before enabling
 - \`nct6687.ko\` from Fred78290/nct6687d commit \`${nct_commit}\`
 - upstream \`nct6683\` disabled to avoid claiming the same Super-I/O IDs
