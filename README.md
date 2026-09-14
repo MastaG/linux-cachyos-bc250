@@ -179,8 +179,12 @@ All three kernels now carry two DCN201 display patches that let the BC-250 drive
 The board could always reach 4K120, but only by halving the chroma (4:2:0) —
 4K120 at 4:4:4 needs about 28 Gbit/s and DP 1.4 carries roughly 20.7 Gbit/s of
 payload. Display Stream Compression fits it in at about 1.7:1. Cyan Skillfish has
-two DSC engines on-die; the Linux driver simply declared it had none, and never
-tried FRL with a protocol converter either. The patches fix both.
+two DSC engines on-die; the Linux driver simply declared it had none. It also
+validated every mode through an HDMI 2.1 adapter against the adapter's *HDMI
+2.0* pixel-clock limit, never reading its FRL bandwidth — so even an adapter
+that was doing FRL on its own HDMI side was held to 600 MHz on the DisplayPort
+side, which is exactly 4K120 at 4:2:0 8-bit and nothing more. The patches fix
+both.
 
 **There is nothing to enable.** No module parameter, no kernel command line. Boot
 the new kernel and the mode is offered if your hardware can carry it. What you

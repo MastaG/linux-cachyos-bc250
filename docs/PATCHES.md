@@ -143,9 +143,24 @@ uncompressed — which is why the BC-250 has only ever offered 4K120 at 4:2:0, o
 224/16 = 14 bpp) and the mode fits.
 
 `0012` sets `dc->caps.dp_hdmi21_pcon_support = true`. DCN201 is the only
-DCN2-class resource pool in the tree that leaves it false; without it the link
-layer never attempts FRL negotiation with the converter at all, and the adapter
-is driven as plain HDMI 2.0 TMDS.
+DCN2-class resource pool in the tree that leaves it false. What the flag gates
+is more specific than "FRL on or off": it decides **which ceiling the driver
+validates modes against**. With it set, `link_dp_capability.c` reads the
+converter's FRL link bandwidth from DPCD and `link_validation.c` checks each
+mode against that. Without it, that field stays zero and every mode is checked
+against the converter's *TMDS* pixel-clock limit instead — one DPCD byte times
+2.5 MHz, so 637.5 MHz at the absolute most and typically 600.
+
+That ceiling is why an FRL-capable adapter still behaves like HDMI 2.0 on an
+unpatched kernel even though its own HDMI side is happily doing FRL. The check
+halves the clock for 4:2:0, takes two thirds for 4:2:2 and scales by 10/8 for
+10-bit, so against 600 MHz: 4K120 4:2:0 8-bit is 594 MHz and passes, 4K120
+4:2:0 10-bit is 742 MHz and is refused, 4K60 4:4:4 10-bit is 742 MHz and is
+refused, 4K60 4:2:2 10-bit is 495 MHz and passes. A "4K120 HDR" desktop on the
+old kernel is therefore 8-bit on the wire with HDR10 metadata attached — which
+looks correct, since the metadata does not depend on wire depth — and 4K60 HDR
+is most likely riding 4:2:2 to get its 10 bits. `0012` removes that ceiling for
+the adapter; `0013` then supplies the bandwidth to use the headroom at 4:4:4.
 
 `0013` enables the DSC hardware. Cyan Skillfish carries two DSC engines on-die,
 but the DCN201 pool ships with `num_dsc = 0`, creates no DSC objects and leaves
