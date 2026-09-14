@@ -1,0 +1,29 @@
+From: Anonymous
+Subject: [PATCH] drm/amd/display: Advertise HDMI 2.1 PCON support on DCN201
+
+DCN201 is the only DCN2-class resource pool that leaves
+dc->caps.dp_hdmi21_pcon_support at false. Without it the link layer never
+attempts FRL negotiation with a DP 1.4 -> HDMI 2.1 protocol converter, so
+a PCON adapter is driven as plain HDMI 2.0 TMDS and 4K120 is only
+reachable at 4:2:0.
+
+Author: TeleBooth, published at
+https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e
+as bc250-dcn201-pcon-hdmi21.patch (the file itself is signed "Anonymous").
+Tested by them and several other BC-250 owners at 3840x2160@120Hz 4:4:4 through a
+Cable Matters 102101 PCON into an LG CX.
+
+Carried here until it lands upstream.
+diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
+index 02b7dc07ad53..7378680ef426 100644
+--- a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
+@@ -1331,6 +1331,8 @@ static bool dcn201_resource_construct(
+ 
+ 	dc->caps.max_odm_combine_factor = 2;
+ 
++	dc->caps.dp_hdmi21_pcon_support = true;
++
+ 	dc->cap_funcs = cap_funcs;
+ 
+ 	return true;

@@ -170,6 +170,52 @@ Use it only per-game for titles that need the experimental GFX10.3 mesh-shader p
 
 ---
 
+## 4K120 at 4:4:4 over an HDMI 2.1 adapter
+
+All three kernels now carry two DCN201 display patches that let the BC-250 drive
+**3840x2160 at 120 Hz with full 4:4:4 chroma** through a DisplayPort 1.4 → HDMI
+2.1 FRL adapter.
+
+The board could always reach 4K120, but only by halving the chroma (4:2:0) —
+4K120 at 4:4:4 needs about 28 Gbit/s and DP 1.4 carries roughly 20.7 Gbit/s of
+payload. Display Stream Compression fits it in at about 1.7:1. Cyan Skillfish has
+two DSC engines on-die; the Linux driver simply declared it had none, and never
+tried FRL with a protocol converter either. The patches fix both.
+
+**There is nothing to enable.** No module parameter, no kernel command line. Boot
+the new kernel and the mode is offered if your hardware can carry it. What you
+need:
+
+- an **active** DP 1.4 → HDMI 2.1 FRL protocol converter (reported working:
+  Cable Matters 102101). A passive DP++ adapter cannot do FRL and is unaffected;
+- a sink advertising DSC and FEC — any HDMI 2.1 TV in practice.
+
+To check it engaged:
+
+```bash
+sudo grep -H . /sys/kernel/debug/dri/*/DP-1/dsc_clock_en
+```
+
+`1` means the DSC engine is running. If it does not engage, nothing breaks — the
+mode falls back to what fits, which is the 4K120 4:2:0 or 4K60 4:4:4 you had
+before.
+
+Credit goes to **TeleBooth**, who did the work of finding that the DSC engines
+were there, getting them running on a real BC-250 and
+[publishing the patches](https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e)
+with the debugfs evidence to back them up — several other owners have reported
+them working since. (The patch files themselves are signed "Anonymous".)
+
+They are **not upstream**, and the DSC power islands are never explicitly
+ungated by the DCN201 code — it works
+because they come up powered on this part. Every call site was checked to
+NULL-guard before this was carried, so the failure mode if a future kernel
+changes that is a mode that does not appear, not a crash. Details in
+[docs/PATCHES.md](docs/PATCHES.md#4k120-444-through-an-hdmi-21-pcon).
+
+
+---
+
 ## FSR4-capable Proton (opt-in)
 
 Three packages, same idea: a Steam compatibility tool with everything FSR 4.1.1
@@ -517,7 +563,7 @@ When unset, the resolver follows the configured upstream branch.
 
 | Document | What's in it |
 |---|---|
-| [docs/PATCHES.md](docs/PATCHES.md) | Every kernel and Mesa patch, the HDMI 2.1 backport, the 40 CU unlock, APU telemetry layouts |
+| [docs/PATCHES.md](docs/PATCHES.md) | Every kernel and Mesa patch, the HDMI 2.1 backport, 4K120 over DSC, the 40 CU unlock, APU telemetry layouts |
 | [docs/FSR4-PROTON.md](docs/FSR4-PROTON.md) | How the FSR4 Proton packages are pinned and built |
 | [docs/ROCM.md](docs/ROCM.md) | Experimental ROCm / KFD support |
 | [docs/BUILDING.md](docs/BUILDING.md) | CI, ccache, the self-hosted runner, published assets, local builds, signing |
@@ -550,5 +596,10 @@ When unset, the resolver follows the configured upstream branch.
   <https://github.com/duggasco/bc250-40cu-unlock>
 - rw-r-r-0644 — BC-250 SMU unlock, including the 8-core metrics firmware patch this repository's kernel decoding is derived from.  
   <https://github.com/rw-r-r-0644/bc250-smu-unlock>
+- TeleBooth — BC-250 4K120 4:4:4 over DSC: identifying that Cyan Skillfish carries
+  two usable DCN200-compatible DSC engines the Linux driver declared absent, the
+  DCN201 DSC and HDMI 2.1 PCON patches this repository carries as `0012`/`0013`,
+  and the working debugfs capture that proved them.  
+  <https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e>
 - Forbidden-Darkness — prebuilt BC-250 UEFI firmware bundling the 8-core unlock with the SMU telemetry patch, and the script that flashes it.  
   <https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases>

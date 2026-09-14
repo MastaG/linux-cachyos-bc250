@@ -18,11 +18,11 @@ patches/linux-cachyos-rc/
 `patches/linux-cachyos` is applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`, since `linux-cachyos` and `linux-cachyos-bore` are built from the same upstream source series.  
 `patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`, and the two sets are now anchored to different kernels: `patches/linux-cachyos` targets the **Linux 7.2** series, `patches/linux-cachyos-rc` targets **Linux 7.3-rc**. That is exactly why the directory was split.
 
-The two sets currently contain the same nine patches with the same content — all of them applied to 7.3-rc1 unmodified. Only the hunk offsets and blob hashes differ, because each set is regenerated against its own base so that future rebases are measured from the right kernel.
+The two sets currently contain the same eleven patches with the same content. Only the hunk offsets and blob hashes differ, because each set is regenerated against its own base so that future rebases are measured from the right kernel. A test asserts that: `KernelPatchSetTests` compares the two directories by patch *substance* — the files touched and the lines changed — so a patch added to one set and forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-Both sets share these nine BC-250 patches — `patches/linux-cachyos` for `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2), `patches/linux-cachyos-rc` for `linux-cachyos-rc-bc250` (7.3-rc):
+Both sets share these eleven BC-250 patches — `patches/linux-cachyos` for `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2), `patches/linux-cachyos-rc` for `linux-cachyos-rc-bc250` (7.3-rc):
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -34,6 +34,8 @@ Both sets share these nine BC-250 patches — `patches/linux-cachyos` for `linux
 0008-cyan-skillfish-sclk-range.patch
 0009-bc250-40cu-unlock.patch
 0011-gud-bound-tv-mode-count.patch
+0012-dcn201-hdmi21-pcon.patch
+0013-dcn201-enable-dsc.patch
 ```
 
 `0011` was written for 7.3-rc and lived only in the RC set until 7.2.5 backported
@@ -49,6 +51,8 @@ read beyond size of object (1st parameter)
 failure and the fix were reproduced against 7.2.5 with CachyOS's own config
 before this was moved across, because the trap only appears at `-O3` with
 ThinLTO; a `defconfig` build of the same tree passes.
+
+`0012` and `0013` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below.
 
 `patches/linux-cachyos-rc` additionally carries one [HDMI 2.1 patch](#hdmi-21-vrr-and-allm-backport-rc-kernel-only) (`0010`), which applies only to the 7.3 series.
 
@@ -105,11 +109,107 @@ It is queued for **Linux 7.4** — it landed in `drm-next` on 2026-09-02, one da
 after 7.3-rc1 was tagged, so it missed the 7.3 merge window by a day and can be
 dropped once 7.4 arrives.
 
-Caveat unchanged: the BC-250 is DisplayPort-only, so none of this applies through
-an **active** DP→HDMI converter, where the GPU still speaks DisplayPort and the
-HDMI code never runs. It should engage with a **passive** DP++ adapter, where the
-GPU drives HDMI TMDS directly — which is exactly the 4K60 case the VTEM fix
-targets.
+Caveat: the BC-250 is DisplayPort-only, so `0010` applies only through a
+**passive** DP++ adapter, where the GPU drives HDMI TMDS directly — exactly the
+case the VTEM fix targets. Through an **active** DP→HDMI converter the GPU still
+speaks DisplayPort and this code never runs.
+
+That is no longer the end of the story for active adapters, though. `0012` and
+`0013` below make the driver negotiate FRL with an HDMI 2.1 protocol converter
+and compress the stream with DSC, which is a different and much higher-bandwidth
+path than anything `0010` touches.
+
+## 4K120 4:4:4 through an HDMI 2.1 PCON
+
+Two patches, `0012` and `0013`, both against
+`drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c`. Together they
+make 3840x2160@120Hz at full 4:4:4 chroma reachable on a BC-250 through a
+DisplayPort 1.4 → HDMI 2.1 FRL protocol converter.
+
+Both are the work of **TeleBooth**, who published them at
+<https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e> along with
+the debugfs capture proving DSC engaged on real hardware — a Cable Matters 102101
+PCON into an LG CX — and several other BC-250 owners have reported them working
+since. The patch files themselves are signed "Anonymous". They are not upstream,
+and they are carried here unchanged apart from one stray blank line and a commit
+message.
+
+### Why it needs both
+
+4K120 at 4:4:4 8bpc needs roughly 28 Gbit/s of payload. DP 1.4 HBR3 x4 carries
+25.92 Gbit/s raw, about 20.7 Gbit/s after 8b/10b, so the mode does not fit
+uncompressed — which is why the BC-250 has only ever offered 4K120 at 4:2:0, or
+4K60 at 4:4:4. DSC compresses roughly 1.7:1 (the working capture runs at
+224/16 = 14 bpp) and the mode fits.
+
+`0012` sets `dc->caps.dp_hdmi21_pcon_support = true`. DCN201 is the only
+DCN2-class resource pool in the tree that leaves it false; without it the link
+layer never attempts FRL negotiation with the converter at all, and the adapter
+is driven as plain HDMI 2.0 TMDS.
+
+`0013` enables the DSC hardware. Cyan Skillfish carries two DSC engines on-die,
+but the DCN201 pool ships with `num_dsc = 0`, creates no DSC objects and leaves
+`.add_dsc_to_stream_resource` NULL, so DC can never select DSC. The patch does
+four things, and all four are required:
+
+- `num_dsc = 2` in the resource caps;
+- create the two DSC objects with `dcn20_dsc_create()`, and destroy them in
+  `dcn201_resource_destruct()`;
+- wire `.add_dsc_to_stream_resource = dcn20_add_dsc_to_stream_resource`;
+- propagate `num_dsc` into `dcn201_ip` before `dml_init_instance()`.
+
+The last one is the non-obvious half. The Display Mode Library validates modes
+against its own IP description, so without it DML reads `NumberOfDSC = 0` and
+rejects every DSC-requiring mode with `Not enough DSC Units` while the hardware
+objects sit there unused.
+
+### Why reusing DCN200's DSC code is safe
+
+`dcn20_dsc_create()` hands the block dcn20's own static register table, which is
+built from Navi10's offsets rather than Cyan Skillfish's. That would be a bug if
+the two disagreed. They do not:
+
+```text
+navi10   DCN_BASE__INST0_SEG0..5 = 0x12, 0xC0, 0x34C0, 0x9000, 0, 0
+cyanskf  DMU_BASE__INST0_SEG0..5 = 0x12, 0xC0, 0x34C0, 0x9000, 0, 0
+```
+
+`mmDSC_TOP0_DSC_TOP_CONTROL` is `0x3000` with `BASE_IDX = 2` in the DCN 2.0.0
+headers, so both resolve to the same absolute address. The public DCN 2.0.1
+headers contain no DSC register definitions at all — 600 in 2.0.0 against 0 in
+2.0.1 — which is why the driver described the hardware as having none.
+
+### Known limitation: DSC power gating
+
+DCN201 leaves `.dsc_pg_control`, `.enable_stream_gating` and
+`.disable_stream_gating` NULL, so the DSC power islands are never explicitly
+ungated. Every call site in the tree NULL-checks before dereferencing, so nothing
+crashes — this was checked rather than assumed — and DCN201's own `init_hw` does
+not touch DSC at all. It works because the islands come up powered on this part.
+Wiring `dcn20_dsc_pg_control()` in would not change that either: it returns early
+when `DOMAIN16_PG_CONFIG` is absent from the register list, and DCN201 has no
+DSC power domains defined. If a future kernel starts gating them, the failure
+mode is a dark screen rather than an oops.
+
+### What you need for it to do anything
+
+- An **active** DP 1.4 → HDMI 2.1 FRL protocol converter. A passive DP++ adapter
+  cannot do FRL and is unaffected by these patches.
+- A sink that reports DSC and FEC support — any HDMI 2.1 TV, in practice.
+- Nothing to configure. There is no module parameter: the capability is simply
+  present, and DC uses DSC when a mode needs it.
+
+To confirm it engaged, with debugfs mounted:
+
+```bash
+sudo grep -H . /sys/kernel/debug/dri/*/DP-1/dsc_clock_en \
+                /sys/kernel/debug/dri/*/DP-1/dsc_bits_per_pixel
+```
+
+`dsc_clock_en: 1` and a `dsc_bits_per_pixel` of `224` (14 bpp) is the working
+state. If DSC is not engaged the mode simply falls back to what fits — 4K120
+4:2:0 or 4K60 4:4:4 — rather than failing visibly.
+
 
 ## Optional 40 CU unlock
 

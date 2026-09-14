@@ -389,6 +389,27 @@ class KernelPatchSetTests(unittest.TestCase):
                 self.assertEqual(self.substance(self.STABLE / name),
                                  self.substance(self.RC / name))
 
+    def test_docs_list_the_patches_that_actually_ship(self):
+        """docs/PATCHES.md names the shared set in a fenced block; keep it true.
+
+        It is the only place a reader can see what the kernels carry, and it has
+        gone stale before -- it still said "nine patches" after two were added.
+        """
+        text = (ROOT / "docs/PATCHES.md").read_text()
+        marker = "Both sets share these"
+        block = text.split(marker, 1)[1].split("```text", 1)[1].split("```", 1)[0]
+        documented = [line.strip() for line in block.splitlines() if line.strip()]
+        shipped = sorted(p.name for p in self.STABLE.glob("*.patch"))
+        self.assertEqual(documented, shipped)
+        self.assertIn(self.number_word(len(shipped)) + " patches", text)
+        self.assertIn(self.number_word(len(shipped)) + " BC-250 patches", text)
+
+    @staticmethod
+    def number_word(n):
+        words = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve",
+                 13: "thirteen", 14: "fourteen", 15: "fifteen"}
+        return words[n]
+
 
 class MetapackageDocsTests(unittest.TestCase):
     """The README's metapackage list must match what the metapackage installs.
