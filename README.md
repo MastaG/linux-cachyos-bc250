@@ -12,7 +12,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 
 | Package | What it is |
 |---|---|
-| `linux-cachyos-bc250` | Stable BC-250 kernel (`-rc` and `-bore` variants also built) |
+| `linux-cachyos-bc250` | Stable BC-250 kernel (`-rc` and `-bore` variants also built), with the `nct6687` fan and temperature driver built in |
 | `mesa` / `lib32-mesa` | Patched Mesa: GFX1013 async compute on by default, FSR4 support |
 | `mesa-git` / `lib32-mesa-git` | Same patches on Mesa main, optional |
 | `proton-cachyos-native-bc250` | CachyOS Proton with FSR4, built for Zen 2 |
@@ -20,7 +20,6 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
-| `nct6687d-dkms` | Fan and temperature sensors |
 
 ---
 

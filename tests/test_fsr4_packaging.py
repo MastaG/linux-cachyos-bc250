@@ -436,6 +436,32 @@ class KernelPatchSetTests(unittest.TestCase):
         return words[n]
 
 
+class ReadmePackageTableTests(unittest.TestCase):
+    """The README's "What you get" table must only name packages this repo builds.
+
+    It listed `nct6687d-dkms` -- a package that has never existed here; the
+    driver is compiled into the kernel packages -- and a reader tried to
+    install it. Every backticked name in that table has to map to a build
+    script or a kernel family.
+    """
+
+    def test_every_package_in_the_table_is_built_here(self):
+        text = (ROOT / "README.md").read_text()
+        start = text.index("## What you get")
+        end = text.index("\n## ", start + 1)
+        rows = [l for l in text[start:end].splitlines() if l.startswith("| `")]
+        self.assertGreater(len(rows), 5)
+        built = {p.name[len("build-"):-len("-package.sh")]
+                 for p in (ROOT / "scripts").glob("build-*-package.sh")}
+        # scripts/build-package.sh builds the three kernel families; mesa and
+        # mesa-git each produce a lib32 split alongside.
+        built |= {"linux-cachyos-bc250", "lib32-mesa-git"}
+        for row in rows:
+            for name in re.findall(r"`([^`]+)`", row.split("|")[1]):
+                with self.subTest(package=name):
+                    self.assertIn(name, built)
+
+
 class MetapackageDocsTests(unittest.TestCase):
     """The README's metapackage list must match what the metapackage installs.
 
