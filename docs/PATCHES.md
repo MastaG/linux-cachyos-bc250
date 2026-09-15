@@ -284,10 +284,15 @@ Established from four instrumented boots (`drm.debug=0x11e`):
   BIOS/GOP → amdgpu handover.
 - It never happened on a native DisplayPort monitor.
 
-Prime suspect, not yet tested: `cachyos-7.2.5-1` merged two CachyOS-only
-branches that upstream 7.2.5 lacks, `7.2/hdmi` ("Enable HDMI VRR over PCON",
-"Merge HDMI and PCON paths", ...) and `7.2/vesa-dsc-bpp`. The next steps are an
-A/B against the 7.2.4 build and against CachyOS's stock 7.2.5 kernel.
+It is **not** a 7.2.4 → 7.2.5 regression in the display driver: checked commit
+by commit, the only `amd/display` changes between `cachyos-7.2.4-1` and
+`cachyos-7.2.5-1` are seven upstream stable fixes, none near DP or PCON link-up,
+and CachyOS's `7.2/hdmi` and `7.2/vesa-dsc-bpp` branches (HDMI VRR over PCON,
+the CH7218 VRR allow-list) were already in 7.2.4-1 — the merge commits between
+the tags are re-merges. The next steps are CachyOS's stock 7.2.5 kernel (same
+DC code, none of this repository's patches) and the 7.3-rc series, plus
+establishing whether any kernel ever showed the boot splash on this TV and
+adapter.
 
 Until it is understood, a one-file workaround restores the picture ~15 s after
 boot at the cost of the boot splash — a oneshot that fires the simulated
