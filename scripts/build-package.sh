@@ -112,6 +112,7 @@ cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/kernel-${KERNEL_ID}.SRCINFO"
 cp -- "$final_config" "$OUT_DIR/kernel-${KERNEL_ID}-config"
 cp -- "$BUILD_DIR/nct6687.c" "$OUT_DIR/nct6687.c"
 
+prune_stale_patches "$OUT_DIR" "$ROOT_DIR/patches/$PATCH_SET" "${PATCH_SET}-"
 for patch in "$ROOT_DIR/patches/$PATCH_SET"/*.patch; do
     [[ -f "$patch" ]] || continue
     cp -- "$patch" "$OUT_DIR/${PATCH_SET}-$(basename "$patch")"

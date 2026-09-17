@@ -33,6 +33,7 @@ normalize_repo_package_filenames "$OUT_DIR"
 
 cp -- "$MESA_BUILD_DIR/PKGBUILD" "$OUT_DIR/mesa-PKGBUILD"
 cp -- "$MESA_BUILD_DIR/.SRCINFO" "$OUT_DIR/mesa.SRCINFO"
+prune_stale_patches "$OUT_DIR" "$ROOT_DIR/patches/mesa" ""
 for patch in "$ROOT_DIR"/patches/mesa/*.patch; do
     cp -- "$patch" "$OUT_DIR/$(basename "$patch")"
 done

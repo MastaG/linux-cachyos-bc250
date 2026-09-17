@@ -20,6 +20,31 @@ remove_pkgbase_from_repo() {
     done
 }
 
+prune_stale_patches() {
+    # out/repo is seeded from the previous release, and the per-component
+    # builders only ever add this run's current patch files -- a rename or
+    # renumbering otherwise leaves the old filename published forever, since
+    # nothing else ever revisits it. This removes any published patch under
+    # $prefix that the current $patch_dir no longer has.
+    #
+    # Anchored on a 4-digit patch number rather than a bare "$prefix*.patch"
+    # glob: patches/linux-cachyos and patches/linux-cachyos-rc share a
+    # "linux-cachyos-" prefix relationship, and a loose glob run for the
+    # stable set would also match (and wrongly delete) the RC set's assets.
+    local out_dir="$1" patch_dir="$2" prefix="$3"
+    local asset base name
+
+    shopt -s nullglob
+    for asset in "$out_dir/$prefix"[0-9][0-9][0-9][0-9]-*.patch; do
+        base="$(basename -- "$asset")"
+        name="${base#"$prefix"}"
+        if [[ ! -f "$patch_dir/$name" ]]; then
+            printf '==> Removing stale patch asset: %s\n' "$base"
+            rm -f -- "$asset"
+        fi
+    done
+}
+
 normalize_repo_package_filenames() {
     local out_dir="$1"
     local package pkginfo package_name package_version package_arch

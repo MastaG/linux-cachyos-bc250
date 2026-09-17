@@ -91,6 +91,7 @@ cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/mesa-git-PKGBUILD"
 cp -- "$BUILD_DIR/customization.cfg" "$OUT_DIR/mesa-git-customization.cfg"
 cp -- "$BUILD_DIR/mesa-userpatches/user.cfg" "$OUT_DIR/mesa-git-user.cfg"
 cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/mesa-git.SRCINFO"
+prune_stale_patches "$OUT_DIR" "$ROOT_DIR/patches/mesa-git" "mesa-git-"
 for patch in "$ROOT_DIR"/patches/mesa-git/*.patch; do
     cp -- "$patch" "$OUT_DIR/mesa-git-$(basename "$patch")"
 done
