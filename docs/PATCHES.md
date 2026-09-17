@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these fourteen BC-250 patches, fourteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same fourteen patches plus its own two series-specific carries, sixteen in total:
+The stable and BORE kernels carry these fifteen BC-250 patches, fifteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same fifteen patches plus its own two series-specific carries, seventeen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -50,9 +50,10 @@ The stable and BORE kernels carry these fourteen BC-250 patches, fourteen patche
 0012-cs-defer-od-during-pcon-frl-training.patch
 0013-cs-defer-od-during-dp-link-training.patch
 0014-cs-release-gfx-override-during-link-bringup.patch
+0015-cs-map-unforce-gfxfreq.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same fourteen patches (content-identical, renumbered around its own two extra series-specific carries) plus the two entries below:
+`patches/linux-cachyos-rc` carries the same fifteen patches (content-identical, renumbered around its own two extra series-specific carries) plus the two entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -71,6 +72,7 @@ The stable and BORE kernels carry these fourteen BC-250 patches, fourteen patche
 0014-cs-defer-od-during-pcon-frl-training.patch
 0015-cs-defer-od-during-dp-link-training.patch
 0016-cs-release-gfx-override-during-link-bringup.patch
+0017-cs-map-unforce-gfxfreq.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below.
@@ -418,6 +420,36 @@ release and restores the previous behaviour). A commit arriving while the
 release is open is refused, but its settings are already recorded — the
 restore applies whatever is current when it fires, so such a commit is delayed
 rather than lost.
+
+### The clock override could not be released at all
+
+There is a second, more basic reason the deferral and release above were not
+enough: **the driver could force the GFX clock but never un-force it.**
+
+`PP_OD_COMMIT_DPM_TABLE` sends `RequestGfxclk`, which is a manual request
+whatever value it carries — PMFW keeps honouring it until told otherwise, and
+there is no "request nothing". `PP_OD_RESTORE_DEFAULT_TABLE` did not tell it
+otherwise either: it simply requested the *default* clock, still a manual
+request. Only the voltage was ever genuinely released, via `UnforceGfxVid`.
+
+The missing message was in the firmware header the whole time.
+`smu_v11_8_ppsmc.h` declares `PPSMC_MSG_UnForceGfxFreq` (`0x3A`) directly
+beside the `ForceGfxVid`/`UnforceGfxVid` pair the driver does map — it was
+simply never added to `cyan_skillfish_message_map`. `cyan-skillfish-governor`'s
+own SMU backend sends `0x3A` on both startup and shutdown, which is where this
+came to light.
+
+`cs-map-unforce-gfxfreq.patch` maps it and makes a release an actual release:
+when `PP_OD_RESTORE_DEFAULT_TABLE` has selected `CYAN_SKILLFISH_VDDC_MAGIC`,
+the commit sends `UnForceGfxFreq` + `UnforceGfxVid` and skips `RequestGfxclk`
+entirely. The forcing path is unchanged.
+
+This is consistent with the one condition that has been reliable across
+*every* affected board: a boot where the governor never ran, and
+`RequestGfxclk` was therefore never sent, switches modes fine. Once it has
+been sent, releasing the voltage alone does not recover — the clock is still
+latched, and until this patch nothing short of a reboot could unlatch it.
+
 
 **The PCON patch used to wait, and that was a mistake worth recording.** Its
 first version polled the PCON's own completion bits
