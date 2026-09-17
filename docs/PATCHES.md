@@ -357,18 +357,35 @@ lost one.
   async SCDC-triggered retrain that `hdmi_frl_status_polling_work` can fire
   at any point while an FRL link stays up — not just at boot.
 - `cs-defer-od-during-pcon-frl-training.patch` covers **active DP→HDMI PCON**
-  output, where no such DC-tracked signal exists: it polls the PCON's own
-  completion bits (`DP_PCON_HDMI_TX_LINK_STATUS` /
-  `DP_PCON_HDMI_POST_FRL_STATUS`) directly for a bounded 10 s after the stream
-  unblanks, holding the same interlock flag for as long as it takes (or until
-  the bound is hit).
+  output, where no such DC-tracked signal exists. It arms a deadline
+  (`amdgpu.cs_pcon_frl_defer_ms`, default 2000 ms; `0` disables the deferral)
+  when a modeset goes out through a PCON, and the commit path defers while the
+  clock is before it. It does not block the modeset at all.
 
-**Two things worth knowing if you go looking at the code.** First, on the one
-board this was hardware-tested against, the PCON readiness poll never actually
-observed "ready" inside its 10 s bound — in practice the fix behaves as a
-bounded defer-after-unblank window on that adapter, not a confirmed
-completion-detector; it still fixed the symptom, but do not read the code as
-proof the poll's success path is exercised on every adapter. Second, the PCON
+**The PCON patch used to wait, and that was a mistake worth recording.** Its
+first version polled the PCON's own completion bits
+(`DP_PCON_HDMI_TX_LINK_STATUS` / `DP_PCON_HDMI_POST_FRL_STATUS`) from the
+modeset path for up to 10 s, holding the interlock flag until they reported
+ready. They never do. With `amdgpu.cs_od_defer_debug=1` on a BC-250 into an LG
+G5 through a UGREEN 8K adapter, every invocation ran the full timeout and
+returned `ready=0` — two invocations per boot, 10000 ms each:
+
+```text
+[    9.626492] cs_od_defer: DP-HDMI21 PCON FRL wait started
+[   20.030431] cs_od_defer: DP-HDMI21 PCON FRL wait finished after 10000ms (ready=0)
+[   29.867259] cs_od_defer: DP-HDMI21 PCON FRL wait started
+[   40.270402] cs_od_defer: DP-HDMI21 PCON FRL wait finished after 10000ms (ready=0)
+```
+
+That bought nothing and cost a great deal: roughly 20 s of added boot time and
+the same again on shutdown (both reported from the field as "boots and shuts
+down noticeably slower"), plus a 10 s window per modeset in which a second
+display commit could land on a link the first was still bringing up — a
+plausible source of the screen corruption reported on some PCON/display
+combinations that an unpatched kernel did not show. The deadline does the one
+thing the wait was actually there to do, without any of that.
+
+**One more thing worth knowing if you go looking at the code.** The PCON
 patch's async-retrain coverage is intentionally narrower than the native-FRL
 one: it has not been established whether a plain, same-resolution
 compositor-to-desktop handoff re-triggers PCON training the way it can for
