@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same twelve patches plus its own two series-specific carries, fourteen in total:
+The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same thirteen patches plus its own two series-specific carries, fifteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -48,9 +48,10 @@ The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in
 0010-dcn201-enable-dsc.patch
 0011-cs-defer-od-during-frl-link-training.patch
 0012-cs-defer-od-during-pcon-frl-training.patch
+0013-cs-defer-od-during-dp-link-training.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same twelve patches (content-identical, renumbered around its own two extra series-specific carries) plus the two entries below:
+`patches/linux-cachyos-rc` carries the same thirteen patches (content-identical, renumbered around its own two extra series-specific carries) plus the two entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -67,11 +68,12 @@ The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in
 0012-dcn201-enable-dsc.patch
 0013-cs-defer-od-during-frl-link-training.patch
 0014-cs-defer-od-during-pcon-frl-training.patch
+0015-cs-defer-od-during-dp-link-training.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below.
 
-`cs-defer-od-during-frl-link-training.patch` and `cs-defer-od-during-pcon-frl-training.patch` fix the black-screen-at-boot issue described in [Solved: black screen from kernel takeover until a hotplug](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below.
+`cs-defer-od-during-frl-link-training.patch`, `cs-defer-od-during-pcon-frl-training.patch` and `cs-defer-od-during-dp-link-training.patch` fix the black-screen-at-boot issue described in [Solved: black screen from kernel takeover until a hotplug](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below.
 
 There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
@@ -342,25 +344,48 @@ Two extra factors, established the same way:
   DC's own `hdmi_frl_perform_link_training_with_retries()` /
   `hdmi_frl_poll_start()` bracket the whole operation.
 
-**The fix** is two patches, `cs-defer-od-during-frl-link-training.patch` and
-`cs-defer-od-during-pcon-frl-training.patch` (`0011`/`0012` in the stable/BORE
-set, `0013`/`0014` in the RC set — see [Kernel patch set](#kernel-patch-set)
-above). Both add a lock-free interlock: a flag that DC sets while link
-training is active, which `cyan_skillfish_od_edit_dpm_table()`'s commit path
-checks before sending `RequestGfxclk`/`ForceGfxVid`, returning `-EBUSY` and
-deferring rather than landing the override mid-training. Governor already
+**The fix** is three patches, `cs-defer-od-during-frl-link-training.patch`,
+`cs-defer-od-during-pcon-frl-training.patch` and
+`cs-defer-od-during-dp-link-training.patch` (`0011`–`0013` in the stable/BORE
+set, `0013`–`0015` in the RC set — see [Kernel patch set](#kernel-patch-set)
+above). All three feed one lock-free interlock: a flag that DC sets while a
+link is being brought up, which `cyan_skillfish_od_edit_dpm_table()`'s commit
+path checks before sending `RequestGfxclk`/`ForceGfxVid`, returning `-EBUSY`
+and deferring rather than landing the override mid-training. Governor already
 retries its next cycle roughly 100 ms later, so a deferred commit is not a
 lost one.
 
+They cover three different windows, and a DP-out board needs all of them:
+
+- `cs-defer-od-during-dp-link-training.patch` covers **DP link training
+  itself**, by bracketing `perform_link_training_with_retries()`. This is the
+  one that runs on every mode change on a DP-out board, and it is the window
+  that actually mattered here — see below.
 - `cs-defer-od-during-frl-link-training.patch` covers **native HDMI FRL**
   output: it sets the flag around both the boot-time training call and the
   async SCDC-triggered retrain that `hdmi_frl_status_polling_work` can fire
-  at any point while an FRL link stays up — not just at boot.
-- `cs-defer-od-during-pcon-frl-training.patch` covers **active DP→HDMI PCON**
-  output, where no such DC-tracked signal exists. It arms a deadline
+  at any point while an FRL link stays up — not just at boot. A DP-out board
+  never runs this path at all; it is here for boards with a native HDMI
+  output or a passive adapter.
+- `cs-defer-od-during-pcon-frl-training.patch` covers the **active DP→HDMI
+  PCON**'s own autonomous HDMI-side training, which starts only after the
+  stream unblanks and which DC has no signal for. It arms a deadline
   (`amdgpu.cs_pcon_frl_defer_ms`, default 2000 ms; `0` disables the deferral)
   when a modeset goes out through a PCON, and the commit path defers while the
   clock is before it. It does not block the modeset at all.
+
+**Covering only the first two was not enough, and the gap was structural.**
+With just the HDMI-FRL and post-unblank windows in place, a KDE ↔ gamescope
+switch on a DP-out board lost signal every time on the way into gamescope
+(4K120, DSC, HBR2): picture gone, link left at `0 lanes / 0x0 rate`, and no
+modeset ever reaching the post-unblank window at all. Across seven modesets in
+one session the post-unblank window never once observed a commit to defer —
+the governor's commits were landing during DP link training, before any of the
+instrumented code ran. Stopping `cyan-skillfish-governor-smu` (with nothing
+else writing `pp_od_clk_voltage`) made the same switch work reliably in both
+directions, which is what identified the window. Raising
+`cs_pcon_frl_defer_ms` cannot help here: that window opens after the
+vulnerable part is already over.
 
 **The PCON patch used to wait, and that was a mistake worth recording.** Its
 first version polled the PCON's own completion bits
