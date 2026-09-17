@@ -1,5 +1,4 @@
 diff --git a/drivers/gpu/drm/amd/display/dc/link/link_dpms.c b/drivers/gpu/drm/amd/display/dc/link/link_dpms.c
-index ca5997748799..fba012754a4d 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/link_dpms.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/link_dpms.c
 @@ -59,6 +59,9 @@
@@ -79,9 +78,9 @@ index ca5997748799..fba012754a4d 100644
  #define RETIMER_REDRIVER_INFO(...) \
  	DC_LOG_RETIMER_REDRIVER(  \
  		__VA_ARGS__)
-@@ -2697,6 +2760,8 @@ void link_set_dpms_on(
- 	dc->hwss.unblank_stream(pipe_ctx,
- 		&pipe_ctx->stream->link->cur_link_settings);
+@@ -2758,6 +2821,8 @@
+ 	hwss->unblank_stream(pipe_ctx,
+ 		&link->cur_link_settings);
  
 +	cs_wait_for_dp_hdmi21_pcon_frl_ready(link);
 +

@@ -1,5 +1,4 @@
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_hdmi_frl.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_hdmi_frl.c
-index c35074177a36..c4043795cba8 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_hdmi_frl.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_hdmi_frl.c
 @@ -34,6 +34,9 @@
@@ -38,7 +37,7 @@ index c35074177a36..c4043795cba8 100644
  #define DC_LOGGER \
  	dc_logger
  #define DC_LOGGER_INIT(logger) \
-@@ -345,6 +367,10 @@ void hdmi_frl_poll_start(struct ddc_service *ddc_service)
+@@ -350,6 +372,10 @@
  
  	DC_LOGGER_INIT(ddc_service->link->ctx->logger);
  
@@ -49,7 +48,7 @@ index c35074177a36..c4043795cba8 100644
  	/*Test Condition - FLT_no_timeout avoid link training*/
  	offset = HDMI_SCDC_SOURCE_TEST_REQ;
  	link_query_ddc_data(ddc_service, slave_address, &offset,
-@@ -354,7 +380,7 @@ void hdmi_frl_poll_start(struct ddc_service *ddc_service)
+@@ -359,7 +385,7 @@
  
  	/*Test Condition - No need to poll FRL_START if FLT_no_timeout*/
  	if (flt_no_timeout)
@@ -58,7 +57,7 @@ index c35074177a36..c4043795cba8 100644
  
  	offset = HDMI_SCDC_UPDATE_0;
  	/*LTS:P: Check FRL_START, poll for 200ms */
-@@ -383,6 +409,10 @@ void hdmi_frl_poll_start(struct ddc_service *ddc_service)
+@@ -388,6 +414,10 @@
  			break;
  		}
  	}
@@ -69,7 +68,7 @@ index c35074177a36..c4043795cba8 100644
  	return;
  }
  
-@@ -695,6 +725,10 @@ enum link_result hdmi_frl_perform_link_training_with_retries(
+@@ -712,6 +742,10 @@
  
  	DC_LOGGER_INIT(link->ctx->logger);
  
@@ -80,7 +79,7 @@ index c35074177a36..c4043795cba8 100644
  	if (link->preferred_hdmi_frl_settings.valid)
  		max_retries = link->preferred_hdmi_frl_settings.max_retries;
  
-@@ -719,6 +753,10 @@ enum link_result hdmi_frl_perform_link_training_with_retries(
+@@ -736,6 +770,10 @@
  		}
  	}
  
@@ -92,13 +91,12 @@ index c35074177a36..c4043795cba8 100644
  }
  
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-index f9cd1f33e204..a149f1285411 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-@@ -947,6 +947,13 @@ static int cyan_skillfish_od_edit_dpm_table(struct smu_context *smu,
+@@ -950,6 +950,13 @@
  			return -EINVAL;
  		}
-
+ 
 +		if (atomic_read(&cs_hdmi_frl_training_active)) {
 +			if (cs_od_defer_debug)
 +				dev_info(smu->adev->dev,
