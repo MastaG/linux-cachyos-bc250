@@ -101,7 +101,7 @@ avoid. Both call sites run in process context from the atomic commit tail.
   * An 8-core board is assumed to carry the 8-core metrics SMU firmware patch
   * (see smu11_driver_if_cyan_skillfish.h's SmuMetricsTable_8core_t comment for
   * how to get it). A board reporting 8 cores without that firmware patch is
-@@ -411,7 +445,29 @@
+@@ -411,7 +445,50 @@
  	if (ret)
  		return ret;
  
@@ -110,29 +110,50 @@ avoid. Both call sites run in process context from the atomic commit tail.
 +	if (ret)
 +		return ret;
 +
-+	/* Only now is this smu usable for the OD release in link_dpms.c. */
-+	WRITE_ONCE(cs_od_smu, smu);
++	/*
++	 * Only now is this smu usable for the OD release in link_dpms.c.
++	 * Published under the same lock the release and teardown take, so
++	 * there is one consistent owner of this pointer.
++	 */
++	mutex_lock(&cs_od_force_lock);
++	cs_od_smu = smu;
++	mutex_unlock(&cs_od_force_lock);
 +
 +	return 0;
 +}
 +
 +static int cyan_skillfish_fini_smc_tables(struct smu_context *smu)
 +{
-+	if (READ_ONCE(cs_od_smu) == smu) {
++	bool was_ours;
++
++	/*
++	 * Drop the reference under the lock, so anything already inside
++	 * cs_od_force_suspend() or the restore work has either finished with
++	 * this smu or will now see NULL and send nothing.
++	 */
++	mutex_lock(&cs_od_force_lock);
++	was_ours = cs_od_smu == smu;
++	if (was_ours)
++		cs_od_smu = NULL;
++	mutex_unlock(&cs_od_force_lock);
++
++	if (was_ours) {
 +		/*
-+		 * Drop the reference first, so a restore that is already
-+		 * running finds no smu and sends nothing, then wait for it.
++		 * Outside the lock: the work takes it, so cancelling while
++		 * holding it would deadlock against a restore already running.
 +		 */
-+		WRITE_ONCE(cs_od_smu, NULL);
 +		cancel_delayed_work_sync(&cs_od_force_restore_work);
-+		WRITE_ONCE(cs_od_force_suspended, false);
++
++		mutex_lock(&cs_od_force_lock);
++		cs_od_force_suspended = false;
++		mutex_unlock(&cs_od_force_lock);
 +	}
 +
 +	return smu_v11_0_fini_smc_tables(smu);
  }
  
  static int cyan_skillfish_refresh_metrics_table(struct smu_context *smu)
-@@ -910,12 +966,132 @@
+@@ -910,12 +987,144 @@
  	return sizeof(struct gpu_metrics_v2_2);
  }
  
@@ -204,13 +225,24 @@ avoid. Both call sites run in process context from the atomic commit tail.
 + */
 +void cs_od_force_suspend(void)
 +{
-+	struct smu_context *smu = READ_ONCE(cs_od_smu);
++	struct smu_context *smu;
 +	bool armed = false;
 +
-+	if (!smu || !cs_od_unforce_ms)
++	if (!cs_od_unforce_ms)
 +		return;
 +
 +	mutex_lock(&cs_od_force_lock);
++	/*
++	 * Read inside the lock, not before it: cyan_skillfish_fini_smc_tables()
++	 * clears this under the same lock, so a teardown racing a modeset
++	 * cannot leave us sending mailbox messages to a device on its way out.
++	 */
++	smu = cs_od_smu;
++	if (!smu) {
++		mutex_unlock(&cs_od_force_lock);
++		return;
++	}
++
 +	if (cs_od_force_suspended) {
 +		/* Already released -- just hold it open a while longer. */
 +		armed = true;
@@ -233,9 +265,10 @@ avoid. Both call sites run in process context from the atomic commit tail.
 +
 +static void cs_od_force_restore_work_fn(struct work_struct *work)
 +{
-+	struct smu_context *smu = READ_ONCE(cs_od_smu);
++	struct smu_context *smu;
 +
 +	mutex_lock(&cs_od_force_lock);
++	smu = cs_od_smu;
 +	if (cs_od_force_suspended && smu) {
 +		/*
 +		 * Whatever the user's settings are *now* -- an OD commit that
@@ -266,7 +299,7 @@ avoid. Both call sites run in process context from the atomic commit tail.
  
  	switch (type) {
  	case PP_OD_EDIT_VDDC_CURVE:
-@@ -972,6 +1148,20 @@
+@@ -972,6 +1181,20 @@
  			return -EBUSY;
  		}
  
@@ -287,7 +320,7 @@ avoid. Both call sites run in process context from the atomic commit tail.
  		if (cyan_skillfish_user_settings.sclk < CYAN_SKILLFISH_SCLK_MIN ||
  		    cyan_skillfish_user_settings.sclk > CYAN_SKILLFISH_SCLK_MAX) {
  			dev_err(smu->adev->dev, "Invalid sclk! Valid sclk range: %uMHz - %uMhz\n",
-@@ -987,31 +1177,11 @@
+@@ -987,31 +1210,11 @@
  			return -EINVAL;
  		}
  
@@ -323,7 +356,7 @@ avoid. Both call sites run in process context from the atomic commit tail.
  
  		break;
  	default:
-@@ -1069,7 +1239,7 @@
+@@ -1069,7 +1272,7 @@
  	.init_power = smu_v11_0_init_power,
  	.fini_power = smu_v11_0_fini_power,
  	.init_smc_tables = cyan_skillfish_init_smc_tables,
