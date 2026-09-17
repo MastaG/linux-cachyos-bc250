@@ -594,9 +594,18 @@ class SlrPackageTests(unittest.TestCase):
                 self.assertIn("--ffx-sdk-default fsr411f", text)
                 self.assertIn("--ffx-sdk-alt fsr411b", text)
                 self.assertIn("--ffx-sdk-alt fsr411f", text)
-                self.assertIn("bc250-fsr4-dll-4.0.0-rc11.zip", text)
-                self.assertNotIn("rc9", text)
-                self.assertNotIn("rc10", text)
+                # Older bridges are kept selectable so their performance can be
+                # measured against the default. Every package must offer the
+                # same set, and the default must stay the newest.
+                self.assertIn("--ffx-sdk-alt fsr411rc9", text)
+                self.assertIn("--ffx-sdk-alt fsr411rc10", text)
+                for archive in ("bc250-fsr4-dll-4.0.0-rc9.tar.xz",
+                                "bc250-fsr4-dll-4.0.0-rc10.zip",
+                                "bc250-fsr4-dll-4.0.0-rc11.zip"):
+                    self.assertIn(archive, text)
+                # The default alias resolves to RC11, not to one of the older
+                # ones -- fsr411f is what --ffx-sdk-default names.
+                self.assertIn('fsr411f', text.split("--ffx-sdk-default", 1)[1][:16])
 
     def test_the_metapackage_pulls_in_all_three(self):
         pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()

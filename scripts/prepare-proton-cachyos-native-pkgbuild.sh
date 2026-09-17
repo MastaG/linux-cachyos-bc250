@@ -216,6 +216,12 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --ffx-sdk-alt fsr411f \\\n'
     '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc11.zip" \\\n'
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11" \\\n'
+    '        --ffx-sdk-alt fsr411rc9 \\\n'
+    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc9.tar.xz" \\\n'
+    '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc9" \\\n'
+    '        --ffx-sdk-alt fsr411rc10 \\\n'
+    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc10.zip" \\\n'
+    '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -265,6 +271,13 @@ payload_sources = [
     # performance"; the DLL identifies itself as 4.1.1r11 rather than r10.
     ("bc250-fsr4-dll-4.0.0-rc11.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc11.zip",
      "95ef0c6ea887e0506a3a92f7e4648e7ab7e1100e99f5eff2f70dd33b8dff2a72", True),
+    # Older bridges from the same fork, opt-in only, kept so their
+    # performance can be measured against the default rather than deleted
+    # when superseded. PROTON_USE_OPTISCALER=fsr411rc9 / fsr411rc10.
+    ("bc250-fsr4-dll-4.0.0-rc9.tar.xz", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc9.tar.xz",
+     "e7b53b1f1aa7aa4b767c3f73e72a33a9a3c5563eefd1edf48bf165fcb0feac89", True),
+    ("bc250-fsr4-dll-4.0.0-rc10.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc10.zip",
+     "eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98", True),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),
