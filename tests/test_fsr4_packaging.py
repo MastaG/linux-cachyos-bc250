@@ -351,20 +351,47 @@ class KernelPatchSetTests(unittest.TestCase):
     be in both. When 7.2.5 backported the drm/gud change, the stable kernel
     stopped building because its set was missing a patch the RC set had had for
     weeks, and nothing said so until CI went red.
+
+    The two sets can legitimately have different *lengths* now: each carries
+    its own series-specific patches (the RC-only HDMI VTEM backport; the gud
+    FORTIFY workaround, needed on 7.3-rc but reverted upstream on 7.2), so the
+    same logical patch does not always sit at the same number prefix in both
+    directories. Comparison is therefore by content name (the part after the
+    `NNNN-`), not by full filename or position.
     """
 
     STABLE = ROOT / "patches/linux-cachyos"
     RC = ROOT / "patches/linux-cachyos-rc"
 
     # Patches that legitimately exist in one set only, with the reason.
-    RC_ONLY = {"0010-hdmi21-vtem-on-tmds.patch": "backport that applies only to 7.3"}
+    STABLE_ONLY = {}
+    RC_ONLY = {
+        "hdmi21-vtem-on-tmds.patch": "backport that applies only to 7.3",
+        "gud-bound-tv-mode-count.patch": (
+            "FORTIFY workaround for a bug upstream reverted on the 7.2 branch "
+            "but that is still present on 7.3-rc"
+        ),
+    }
+
+    @staticmethod
+    def content_name(patch_name):
+        """Strip the leading `NNNN-` ordering prefix, e.g. '0003-foo.patch' -> 'foo.patch'."""
+        return re.sub(r"^\d+-", "", patch_name)
+
+    @classmethod
+    def stable_by_content(cls):
+        return {cls.content_name(p.name): p for p in cls.STABLE.glob("*.patch")}
+
+    @classmethod
+    def rc_by_content(cls):
+        return {cls.content_name(p.name): p for p in cls.RC.glob("*.patch")}
 
     def test_the_sets_differ_only_by_documented_carries(self):
-        stable = {p.name for p in self.STABLE.glob("*.patch")}
-        rc = {p.name for p in self.RC.glob("*.patch")}
-        self.assertEqual(sorted(rc - stable), sorted(self.RC_ONLY),
+        stable = self.stable_by_content()
+        rc = self.rc_by_content()
+        self.assertEqual(sorted(set(rc) - set(stable)), sorted(self.RC_ONLY),
                          "a patch is in the RC set but not in the stable one")
-        self.assertEqual(sorted(stable - rc), [],
+        self.assertEqual(sorted(set(stable) - set(rc)), sorted(self.STABLE_ONLY),
                          "a patch is in the stable set but not in the RC one")
 
     @staticmethod
@@ -384,19 +411,21 @@ class KernelPatchSetTests(unittest.TestCase):
         return touched, changed
 
     def test_shared_patches_do_the_same_thing_in_both_sets(self):
-        for name in sorted({p.name for p in self.STABLE.glob("*.patch")}):
-            with self.subTest(patch=name):
-                self.assertEqual(self.substance(self.STABLE / name),
-                                 self.substance(self.RC / name))
+        stable = self.stable_by_content()
+        rc = self.rc_by_content()
+        for content_name in sorted(set(stable) & set(rc)):
+            with self.subTest(patch=content_name):
+                self.assertEqual(self.substance(stable[content_name]),
+                                 self.substance(rc[content_name]))
 
     def test_docs_list_the_patches_that_actually_ship(self):
-        """docs/PATCHES.md names the shared set in a fenced block; keep it true.
+        """docs/PATCHES.md names the stable set in a fenced block; keep it true.
 
         It is the only place a reader can see what the kernels carry, and it has
         gone stale before -- it still said "nine patches" after two were added.
         """
         text = (ROOT / "docs/PATCHES.md").read_text()
-        marker = "Both sets share these"
+        marker = "The stable and BORE kernels carry these"
         block = text.split(marker, 1)[1].split("```text", 1)[1].split("```", 1)[0]
         documented = [line.strip() for line in block.splitlines() if line.strip()]
         shipped = sorted(p.name for p in self.STABLE.glob("*.patch"))
@@ -405,8 +434,8 @@ class KernelPatchSetTests(unittest.TestCase):
         self.assertIn(self.number_word(len(shipped)) + " BC-250 patches", text)
 
     def test_hdmi21_patches_stay_switchable_and_default_on(self):
-        """0012/0013 are on by default but must keep amdgpu.bc250_hdmi21 as an
-        off switch that gives an unpatched kernel back.
+        """The two DCN201 display patches are on by default but must keep
+        amdgpu.bc250_hdmi21 as an off switch that gives an unpatched kernel back.
 
         They shipped unconditional, then opt-in after a dark-display report,
         then on again once that report proved unrelated. The gist they come
@@ -415,14 +444,20 @@ class KernelPatchSetTests(unittest.TestCase):
         `dp_hdmi21_pcon_support = true` are the two signatures of that. The
         default is pinned too, because users asked for it and it decides what
         everyone gets.
+
+        Looked up by content name, not number prefix: the two sets number this
+        pair differently (stable and RC have diverged in length elsewhere).
         """
-        for patch_set in (self.STABLE, self.RC):
-            for name in ("0012-dcn201-hdmi21-pcon.patch", "0013-dcn201-enable-dsc.patch"):
-                text = (patch_set / name).read_text()
-                with self.subTest(patch=f"{patch_set.name}/{name}"):
+        for patch_set, by_content in (
+            (self.STABLE, self.stable_by_content()),
+            (self.RC, self.rc_by_content()),
+        ):
+            for content_name in ("dcn201-hdmi21-pcon.patch", "dcn201-enable-dsc.patch"):
+                text = by_content[content_name].read_text()
+                with self.subTest(patch=f"{patch_set.name}/{content_name}"):
                     self.assertIn("dc->config.bc250_hdmi21", text)
                     self.assertNotIn("-\t\t.num_dsc = 0,", text)
-            pcon = (patch_set / "0012-dcn201-hdmi21-pcon.patch").read_text()
+            pcon = by_content["dcn201-hdmi21-pcon.patch"].read_text()
             self.assertIn("+\tif (dc->config.bc250_hdmi21)\n"
                           "+\t\tdc->caps.dp_hdmi21_pcon_support = true;", pcon)
             self.assertIn('module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);', pcon)

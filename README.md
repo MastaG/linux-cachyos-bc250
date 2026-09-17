@@ -8,6 +8,11 @@ output. Everything is prebuilt — you add the repository and install packages.
 
 Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 
+> **Running 8 CPU cores?** Your SMU firmware must be patched to match — there
+> is no supported fallback for unlocking 8 cores on stock SMU firmware anymore.
+> See [step 5](#5-running-8-cpu-cores) before you do anything else with core
+> count. Everything below this applies equally either way.
+
 ## What you get
 
 | Package | What it is |
@@ -113,7 +118,7 @@ uname -r
 lsmod | grep nct6687
 ```
 
-### 5. Running 8 CPU cores? Check which BIOS you have
+### 5. Running 8 CPU cores?
 
 Check what your board reports:
 
@@ -123,36 +128,40 @@ lscpu | grep '^Core(s) per socket'
 
 Skip the rest of this step if that says `6` — everything works out of the box and nothing here applies to you.
 
-The BC-250's SMU firmware was written for 6 CPU cores. If your BIOS unlocks all 8, that firmware has to report per-core telemetry it was never designed to report, and **which BIOS you flashed decides how complete that telemetry is**. The kernel picks the right decoding automatically, so there is nothing to configure in the normal case — but you should know which of these two you are in:
+> ## ⚠️ If you unlocked 8 cores, your SMU firmware MUST also be patched
+>
+> **There is no supported fallback for running 8 cores on stock, unpatched SMU
+> firmware.** An older kernel patch set used to offer
+> `amdgpu.cs_legacy_8core_metrics=1` as a workaround for that combination — it
+> has been **removed**. It only ever produced partial, gap-riddled telemetry,
+> and kept people running an unsupported firmware/kernel combination without
+> realizing it. If your BIOS unlocks 8 cores without also patching the SMU
+> firmware, your telemetry (clocks, power, temperatures, `gpu_busy_percent`,
+> MangoHud, everything) **will read as garbage**, because the kernel decodes
+> the 8-core table assuming the patched layout unconditionally.
+>
+> Patch your SMU firmware. Two ways to do it, pick one:
+>
+> - **Flash a prebuilt UEFI firmware** that bundles the core unlock with the
+>   SMU patch — the easiest option for most people:
+>   <https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases>
+>   Follow that repository's own instructions — it ships a script that unpacks
+>   the firmware to a USB stick and reboots you into the flashing environment.
+>   Flashing firmware can brick a board if it is interrupted, so read its
+>   README first and do not do it on a machine you cannot afford to lose.
+> - **Patch the SMU firmware yourself from a running system**, if you would
+>   rather not flash a new BIOS:
+>   <https://github.com/rw-r-r-0644/bc250-smu-unlock>
 
-| Your BIOS | What to do | What you get |
+The kernel picks the right decoding automatically once your firmware is patched, so there is nothing to configure:
+
+| Your BIOS | Supported? | What you get |
 |---|---|---|
-| Unlocks 8 cores **and** patches the SMU (current community BIOS) | Nothing. This is the default. | Clock, power, temperature and C0 residency for **all 8 cores** |
-| Unlocks 8 cores on the **stock, unpatched** SMU (older BIOS) | Add `amdgpu.cs_legacy_8core_metrics=1` | Correct but **incomplete** — see below |
+| 6 cores (stock) | Yes | Normal telemetry, nothing to do |
+| Unlocks 8 cores **and** patches the SMU | Yes — this is the default once you flash it | Clock, power, temperature and C0 residency for **all 8 cores** |
+| Unlocks 8 cores on **stock, unpatched** SMU | **No** | Garbage telemetry — patch your SMU firmware, see above |
 
-A prebuilt, easy-to-flash UEFI firmware carrying both the core unlock and the SMU patch is published here:
-
-<https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases>
-
-Follow that repository's own instructions — it ships a script that unpacks the firmware to a USB stick and reboots you into the flashing environment. Flashing firmware can brick a board if it is interrupted, so read its README first and do not do it on a machine you cannot afford to lose.
-
-If you would rather not flash anything, the kernel parameter is a perfectly good answer. Set it on the stock BIOS with 8 cores unlocked and telemetry becomes correct instead of scrambled — you just do not get the full picture, because that firmware has no table slot for some of it:
-
-```text
-amdgpu.cs_legacy_8core_metrics=1
-```
-
-| Reading | Stock BIOS, 8 cores unlocked |
-|---|---|
-| Core clock | All 8 cores |
-| Core power | Cores 1-7 (core 0 has no slot) |
-| Core temperature | Cores 4 and 5 only |
-| C0 residency | Cores 0-6 (core 7 has no slot) |
-| GFX clock, voltages, socket power, temperatures | Complete |
-
-Missing values are reported as unavailable rather than filled in with a number belonging to a different field, so nothing lies to you.
-
-**Do not set this parameter if you are on the patched BIOS** — it decodes the table the wrong way and your telemetry will look scrambled. If you are unsure which BIOS you have, boot without the parameter and look at per-core temperatures in `amdgpu_top`: on the patched BIOS all eight are plausible room-temperature-and-up values. If most of them read zero, you are on the older BIOS and want the parameter.
+To confirm you are actually on the patched layout, look at per-core temperatures in `amdgpu_top`: all eight should be plausible room-temperature-and-up values. If most of them read zero or nonsense, your SMU firmware is not patched — fix that before reporting a telemetry bug.
 
 ---
 
@@ -238,13 +247,16 @@ sudo grep -H . /sys/kernel/debug/dri/*/DP-1/dsc_clock_en
 mode falls back to what fits, which is the 4K120 4:2:0 or 4K60 4:4:4 you had
 before.
 
-**A known issue that is not this.** Some DP→HDMI 2.1 adapters show a black
-screen from the moment the kernel takes over the display at boot until the cable
-is re-seated, even though the link is up and the compositor is running. It
-happens with the feature off as well, with an ordinary 4K60 signal, so it is not
-these patches; it is under investigation (see
-[docs/PATCHES.md](docs/PATCHES.md#4k120-444-through-an-hdmi-21-pcon) for the
-current state and a one-file workaround).
+**A now-solved issue that was not this.** Some DP→HDMI 2.1 adapters used to
+show a black screen from the moment the kernel took over the display at boot
+until the cable was re-seated — or, with the fix partially in place, a picture
+that arrived but late enough to miss the boot splash. It happened with this
+feature off as well, so it was never these patches; the actual cause was a GPU
+governor's clock/voltage commit landing on the SMU while the HDMI link was
+still training. Two kernel patches now defer that commit until training
+finishes — see
+[Solved: black screen from kernel takeover until a hotplug](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug)
+for the mechanism, the patches involved, and the residual caveats.
 
 Credit goes to **TeleBooth**, who did the work of finding that the DSC engines
 were there, getting them running on a real BC-250 and
@@ -597,12 +609,13 @@ The optional ROCm/KFD runlist-TLB workaround documented below requires hardware 
 
 ## cyan-skillfish-governor recommendations
 
-The 8-core telemetry decoding in this repository's kernel patches is unofficial and community-reverse-engineered; the Cyan Skillfish SMU firmware was written with 6 CPU cores in mind, and the extra decoding only applies to boards running a patched BIOS that unlocks the two extra cores.
+The 8-core telemetry decoding in this repository's kernel patches is unofficial and community-reverse-engineered; it requires the patched SMU firmware described in [step 5](#5-running-8-cpu-cores) of the quick start — **the extra decoding is not a substitute for that firmware patch**, it only applies once you have it.
 
 For [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) users on this kernel:
 
 - Use `set-method = "kernel"`. The widened Cyan Skillfish SMU SCLK range above exists specifically to make this option viable end to end. Setting frequency through the kernel interface avoids the extra SMU mailbox round-trips that `set-method = "smu"` requires, and excessive SMU traffic is a real crash risk on this board.
-- Leave `fix-metrics = false` and `fix-freq = false`. Both bind-mount a corrected value over a sysfs file to work around inaccurate stock telemetry, but this repository's kernel patches already fix that telemetry at the source: `gpu_metrics`'s `average_gfx_activity` and `gpu_busy_percent` are populated by the same corrected kernel function, and `freq1_input` already reflects a real `GetGfxclkFrequency` SMU read. Enabling either on this kernel only adds an extra bind mount (and, for `fix-freq`, a second independent SMU connection) to duplicate a number the kernel already reports correctly.
+- Leave `fix-metrics = false` and `fix-freq = false`. Both bind-mount a corrected value over a sysfs file to work around inaccurate stock telemetry, but this repository's kernel patches already fix that telemetry at the source: `gpu_metrics`'s `average_gfx_activity` and `gpu_busy_percent` are populated by the same corrected kernel function, and `freq1_input` is read straight from the same already-cached SMU metrics table, not a separate mailbox round-trip. Enabling either on this kernel only adds an extra bind mount (and, for `fix-freq`, a second independent SMU connection) to duplicate a number the kernel already reports correctly.
+- If you have a DP→HDMI 2.1 adapter or a native HDMI 2.1 FRL display and used to see a black screen or a late sync at boot with the governor running: that was the governor's own clock/voltage commit racing HDMI link training, and it is fixed at the kernel level as of this patch set. Nothing to configure in the governor itself — see [Solved: black screen from kernel takeover until a hotplug](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug) if you want the mechanism.
 
 ---
 
@@ -666,8 +679,9 @@ When unset, the resolver follows the configured upstream branch.
   <https://github.com/rw-r-r-0644/bc250-smu-unlock>
 - TeleBooth — BC-250 4K120 4:4:4 over DSC: identifying that Cyan Skillfish carries
   two usable DCN200-compatible DSC engines the Linux driver declared absent, the
-  DCN201 DSC and HDMI 2.1 PCON patches this repository carries as `0012`/`0013`,
-  and the working debugfs capture that proved them.  
+  DCN201 DSC and HDMI 2.1 PCON patches this repository carries (`dcn201-hdmi21-pcon.patch`
+  and `dcn201-enable-dsc.patch` — see [Kernel patch set](docs/PATCHES.md#kernel-patch-set)
+  for their current numbers in each set), and the working debugfs capture that proved them.  
   <https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e>
 - Forbidden-Darkness — prebuilt BC-250 UEFI firmware bundling the 8-core unlock with the SMU telemetry patch, and the script that flashes it.  
   <https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases>

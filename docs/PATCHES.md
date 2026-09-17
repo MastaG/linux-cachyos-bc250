@@ -18,56 +18,84 @@ patches/linux-cachyos-rc/
 `patches/linux-cachyos` is applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`, since `linux-cachyos` and `linux-cachyos-bore` are built from the same upstream source series.  
 `patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`, and the two sets are now anchored to different kernels: `patches/linux-cachyos` targets the **Linux 7.2** series, `patches/linux-cachyos-rc` targets **Linux 7.3-rc**. That is exactly why the directory was split.
 
-The two sets currently contain the same eleven patches with the same content. Only the hunk offsets and blob hashes differ, because each set is regenerated against its own base so that future rebases are measured from the right kernel. A test asserts that: `KernelPatchSetTests` compares the two directories by patch *substance* — the files touched and the lines changed — so a patch added to one set and forgotten in the other fails before CI ever builds it.
+The two sets carry the same BC-250 patches with the same content — but not
+always at the same file number, and not always the same *count*. Each set
+regenerates its shared patches against its own kernel base, and each also
+carries a small number of series-specific patches the other does not need (see
+[patches that exist in one set only](#patches-that-exist-in-one-set-only)
+below), which shifts everything after them in whichever set has more of them.
+Two tests keep this from drifting apart silently: `KernelPatchSetTests`
+compares the two directories by patch *content name* (ignoring the `NNNN-`
+number) and asserts the shared ones are byte-identical in substance — the
+files touched and the lines changed — and that any patch existing in only one
+set is on an explicit, reasoned allow-list. A patch added to one set and
+forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-Both sets share these eleven BC-250 patches — `patches/linux-cachyos` for `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2), `patches/linux-cachyos-rc` for `linux-cachyos-rc-bc250` (7.3-rc):
+The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same twelve patches plus its own two series-specific carries, fourteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
-0003-nct6687d-hwmon.patch
-0004-gfx1013-pasid-tlb-invalidation.patch
-0005-gfx1013-compute-gfxoff-guard.patch
-0006-bc250-kfd-flush-tlb-by-runlist.patch
-0007-amdgpu-ttm-null-page-guard.patch
-0008-cyan-skillfish-sclk-range.patch
-0009-bc250-40cu-unlock.patch
-0011-gud-bound-tv-mode-count.patch
-0012-dcn201-hdmi21-pcon.patch
-0013-dcn201-enable-dsc.patch
+0002-nct6687d-hwmon.patch
+0003-gfx1013-pasid-tlb-invalidation.patch
+0004-gfx1013-compute-gfxoff-guard.patch
+0005-bc250-kfd-flush-tlb-by-runlist.patch
+0006-amdgpu-ttm-null-page-guard.patch
+0007-cyan-skillfish-sclk-range.patch
+0008-bc250-40cu-unlock.patch
+0009-dcn201-hdmi21-pcon.patch
+0010-dcn201-enable-dsc.patch
+0011-cs-defer-od-during-frl-link-training.patch
+0012-cs-defer-od-during-pcon-frl-training.patch
 ```
 
-`0011` was written for 7.3-rc and lived only in the RC set until 7.2.5 backported
-the `drm/gud` change that needs it. It is not optional on either series: without
-it the build dies at link time, in a driver this hardware does not even use —
+`patches/linux-cachyos-rc` carries the same twelve patches (content-identical, renumbered around its own two extra series-specific carries) plus the two entries below:
 
 ```text
-ld.lld: error: call to __read_overflow marked "dontcall-error": detected
-read beyond size of object (1st parameter)
+0001-bc250-8core-telemetry-gpu-activity.patch
+0002-nct6687d-hwmon.patch
+0003-gfx1013-pasid-tlb-invalidation.patch
+0004-gfx1013-compute-gfxoff-guard.patch
+0005-bc250-kfd-flush-tlb-by-runlist.patch
+0006-amdgpu-ttm-null-page-guard.patch
+0007-cyan-skillfish-sclk-range.patch
+0008-bc250-40cu-unlock.patch
+0009-hdmi21-vtem-on-tmds.patch
+0010-gud-bound-tv-mode-count.patch
+0011-dcn201-hdmi21-pcon.patch
+0012-dcn201-enable-dsc.patch
+0013-cs-defer-od-during-frl-link-training.patch
+0014-cs-defer-od-during-pcon-frl-training.patch
 ```
 
-— which is what happened to `linux-cachyos-bc250` the day 7.2.5 landed. Both the
-failure and the fix were reproduced against 7.2.5 with CachyOS's own config
-before this was moved across, because the trap only appears at `-O3` with
-ThinLTO; a `defconfig` build of the same tree passes.
+`dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below.
 
-`0012` and `0013` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below.
+`cs-defer-od-during-frl-link-training.patch` and `cs-defer-od-during-pcon-frl-training.patch` fix the black-screen-at-boot issue described in [Solved: black screen from kernel takeover until a hotplug](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below.
 
-`patches/linux-cachyos-rc` additionally carries one [HDMI 2.1 patch](#hdmi-21-vrr-and-allm-backport-rc-kernel-only) (`0010`), which applies only to the 7.3 series.
+There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
-There is intentionally no `0002-bc250-audio.patch` here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
+#### Patches that exist in one set only
+
+- `hdmi21-vtem-on-tmds.patch` — RC only. Applies only to the 7.3 series; see [HDMI 2.1 VRR and ALLM backport](#hdmi-21-vrr-and-allm-backport-rc-kernel-only) below.
+- `gud-bound-tv-mode-count.patch` — RC only, as of this writing. A FORTIFY_SOURCE workaround for a `drm/gud` bug (`da1ea35fea67`) that trips `__read_overflow` at `-O3` with ThinLTO:
+
+  ```text
+  ld.lld: error: call to __read_overflow marked "dontcall-error": detected
+  read beyond size of object (1st parameter)
+  ```
+
+  Upstream **reverted** the commit that causes this on the branch the stable/BORE kernels track, so the vulnerable code is gone there and the workaround was dropped from `patches/linux-cachyos` — confirmed by reading the reverted-to state directly, not by assuming a version bump fixed it. The 7.3-rc branch still carries the vulnerable code verbatim, confirmed the same way and by a real `-O3`/ThinLTO build that reproduces the failure without this patch and passes with it, so it stays in `patches/linux-cachyos-rc` until 7.3 either reverts it too or lands its own fix. **Do not drop this from the RC set on a version bump alone** — verify with `git apply --check -R gud-bound-tv-mode-count.patch` against the new tree (should fail cleanly if the patch is still needed) and, ideally, a real build.
 
 This patch set contains:
 
-> The telemetry/activity and tunable GFXCLK/activity/metrics cache logic is consolidated in `0001-bc250-8core-telemetry-gpu-activity.patch`.  
-> All three cache windows default to 25 ms and can still be changed at runtime or disabled with `0`.
+> The telemetry/activity and tunable activity/metrics cache logic is consolidated in `bc250-8core-telemetry-gpu-activity.patch`.  
+> Both cache windows default to 25 ms and can still be changed at runtime or disabled with `0`.
 
-- automatic 6-core / 8-core Cyan Skillfish SMU metrics layout detection;
-- correct per-core telemetry for unlocked 8-core BC-250 systems, matched to the patched SMU firmware in the current community BIOS, with an opt-in fallback (`amdgpu.cs_legacy_8core_metrics=1`) for an older BIOS that unlocks the cores without the SMU metrics patch;
-- GPU activity reporting through GPU Metrics and `GPU_LOAD` derived from the GFX ring's emitted-fence count (Cyan Skillfish's `GRBM_STATUS` register reads back all-ones regardless of GPU state, which previously pegged `gpu_busy_percent` at 100% even at idle), with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it);
-- GFX clock read through the `GetGfxclkFrequency` SMU mailbox, with tunable caching (`amdgpu.cs_gfxclk_cache_ms`, default 25 ms, `0` disables it);
-- a tunable cache (`amdgpu.cs_metrics_cache_ms`, default 25 ms, `0` disables it) for the bulk SMU metrics table refresh backing temperature, power, voltage, socclk/vclk/dclk/uclk and throttler-status reads. Upstream's own internal debounce for that transfer is only 1 ms, so every distinct hwmon attribute a monitoring tool polls in one cycle could otherwise trigger its own SMU mailbox round trip;
+- automatic 6-core / 8-core Cyan Skillfish SMU metrics layout detection — **8-core boards must run the patched SMU firmware; see the warning at the top of this document**;
+- GPU activity reporting through GPU Metrics and `GPU_LOAD` derived from the GFX ring's emitted-fence count (Cyan Skillfish's `GRBM_STATUS` register reads back all-ones regardless of GPU state, which previously pegged `gpu_busy_percent` at 100% even at idle), with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it) and a real sleep (not a busy-wait) between ring samples;
+- GFX clock read directly from the SMU metrics table (no separate SMU mailbox round trip — see below);
+- a tunable cache (`amdgpu.cs_metrics_cache_ms`, default 25 ms, `0` disables it) for the bulk SMU metrics table refresh backing temperature, power, voltage, socclk/vclk/dclk/uclk, GFX clock and throttler-status reads. Upstream's own internal debounce for that transfer is only 1 ms, so every distinct hwmon attribute a monitoring tool polls in one cycle could otherwise trigger its own SMU mailbox round trip;
 - corrected `gpu_metrics` CPU-power reporting and overflow-safe 16-bit power export;
 - optional full BC-250 APU telemetry through `pp_dpm_socclk` (`amdgpu.cs_full_telemetry=1`), disabled by default so the normal sysfs clock ABI is preserved;
 - the v33 merged GFX1013 PASID TLB invalidation fix;
@@ -75,12 +103,14 @@ This patch set contains:
 - an **opt-in** KFD/HWS runlist rebuild workaround for stale ROCm compute TLB translations (`amdgpu.bc250_flush_by_runlist=1`);
 - a defensive AMDGPU TTM NULL-page guard so partially populated BO cleanup cannot dereference a missing page;
 - a widened Cyan Skillfish SMU SCLK range (350–2230 MHz, up from the stock 1000–2000 MHz) so userspace SMU-based governors such as [filippor/cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) can drive the full clock range;
-- integration of the external `nct6687` hwmon/PWM driver.
-- an **opt-in** 40 CU unlock for the harvested shader engines (`amdgpu.bc250_cc_write_mode=3`), described below.
+- integration of the external `nct6687` hwmon/PWM driver;
+- an **opt-in** 40 CU unlock for the harvested shader engines (`amdgpu.bc250_cc_write_mode=3`), described below;
+- a kernel-side interlock that defers GPU clock/voltage commits (from `cyan-skillfish-governor` or any other tool) around HDMI FRL link training, fixing the black-screen-at-boot issue — see [Solved: black screen from kernel takeover until a hotplug](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below.
 
 ## HDMI 2.1 VRR and ALLM backport (RC kernel only)
 
-`linux-cachyos-rc-bc250` carries one extra patch, `0010`, supporting HDMI 2.1
+`linux-cachyos-rc-bc250` carries one extra patch, `hdmi21-vtem-on-tmds.patch`
+(`0009` in the RC set), supporting HDMI 2.1
 Variable Refresh Rate for sinks that advertise it through the HDMI Forum VSDB
 (HF-VSDB) rather than AMD's own FreeSync VSDB. That matters for the
 Steam-Machine use case: TVs and AV receivers generally advertise VRR/ALLM the
@@ -94,7 +124,7 @@ removal: each removed patch reverses cleanly against the new tree, and
 `git merge-base --is-ancestor` confirms every one of their commits is now an
 ancestor of `cachyos-7.3-rc2-1`.
 
-`0010` (upstream `640fd039dc8b`, "Emit VTEM for HF-VSDB VRR on TMDS links") is
+This patch (upstream `640fd039dc8b`, "Emit VTEM for HF-VSDB VRR on TMDS links") is
 the one that did **not** arrive that way. It came from `drm-next` directly and
 was never on CachyOS's `7.3/hdmi` branch, so it still has to be carried here. It
 is also the most useful of the set for adapter-based setups. Before it,
@@ -109,19 +139,25 @@ It is queued for **Linux 7.4** — it landed in `drm-next` on 2026-09-02, one da
 after 7.3-rc1 was tagged, so it missed the 7.3 merge window by a day and can be
 dropped once 7.4 arrives.
 
-Caveat: the BC-250 is DisplayPort-only, so `0010` applies only through a
+Caveat: the BC-250 is DisplayPort-only, so this patch applies only through a
 **passive** DP++ adapter, where the GPU drives HDMI TMDS directly — exactly the
 case the VTEM fix targets. Through an **active** DP→HDMI converter the GPU still
 speaks DisplayPort and this code never runs.
 
-That is no longer the end of the story for active adapters, though. `0012` and
-`0013` below make the driver negotiate FRL with an HDMI 2.1 protocol converter
-and compress the stream with DSC, which is a different and much higher-bandwidth
-path than anything `0010` touches.
+That is no longer the end of the story for active adapters, though. The two
+DCN201 display patches below make the driver negotiate FRL with an HDMI 2.1
+protocol converter and compress the stream with DSC, which is a different and
+much higher-bandwidth path than anything this patch touches.
 
 ## 4K120 4:4:4 through an HDMI 2.1 PCON
 
-Two patches, `0012` and `0013`. Together they make 3840x2160@120Hz at full 4:4:4
+Two patches, `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` — `0009`
+and `0010` in the stable/BORE set, `0011` and `0012` in the RC set (the RC set
+carries two extra series-specific patches ahead of these; see [patches that
+exist in one set only](#patches-that-exist-in-one-set-only)). Called `0012`
+and `0013` below for brevity, meaning "the hdmi21-pcon patch" and "the
+enable-dsc patch" respectively, whatever number they actually have in the set
+you are looking at. Together they make 3840x2160@120Hz at full 4:4:4
 chroma reachable on a BC-250 through a DisplayPort 1.4 → HDMI 2.1 FRL protocol
 converter. **Both are on by default**, behind one parameter that exists as an
 off switch:
@@ -262,60 +298,94 @@ value for a CTA 4K120 timing) is the working state seen on the LG G5; the gist's
 LG CX capture shows `224` (14 bpp). If DSC is not engaged the mode simply falls
 back to what fits — 4K120 4:2:0 or 4K60 4:4:4 — rather than failing visibly.
 
-### Known issue: black screen from kernel takeover until a hotplug
+### Solved: black screen from kernel takeover until a hotplug
 
-Not caused by these patches, but found while testing them, and anyone with a
-DP→HDMI 2.1 adapter may hit it. On a BC-250 into an LG G5 through a UGREEN 8K
-adapter, the BIOS logo and Limine display fine, then the screen goes black the
-moment amdgpu takes over and stays black until the HDMI cable is re-seated. The
-system is up throughout: the link is trained, the compositor has set 4K120, and
-a *simulated* hotplug through debugfs brings the picture just as a physical one
-does.
+Not caused by the DCN201 display patches above, but found while testing them,
+and anyone with a DP→HDMI 2.1 adapter (active PCON, e.g. a Chrontel CH7218) or
+a native HDMI 2.1 FRL output could hit it. Symptoms varied with how governor
+software was configured, from a screen that stayed black indefinitely until a
+physical hotplug, to one that eventually synced but late enough to miss the
+boot splash and the SteamOS intro video.
 
-Established from four instrumented boots (`drm.debug=0x11e`):
+**Root cause: a GPU clock/voltage commit landing while the HDMI FRL link is
+still training.** `cyan_skillfish_od_edit_dpm_table()`'s commit path
+(`cyan_skillfish_ppt.c`) sends `SMU_MSG_RequestGfxclk` and
+`SMU_MSG_ForceGfxVid`/`UnforceGfxVid` — forced, immediate hardware clock and
+voltage overrides, not soft requests — whenever userspace writes to
+`pp_od_clk_voltage`. `cyan-skillfish-governor` does exactly that on its very
+first frequency-adjustment cycle, which fires within seconds of boot,
+regardless of `gpu-usage.method` or `gpu-set-method` — the OD commit path is
+the same either way. If that forced override lands while the CH7218 (or any
+HDMI FRL sink) is still mid link-training, the transient disturbance is enough
+to desync the link. Confirmed by isolation on real hardware: with the governor
+fully masked, a single manual write of `vc 0 <freq> <vddc>` + commit to
+`pp_od_clk_voltage`, timed to land during boot, reproduced the same symptom on
+its own — no governor code, no polling, no D-Bus involved.
 
-- It happens with `amdgpu.bc250_hdmi21=0` too, where fbcon's first stream is an
-  ordinary 4K60 RGB 8-bit signal any HDMI 2.0 adapter carries. FRL and DSC are
-  bystanders.
-- The DPCD write sequence of the boot-time modeset and the post-hotplug modeset
-  is byte-identical (sink D3/D0, link training, FEC, DSC enable, PPS). The
-  adapter's reported capabilities are identical too. The source does the same
-  thing twice; the adapter ends up in a different state — which points at the
-  BIOS/GOP → amdgpu handover.
-- It never happened on a native DisplayPort monitor.
+Two extra factors, established the same way:
 
-It is **not** a 7.2.4 → 7.2.5 regression in the display driver: checked commit
-by commit, the only `amd/display` changes between `cachyos-7.2.4-1` and
-`cachyos-7.2.5-1` are seven upstream stable fixes, none near DP or PCON link-up,
-and CachyOS's `7.2/hdmi` and `7.2/vesa-dsc-bpp` branches (HDMI VRR over PCON,
-the CH7218 VRR allow-list) were already in 7.2.4-1 — the merge commits between
-the tags are re-merges. The next steps are CachyOS's stock 7.2.5 kernel (same
-DC code, none of this repository's patches) and the 7.3-rc series, plus
-establishing whether any kernel ever showed the boot splash on this TV and
-adapter.
+- The `0001-bc250-8core-telemetry-gpu-activity.patch` telemetry rework earlier
+  in this repository's history was never the cause — it only changes metrics
+  *decode*, a completely different code path from the OD-commit write path
+  above. It does very plausibly make the symptom *worse* by keeping the SMU
+  busier around boot (a bigger periodic metrics transfer, before this rework
+  removed the extra `GetGfxclkFrequency` mailbox call — see [above](#kernel-patch-set)),
+  stretching an otherwise brief, invisible glitch into one long enough to
+  desync the link. Kernels without it still take the same forced commit; they
+  just usually recover before anyone notices.
+- On an **active DP→HDMI PCON** (as opposed to a native HDMI FRL output), the
+  PCON trains HDMI FRL to the actual display autonomously — DC only ever reads
+  its status via DPCD (`read_and_intersect_post_frl_lt_status()` in
+  `link_dp_capability.c`), it never drives or waits on that training itself.
+  That means there was no existing "training in progress" signal for the fix
+  below to hook for this specific case, unlike a native HDMI FRL output where
+  DC's own `hdmi_frl_perform_link_training_with_retries()` /
+  `hdmi_frl_poll_start()` bracket the whole operation.
 
-Until it is understood, a one-file workaround restores the picture ~15 s after
-boot at the cost of the boot splash — a oneshot that fires the simulated
-hotplug once the compositor has a mode:
+**The fix** is two patches, `cs-defer-od-during-frl-link-training.patch` and
+`cs-defer-od-during-pcon-frl-training.patch` (`0011`/`0012` in the stable/BORE
+set, `0013`/`0014` in the RC set — see [Kernel patch set](#kernel-patch-set)
+above). Both add a lock-free interlock: a flag that DC sets while link
+training is active, which `cyan_skillfish_od_edit_dpm_table()`'s commit path
+checks before sending `RequestGfxclk`/`ForceGfxVid`, returning `-EBUSY` and
+deferring rather than landing the override mid-training. Governor already
+retries its next cycle roughly 100 ms later, so a deferred commit is not a
+lost one.
 
-```bash
-# /usr/local/bin/bc250-hdmi-hotplug
-for c in /sys/class/drm/card*-DP-*; do
-    [ "$(cat "$c/status")" = connected ] && [ "$(cat "$c/enabled")" = enabled ] || continue
-    n=${c##*/card?-}; d=$(ls -d /sys/kernel/debug/dri/*/"$n" | head -1)
-    sleep 3; echo 0 > "$d/trigger_hotplug"; sleep 2; echo 1 > "$d/trigger_hotplug"; exit 0
-done
-```
+- `cs-defer-od-during-frl-link-training.patch` covers **native HDMI FRL**
+  output: it sets the flag around both the boot-time training call and the
+  async SCDC-triggered retrain that `hdmi_frl_status_polling_work` can fire
+  at any point while an FRL link stays up — not just at boot.
+- `cs-defer-od-during-pcon-frl-training.patch` covers **active DP→HDMI PCON**
+  output, where no such DC-tracked signal exists: it polls the PCON's own
+  completion bits (`DP_PCON_HDMI_TX_LINK_STATUS` /
+  `DP_PCON_HDMI_POST_FRL_STATUS`) directly for a bounded 10 s after the stream
+  unblanks, holding the same interlock flag for as long as it takes (or until
+  the bound is hit).
 
-with a `Type=oneshot` unit `After=multi-user.target` that runs it. Remove both
-once the cause is fixed.
+**Two things worth knowing if you go looking at the code.** First, on the one
+board this was hardware-tested against, the PCON readiness poll never actually
+observed "ready" inside its 10 s bound — in practice the fix behaves as a
+bounded defer-after-unblank window on that adapter, not a confirmed
+completion-detector; it still fixed the symptom, but do not read the code as
+proof the poll's success path is exercised on every adapter. Second, the PCON
+patch's async-retrain coverage is intentionally narrower than the native-FRL
+one: it has not been established whether a plain, same-resolution
+compositor-to-desktop handoff re-triggers PCON training the way it can for
+native FRL, so if a *runtime* (not boot) desync is ever reported specifically
+on an active-PCON setup, that gap is the place to look first.
+
+A module parameter aids debugging without needing a debugger: enable
+`amdgpu.cs_od_defer_debug=1` (or `echo 1 | sudo tee /sys/module/amdgpu/parameters/cs_od_defer_debug`
+at runtime) and dmesg logs when link training starts/ends and whenever an OD
+commit is actually deferred because of it.
 
 
 ## Optional 40 CU unlock
 
 The BC-250 is a salvaged PS5 APU and ships with **24 of its 40 RDNA2 compute units enabled**. The remaining 16 were fused off by firmware policy rather than because they are defective: they still have power, clocks and matching CGTS configuration, and no power gating is active on them.
 
-`0009-bc250-40cu-unlock.patch` re-enables them by writing two hardware registers during CU enumeration, based on the research and testing in [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
+`bc250-40cu-unlock.patch` (`0008` in both sets) re-enables them by writing two hardware registers during CU enumeration, based on the research and testing in [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
 
 Both registers are required, and this is the part that took the original author a controlled experiment to establish — neither one alone does anything:
 
@@ -353,7 +423,7 @@ RADV_DEBUG=info vulkaninfo --summary 2>&1 | grep num_cu   # expect: num_cu = 40
 
 The extra CUs cost power. The upstream measurements, on a Vulkan LLM inference workload, were roughly **1.6x throughput for about +30 W and +4 °C** when clocks are held at 1500 MHz. Left at the governor's 2 GHz default the same board drew around 181 W and reached **96 °C**, which is not a sustainable operating point.
 
-If you enable this, cap the clocks. With [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu), the widened SCLK range from `0008` makes 1500 MHz / 900 mV reachable as a safe point, and that is the combination the author recommends. Watch temperatures on the first few runs rather than assuming your board behaves like theirs.
+If you enable this, cap the clocks. With [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu), the widened SCLK range from `cyan-skillfish-sclk-range.patch` (`0007` in both sets) makes 1500 MHz / 900 mV reachable as a safe point, and that is the combination the author recommends. Watch temperatures on the first few runs rather than assuming your board behaves like theirs.
 
 ### Not every board may be healthy at 40 CUs
 
@@ -363,29 +433,45 @@ This patch is carried unmodified apart from one rebase: upstream Linux added an 
 
 ## BC-250 APU telemetry
 
+> **8-core boards must run the patched SMU firmware. There is no fallback.**
+> The Cyan Skillfish SMU firmware was written for 6 CPU cores; unlocking the
+> two extra cores in the BIOS without also patching the SMU firmware to
+> understand them leaves the metrics table in a shape this kernel does not
+> know how to decode, and telemetry (`gpu_busy_percent`, clocks, power,
+> temperatures, `gpu_metrics`, and anything reading them — MangoHud included)
+> **will be garbage** on such a board. There used to be an
+> `amdgpu.cs_legacy_8core_metrics=1` opt-in that decoded the old, unpatched
+> 8-core layout; it has been **removed**, because it only ever produced
+> partial, gap-riddled telemetry and made it easy to end up running an
+> unsupported firmware/kernel combination without realizing it. If you are
+> unlocking 8 cores, patch the SMU firmware first, with either:
+>
+> - a **prebuilt, easy-to-flash UEFI firmware** that bundles the core unlock
+>   with the SMU patch:
+>   <https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases>
+> - or the **userspace unlocker/patcher tool**, if you would rather not flash
+>   new firmware:
+>   <https://github.com/rw-r-r-0644/bc250-smu-unlock>
+>
+> Either one gets you a real, fully-populated 8-core metrics table. See
+> [step 5 of the quick start](../README.md#5-running-8-cpu-cores) for the
+> full instructions and a way to check which firmware you are currently on.
+
 The main telemetry patch includes the additional Cyan Skillfish metrics work while keeping the normal interfaces safe by default.  
-GPU activity sampling and the 25 ms activity/GFXCLK caches are unchanged.
+GPU activity sampling and the 25 ms activity/metrics caches are unchanged.
 
 ### 6-core and 8-core metrics layouts
 
-The Cyan Skillfish SMU firmware was written for 6 CPU cores. On a BIOS that unlocks all 8, the firmware's metrics table changes shape, and the kernel has to decode it differently. The layout is selected automatically from the number of physical cores the CPU reports, so nothing normally needs configuring:
+On a BIOS that unlocks all 8 cores **and** carries the SMU metrics patch, the firmware's metrics table changes shape, and the kernel decodes it differently. The layout is selected automatically from the number of physical cores the CPU reports, so nothing normally needs configuring:
 
 | Cores detected | Layout used |
 |---|---|
 | 6 | Stock Cyan Skillfish table |
 | 8 | 8-core table as produced by the patched SMU firmware |
 
-The 8-core layout matches the SMU metrics patch in [rw-r-r-0644/bc250-smu-unlock](https://github.com/rw-r-r-0644/bc250-smu-unlock), which is carried by the current community BIOS ([prebuilt firmware here](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases); see [step 5](../README.md#5-running-8-cpu-cores-check-which-bios-you-have) of the quick start). That firmware widens every per-core array to eight entries and keeps its own slot for each remaining field, so **all eight cores report clock, power, temperature and C0 residency**, with no gaps. The struct offsets in the kernel patch are taken directly from that firmware patch's store instructions rather than guessed, and the total export length is asserted at compile time against the 0x11c bytes the firmware actually DMAs.
+The 8-core layout matches the SMU metrics patch in [rw-r-r-0644/bc250-smu-unlock](https://github.com/rw-r-r-0644/bc250-smu-unlock), which is carried by the current community BIOS ([prebuilt firmware here](https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases); see [step 5](../README.md#5-running-8-cpu-cores) of the quick start). That firmware widens every per-core array to eight entries and keeps its own slot for each remaining field, so **all eight cores report clock, power, temperature and C0 residency**, with no gaps. The struct offsets in the kernel patch are taken directly from that firmware patch's store instructions rather than guessed, and the total export length is asserted at compile time against the 0x11c bytes the firmware actually DMAs.
 
-If you unlocked 8 cores on an **older BIOS that does not carry the SMU metrics patch**, that firmware instead packed the extra cores into the original 116-byte table, leaving several fields with no slot at all. Select that older decoding with:
-
-```text
-amdgpu.cs_legacy_8core_metrics=1
-```
-
-or at runtime with `echo 1 | sudo tee /sys/module/amdgpu/parameters/cs_legacy_8core_metrics`. Telemetry is then correct but incomplete: core power covers cores 1-7, only cores 4 and 5 have a temperature, C0 residency covers cores 0-6, and the stock GfxclkFrequency slot is occupied by C0Residency[6], so GFX clock is read through the `GetGfxclkFrequency` SMU message instead. Everything with no slot is reported as unavailable rather than being filled in from an unrelated field.
-
-Leave the parameter off unless your telemetry is visibly wrong on 8 cores — on the patched firmware it produces garbage, which is exactly what the old default did on the new firmware. If you are unsure which BIOS you have, compare per-core temperatures in `amdgpu_top`: on the patched firmware with the default setting all eight are plausible, and with the wrong setting most read as zero.
+**An 8-core board without that firmware patch is not supported.** The kernel assumes the patched layout unconditionally once it sees 8 cores; an unpatched 8-core board's table is read as if it were that layout and the result is garbage — not incomplete-but-labeled telemetry, actual garbage. Patch your SMU firmware (see the warning at the top of this section) rather than relying on the kernel to work around it. If you are unsure which firmware you are on, compare per-core temperatures in `amdgpu_top`: on the patched firmware all eight are plausible; on unpatched firmware read as 8 cores, they are nonsense.
 
 The `gpu_metrics` export now places the VDDCR_VDD rail in `average_cpu_power` instead of incorrectly exposing it as SoC power. The VDDCR_GFX rail continues to feed `average_gfx_power`, while `average_soc_power` remains at the unsupported sentinel because this firmware table has no separate SoC-rail power value.  
 The GPU Metrics v2.2 power fields are only 16-bit milliwatt values, so values above their usable range are saturated instead of silently wrapping to a much lower number. `0xffff` remains reserved as the kernel's unsupported-value sentinel.
@@ -404,7 +490,7 @@ amdgpu.cs_full_telemetry=1
 ```
 
 The diagnostic view reports the detected layout, per-core clocks/power/temperature/C0 residency, L3 clocks and temperatures, GFX/SOC/VCLK/DCLK/memory clocks, edge temperature, CPU and GPU rail voltage/current/power, socket power and throttler status.  
-Its first line names the active layout (`6-core stock`, `8-core` or `8-core legacy`), which is the quickest way to confirm what the kernel decided. In the legacy layout the firmware has no table slot for core 0 power or core 7 C0 residency, and only cores 4 and 5 have per-core temperature slots; those values are shown as `n/a` rather than interpreting unrelated fields as telemetry.
+Its first line names the active layout (`6-core stock` or `8-core`), which is the quickest way to confirm what the kernel decided.
 
 While `cs_full_telemetry=1` is active, `pp_dpm_socclk` is intentionally used as the diagnostic output instead of its normal single-clock listing. Return to the standard behavior at runtime with:
 
@@ -416,31 +502,29 @@ echo 0 | sudo tee /sys/module/amdgpu/parameters/cs_full_telemetry
 
 Reading GPU telemetry on Cyan Skillfish means talking to the SMU firmware, and doing that too often is a real stability risk on this board. This is also why some userspace SMU-based governors, such as [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu), offer a `set-method = "kernel"` option to set clocks through the kernel interface instead of the SMU directly.
 
-Three independent caches bound how often the kernel talks to the SMU for telemetry:
+Two independent caches bound how often the kernel talks to the SMU for telemetry:
 
 | Parameter | Default | Covers |
 |---|---|---|
 | `amdgpu.cs_activity_cache_ms` | 25 ms | `gpu_busy_percent` / `GPU_LOAD` sampling |
-| `amdgpu.cs_gfxclk_cache_ms` | 25 ms | The `GetGfxclkFrequency` SMU mailbox message |
-| `amdgpu.cs_metrics_cache_ms` | 25 ms | The bulk SMU metrics table: temperature, power, voltage, socclk/vclk/dclk/uclk and throttler status |
+| `amdgpu.cs_metrics_cache_ms` | 25 ms | The bulk SMU metrics table: temperature, power, voltage, GFX clock, socclk/vclk/dclk/uclk and throttler status |
 
-All three default to 25 ms, matching [MangoHud](https://github.com/flightlessmango/MangoHud)'s default telemetry poll interval, since that is the most common way BC-250 users watch these values live while gaming. Each is independently tunable and `0` disables that cache (every read then hits the SMU directly).
+Both default to 25 ms, matching [MangoHud](https://github.com/flightlessmango/MangoHud)'s default telemetry poll interval, since that is the most common way BC-250 users watch these values live while gaming. Each is independently tunable and `0` disables that cache (every read then hits the SMU directly). There used to be a third, `amdgpu.cs_gfxclk_cache_ms`, for a separate `GetGfxclkFrequency` SMU mailbox message; that message has been removed entirely — GFX clock is now always read straight from the same already-cached bulk metrics table `cs_metrics_cache_ms` covers, so there is nothing left for a third cache to throttle.
 
-Change any of them at runtime:
+Change either at runtime:
 
 ```bash
 echo 50 | sudo tee /sys/module/amdgpu/parameters/cs_activity_cache_ms
-echo 50 | sudo tee /sys/module/amdgpu/parameters/cs_gfxclk_cache_ms
 echo 50 | sudo tee /sys/module/amdgpu/parameters/cs_metrics_cache_ms
 ```
 
 Or set them permanently at boot, the same way as the other `amdgpu.*` parameters documented above:
 
 ```text
-amdgpu.cs_activity_cache_ms=50 amdgpu.cs_gfxclk_cache_ms=50 amdgpu.cs_metrics_cache_ms=50
+amdgpu.cs_activity_cache_ms=50 amdgpu.cs_metrics_cache_ms=50
 ```
 
-`gpu_busy_percent` itself no longer touches the SMU or any hardware register at all: it is derived purely from the GFX ring's existing software fence-tracking, the same activity signal that already backs `fdinfo`'s `drm-engine-gfx`. `cs_activity_cache_ms` only bounds how often that essentially free sample is retaken, not SMU traffic.
+`gpu_busy_percent` itself no longer touches the SMU or any hardware register at all: it is derived purely from the GFX ring's existing software fence-tracking, the same activity signal that already backs `fdinfo`'s `drm-engine-gfx`, sampled with a real sleep between reads rather than a busy-wait. `cs_activity_cache_ms` only bounds how often that essentially free sample is retaken, not SMU traffic.
 
 ## Patched stable CachyOS Mesa
 
