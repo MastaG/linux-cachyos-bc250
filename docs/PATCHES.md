@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same thirteen patches plus its own two series-specific carries, fifteen in total:
+The stable and BORE kernels carry these fourteen BC-250 patches, fourteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same fourteen patches plus its own two series-specific carries, sixteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -49,9 +49,10 @@ The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patche
 0011-cs-defer-od-during-frl-link-training.patch
 0012-cs-defer-od-during-pcon-frl-training.patch
 0013-cs-defer-od-during-dp-link-training.patch
+0014-cs-release-gfx-override-during-link-bringup.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same thirteen patches (content-identical, renumbered around its own two extra series-specific carries) plus the two entries below:
+`patches/linux-cachyos-rc` carries the same fourteen patches (content-identical, renumbered around its own two extra series-specific carries) plus the two entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -69,11 +70,12 @@ The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patche
 0013-cs-defer-od-during-frl-link-training.patch
 0014-cs-defer-od-during-pcon-frl-training.patch
 0015-cs-defer-od-during-dp-link-training.patch
+0016-cs-release-gfx-override-during-link-bringup.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below.
 
-`cs-defer-od-during-frl-link-training.patch`, `cs-defer-od-during-pcon-frl-training.patch` and `cs-defer-od-during-dp-link-training.patch` fix the black-screen-at-boot issue described in [Solved: black screen from kernel takeover until a hotplug](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below.
+The four `cs-*` patches together address the black screen described in [Solved: black screen from kernel takeover until a hotplug](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below. The three `cs-defer-*` ones hold GPU clock/voltage commits off while a link is being brought up; `cs-release-gfx-override-during-link-bringup.patch` additionally takes an already-held override *off* for the duration, which is what a runtime mode change actually needs.
 
 There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
@@ -344,48 +346,78 @@ Two extra factors, established the same way:
   DC's own `hdmi_frl_perform_link_training_with_retries()` /
   `hdmi_frl_poll_start()` bracket the whole operation.
 
-**The fix** is three patches, `cs-defer-od-during-frl-link-training.patch`,
-`cs-defer-od-during-pcon-frl-training.patch` and
-`cs-defer-od-during-dp-link-training.patch` (`0011`–`0013` in the stable/BORE
-set, `0013`–`0015` in the RC set — see [Kernel patch set](#kernel-patch-set)
-above). All three feed one lock-free interlock: a flag that DC sets while a
-link is being brought up, which `cyan_skillfish_od_edit_dpm_table()`'s commit
-path checks before sending `RequestGfxclk`/`ForceGfxVid`, returning `-EBUSY`
-and deferring rather than landing the override mid-training. Governor already
-retries its next cycle roughly 100 ms later, so a deferred commit is not a
-lost one.
+**The fix** is four patches (`0011`–`0014` in the stable/BORE set, `0013`–`0016`
+in the RC set — see [Kernel patch set](#kernel-patch-set) above). Three of them
+*defer* GPU clock/voltage commits while a link is being brought up; the fourth
+*releases* an override that is already held, which is what a runtime mode
+change actually needs.
 
-They cover three different windows, and a DP-out board needs all of them:
+The three `cs-defer-*` patches feed one lock-free interlock: a flag that DC
+sets while a link is coming up, which `cyan_skillfish_od_edit_dpm_table()`'s
+commit path checks before sending `RequestGfxclk`/`ForceGfxVid`, returning
+`-EBUSY` rather than landing the override mid-training. The governor retries
+its next cycle roughly 100 ms later, so a deferred commit is not a lost one.
+They cover three different windows:
 
-- `cs-defer-od-during-dp-link-training.patch` covers **DP link training
-  itself**, by bracketing `perform_link_training_with_retries()`. This is the
-  one that runs on every mode change on a DP-out board, and it is the window
-  that actually mattered here — see below.
-- `cs-defer-od-during-frl-link-training.patch` covers **native HDMI FRL**
-  output: it sets the flag around both the boot-time training call and the
-  async SCDC-triggered retrain that `hdmi_frl_status_polling_work` can fire
-  at any point while an FRL link stays up — not just at boot. A DP-out board
-  never runs this path at all; it is here for boards with a native HDMI
-  output or a passive adapter.
-- `cs-defer-od-during-pcon-frl-training.patch` covers the **active DP→HDMI
-  PCON**'s own autonomous HDMI-side training, which starts only after the
-  stream unblanks and which DC has no signal for. It arms a deadline
-  (`amdgpu.cs_pcon_frl_defer_ms`, default 2000 ms; `0` disables the deferral)
-  when a modeset goes out through a PCON, and the commit path defers while the
-  clock is before it. It does not block the modeset at all.
+- `cs-defer-od-during-dp-link-training.patch` — **DP link training itself**, by
+  bracketing `perform_link_training_with_retries()`. This runs on every mode
+  change on a DP-out board.
+- `cs-defer-od-during-frl-link-training.patch` — **native HDMI FRL** output:
+  the boot-time training call and the async SCDC-triggered retrain that
+  `hdmi_frl_status_polling_work` can fire at any point while an FRL link stays
+  up. A DP-out board never runs this path; it is here for boards with a native
+  HDMI output or a passive adapter.
+- `cs-defer-od-during-pcon-frl-training.patch` — the **active DP→HDMI PCON**'s
+  own autonomous HDMI-side training, which starts only after the stream
+  unblanks and which DC has no signal for. It arms a deadline
+  (`amdgpu.cs_pcon_frl_defer_ms`, default 2000 ms; `0` disables it) and the
+  commit path defers while the clock is before it. It never blocks the modeset.
 
-**Covering only the first two was not enough, and the gap was structural.**
-With just the HDMI-FRL and post-unblank windows in place, a KDE ↔ gamescope
-switch on a DP-out board lost signal every time on the way into gamescope
-(4K120, DSC, HBR2): picture gone, link left at `0 lanes / 0x0 rate`, and no
-modeset ever reaching the post-unblank window at all. Across seven modesets in
-one session the post-unblank window never once observed a commit to defer —
-the governor's commits were landing during DP link training, before any of the
-instrumented code ran. Stopping `cyan-skillfish-governor-smu` (with nothing
-else writing `pp_od_clk_voltage`) made the same switch work reliably in both
-directions, which is what identified the window. Raising
-`cs_pcon_frl_defer_ms` cannot help here: that window opens after the
-vulnerable part is already over.
+### Deferring commits is not sufficient on its own
+
+Boot is fixed by the deferral patches. A **runtime** mode change is not, and
+the reason is that the damage is not done by the commit — it is done by the
+override being **held**.
+
+Isolated on hardware with `cyan-skillfish-governor-smu` **stopped in both
+cases**, so the governor process was not a variable and no commit occurred
+during either run. The only difference was whether a `ForceGfxVid` override was
+in effect:
+
+| override | GFX state | KDE ↔ gamescope |
+| --- | --- | --- |
+| held | 1000 MHz / 799 mV | **loses sync** |
+| released | SMU defaults (1500 MHz / ~890 mV) | **works** |
+
+Supporting evidence from the same board: governor never started since boot
+(nothing ever forced) is 3/3 reliable; governor running (override held) is
+0/3. Three consecutive failures had no OD commit within 37 s, 41 s and 94 s of
+the modeset — which is what rules out commit timing, and with it any deferral
+window at any length. Forcing a *higher* clock does not help either: pinning
+the governor's floor to 1500 MHz, the same clock the passing runs sat at,
+still failed, and failed at boot.
+
+So `cs-release-gfx-override-during-link-bringup.patch` takes the override off
+for the bring-up and puts it back afterwards. `cs_od_force_suspend()` sends the
+same `RequestGfxclk` + `UnforceGfxVid` pair that `PP_OD_RESTORE_DEFAULT_TABLE`
+followed by `PP_OD_COMMIT_DPM_TABLE` does — that exact sequence, issued by
+hand, is what was shown to fix a live failure:
+
+```bash
+printf 'r' | sudo tee /sys/class/drm/card1/device/pp_od_clk_voltage
+printf 'c' | sudo tee /sys/class/drm/card1/device/pp_od_clk_voltage
+```
+
+A delayed work restores the user's settings once the window closes, rather
+than a matching "link is up" callback, because no such signal exists for a
+PCON — it trains its HDMI side autonomously and DC never learns when it
+finished. Every modeset re-arms the timer, so back-to-back modesets hold the
+release open instead of restoring between them.
+`amdgpu.cs_od_unforce_ms` tunes the window (default 3000 ms; `0` disables the
+release and restores the previous behaviour). A commit arriving while the
+release is open is refused, but its settings are already recorded — the
+restore applies whatever is current when it fires, so such a commit is delayed
+rather than lost.
 
 **The PCON patch used to wait, and that was a mistake worth recording.** Its
 first version polled the PCON's own completion bits
