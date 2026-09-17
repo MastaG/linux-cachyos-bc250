@@ -377,13 +377,33 @@ returned `ready=0` — two invocations per boot, 10000 ms each:
 [   40.270402] cs_od_defer: DP-HDMI21 PCON FRL wait finished after 10000ms (ready=0)
 ```
 
-That bought nothing and cost a great deal: roughly 20 s of added boot time and
-the same again on shutdown (both reported from the field as "boots and shuts
-down noticeably slower"), plus a 10 s window per modeset in which a second
-display commit could land on a link the first was still bringing up — a
-plausible source of the screen corruption reported on some PCON/display
-combinations that an unpatched kernel did not show. The deadline does the one
-thing the wait was actually there to do, without any of that.
+It cost roughly 20 s of added boot time and the same again on shutdown, both
+reported from the field as "boots and shuts down noticeably slower".
+
+**And the poll was not merely useless — it was destroying the training it was
+waiting for.** Those 200 AUX DPCD reads (two every 100 ms for 10 s) go out
+while the PCON is trying to train its HDMI side, which is why they always read
+back `ready=0`: the polling is what stopped it finishing. Established by a
+three-way A/B on one board into an LG G5 through a UGREEN 8K adapter, at
+3840x2160@120 with VRR and **12-bit** HDR:
+
+| kernel | poll | defer | boot | 12-bit 4K120 |
+| --- | --- | --- | --- | --- |
+| 1.171 (pre-patch) | no | no | black until cable replug | works |
+| 1.177 (10 s poll) | yes | 10 s | clean | **corrupts, sink loses sync** |
+| 1.178 (deadline) | no | 2 s | clean | works |
+
+The 1.177 and 1.178 runs negotiated byte-identical link and DSC parameters —
+4 lanes at HBR2, DSC at 12.0 bpp, `max_requested_bpc=12`, same slice and chunk
+sizes — so nothing about the mode's bandwidth explains the difference. What
+separates them is a second
+`read_and_intersect_post_frl_lt_status: PCON TX link training has not finished`
+appearing at the modeset on 1.177 and not on 1.178. (One such line at boot, from
+the capability probe before video flows, is normal and appears on every kernel
+including 1.171.)
+
+So the deadline does the one thing the wait was actually there to do, and stops
+doing the thing that broke it.
 
 **One more thing worth knowing if you go looking at the code.** The PCON
 patch's async-retrain coverage is intentionally narrower than the native-FRL
