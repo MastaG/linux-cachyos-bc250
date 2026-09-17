@@ -1,56 +1,20 @@
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h b/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h
-index 4884a4e1f261..b90284b7fb01 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h
 +++ b/drivers/gpu/drm/amd/pm/swsmu/inc/pmfw_if/smu11_driver_if_cyan_skillfish.h
-@@ -76,4 +76,95 @@ typedef struct SmuMetrics_t {
+@@ -76,4 +76,60 @@
  	uint32_t Accnt;
  } SmuMetrics_t;
  
 +/*
-+ * PMFW layout of the Current metrics table when all eight physical BC-250
-+ * cores are enabled. The table remains 116 bytes: the per-core fields are
-+ * redistributed while L3 and the aggregate tail keep their stock offsets.
-+ *
-+ * Per-core coverage:
-+ *   CoreFrequency[8]   -> cores 0-7
-+ *   CorePower[7]       -> cores 1-7
-+ *   CoreTemperature[2] -> cores 4-5
-+ *   C0Residency[7]     -> cores 0-6
-+ *
-+ * Offset 0x44 is C0Residency[6], so GfxclkFrequency must be queried through
-+ * the GetGfxclkFrequency SMU message.
-+ */
-+typedef struct SmuMetricsTable_hybrid_t {
-+	uint16_t CoreFrequency[8];		/* 0x00 cores 0-7 */
-+	uint32_t CorePower[7];			/* 0x10 cores 1-7 */
-+	uint16_t CoreTemperature[2];		/* 0x2c cores 4-5 */
-+	uint16_t L3Frequency[2];		/* 0x30 */
-+	uint16_t L3Temperature[2];		/* 0x34 */
-+	uint16_t C0Residency[7];		/* 0x38 cores 0-6 */
-+	uint16_t GfxTemperature;		/* 0x46 */
-+	uint16_t SocclkFrequency;		/* 0x48 */
-+	uint16_t VclkFrequency;			/* 0x4a */
-+	uint16_t DclkFrequency;			/* 0x4c */
-+	uint16_t MemclkFrequency;		/* 0x4e */
-+	uint32_t Voltage[2];			/* 0x50 */
-+	uint32_t Current[2];			/* 0x58 */
-+	uint32_t Power[2];			/* 0x60 */
-+	uint32_t CurrentSocketPower;		/* 0x68 */
-+	uint16_t SocTemperature;		/* 0x6c */
-+	uint16_t EdgeTemperature;		/* 0x6e */
-+	uint16_t ThrottlerStatus;		/* 0x70 */
-+	uint16_t Spare;				/* 0x72 */
-+} SmuMetricsTable_hybrid_t;
-+
-+static_assert(sizeof(SmuMetricsTable_hybrid_t) == 116,
-+	      "hybrid metrics table must remain 116 bytes");
-+
-+/*
 + * Layout produced by a BC-250 whose SMU firmware carries the 8-core metrics
 + * patch (shipped in the newer community BIOS; see rw-r-r-0644/bc250-smu-unlock
-+ * patches/metrics-8core.s). Unlike the pre-patch layout above, this one is a
++ * patches/metrics-8core.s, or apply it yourself with
++ * Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script). This is a
 + * clean 8-wide widening of the stock table: every per-core array covers all
-+ * eight cores and GfxclkFrequency keeps a slot of its own.
++ * eight cores and GfxclkFrequency keeps a slot of its own. Boards that
++ * report 8 cores without this firmware patch are not supported -- their
++ * metrics table is still laid out as SmuMetricsTable_t above, and reading it
++ * as this layout will produce garbage.
 + *
 + * The offsets below are taken directly from the firmware patch's store
 + * instructions rather than inferred, e.g. CoreTemperature from
@@ -99,13 +63,13 @@ index 4884a4e1f261..b90284b7fb01 100644
 +
  #endif
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-index bb9620666dae..7cf104e91395 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-@@ -23,6 +23,13 @@
+@@ -23,6 +23,14 @@
  
  #define SWSMU_CODE_LAYER_L2
  
++#include <linux/atomic.h>
 +#include <linux/cpumask.h>
 +#include <linux/delay.h>
 +#include <linux/jiffies.h>
@@ -116,15 +80,10 @@ index bb9620666dae..7cf104e91395 100644
  #include "amdgpu.h"
  #include "amdgpu_smu.h"
  #include "smu_v11_0.h"
-@@ -60,6 +67,358 @@ static struct gfx_user_settings {
+@@ -60,6 +68,270 @@
  
  static uint32_t cyan_skillfish_sclk_default;
  
-+static uint cs_gfxclk_cache_ms = 25;
-+module_param(cs_gfxclk_cache_ms, uint, 0644);
-+MODULE_PARM_DESC(cs_gfxclk_cache_ms,
-+		 "GetGfxclkFrequency mailbox cache window in ms (0 = off)");
-+
 +static uint cs_activity_cache_ms = 25;
 +module_param(cs_activity_cache_ms, uint, 0644);
 +MODULE_PARM_DESC(cs_activity_cache_ms,
@@ -157,8 +116,7 @@ index bb9620666dae..7cf104e91395 100644
 +/*
 + * Keep the activity cache private to this ASIC implementation. The SMU
 + * metrics transfer only writes the leading SmuMetrics_8core_t, so the cache
-+ * tail is preserved when the firmware metrics table is refreshed. The GFXCLK
-+ * cache throttles the direct SMU mailbox query added for the 8-core layout.
++ * tail is preserved when the firmware metrics table is refreshed.
 + */
 +struct cyan_skillfish_metrics_cache {
 +	/*
@@ -167,10 +125,6 @@ index bb9620666dae..7cf104e91395 100644
 +	 * never interpreted.
 +	 */
 +	SmuMetrics_8core_t metrics;
-+	spinlock_t gfxclk_lock;
-+	unsigned long gfxclk_time;
-+	uint32_t gfxclk;
-+	bool gfxclk_valid;
 +	spinlock_t gpu_activity_lock;
 +	unsigned long gpu_activity_time;
 +	uint16_t gpu_activity;
@@ -188,20 +142,22 @@ index bb9620666dae..7cf104e91395 100644
 +		 "Force 8-core SMU metrics layout");
 +
 +/*
-+ * On an 8-core board, decode the metrics table the way the pre-patch SMU
-+ * firmware laid it out. Only needed on an older BIOS that unlocks the two
-+ * extra cores without carrying the 8-core metrics firmware patch; with that
-+ * firmware the default layout is correct and this must stay off.
++ * Set by drivers/gpu/drm/amd/display/dc/link/protocols/link_hdmi_frl.c while
++ * HDMI FRL link training (boot-time or a later SCDC-triggered retrain) is in
++ * progress. See the comment there for why OD commits need to defer around it.
 + */
-+static bool cs_legacy_8core_metrics;
-+module_param(cs_legacy_8core_metrics, bool, 0644);
-+MODULE_PARM_DESC(cs_legacy_8core_metrics,
-+		 "Use the pre-SMU-patch 8-core metrics layout (old BIOS)");
++extern atomic_t cs_hdmi_frl_training_active;
++extern bool cs_od_defer_debug;
 +
++/*
++ * An 8-core board is assumed to carry the 8-core metrics SMU firmware patch
++ * (see smu11_driver_if_cyan_skillfish.h's SmuMetricsTable_8core_t comment for
++ * how to get it). A board reporting 8 cores without that firmware patch is
++ * not supported and will decode garbage telemetry.
++ */
 +enum cyan_skillfish_metrics_layout {
 +	CS_METRICS_STOCK,		/* 6 cores, 116-byte tables */
 +	CS_METRICS_8CORE,		/* patched SMU, 136-byte tables */
-+	CS_METRICS_8CORE_LEGACY,	/* pre-patch 8-core guess, 116-byte */
 +};
 +
 +static uint16_t cyan_skillfish_core_count(void)
@@ -221,8 +177,7 @@ index bb9620666dae..7cf104e91395 100644
 +	if (!cs_eight_core_map && cyan_skillfish_core_count() < 8)
 +		return CS_METRICS_STOCK;
 +
-+	return cs_legacy_8core_metrics ? CS_METRICS_8CORE_LEGACY
-+				       : CS_METRICS_8CORE;
++	return CS_METRICS_8CORE;
 +}
 +
 +/*
@@ -255,7 +210,6 @@ index bb9620666dae..7cf104e91395 100644
 +	bool core_power_valid[8];
 +	bool core_temp_valid[8];
 +	bool c0_valid[8];
-+	bool gfxclk_valid;
 +};
 +
 +#define CS_VIEW_COPY_TAIL(v, t)						\
@@ -312,47 +266,12 @@ index bb9620666dae..7cf104e91395 100644
 +			view->c0_valid[i]	= true;
 +		}
 +		view->GfxclkFrequency = t->GfxclkFrequency;
-+		view->gfxclk_valid = true;
 +		CS_VIEW_COPY_TAIL(view, t);
 +		return;
 +	}
 +
-+	if (layout == CS_METRICS_8CORE_LEGACY && !average) {
-+		const SmuMetrics_t *m = buf;
-+		SmuMetricsTable_hybrid_t t;
-+
-+		/*
-+		 * The pre-patch firmware only rearranged the Current table;
-+		 * Average stayed six wide and is decoded below. Per-core
-+		 * coverage is partial here: power omits core 0 and only cores
-+		 * 4-5 report a temperature.
-+		 */
-+		memcpy(&t, &m->Current, sizeof(t));
-+
-+		view->ncores = 8;
-+		for (i = 0; i < 8; i++)
-+			view->CoreFrequency[i] = t.CoreFrequency[i];
-+		for (i = 1; i < 8; i++) {
-+			view->CorePower[i] = t.CorePower[i - 1];
-+			view->core_power_valid[i] = true;
-+		}
-+		for (i = 4; i <= 5; i++) {
-+			view->CoreTemperature[i] = t.CoreTemperature[i - 4];
-+			view->core_temp_valid[i] = true;
-+		}
-+		for (i = 0; i <= 6; i++) {
-+			view->C0Residency[i] = t.C0Residency[i];
-+			view->c0_valid[i] = true;
-+		}
-+		/* GfxclkFrequency's slot is occupied by C0Residency[6]. */
-+		view->gfxclk_valid = false;
-+		CS_VIEW_COPY_TAIL(view, &t);
-+		return;
-+	}
-+
 +	/*
-+	 * Stock 116-byte table: the 6-core layout, and also the Average table
-+	 * of the pre-patch 8-core firmware.
++	 * Stock 116-byte table: the 6-core layout.
 +	 */
 +	{
 +		const SmuMetrics_t *m = buf;
@@ -369,7 +288,6 @@ index bb9620666dae..7cf104e91395 100644
 +			view->c0_valid[i]	= true;
 +		}
 +		view->GfxclkFrequency = t->GfxclkFrequency;
-+		view->gfxclk_valid = true;
 +		CS_VIEW_COPY_TAIL(view, t);
 +	}
 +}
@@ -411,11 +329,13 @@ index bb9620666dae..7cf104e91395 100644
 +	 * that already backs the reliable fdinfo drm-engine-gfx accounting,
 +	 * and amdgpu_fence_count_emitted() is an existing core helper used
 +	 * historically for exactly this kind of ring activity tracking.
++	 * Only sysfs/hwmon/gpu_metrics readers reach this (process context),
++	 * so sleep between samples instead of tying up the CPU.
 +	 */
 +	for (i = 0; i < 32; i++) {
 +		busy += !!amdgpu_fence_count_emitted(&adev->gfx.gfx_ring[0]);
 +		if (i != 31)
-+			udelay(50);
++			usleep_range(45, 55);
 +	}
 +
 +	activity = DIV_ROUND_CLOSEST(busy * 10000, 32);
@@ -428,62 +348,10 @@ index bb9620666dae..7cf104e91395 100644
 +	return activity;
 +}
 +
-+/*
-+ * GFXCLK is read through the SMU mailbox. @fallback is the table's own
-+ * GfxclkFrequency, used only if the mailbox call fails; @fallback_valid says
-+ * whether the active layout actually has that field (the pre-patch 8-core
-+ * layout does not).
-+ */
-+static int cyan_skillfish_get_current_gfxclk(struct smu_context *smu,
-+					     uint32_t *value, uint32_t fallback,
-+					     bool fallback_valid)
-+{
-+	struct cyan_skillfish_metrics_cache *cache = smu->smu_table.metrics_table;
-+	unsigned long flags, now = jiffies;
-+	unsigned int cache_ms = cs_gfxclk_cache_ms;
-+	int ret;
-+
-+	if (cache_ms) {
-+		spin_lock_irqsave(&cache->gfxclk_lock, flags);
-+		if (cache->gfxclk_valid &&
-+		    time_before(now, cache->gfxclk_time +
-+				msecs_to_jiffies(cache_ms))) {
-+			*value = cache->gfxclk;
-+			spin_unlock_irqrestore(&cache->gfxclk_lock, flags);
-+			return 0;
-+		}
-+		spin_unlock_irqrestore(&cache->gfxclk_lock, flags);
-+	}
-+
-+	ret = smu_cmn_send_smc_msg(smu, SMU_MSG_GetGfxclkFrequency, value);
-+	if (ret && fallback_valid) {
-+		*value = fallback;
-+		ret = 0;
-+	}
-+
-+	if (!ret && cache_ms) {
-+		spin_lock_irqsave(&cache->gfxclk_lock, flags);
-+		cache->gfxclk = *value;
-+		cache->gfxclk_time = jiffies;
-+		cache->gfxclk_valid = true;
-+		spin_unlock_irqrestore(&cache->gfxclk_lock, flags);
-+	}
-+
-+	return ret;
-+}
-+
  static const struct smu_feature_bits cyan_skillfish_dpm_features = {
  	.bits = {
  		SMU_FEATURE_BIT_INIT(FEATURE_FCLK_DPM_BIT),
-@@ -77,6 +436,7 @@ static struct cmn2asic_msg_mapping cyan_skillfish_message_map[SMU_MSG_MAX_COUNT]
- 	MSG_MAP(TransferTableSmu2Dram,          PPSMC_MSG_TransferTableSmu2Dram,	0),
- 	MSG_MAP(TransferTableDram2Smu,          PPSMC_MSG_TransferTableDram2Smu,	0),
- 	MSG_MAP(GetEnabledSmuFeatures,          PPSMC_MSG_GetEnabledSmuFeatures,	0),
-+	MSG_MAP(GetGfxclkFrequency,             PPSMC_MSG_GetGfxFrequency,		0),
- 	MSG_MAP(RequestGfxclk,                  PPSMC_MSG_RequestGfxclk,		0),
- 	MSG_MAP(ForceGfxVid,                    PPSMC_MSG_ForceGfxVid,			0),
- 	MSG_MAP(UnforceGfxVid,                  PPSMC_MSG_UnforceGfxVid,		0),
-@@ -90,17 +450,24 @@ static int cyan_skillfish_tables_init(struct smu_context *smu)
+@@ -90,17 +362,23 @@
  {
  	struct smu_table_context *smu_table = &smu->smu_table;
  	struct smu_table *tables = smu_table->tables;
@@ -503,14 +371,13 @@ index bb9620666dae..7cf104e91395 100644
  		goto err0_out;
  
 +	metrics_cache = smu_table->metrics_table;
-+	spin_lock_init(&metrics_cache->gfxclk_lock);
 +	spin_lock_init(&metrics_cache->gpu_activity_lock);
 +	spin_lock_init(&metrics_cache->metrics_lock);
 +
  	ret = smu_driver_table_init(smu, SMU_DRIVER_TABLE_GPU_METRICS,
  				    sizeof(struct gpu_metrics_v2_2),
  				    SMU_GPU_METRICS_CACHE_INTERVAL);
-@@ -128,57 +495,93 @@ static int cyan_skillfish_init_smc_tables(struct smu_context *smu)
+@@ -128,57 +406,91 @@
  	return smu_v11_0_init_smc_tables(smu);
  }
  
@@ -568,9 +435,7 @@ index bb9620666dae..7cf104e91395 100644
  	switch (member) {
  	case METRICS_CURR_GFXCLK:
 -		*value = metrics->Current.GfxclkFrequency;
-+		ret = cyan_skillfish_get_current_gfxclk(smu, value,
-+							view.GfxclkFrequency,
-+							view.gfxclk_valid);
++		*value = view.GfxclkFrequency;
  		break;
  	case METRICS_CURR_SOCCLK:
 -		*value = metrics->Current.SocclkFrequency;
@@ -619,7 +484,7 @@ index bb9620666dae..7cf104e91395 100644
  		break;
  	default:
  		*value = UINT_MAX;
-@@ -203,7 +606,8 @@ static int cyan_skillfish_read_sensor(struct smu_context *smu,
+@@ -203,7 +515,8 @@
  		ret = cyan_skillfish_get_smu_metrics_data(smu,
  						   METRICS_CURR_GFXCLK,
  						   (uint32_t *)data);
@@ -629,7 +494,7 @@ index bb9620666dae..7cf104e91395 100644
  		*size = 4;
  		break;
  	case AMDGPU_PP_SENSOR_GFX_MCLK:
-@@ -249,6 +653,10 @@ static int cyan_skillfish_read_sensor(struct smu_context *smu,
+@@ -249,6 +562,10 @@
  						   (uint32_t *)data);
  		*size = 4;
  		break;
@@ -640,7 +505,7 @@ index bb9620666dae..7cf104e91395 100644
  	default:
  		ret = -EOPNOTSUPP;
  		break;
-@@ -288,6 +696,114 @@ static int cyan_skillfish_get_current_clk_freq(struct smu_context *smu,
+@@ -288,6 +605,93 @@
  	return cyan_skillfish_get_smu_metrics_data(smu, member_type, value);
  }
  
@@ -649,8 +514,6 @@ index bb9620666dae..7cf104e91395 100644
 +	switch (layout) {
 +	case CS_METRICS_8CORE:
 +		return "8-core";
-+	case CS_METRICS_8CORE_LEGACY:
-+		return "8-core legacy";
 +	default:
 +		return "6-core stock";
 +	}
@@ -663,7 +526,6 @@ index bb9620666dae..7cf104e91395 100644
 +	enum cyan_skillfish_metrics_layout layout;
 +	struct cyan_skillfish_metrics_view view;
 +	int size = *size_ptr;
-+	uint32_t gfxclk = 0;
 +	int ret, i;
 +
 +	ret = cyan_skillfish_refresh_metrics_table(smu);
@@ -677,11 +539,6 @@ index bb9620666dae..7cf104e91395 100644
 +	size += sysfs_emit_at(buf, size, "layout: %s\n",
 +			      cyan_skillfish_layout_name(layout));
 +
-+	/*
-+	 * Per-core coverage is complete for the stock and patched-SMU layouts.
-+	 * Only the pre-patch 8-core layout has gaps, so print "n/a" there
-+	 * rather than a value belonging to a different field.
-+	 */
 +	size += sysfs_emit_at(buf, size,
 +			      "\ncore     clk     power    temp    C0%%\n");
 +	for (i = 0; i < view.ncores; i++) {
@@ -711,22 +568,9 @@ index bb9620666dae..7cf104e91395 100644
 +				      i, view.L3Frequency[i],
 +				      view.L3Temperature[i] / 100);
 +
-+	/*
-+	 * Prefer the cached GetGfxclkFrequency mailbox helper over the table
-+	 * slot: it avoids refreshing the metrics table a second time, and it is
-+	 * the only source in the pre-patch 8-core layout, where C0Residency[6]
-+	 * occupies the stock GfxclkFrequency offset.
-+	 */
 +	size += sysfs_emit_at(buf, size, "\n");
-+	ret = cyan_skillfish_get_current_gfxclk(smu, &gfxclk,
-+						view.GfxclkFrequency,
-+						view.gfxclk_valid);
-+	if (ret)
-+		size += sysfs_emit_at(buf, size, "gfx:      n/a          %4u C\n",
-+				      view.GfxTemperature / 100);
-+	else
-+		size += sysfs_emit_at(buf, size, "gfx:   %5uMHz          %4u C\n",
-+				      gfxclk, view.GfxTemperature / 100);
++	size += sysfs_emit_at(buf, size, "gfx:   %5uMHz          %4u C\n",
++			      view.GfxclkFrequency, view.GfxTemperature / 100);
 +
 +	size += sysfs_emit_at(buf, size, "soc:   %5uMHz          %4u C\n",
 +			      view.SocclkFrequency, view.SocTemperature / 100);
@@ -755,7 +599,7 @@ index bb9620666dae..7cf104e91395 100644
  static int cyan_skillfish_emit_clk_levels(struct smu_context *smu,
  					  enum smu_clk_type clk_type, char *buf,
  					  int *offset)
-@@ -318,9 +834,20 @@ static int cyan_skillfish_emit_clk_levels(struct smu_context *smu,
+@@ -318,9 +722,20 @@
  		size += sysfs_emit_at(buf, size, "VDDC: %7umV  %10umV\n",
  						CYAN_SKILLFISH_VDDC_MIN, CYAN_SKILLFISH_VDDC_MAX);
  		break;
@@ -777,7 +621,7 @@ index bb9620666dae..7cf104e91395 100644
  	case SMU_VCLK:
  	case SMU_DCLK:
  		ret = cyan_skillfish_get_current_clk_freq(smu, clk_type, &cur_value);
-@@ -382,54 +909,114 @@ static bool cyan_skillfish_is_dpm_running(struct smu_context *smu)
+@@ -382,54 +797,102 @@
  					  cyan_skillfish_dpm_features.bits);
  }
  
@@ -804,8 +648,6 @@ index bb9620666dae..7cf104e91395 100644
 +	enum cyan_skillfish_metrics_layout layout;
 +	/* Sized for the largest layout; see cyan_skillfish_tables_init(). */
 +	SmuMetrics_8core_t metrics;
-+	uint32_t gfxclk = 0;
-+	int gfxclk_ret;
  	int i, ret = 0;
  
  	ret = smu_cmn_get_metrics_table(smu, &metrics, true);
@@ -815,10 +657,6 @@ index bb9620666dae..7cf104e91395 100644
 +	layout = cyan_skillfish_metrics_layout();
 +	cyan_skillfish_decode_metrics(&metrics, layout, false, &cur);
 +	cyan_skillfish_decode_metrics(&metrics, layout, true, &avg);
-+
-+	gfxclk_ret = cyan_skillfish_get_current_gfxclk(smu, &gfxclk,
-+						       cur.GfxclkFrequency,
-+						       cur.gfxclk_valid);
 +
  	smu_cmn_init_soft_gpu_metrics(gpu_metrics, 2, 2);
 +	gpu_metrics->average_gfx_activity =
@@ -841,17 +679,36 @@ index bb9620666dae..7cf104e91395 100644
 +	gpu_metrics->average_gfx_power =
 +		cyan_skillfish_gpu_metrics_power(cur.Power[1]);
 +
-+	if (avg.gfxclk_valid)
-+		gpu_metrics->average_gfxclk_frequency = avg.GfxclkFrequency;
++	gpu_metrics->average_gfxclk_frequency = avg.GfxclkFrequency;
 +	gpu_metrics->average_socclk_frequency = avg.SocclkFrequency;
 +	gpu_metrics->average_uclk_frequency = avg.MemclkFrequency;
 +	gpu_metrics->average_fclk_frequency = avg.MemclkFrequency;
 +	gpu_metrics->average_vclk_frequency = avg.VclkFrequency;
 +	gpu_metrics->average_dclk_frequency = avg.DclkFrequency;
++
++	gpu_metrics->current_gfxclk = cur.GfxclkFrequency;
++	gpu_metrics->current_socclk = cur.SocclkFrequency;
++	gpu_metrics->current_uclk = cur.MemclkFrequency;
++	gpu_metrics->current_fclk = cur.MemclkFrequency;
++	gpu_metrics->current_vclk = cur.VclkFrequency;
++	gpu_metrics->current_dclk = cur.DclkFrequency;
  
 -	gpu_metrics->temperature_gfx = metrics.Current.GfxTemperature;
 -	gpu_metrics->temperature_soc = metrics.Current.SocTemperature;
--
++	/*
++	 * Upstream sources per-core power from the Average table, which is
++	 * correct on the stock 6-core firmware. Neither 8-core firmware
++	 * maintains that field: the pre-patch one left Average six wide, and
++	 * the patched one widens the layout without populating the per-core
++	 * power average, reporting tens of milliwatts per core with all eight
++	 * pinned at 3850 MHz. The Current table there reports ~4 W each,
++	 * summing to the 34 W the VDDCR_VDD rail itself reports, so use the
++	 * instantaneous values whenever the average is not maintained. Fields
++	 * with no firmware slot keep the 0xffff sentinel set by
++	 * smu_cmn_init_soft_gpu_metrics().
++	 */
++	pcore = layout == CS_METRICS_STOCK ? &avg : &cur;
+ 
 -	gpu_metrics->average_socket_power = metrics.Current.CurrentSocketPower;
 -	gpu_metrics->average_soc_power = metrics.Current.Power[0];
 -	gpu_metrics->average_gfx_power = metrics.Current.Power[1];
@@ -874,32 +731,6 @@ index bb9620666dae..7cf104e91395 100644
 -		gpu_metrics->temperature_core[i] = metrics.Current.CoreTemperature[i];
 -		gpu_metrics->average_core_power[i] = metrics.Average.CorePower[i];
 -		gpu_metrics->current_coreclk[i] = metrics.Current.CoreFrequency[i];
-+	/*
-+	 * Leave current_gfxclk at the 0xffff sentinel when the direct SMU query
-+	 * fails and the layout has no table slot to fall back on.
-+	 */
-+	if (!gfxclk_ret)
-+		gpu_metrics->current_gfxclk = gfxclk;
-+	gpu_metrics->current_socclk = cur.SocclkFrequency;
-+	gpu_metrics->current_uclk = cur.MemclkFrequency;
-+	gpu_metrics->current_fclk = cur.MemclkFrequency;
-+	gpu_metrics->current_vclk = cur.VclkFrequency;
-+	gpu_metrics->current_dclk = cur.DclkFrequency;
-+
-+	/*
-+	 * Upstream sources per-core power from the Average table, which is
-+	 * correct on the stock 6-core firmware. Neither 8-core firmware
-+	 * maintains that field: the pre-patch one left Average six wide, and
-+	 * the patched one widens the layout without populating the per-core
-+	 * power average, reporting tens of milliwatts per core with all eight
-+	 * pinned at 3850 MHz. The Current table there reports ~4 W each,
-+	 * summing to the 34 W the VDDCR_VDD rail itself reports, so use the
-+	 * instantaneous values whenever the average is not maintained. Fields
-+	 * with no firmware slot keep the 0xffff sentinel set by
-+	 * smu_cmn_init_soft_gpu_metrics().
-+	 */
-+	pcore = layout == CS_METRICS_STOCK ? &avg : &cur;
-+
 +	for (i = 0; i < cur.ncores; i++) {
 +		gpu_metrics->current_coreclk[i] = cur.CoreFrequency[i];
 +		if (cur.core_temp_valid[i])

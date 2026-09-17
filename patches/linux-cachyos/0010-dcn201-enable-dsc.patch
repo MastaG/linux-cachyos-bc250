@@ -37,7 +37,7 @@ kernel starts gating them, this patch goes dark rather than crashing.
 
 Carried here until it lands upstream.
 diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
-index 523a9aa5658b..c1ba48c9c9d6 100644
+index e2819852a40a..7bfd8bc0f7f5 100644
 --- a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
 +++ b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
 @@ -572,6 +572,19 @@ static const struct resource_caps res_cap_dnc201 = {

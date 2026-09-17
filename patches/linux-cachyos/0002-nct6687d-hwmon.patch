@@ -1,5 +1,5 @@
 diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
-index 0dc60c7..e2d7dd8 100644
+index 0dc60c793cf1..e2d7dd89313d 100644
 --- a/drivers/hwmon/Kconfig
 +++ b/drivers/hwmon/Kconfig
 @@ -1767,6 +1767,21 @@ config SENSORS_NCT6683
@@ -25,7 +25,7 @@ index 0dc60c7..e2d7dd8 100644
  	tristate "Nuvoton NCT6694 Hardware Monitor support"
  	depends on MFD_NCT6694
 diff --git a/drivers/hwmon/Makefile b/drivers/hwmon/Makefile
-index 1f886b3..513c782 100644
+index 1f886b38ff89..513c78221d36 100644
 --- a/drivers/hwmon/Makefile
 +++ b/drivers/hwmon/Makefile
 @@ -181,6 +181,7 @@ obj-$(CONFIG_SENSORS_MLXREG_FAN) += mlxreg-fan.o

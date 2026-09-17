@@ -31,10 +31,10 @@ as the off switch.
 
 Carried here until it lands upstream.
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index 7974f9b7944f..a96f2cb6dd4e 100644
+index 0dd8e2375c4d..22b043235045 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-@@ -255,6 +255,7 @@ extern int amdgpu_num_kcq;
+@@ -259,6 +259,7 @@ extern int amdgpu_num_kcq;
  #define AMDGPU_UMSCHFW_LOG_SIZE (32 * 1024)
  extern int amdgpu_vcnfw_log;
  extern int amdgpu_sg_display;
@@ -43,10 +43,10 @@ index 7974f9b7944f..a96f2cb6dd4e 100644
  extern int amdgpu_seamless;
  extern int amdgpu_umsch_mm_fwlog;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-index 5c33c19fd9bc..b2a3acbe798a 100644
+index b72058e1a3d8..9fe6d55119c0 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-@@ -235,6 +235,7 @@ int amdgpu_smartshift_bias;
+@@ -236,6 +236,7 @@ int amdgpu_smartshift_bias;
  int amdgpu_use_xgmi_p2p = 1;
  int amdgpu_vcnfw_log;
  int amdgpu_sg_display = -1; /* auto */
@@ -54,7 +54,7 @@ index 5c33c19fd9bc..b2a3acbe798a 100644
  int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
  int amdgpu_umsch_mm;
  int amdgpu_seamless = -1; /* auto */
-@@ -975,6 +976,17 @@ module_param_named(vcnfw_log, amdgpu_vcnfw_log, int, 0444);
+@@ -985,6 +986,17 @@ module_param_named(vcnfw_log, amdgpu_vcnfw_log, int, 0444);
  MODULE_PARM_DESC(sg_display, "S/G Display (-1 = auto (default), 0 = disable)");
  module_param_named(sg_display, amdgpu_sg_display, int, 0444);
  
@@ -73,10 +73,10 @@ index 5c33c19fd9bc..b2a3acbe798a 100644
   * DOC: umsch_mm (int)
   * Enable Multi Media User Mode Scheduler. This is a HW scheduling engine for VCN and VPE.
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-index fc4d89603101..dbc349bedc90 100644
+index 36982ca89d1f..26c844557770 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -565,6 +565,8 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
+@@ -2147,6 +2147,8 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
  	if (amdgpu_dc_feature_mask & DC_FRL_MASK)
  		init_data.flags.enable_frl = true;
  
@@ -86,22 +86,22 @@ index fc4d89603101..dbc349bedc90 100644
  
  	if (amdgpu_device_seamless_boot_supported(adev)) {
 diff --git a/drivers/gpu/drm/amd/display/dc/dc.h b/drivers/gpu/drm/amd/display/dc/dc.h
-index 705c500ad711..159ab43ff9ec 100644
+index dfe41d46b3f1..b9571ba0e921 100644
 --- a/drivers/gpu/drm/amd/display/dc/dc.h
 +++ b/drivers/gpu/drm/amd/display/dc/dc.h
-@@ -602,6 +602,7 @@ struct dc_config {
+@@ -590,6 +590,7 @@ struct dc_config {
  	bool ignore_dpref_ss;
  	bool enable_mipi_converter_optimization;
  	bool enable_frl;
 +	bool bc250_hdmi21;
  	bool force_hdmi21_frl_enc_enable;
+ 	bool skip_frl_pretraining;
  	bool use_default_clock_table;
- 	bool force_bios_enable_lttpr;
 diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
-index 765c63513a31..b99c05d2ec96 100644
+index 02b7dc07ad53..e2819852a40a 100644
 --- a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
 +++ b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
-@@ -1332,6 +1332,10 @@ static bool dcn201_resource_construct(
+@@ -1331,6 +1331,10 @@ static bool dcn201_resource_construct(
  
  	dc->caps.max_odm_combine_factor = 2;
  

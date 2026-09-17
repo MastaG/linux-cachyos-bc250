@@ -1,0 +1,90 @@
+diff --git a/drivers/gpu/drm/amd/display/dc/link/link_dpms.c b/drivers/gpu/drm/amd/display/dc/link/link_dpms.c
+index ca5997748799..fba012754a4d 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/link_dpms.c
++++ b/drivers/gpu/drm/amd/display/dc/link/link_dpms.c
+@@ -59,6 +59,9 @@
+ #include "atomfirmware.h"
+ #include "vpg.h"
+ 
++#include <linux/atomic.h>
++#include <drm/display/drm_dp.h>
++
+ #define DC_LOGGER \
+ 	dc_logger
+ #define DC_LOGGER_INIT(logger) \
+@@ -68,6 +71,66 @@
+ 	DC_LOG_HW_HOTPLUG(  \
+ 		__VA_ARGS__)
+ 
++/*
++ * Shared with drivers/gpu/drm/amd/display/dc/link/protocols/link_hdmi_frl.c
++ * and drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c -- see the
++ * comment in link_hdmi_frl.c for why Cyan Skillfish's OD clock/voltage
++ * commit path needs to defer around active link training.
++ */
++extern atomic_t cs_hdmi_frl_training_active;
++extern bool cs_od_defer_debug;
++
++/*
++ * On a DP-out board driving an active DP->HDMI2.1 PCON (e.g. a Chrontel
++ * CH7218), the PCON trains HDMI FRL to the actual display autonomously and
++ * asynchronously -- DC only ever reads its status via DPCD
++ * (DP_PCON_HDMI_TX_LINK_STATUS / DP_PCON_HDMI_POST_FRL_STATUS), it never
++ * drives or waits on that training itself (see
++ * read_and_intersect_post_frl_lt_status() in link_dp_capability.c, which
++ * checks it once during capability detection, before real video --
++ * and thus before the PCON could have started training -- is even
++ * flowing). There is no existing "training in progress" signal to hook for
++ * this path the way link_hdmi_frl.c's native-HDMI-FRL functions provide, so
++ * poll the real PCON status directly for a bounded window right after the
++ * stream unblanks (hwss->unblank_stream(), below) -- the point real video
++ * starts flowing and the PCON can actually begin training.
++ */
++static void cs_wait_for_dp_hdmi21_pcon_frl_ready(struct dc_link *link)
++{
++	union hdmi_tx_link_status hdmi_tx_link_status = {0};
++	union hdmi_encoded_link_bw hdmi_encoded_link_bw = {0};
++	int attempt;
++	const int max_attempts = 100; /* 100 x 100ms = 10s bound */
++
++	if (!link->dc->caps.dp_hdmi21_pcon_support ||
++	    !link->dpcd_caps.dongle_caps.dp_hdmi_regulated_autonomous_mode_support)
++		return;
++
++	atomic_set(&cs_hdmi_frl_training_active, 1);
++	if (cs_od_defer_debug)
++		pr_info("amdgpu: cs_od_defer: DP-HDMI21 PCON FRL wait started, deferring OD clock/voltage commits\n");
++
++	for (attempt = 0; attempt < max_attempts; attempt++) {
++		core_link_read_dpcd(link, DP_PCON_HDMI_TX_LINK_STATUS,
++				&hdmi_tx_link_status.raw, sizeof(hdmi_tx_link_status));
++		core_link_read_dpcd(link, DP_PCON_HDMI_POST_FRL_STATUS,
++				&hdmi_encoded_link_bw.raw, sizeof(hdmi_encoded_link_bw));
++
++		if (hdmi_tx_link_status.bits.HDMI_TX_READY_STATUS &&
++				hdmi_encoded_link_bw.bits.FRL_LINK_TRAINING_FINISHED)
++			break;
++
++		msleep(100);
++	}
++
++	atomic_set(&cs_hdmi_frl_training_active, 0);
++	if (cs_od_defer_debug)
++		pr_info("amdgpu: cs_od_defer: DP-HDMI21 PCON FRL wait finished after %dms (ready=%d), OD clock/voltage commits allowed\n",
++			attempt * 100,
++			hdmi_tx_link_status.bits.HDMI_TX_READY_STATUS &&
++				hdmi_encoded_link_bw.bits.FRL_LINK_TRAINING_FINISHED);
++}
++
+ #define RETIMER_REDRIVER_INFO(...) \
+ 	DC_LOG_RETIMER_REDRIVER(  \
+ 		__VA_ARGS__)
+@@ -2697,6 +2760,8 @@ void link_set_dpms_on(
+ 	dc->hwss.unblank_stream(pipe_ctx,
+ 		&pipe_ctx->stream->link->cur_link_settings);
+ 
++	cs_wait_for_dp_hdmi21_pcon_frl_ready(link);
++
+ 	if (stream->sink_patches.delay_ignore_msa > 0)
+ 		msleep(stream->sink_patches.delay_ignore_msa);
+ 

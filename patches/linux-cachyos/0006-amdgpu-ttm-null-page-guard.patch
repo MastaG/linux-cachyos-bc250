@@ -1,5 +1,5 @@
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
-index eaa86e3..d3d687b 100644
+index eaa86e32912e..d3d687b0d269 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
 @@ -1279,8 +1279,11 @@ static void amdgpu_ttm_tt_unpopulate(struct ttm_device *bdev,

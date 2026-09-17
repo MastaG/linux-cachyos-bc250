@@ -24,10 +24,10 @@ Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
  1 file changed, 4 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c
-index 63d10cb7f5ed..281c6cec9f4b 100644
+index db3bc37a1a7e..cf0f9f6a6eea 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c
-@@ -238,7 +238,10 @@ void amdgpu_dm_update_freesync_state_on_stream(
+@@ -245,7 +245,10 @@ void amdgpu_dm_update_freesync_state_on_stream(
  		&vrr_infopacket,
  		pack_sdp_v1_3);
  
@@ -39,6 +39,3 @@ index 63d10cb7f5ed..281c6cec9f4b 100644
  		mod_build_infopacket_vtem(new_stream, &vrr_params, 0, &vrr_infopacket);
  
  	new_crtc_state->freesync_vrr_info_changed |=
--- 
-2.55.0
-
