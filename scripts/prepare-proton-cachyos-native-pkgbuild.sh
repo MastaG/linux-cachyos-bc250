@@ -25,6 +25,17 @@ source "${ROOT_DIR}/scripts/fsr4-payload-sources.sh"
     exit 1
 }
 
+# Local builds only (scripts/build-proton-tarball.sh --optiscaler-proxy). Never
+# set in CI, so the published package keeps build-fsr4-payload.py's own
+# winmm.dll default -- this only overrides that default's baked-in value, same
+# shape bc250-fsr4-launch.py enforces for PROTON_OPTISCALER_NAME at runtime.
+OPTISCALER_PROXY="${BC250_OPTISCALER_PROXY:-}"
+if [[ -n "$OPTISCALER_PROXY" && ! "$OPTISCALER_PROXY" =~ ^[A-Za-z0-9_+-]+\.dll$ ]]; then
+    printf 'ERROR: BC250_OPTISCALER_PROXY must be a bare DLL name such as dxgi.dll: %s\n' \
+        "$OPTISCALER_PROXY" >&2
+    exit 1
+fi
+
 for cmd in curl sha256sum python3 bash; do
     command -v "$cmd" >/dev/null 2>&1 || {
         printf 'ERROR: required command not found: %s\n' "$cmd" >&2
@@ -97,13 +108,13 @@ python3 - \
     "$BC250_FSR4_PAYLOAD_BASE" \
     "${FSR4_PAYLOAD_SHA256[SHA_PATCH]}" "${FSR4_PAYLOAD_SHA256[SHA_LAUNCH]}" \
     "${FSR4_PAYLOAD_SHA256[SHA_PAYLOAD_BUILDER]}" "${FSR4_PAYLOAD_SHA256[SHA_PRESET]}" \
-    "${FSR4_PAYLOAD_SHA256[SHA_SHIM]}" <<'PY'
+    "${FSR4_PAYLOAD_SHA256[SHA_SHIM]}" "$OPTISCALER_PROXY" <<'PY'
 from pathlib import Path
 import sys
 
 (path, pkgrel, march, mtune, upstream_n, opti_asset, opti_url, opti_sha,
  opti_version, fakenvapi_asset, fakenvapi_url, fakenvapi_sha, payload_base,
- sha_patch, sha_launch, sha_builder, sha_preset, sha_shim) = sys.argv[1:19]
+ sha_patch, sha_launch, sha_builder, sha_preset, sha_shim, proxy) = sys.argv[1:20]
 upstream_n = int(upstream_n)
 
 path = Path(path)
@@ -179,6 +190,12 @@ sub("    for rustlib in gst-plugins-rs; do\n",
     "    for rustlib in gst-plugins-rs; do\n",
     "the rustlib loop at the end of prepare()")
 
+# Local builds only (scripts/build-proton-tarball.sh --optiscaler-proxy): bake
+# a non-default OptiScaler proxy name into this build. Omitted entirely when
+# unset, so a CI-built package keeps build-fsr4-payload.py's own winmm.dll
+# default byte-for-byte identical to before this existed.
+proxy_line = f'        --proxy "{proxy}" \\\n' if proxy else ''
+
 # Lay the payload into dist/ so package()'s existing rsync carries it, and point
 # Steam at our shim instead of Proton's own launcher.
 sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}\n',
@@ -202,6 +219,7 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
+    f'{proxy_line}'
     '        --manifest-rel "upscaler-manifest.json" \\\n'
     '        --proton-rel "proton" \\\n'
     "        --output . \\\n"

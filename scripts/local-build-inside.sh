@@ -114,6 +114,7 @@ for component in "${COMPONENTS[@]}"; do
         BC250_PKGREL="${BC250_PKGREL:-1}" \
         BC250_LOCAL_PATCHES="${BC250_LOCAL_PATCHES:-0}" \
         BC250_LOCAL_PATCHES_DIR="${BC250_LOCAL_PATCHES_DIR:-/workspace/local-patches}" \
+        BC250_OPTISCALER_PROXY="${BC250_OPTISCALER_PROXY:-}" \
         bash "$script"
 done
 

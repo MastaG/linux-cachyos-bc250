@@ -28,6 +28,13 @@
 # keeps working. Steam stores the tool name per game, so a tarball built with a
 # different suffix is a different tool as far as Steam is concerned.
 #
+# --optiscaler-proxy overrides which DLL name the packaged OptiScaler answers
+# to, baked in as this tool's default (PROTON_OPTISCALER_NAME remains free to
+# override per game on top of it). Unset, the build keeps upstream's own
+# default of winmm.dll. Only affects a real build, not --repack-only.
+#
+#   scripts/build-proton-tarball.sh --suffix custom --optiscaler-proxy dxgi.dll native
+#
 # Custom patches: drop .patch files into
 #
 #     local-patches/proton-cachyos-native/   applied to the Proton source tree
@@ -55,6 +62,7 @@ read -r -a ENGINE <<< "$ENGINE_SPEC"
 SUFFIX=""
 OUT_DIR="${ROOT_DIR}/dist"
 REPACK_ONLY=false
+OPTISCALER_PROXY=""
 
 usage() {
     # The header comment above is the help text, however long it grows.
@@ -68,6 +76,7 @@ while (( $# )); do
         --out)    OUT_DIR="${2:?--out needs a value}"; shift 2 ;;
         --image)  IMAGE="${2:?--image needs a value}"; shift 2 ;;
         --repack-only) REPACK_ONLY=true; shift ;;
+        --optiscaler-proxy) OPTISCALER_PROXY="${2:?--optiscaler-proxy needs a value}"; shift 2 ;;
         -h|--help) usage 0 ;;
         native) shift ;;
         ge|both) printf 'ERROR: local builds are proton-cachyos-native-bc250 only\n' >&2
@@ -83,6 +92,15 @@ COMPONENTS=(proton-cachyos-native-bc250)
 if [[ -n "$SUFFIX" && ! "$SUFFIX" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     printf 'ERROR: --suffix must start alphanumeric and contain only [A-Za-z0-9._-]: %s\n' \
         "$SUFFIX" >&2
+    exit 1
+fi
+
+# Same shape bc250-fsr4-launch.py enforces for PROTON_OPTISCALER_NAME at
+# runtime: a bare DLL name, not a path fragment, since it reaches Wine's loader
+# as a name to match.
+if [[ -n "$OPTISCALER_PROXY" && ! "$OPTISCALER_PROXY" =~ ^[A-Za-z0-9_+-]+\.dll$ ]]; then
+    printf 'ERROR: --optiscaler-proxy must be a bare DLL name such as dxgi.dll: %s\n' \
+        "$OPTISCALER_PROXY" >&2
     exit 1
 fi
 
@@ -154,6 +172,7 @@ else
         -e CCACHE_DIR=/ccache \
         -e CCACHE_COMPILERCHECK=content \
         -e BC250_LOCAL_PATCHES=1 \
+        -e BC250_OPTISCALER_PROXY="$OPTISCALER_PROXY" \
         "$IMAGE" sleep infinity >/dev/null
 
     "${ENGINE[@]}" exec "$container" bash /workspace/scripts/local-build-inside.sh "${COMPONENTS[@]}"
