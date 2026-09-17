@@ -197,8 +197,8 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '            "${srcdir}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \\\n'
     '            "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \\\n'
     '        --ffx-sdk-alt fsr411f \\\n'
-    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc10.zip" \\\n'
-    '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \\\n'
+    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc11.zip" \\\n'
+    '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -239,12 +239,14 @@ payload_sources = [
     # what a rebuild produces. Selected with PROTON_USE_OPTISCALER=fsr411b.
     ("amd_fidelityfx_upscaler_dx12_v4.1.1b.dll", f"{payload_base}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll",
      "0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75", False),
-    # The default bridge: the BC-250 FSR4 fork's RC10, mirrored from its
+    # The default bridge: the BC-250 FSR4 fork's RC11, mirrored from its
     # release so a deleted upstream release cannot change what a rebuild
     # produces. Taken as the published archive rather than a bare DLL: it
-    # carries the notices that release asks be kept. RC10 ships only a zip.
-    ("bc250-fsr4-dll-4.0.0-rc10.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc10.zip",
-     "eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98", True),
+    # carries the notices that release asks be kept. RC11 ships only a zip.
+    # RC11's own release notes: "retains RC10's 348 shader programs and
+    # performance"; the DLL identifies itself as 4.1.1r11 rather than r10.
+    ("bc250-fsr4-dll-4.0.0-rc11.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc11.zip",
+     "95ef0c6ea887e0506a3a92f7e4648e7ab7e1100e99f5eff2f70dd33b8dff2a72", True),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),

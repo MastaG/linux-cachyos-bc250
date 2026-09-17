@@ -454,7 +454,7 @@ One file in the payload — the FidelityFX bridge, `amd_fidelityfx_upscaler_dx12
 file; `PROTON_USE_OPTISCALER` picks one per game:
 
 ```text
-                                          # (unset) BC-250 FSR4 fork RC10, 4.1.1r10 — the default
+                                          # (unset) BC-250 FSR4 fork RC11, 4.1.1r11 — the default
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
 PROTON_USE_OPTISCALER=fsr411f %command%   # the default, by name
@@ -462,23 +462,27 @@ PROTON_USE_OPTISCALER=fsr411f %command%   # the default, by name
 
 | | default (`fsr411f`) | `signed` | `fsr411b` |
 |---|---|---|---|
-| Source | [bc250-fsr4-fork v4.0.0-rc10](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10) | [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) |
-| Watermark shows | `4.1.1r10` | `4.1.1 / SOURCE: DRIVER` (the provider; the bridge file itself is 4.0.2) | `4.1.1b` |
+| Source | [bc250-fsr4-fork v4.0.0-rc11](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11) | [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) |
+| Watermark shows | `4.1.1r11` | `4.1.1 / SOURCE: DRIVER` (the provider; the bridge file itself is 4.0.2) | `4.1.1b` |
 | Aimed at | the BC-250 specifically | the reference | ghosting on RDNA2 |
 | Tested on a BC-250 by its author | yes | — | no |
 | Signed | no | AMD | no |
 
 **The default is the BC-250 fork's build**, by daniel-h-0, because it is the one
-made for and measured on this hardware. RC10 keeps RC9's model, packed
-arithmetic, weight guards and synchronisation repair, and trims the cold shader
-compile — its author measured synthetic cold upscaler setup from 22.24 s to
-19.38 s, about 13%, with the changed shaders producing the same native
-instructions as RC9. That is setup time, not FPS. Every setting its README asks
-for — `Dx12Upscaler=ffx`, `Dx11Upscaler=ffx_12`, `VulkanUpscaler=ffx_12`,
+made for and measured on this hardware. RC11 is a version-identification and
+validation release over RC10: same 348 shader programs, same performance, same
+underlying model — the author's own release notes describe it as passing "a
+complete shader rebuild and nine synthetic image comparisons against RC10."
+RC10 itself keeps RC9's model, packed arithmetic, weight guards and
+synchronisation repair, and trimmed the cold shader compile — its author
+measured synthetic cold upscaler setup from 22.24 s to 19.38 s, about 13%,
+with the changed shaders producing the same native instructions as RC9. That
+is setup time, not FPS. Every setting its README asks for —
+`Dx12Upscaler=ffx`, `Dx11Upscaler=ffx_12`, `VulkanUpscaler=ffx_12`,
 `UpscalerIndex=0`, `Fsr4ForceModel=2`, `FsrNonLinearColorSpace=false`,
 `FsrNonLinearSRGB=auto`, `FsrNonLinearPQ=auto`, `FrameGen.Enabled=false` — is
 already what this package enforces. To confirm which build is running, add
-`BC250_FSR4_DEBUG=1`; the watermark identifies `4.1.1r10`.
+`BC250_FSR4_DEBUG=1`; the watermark identifies `4.1.1r11`.
 
 Two things to know about the alternatives:
 

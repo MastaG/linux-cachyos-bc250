@@ -458,8 +458,8 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
 - The FidelityFX bridge defaults to the BC-250 FSR4 fork's
-  [RC10](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10)
-  build (\`4.1.1r10\`, by daniel-h-0), the one made for and measured on this
+  [RC11](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11)
+  build (\`4.1.1r11\`, by daniel-h-0), the one made for and measured on this
   hardware; it ships that release's licence notices into the prefix. Two
   alternatives swap only that file, per game, each pinned by SHA256:
   \`PROTON_USE_OPTISCALER=signed %command%\` for AMD's signed 4.0.2 bridge, and

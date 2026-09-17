@@ -155,7 +155,7 @@ bridge. OptiScaler bundles a 4.1.1 bridge that would shadow the equally
 versioned provider. The payload is built three times, identical except for
 that one file, and `PROTON_USE_OPTISCALER` picks one:
 
-- **default / `fsr411f`** — the BC-250 FSR4 fork's build (RC10, `4.1.1r10`),
+- **default / `fsr411f`** — the BC-250 FSR4 fork's build (RC11, `4.1.1r11`),
   passed to the builder with `--ffx-sdk-default fsr411f`. Unsigned, made for
   and measured on this hardware, and it ships its author's notices.
 - **`signed`** — AMD's signed **4.0.2** bridge laid over OptiScaler's, which

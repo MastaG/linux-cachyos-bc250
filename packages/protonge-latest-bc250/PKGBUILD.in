@@ -49,12 +49,14 @@ source=(
     # FidelityFX bridge, mirrored so a deleted upstream release cannot change
     # what a rebuild produces. Selected with PROTON_USE_OPTISCALER=fsr411b.
     "amd_fidelityfx_upscaler_dx12_v4.1.1b.dll::@PAYLOAD_BASE@/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll"
-    # The default bridge: the BC-250 FSR4 fork's RC10, mirrored from its release
+    # The default bridge: the BC-250 FSR4 fork's RC11, mirrored from its release
     # so a deleted upstream release cannot change what a rebuild produces.
     # Taken as the published archive rather than a bare DLL -- it carries the
-    # notices that release asks to be retained. RC10 ships only a zip, which
-    # bsdtar reads like anything else.
-    "bc250-fsr4-dll-4.0.0-rc10.zip::@PAYLOAD_BASE@/bc250-fsr4-dll-4.0.0-rc10.zip"
+    # notices that release asks to be retained. RC11 ships only a zip, which
+    # bsdtar reads like anything else. RC11's own release notes: "retains
+    # RC10's 348 shader programs and performance"; the DLL identifies itself
+    # as 4.1.1r11 rather than r10.
+    "bc250-fsr4-dll-4.0.0-rc11.zip::@PAYLOAD_BASE@/bc250-fsr4-dll-4.0.0-rc11.zip"
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     "@FAKENVAPI_ASSET@::@FAKENVAPI_URL@"
@@ -78,7 +80,7 @@ noextract=(
     # leave it alone.
     "@FAKENVAPI_ASSET@"
     # build-fsr4-payload.py unpacks this itself.
-    "bc250-fsr4-dll-4.0.0-rc10.zip"
+    "bc250-fsr4-dll-4.0.0-rc11.zip"
 )
 
 # Two checksum arrays, because the two kinds of source are pinned differently.
@@ -98,7 +100,7 @@ sha256sums=(
     '5de9b6d9f5475a0f2622e4cbce88cde46c68929d9bd0bbc353c70056997bb771'
     '241e6e5e4d848424eb8ec9a6b22c43fe34cf0cf52d30002ca435ba42e53a9ca0'
     '0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75'
-    'eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98'
+    '95ef0c6ea887e0506a3a92f7e4648e7ab7e1100e99f5eff2f70dd33b8dff2a72'
     '@FAKENVAPI_SHA256@'
     'be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e'
     '@SHA_PATCH@'
@@ -174,8 +176,8 @@ build() {
         --ffx-sdk-default fsr411f \
         --ffx-sdk-alt fsr411b "$srcdir/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \
             "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \
-        --ffx-sdk-alt fsr411f "$srcdir/bc250-fsr4-dll-4.0.0-rc10.zip" \
-            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \
+        --ffx-sdk-alt fsr411f "$srcdir/bc250-fsr4-dll-4.0.0-rc11.zip" \
+            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11" \
         --dlss "$srcdir/nvngx_dlss.dll" \
         --licenses "$srcdir" \
         --preset "$srcdir/optiscaler-preset.json" \
