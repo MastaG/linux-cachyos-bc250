@@ -1,38 +1,29 @@
 From: MastaG <mastag@gmail.com>
-Subject: [PATCH] drm/amd/pm: map UnForceGfxFreq so a Cyan Skillfish clock override can actually be released
+Subject: [PATCH] drm/amd/pm: map UnForceGfxFreq and keep requesting the default on a Cyan Skillfish release
 
-The driver could force the GFX clock but never un-force it.
-PP_OD_COMMIT_DPM_TABLE sends RequestGfxclk, which is a manual request
-whatever value it carries, and PMFW keeps honouring it until told otherwise.
-PP_OD_RESTORE_DEFAULT_TABLE did not tell it otherwise -- it just requested
-the *default* clock, still a manual request. Only the voltage was ever
-released, via UnforceGfxVid.
+PP_OD_RESTORE_DEFAULT_TABLE + commit is the only "give it back" the driver
+offers, and it was doing half a job: it requested the *default* clock, which
+is still a manual RequestGfxclk, and released only the voltage.
 
-The firmware has had the missing message all along: smu_v11_8_ppsmc.h
-declares PPSMC_MSG_UnForceGfxFreq (0x3A) right beside the ForceGfxVid /
-UnforceGfxVid pair the driver does map. It was simply never added to
-cyan_skillfish_message_map, so there was no way back to firmware DPM control
-short of a reboot. cyan-skillfish-governor's own SMU backend sends 0x3A on
-both startup and shutdown, which is where this came to light.
+PPSMC_MSG_UnForceGfxFreq (0x3A) is declared in smu_v11_8_ppsmc.h beside the
+ForceGfxVid/UnforceGfxVid pair the driver maps, and was never added to
+cyan_skillfish_message_map. Map it and send it on a release.
 
-This matters beyond tidiness. On a board driving a DP->HDMI 2.1 PCON, a
-mode change fails once the GFX clock has been put under manual control, and
-stays failing: releasing the voltage alone does not help, because the clock
-is still latched. The one condition that reliably switched modes all night
-was a boot where the governor had never run and RequestGfxclk had therefore
-never been sent.
+But measured on hardware, it is NOT the counterpart of RequestGfxclk: force
+1800 MHz via RequestGfxclk (0xE), send UnForceGfxFreq, and the clock stays at
+1800. 0x3A undoes ForceGfxFreq (0x39), a mechanism this driver never uses.
+RequestGfxclk has no release of its own -- there is no "request nothing".
 
-So make a release an actual release: when PP_OD_RESTORE_DEFAULT_TABLE has
-selected CYAN_SKILLFISH_VDDC_MAGIC, send UnForceGfxFreq + UnforceGfxVid and
-skip RequestGfxclk entirely. The forcing path is unchanged.
+So a release sends UnForceGfxFreq *and* still requests the default clock and
+unforces the voltage. Sending only UnForceGfxFreq would have been a
+regression: it moves nothing, so "restore defaults" would have left the clock
+wherever the last commit put it.
 
-This also gives cs_od_force_suspend() -- which releases the override across a
-link bring-up -- something that actually releases, rather than swapping one
-manual clock request for another.
-
-NOT yet hardware-tested. The missing message is established from the firmware
-header and the governor's own use of it; that releasing the clock fixes the
-mode switch is the hypothesis this is meant to test.
+This does not by itself fix the PCON mode-switch failure -- the clock cannot
+be handed back to firmware DPM at all through this interface, which is
+consistent with "the governor never ran since boot" being the only condition
+that reliably switches modes. It is a correctness fix for the release path
+and a documented measurement of what these two messages actually do.
 
 --- a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_types.h
 +++ b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_types.h
@@ -54,7 +45,7 @@ mode switch is the hypothesis this is meant to test.
  };
  
  static struct cmn2asic_mapping cyan_skillfish_table_map[SMU_TABLE_COUNT] = {
-@@ -999,31 +1000,47 @@
+@@ -999,31 +1000,63 @@
  	uint32_t vid;
  	int ret;
  
@@ -66,12 +57,21 @@ mode switch is the hypothesis this is meant to test.
 -	}
 -
 +	/*
-+	 * A release has to hand the clock back to the firmware's own DPM, not
-+	 * merely request the default one. RequestGfxclk is a manual request
-+	 * whatever value it carries, and PMFW keeps honouring it until told
-+	 * otherwise -- there is no "request nothing". UnForceGfxFreq is that
-+	 * "otherwise", and the driver never used to map it, so before this
-+	 * there was no way back to automatic control short of a reboot.
++	 * A release sends UnForceGfxFreq *and* still requests the default
++	 * clock, because on this firmware those are two different mechanisms
++	 * and only the second one actually moves anything.
++	 *
++	 * Measured on hardware: force to 1800 MHz via RequestGfxclk, then send
++	 * UnForceGfxFreq -- the clock stays at 1800. UnForceGfxFreq (0x3A) is
++	 * the counterpart of ForceGfxFreq (0x39), which this driver never
++	 * uses; it does not undo RequestGfxclk (0xE), and RequestGfxclk has no
++	 * counterpart of its own. There is no "request nothing", so the
++	 * closest thing to a release is to request the firmware's own default
++	 * and stop forcing the voltage.
++	 *
++	 * UnForceGfxFreq is still sent first: it is harmless where nothing
++	 * used ForceGfxFreq, and it is the correct release for the half of
++	 * the interface that does.
 +	 */
  	if (vddc == CYAN_SKILLFISH_VDDC_MAGIC) {
 -		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_UnforceGfxVid, NULL);
@@ -89,6 +89,13 @@ mode switch is the hypothesis this is meant to test.
 -		vid = (1550 - vddc) * 160 / 1000;
 -		ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_ForceGfxVid,
 -						      vid, NULL);
++
++		ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_RequestGfxclk,
++						      sclk, NULL);
++		if (ret) {
++			dev_err(smu->adev->dev, "Set sclk failed!\n");
++			return ret;
++		}
 +
 +		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_UnforceGfxVid, NULL);
  		if (ret) {
