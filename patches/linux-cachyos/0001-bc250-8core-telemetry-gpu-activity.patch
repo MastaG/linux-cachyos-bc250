@@ -80,7 +80,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
  #include "amdgpu.h"
  #include "amdgpu_smu.h"
  #include "smu_v11_0.h"
-@@ -60,6 +68,270 @@
+@@ -60,6 +68,262 @@
  
  static uint32_t cyan_skillfish_sclk_default;
  
@@ -140,14 +140,6 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
 +module_param(cs_eight_core_map, bool, 0644);
 +MODULE_PARM_DESC(cs_eight_core_map,
 +		 "Force 8-core SMU metrics layout");
-+
-+/*
-+ * Set by drivers/gpu/drm/amd/display/dc/link/protocols/link_hdmi_frl.c while
-+ * HDMI FRL link training (boot-time or a later SCDC-triggered retrain) is in
-+ * progress. See the comment there for why OD commits need to defer around it.
-+ */
-+extern atomic_t cs_hdmi_frl_training_active;
-+extern bool cs_od_defer_debug;
 +
 +/*
 + * An 8-core board is assumed to carry the 8-core metrics SMU firmware patch

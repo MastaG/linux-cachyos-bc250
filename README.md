@@ -200,8 +200,10 @@ both.
 **Verified on hardware.** On a BC-250 into an LG G5 through a UGREEN 8K DP→HDMI
 2.1 adapter, this repository's kernel negotiates the FRL PCON, engages DSC at
 12 bpp and drives 3840x2160@120 **RGB** with HDR — where the same kernel with
-the feature off sends the same mode as 4:2:0. The debugfs capture that shows it
-is in the commit that turned the feature on by default.
+the feature off sends the same mode as 4:2:0.
+
+**This is off by default — you have to turn it on.** See *Turning it on* below
+for why.
 
 What you need for it to do anything:
 
@@ -214,28 +216,36 @@ Nobody on a native DisplayPort monitor or a passive adapter gets anything from
 the change, and nothing changes for them either: the code paths are only ever
 reached through an HDMI downstream port that reports FRL.
 
-**Switching it off.** The feature sits behind a kernel parameter that defaults
-to on. Set it to `0` and every touched code path is identical to an unpatched
-kernel — not "disabled", *absent*:
+**Turning it on.** The feature sits behind a kernel parameter that defaults to
+`0`. With it off, every touched code path is identical to an unpatched kernel —
+not "disabled", *absent*. To opt in:
 
 ```bash
-sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 amdgpu.bc250_hdmi21=0"|' /etc/default/limine
+sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 amdgpu.bc250_hdmi21=1"|' /etc/default/limine
 sudo limine-mkinitcpio
 ```
 
 That appends the parameter inside the quotes of the existing
 `KERNEL_CMDLINE[default]+="…"` line, which is the only form
 `limine-mkinitcpio` reads — a separate `KERNEL_CMDLINE[default]+=…` line is
-silently ignored. To go back:
+silently ignored. To go back to the default:
 
 ```bash
-sudo sed -i 's| amdgpu.bc250_hdmi21=0||' /etc/default/limine
+sudo sed -i 's| amdgpu.bc250_hdmi21=1||' /etc/default/limine
 sudo limine-mkinitcpio
 ```
 
+**Why it is off by default.** DSC through an active PCON is not yet reliable
+across a compositor handover. Switching between a desktop session and gamescope
+can leave the display dark, with the driver reporting success at every step —
+link training passes, DSC is enabled, the right 4K120 mode is committed — because
+the adapter's HDMI side dropped during the handover and the driver never
+re-detects the link. Only a hotplug (or re-seating the cable) brings it back.
+It is being worked on; until it is fixed, a default install does not enable DSC.
+
 If a screen ever stays dark after an update, boot the previous Limine snapshot
-entry — CachyOS takes one before every upgrade — or edit the boot entry and add
-the parameter for that boot.
+entry — CachyOS takes one before every upgrade — or edit the boot entry and
+remove the parameter for that boot.
 
 To check it engaged:
 
@@ -247,16 +257,16 @@ sudo grep -H . /sys/kernel/debug/dri/*/DP-1/dsc_clock_en
 mode falls back to what fits, which is the 4K120 4:2:0 or 4K60 4:4:4 you had
 before.
 
-**A now-solved issue that was not this.** Some DP→HDMI 2.1 adapters used to
-show a black screen from the moment the kernel took over the display at boot
-until the cable was re-seated — or, with the fix partially in place, a picture
-that arrived but late enough to miss the boot splash. It happened with this
-feature off as well, so it was never these patches; the actual cause was a GPU
-governor's clock/voltage commit landing on the SMU while the HDMI link was
-still training. Two kernel patches now defer that commit until training
-finishes — see
+**A related issue, for context.** Some DP→HDMI 2.1 adapters showed a black
+screen from the moment the kernel took over the display at boot until the cable
+was re-seated. The cause was a GPU governor's clock/voltage commit landing on
+the SMU while the HDMI link was still training. Kernel patches that deferred
+that commit fixed the boot case, but they only ever mattered with DSC enabled,
+so they are **no longer shipped** — they now live unapplied in
+`patches/<set>/disabled/`. See
 [Solved: black screen from kernel takeover until a hotplug](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug)
-for the mechanism, the patches involved, and the residual caveats.
+for the full analysis, including which of its conclusions later proved
+overstated.
 
 Credit goes to **TeleBooth**, who did the work of finding that the DSC engines
 were there, getting them running on a real BC-250 and
@@ -564,8 +574,8 @@ Each of these is genuinely optional; the defaults are fine.
   disabled compute units with `amdgpu.bc250_cc_write_mode=3`. **Read the thermal
   notes first**: it raises power draw, and not every board is stable at 40 CUs.
 - **[4K120 at 4:4:4 over HDMI 2.1](#4k120-at-444-over-an-hdmi-21-adapter)** —
-  on by default; `amdgpu.bc250_hdmi21=0` switches DSC and HDMI 2.1 PCON
-  negotiation off. Only does anything with an active DP→HDMI 2.1 FRL adapter.
+  **off by default**; `amdgpu.bc250_hdmi21=1` opts in to DSC and HDMI 2.1 PCON
+  negotiation. Only does anything with an active DP→HDMI 2.1 FRL adapter.
 - **[AMDGPU scheduler tuning](#optional-amdgpu-scheduler-tuning)** — `sched_policy=2`
   helps some systems and hurts others. Workload-dependent; measure it.
 - **[GPU telemetry cache](docs/PATCHES.md#bc-250-apu-telemetry)** — tunables for
@@ -619,7 +629,7 @@ For [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governo
 
 - Use `set-method = "kernel"`. The widened Cyan Skillfish SMU SCLK range above exists specifically to make this option viable end to end. Setting frequency through the kernel interface avoids the extra SMU mailbox round-trips that `set-method = "smu"` requires, and excessive SMU traffic is a real crash risk on this board.
 - Leave `fix-metrics = false` and `fix-freq = false`. Both bind-mount a corrected value over a sysfs file to work around inaccurate stock telemetry, but this repository's kernel patches already fix that telemetry at the source: `gpu_metrics`'s `average_gfx_activity` and `gpu_busy_percent` are populated by the same corrected kernel function, and `freq1_input` is read straight from the same already-cached SMU metrics table, not a separate mailbox round-trip. Enabling either on this kernel only adds an extra bind mount (and, for `fix-freq`, a second independent SMU connection) to duplicate a number the kernel already reports correctly.
-- If you have a DP→HDMI 2.1 adapter or a native HDMI 2.1 FRL display and used to see a black screen or a late sync at boot with the governor running: that was the governor's own clock/voltage commit racing HDMI link training, and it is fixed at the kernel level as of this patch set. Nothing to configure in the governor itself — see [Solved: black screen from kernel takeover until a hotplug](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug) if you want the mechanism.
+- If you have a DP→HDMI 2.1 adapter or a native HDMI 2.1 FRL display and saw a black screen or a late sync at boot with the governor running: that was the governor's own clock/voltage commit racing HDMI link training. It only happens with `amdgpu.bc250_hdmi21=1`, which is no longer the default, so a default install does not hit it. See [Solved: black screen from kernel takeover until a hotplug](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug) for the mechanism.
 
 ---
 

@@ -6,7 +6,7 @@ engines on-die, but the DCN201 resource pool ships with num_dsc = 0, no
 DSC objects and no .add_dsc_to_stream_resource, so DC can never select
 DSC and every mode that needs it is rejected.
 
-With amdgpu.bc250_hdmi21 set (the default) the pool selects a second resource_caps with
+With amdgpu.bc250_hdmi21=1 the pool selects a second resource_caps with
 num_dsc = 2, creates the two DSC objects with dcn20_dsc_create(), wires
 dcn20_add_dsc_to_stream_resource, and propagates num_dsc into dcn201_ip
 before dml_init_instance(). The last one is the non-obvious half: DML
@@ -18,7 +18,7 @@ DCN201 and DCN200 share the same display register base
 engines sit at the standard DCN200 offsets, so DCN200's register tables
 address the real hardware and dcn20_dsc_create() can be reused as-is.
 
-With amdgpu.bc250_hdmi21=0: res_cap_dnc201 (num_dsc = 0) is used as
+With amdgpu.bc250_hdmi21=0, the default: res_cap_dnc201 (num_dsc = 0) is used as
 before, the create and destroy loops run zero times,
 .add_dsc_to_stream_resource stays NULL, and dcn201_ip.num_dsc is
 assigned the 0 it already held. Nothing observable changes.
@@ -44,7 +44,7 @@ index 0eeb21a1bcaa..b50937054e56 100644
  		.num_ddc = 2,
  };
  
-+/* BC-250: the two on-die DSC engines, selected unless amdgpu.bc250_hdmi21=0. */
++/* BC-250: the two on-die DSC engines, selected only with amdgpu.bc250_hdmi21=1. */
 +static const struct resource_caps res_cap_dnc201_dsc = {
 +		.num_timing_generator = 2,
 +		.num_opp = 2,
@@ -96,7 +96,7 @@ index 0eeb21a1bcaa..b50937054e56 100644
  		goto create_fail;
  	}
  
-+	/* DSC engines: two by default, zero with amdgpu.bc250_hdmi21=0 */
++	/* DSC engines: two with amdgpu.bc250_hdmi21=1, zero by default */
 +	for (i = 0; i < pool->base.res_cap->num_dsc; i++) {
 +		pool->base.dscs[i] = dcn20_dsc_create(ctx, i);
 +		if (!pool->base.dscs[i]) {
