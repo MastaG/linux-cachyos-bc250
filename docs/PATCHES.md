@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these sixteen BC-250 patches, sixteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same sixteen patches plus its own two series-specific carries, eighteen in total:
+The stable and BORE kernels carry these fifteen BC-250 patches, fifteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same fifteen patches plus its own two series-specific carries, seventeen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -51,10 +51,9 @@ The stable and BORE kernels carry these sixteen BC-250 patches, sixteen patches 
 0013-cs-defer-od-during-dp-link-training.patch
 0014-cs-release-gfx-override-during-link-bringup.patch
 0015-cs-map-unforce-gfxfreq.patch
-0016-cs-release-gfx-override-at-commit-start.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same sixteen patches (content-identical, renumbered around its own two extra series-specific carries) plus the two entries below:
+`patches/linux-cachyos-rc` carries the same fifteen patches (content-identical, renumbered around its own two extra series-specific carries) plus the two entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -74,7 +73,6 @@ The stable and BORE kernels carry these sixteen BC-250 patches, sixteen patches 
 0015-cs-defer-od-during-dp-link-training.patch
 0016-cs-release-gfx-override-during-link-bringup.patch
 0017-cs-map-unforce-gfxfreq.patch
-0018-cs-release-gfx-override-at-commit-start.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below.
