@@ -38,6 +38,31 @@ case "$CACHYOS_SOURCE_VARIANT" in
 esac
 
 PATCH_DIR="${ROOT_DIR}/patches/${PATCH_SET}"
+
+# Local experiment builds only. Never set in CI, so a published package cannot
+# pick either of these up.
+#
+# BC250_KERNEL_SUFFIX renames the package so a test kernel installs beside the
+# real one instead of replacing it -- Steam and pacman both key on the name, and
+# a user who upgrades should never silently land on an experiment.
+# BC250_PATCH_DIR points the build at a different patch set, so a candidate
+# patch can be tried without putting it in patches/ and having CI ship it.
+if [[ -n "${BC250_KERNEL_SUFFIX:-}" ]]; then
+    [[ "$BC250_KERNEL_SUFFIX" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || {
+        printf 'ERROR: BC250_KERNEL_SUFFIX must start alphanumeric and contain only [A-Za-z0-9._-]: %s\n' \
+            "$BC250_KERNEL_SUFFIX" >&2
+        exit 1
+    }
+    CUSTOM_SUFFIX="$BC250_KERNEL_SUFFIX"
+    EXPECTED_PKGBASE="linux-${BC250_KERNEL_SUFFIX}"
+    printf '==> local experiment build: package base is %s\n' "$EXPECTED_PKGBASE"
+fi
+
+if [[ -n "${BC250_PATCH_DIR:-}" ]]; then
+    PATCH_DIR="$BC250_PATCH_DIR"
+    printf '==> local experiment build: patches from %s\n' "$PATCH_DIR"
+fi
+
 [[ -d "$PATCH_DIR" ]] || {
     printf 'ERROR: missing kernel patch set: %s\n' "$PATCH_DIR" >&2
     exit 1
