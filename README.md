@@ -554,7 +554,14 @@ file; `PROTON_USE_OPTISCALER` picks one per game:
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
 PROTON_USE_OPTISCALER=fsr411f %command%   # the default, by name
+PROTON_USE_OPTISCALER=fsr411rc9 %command%  # the older RC9 build
+PROTON_USE_OPTISCALER=fsr411rc10 %command% # the older RC10 build
 ```
+
+RC9 and RC10 are kept selectable so their performance can be compared against
+the default rather than being deleted when superseded. That is the standing
+policy: a new release becomes the default, older ones stay reachable. All three
+Proton packages ship the same set.
 
 | | default (`fsr411f`) | `signed` | `fsr411b` |
 |---|---|---|---|
@@ -716,6 +723,35 @@ For [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governo
 - Use `set-method = "kernel"`. The widened Cyan Skillfish SMU SCLK range above exists specifically to make this option viable end to end. Setting frequency through the kernel interface avoids the extra SMU mailbox round-trips that `set-method = "smu"` requires, and excessive SMU traffic is a real crash risk on this board.
 - Leave `fix-metrics = false` and `fix-freq = false`. Both bind-mount a corrected value over a sysfs file to work around inaccurate stock telemetry, but this repository's kernel patches already fix that telemetry at the source: `gpu_metrics`'s `average_gfx_activity` and `gpu_busy_percent` are populated by the same corrected kernel function, and `freq1_input` is read straight from the same already-cached SMU metrics table, not a separate mailbox round-trip. Enabling either on this kernel only adds an extra bind mount (and, for `fix-freq`, a second independent SMU connection) to duplicate a number the kernel already reports correctly.
 - A GPU governor makes the display more likely to go black on a mode change, but the kernels now recover from that by themselves — see [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change). The governor is not the cause; what it does is make session handovers much slower (measured at 4.4 s against 0.09 s for the same switch), and a slow handover is what makes the HDMI converter drop out. If your build of cyan-skillfish-governor supports `temp-read = "sysfs"`, use it: a governor holding a DRM connection open just to read the GPU temperature is what makes the handover slow.
+
+### Recommended `config.toml` for this kernel
+
+Putting the above together, the settings that matter on a BC-250 running these
+kernels:
+
+```toml
+[gpu-usage]
+fix-metrics = false
+fix-freq    = false
+method      = "kernel"
+flush-every = 10
+# temp-read = "sysfs"   # not in a released build yet -- see below
+
+[gpu]
+set-method = "kernel"
+```
+
+Everything else can stay at its default. The file lives at
+`/etc/cyan-skillfish-governor-smu/config.toml`; restart the service after
+editing it.
+
+`temp-read` is **not in a released governor yet** — it is
+[pull request #30](https://github.com/filippor/cyan-skillfish-governor/pull/30),
+still open. Leave that line commented out until it is merged and you are running
+a build that has it; an unknown key is ignored, but the quotes matter when you
+do enable it (`"sysfs"`, not bare `sysfs`). Until then the governor reads the
+temperature over DRM, which works — it just makes session handovers slower, and
+the kernel now recovers from that by itself.
 
 ---
 
