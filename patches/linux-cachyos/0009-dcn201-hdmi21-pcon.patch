@@ -2,8 +2,8 @@ From: Anonymous
 Subject: [PATCH] drm/amd/display: HDMI 2.1 PCON support on DCN201 (amdgpu.bc250_hdmi21)
 
 Advertise dc->caps.dp_hdmi21_pcon_support on DCN201, behind a BC-250
-module parameter, amdgpu.bc250_hdmi21, that defaults to off and exists
-so that amdgpu.bc250_hdmi21=1 opts in to it.
+module parameter, amdgpu.bc250_hdmi21, that defaults to on and exists
+so that amdgpu.bc250_hdmi21=0 gives an unpatched kernel back.
 
 DCN201 is the only DCN2-class resource pool that leaves that flag false.
 What it gates is which ceiling link_validation.c checks a mode against
@@ -16,8 +16,8 @@ whatever the adapter's own HDMI side can do.
 The parameter is plumbed the way DC expects OS-side switches to arrive:
 amdgpu_drv.c defines it, amdgpu_dm.c copies it into dc_init_data.flags,
 and it lands in dc->config.bc250_hdmi21, which the resource pool reads.
-With amdgpu.bc250_hdmi21=0, the default, every touched path is
-identical to an unpatched kernel.
+With amdgpu.bc250_hdmi21=0 every touched path is identical to an
+unpatched kernel.
 
 Author: TeleBooth, published at
 https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e
@@ -25,9 +25,9 @@ as bc250-dcn201-pcon-hdmi21.patch (the file itself is signed "Anonymous").
 Tested by them and several other BC-250 owners at 3840x2160@120Hz 4:4:4
 through a Cable Matters 102101 PCON into an LG CX, and on an LG G5
 through a UGREEN 8K adapter with this exact patch (4K120 RGB, DSC 12 bpp
-over HBR2 x4, FRL PCON negotiated). Ships opt-in: DSC through this PCON
-is not yet reliable across a compositor handover, so the parameter
-defaults to off until that is fixed.
+over HBR2 x4, FRL PCON negotiated). Verified on hardware; the parameter
+stays as the off switch for anyone who wants an unpatched kernel back.
+Reproduced blackouts with it off proved DSC was never the cause.
 
 Carried here until it lands upstream.
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
@@ -50,7 +50,7 @@ index b72058e1a3d8..9fe6d55119c0 100644
  int amdgpu_use_xgmi_p2p = 1;
  int amdgpu_vcnfw_log;
  int amdgpu_sg_display = -1; /* auto */
-+int amdgpu_bc250_hdmi21;
++int amdgpu_bc250_hdmi21 = 1;
  int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
  int amdgpu_umsch_mm;
  int amdgpu_seamless = -1; /* auto */
@@ -64,9 +64,9 @@ index b72058e1a3d8..9fe6d55119c0 100644
 + * and the two on-die DSC engines, both of which the DCN201 driver otherwise
 + * leaves disabled. Needed for 4K120 at 4:4:4 through a DP 1.4 to HDMI 2.1
 + * FRL adapter; inert on a native DisplayPort monitor or a passive adapter.
-+ * (0 = disabled (default), 1 = enabled)
++ * (0 = disabled, 1 = enabled (default))
 + */
-+MODULE_PARM_DESC(bc250_hdmi21, "BC-250: HDMI 2.1 PCON and DSC on DCN201 (0 = disabled (default), 1 = enabled)");
++MODULE_PARM_DESC(bc250_hdmi21, "BC-250: HDMI 2.1 PCON and DSC on DCN201 (0 = disabled, 1 = enabled (default))");
 +module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
 +
  /**
@@ -105,7 +105,7 @@ index 02b7dc07ad53..e2819852a40a 100644
  
  	dc->caps.max_odm_combine_factor = 2;
  
-+	/* BC-250: amdgpu.bc250_hdmi21, off by default; 1 opts in */
++	/* BC-250: amdgpu.bc250_hdmi21, on by default; 0 restores stock behaviour */
 +	if (dc->config.bc250_hdmi21)
 +		dc->caps.dp_hdmi21_pcon_support = true;
 +

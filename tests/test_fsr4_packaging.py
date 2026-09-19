@@ -431,19 +431,19 @@ class KernelPatchSetTests(unittest.TestCase):
         self.assertIn(self.number_word(len(shipped)) + " patches", text)
         self.assertIn(self.number_word(len(shipped)) + " BC-250 patches", text)
 
-    def test_hdmi21_patches_stay_switchable_and_default_off(self):
+    def test_hdmi21_patches_stay_switchable_and_default_on(self):
         """The two DCN201 display patches must stay behind amdgpu.bc250_hdmi21,
-        and that switch must default to OFF.
+        and that switch must default to ON.
 
         The gist they come from has no switch at all, so a careless re-import
         would drop it: the removed line `.num_dsc = 0,` and an unguarded
         `dp_hdmi21_pcon_support = true` are the two signatures of that.
 
-        The default is pinned because it decides what every user gets. DSC
-        through a DP->HDMI PCON is not yet reliable across a compositor
-        handover -- the link can come up dark with the driver reporting success
-        at every step -- so it ships opt-in until that is fixed. Flipping this
-        back on is a deliberate act that should fail this test first.
+        The default is pinned because it decides what every user gets. It was
+        briefly flipped off while a display blackout was suspected to be a DSC
+        problem; it was then reproduced on hardware with bc250_hdmi21=0 on an
+        uncompressed link, so DSC was exonerated and the default went back on.
+        Changing it is a deliberate act that should fail this test first.
 
         Looked up by content name, not number prefix: the two sets number this
         pair differently (stable and RC have diverged in length elsewhere).
@@ -461,11 +461,9 @@ class KernelPatchSetTests(unittest.TestCase):
             self.assertIn("+\tif (dc->config.bc250_hdmi21)\n"
                           "+\t\tdc->caps.dp_hdmi21_pcon_support = true;", pcon)
             self.assertIn('module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);', pcon)
-            self.assertIn("+int amdgpu_bc250_hdmi21;\n", pcon,
-                          "the switch must default to off")
-            self.assertNotIn("+int amdgpu_bc250_hdmi21 = 1;", pcon,
-                             "the switch must not be re-defaulted to on")
-            self.assertIn("(0 = disabled (default), 1 = enabled)", pcon,
+            self.assertIn("+int amdgpu_bc250_hdmi21 = 1;\n", pcon,
+                          "the switch must default to on")
+            self.assertIn("(0 = disabled, 1 = enabled (default))", pcon,
                           "the parm description must say which way it defaults")
 
     @staticmethod

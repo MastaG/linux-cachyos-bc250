@@ -200,10 +200,8 @@ both.
 **Verified on hardware.** On a BC-250 into an LG G5 through a UGREEN 8K DP→HDMI
 2.1 adapter, this repository's kernel negotiates the FRL PCON, engages DSC at
 12 bpp and drives 3840x2160@120 **RGB** with HDR — where the same kernel with
-the feature off sends the same mode as 4:2:0.
-
-**This is off by default — you have to turn it on.** See *Turning it on* below
-for why.
+the feature off sends the same mode as 4:2:0. The debugfs capture that shows it
+is in the commit that turned the feature on by default.
 
 What you need for it to do anything:
 
@@ -216,36 +214,28 @@ Nobody on a native DisplayPort monitor or a passive adapter gets anything from
 the change, and nothing changes for them either: the code paths are only ever
 reached through an HDMI downstream port that reports FRL.
 
-**Turning it on.** The feature sits behind a kernel parameter that defaults to
-`0`. With it off, every touched code path is identical to an unpatched kernel —
-not "disabled", *absent*. To opt in:
+**Switching it off.** The feature sits behind a kernel parameter that defaults
+to on. Set it to `0` and every touched code path is identical to an unpatched
+kernel — not "disabled", *absent*:
 
 ```bash
-sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 amdgpu.bc250_hdmi21=1"|' /etc/default/limine
+sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 amdgpu.bc250_hdmi21=0"|' /etc/default/limine
 sudo limine-mkinitcpio
 ```
 
 That appends the parameter inside the quotes of the existing
 `KERNEL_CMDLINE[default]+="…"` line, which is the only form
 `limine-mkinitcpio` reads — a separate `KERNEL_CMDLINE[default]+=…` line is
-silently ignored. To go back to the default:
+silently ignored. To go back:
 
 ```bash
-sudo sed -i 's| amdgpu.bc250_hdmi21=1||' /etc/default/limine
+sudo sed -i 's| amdgpu.bc250_hdmi21=0||' /etc/default/limine
 sudo limine-mkinitcpio
 ```
 
-**Why it is off by default.** DSC through an active PCON is not yet reliable
-across a compositor handover. Switching between a desktop session and gamescope
-can leave the display dark, with the driver reporting success at every step —
-link training passes, DSC is enabled, the right 4K120 mode is committed — because
-the adapter's HDMI side dropped during the handover and the driver never
-re-detects the link. Only a hotplug (or re-seating the cable) brings it back.
-It is being worked on; until it is fixed, a default install does not enable DSC.
-
 If a screen ever stays dark after an update, boot the previous Limine snapshot
-entry — CachyOS takes one before every upgrade — or edit the boot entry and
-remove the parameter for that boot.
+entry — CachyOS takes one before every upgrade — or edit the boot entry and add
+the parameter for that boot.
 
 To check it engaged:
 
@@ -257,16 +247,9 @@ sudo grep -H . /sys/kernel/debug/dri/*/DP-1/dsc_clock_en
 mode falls back to what fits, which is the 4K120 4:2:0 or 4K60 4:4:4 you had
 before.
 
-**A related issue, for context.** Some DP→HDMI 2.1 adapters showed a black
-screen from the moment the kernel took over the display at boot until the cable
-was re-seated. The cause was a GPU governor's clock/voltage commit landing on
-the SMU while the HDMI link was still training. Kernel patches that deferred
-that commit fixed the boot case, but they only ever mattered with DSC enabled,
-so they are **no longer shipped** — they now live unapplied in
-`patches/<set>/disabled/`. See
-[Solved: black screen from kernel takeover until a hotplug](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug)
-for the full analysis, including which of its conclusions later proved
-overstated.
+**A separate issue, now fixed.** Losing the picture on a mode change is a
+different problem, and **not** a DSC one — see
+[Losing the picture on a mode change](#losing-the-picture-on-a-mode-change) below.
 
 Credit goes to **TeleBooth**, who did the work of finding that the DSC engines
 were there, getting them running on a real BC-250 and
@@ -283,6 +266,90 @@ a crash. Details in
 
 
 ---
+
+## Losing the picture on a mode change
+
+Some setups lost the display on a mode change — most often returning from the
+desktop session to gamescope, sometimes when switching *to* the desktop, and
+sometimes on the very first gamescope start after boot. The screen went black
+and only a cable re-seat (or a software hotplug) brought it back.
+
+**This is fixed in the shipped kernels.** Nothing to configure.
+
+### What was happening
+
+A GPU governor — `cyan-skillfish-governor` or anything else writing to
+`pp_od_clk_voltage` — holds a *forced* clock and voltage override on the SMU.
+While that override is held, the display link cannot be brought up properly
+through a DP→HDMI adapter: the DisplayPort side trains and reports success at
+every step, so the driver sees no fault at all, but the adapter's HDMI side
+never comes up and the sink stays dark.
+
+It is the override being **held** that breaks it, not any particular write.
+Failures were observed with no clock commit anywhere near the mode change.
+
+**It is not a DSC problem.** It was reproduced with `amdgpu.bc250_hdmi21=0`, on
+an uncompressed 4-lane HBR2 link, with none of the display patches applied. DSC
+was briefly disabled by default on that suspicion and has since been restored.
+
+### What the fix does
+
+Two things, and neither is sufficient alone:
+
+1. **The override is released across the modeset.** The release happens at the
+   very start of the display commit — before streams are disabled, before the
+   link is torn down, before training — and the user's values are restored a
+   few seconds later. Clock commits arriving during that window are recorded and
+   applied by the restore rather than rejected, so nothing is lost.
+2. **The release genuinely un-forces the clock.** The driver now forces with
+   `ForceGfxFreq` and releases with `UnForceGfxFreq`, which are a matched pair.
+   It previously used `RequestGfxclk`, which has no "stop requesting"
+   counterpart — releasing through it left the clock under manual control, and
+   the link still died.
+
+### Tuning the window
+
+```text
+amdgpu.cs_od_unforce_ms=3000
+```
+
+How long the override stays released after a modeset, in milliseconds.
+**Default 3000.** `0` disables the release entirely and restores the behaviour
+of a kernel without this patch.
+
+The window is re-armed if another mode change lands inside it, so back-to-back
+modesets extend it rather than cutting it short.
+
+If you still lose the picture on a mode change, **raise this before anything
+else**. During development a 3-second window passed once and then failed on the
+same kernel, while 8 seconds held across ten consecutive switches — the adapter
+keeps bringing its HDMI side up after the driver has finished and reported
+success, and how long that takes varies. It is a runtime parameter, so trying a
+larger value costs nothing:
+
+```bash
+echo 8000 | sudo tee /sys/module/amdgpu/parameters/cs_od_unforce_ms
+```
+
+That takes effect immediately for the next mode change. To make it permanent,
+append `amdgpu.cs_od_unforce_ms=8000` to `KERNEL_CMDLINE[default]+="…"` in
+`/etc/default/limine` and run `sudo limine-mkinitcpio`.
+
+The cost of a larger window is that the GPU sits at the firmware's default clock
+for that long after each mode change, so it is a few seconds before the governor
+takes over again. Mode changes are rare during play, so this is mostly a delay
+to reaching full clocks rather than a sustained penalty.
+
+To watch it working, add `amdgpu.cs_od_defer_debug=1` and check `dmesg`:
+
+```text
+cs_od_defer: released forced GFX clock/voltage for modeset
+cs_od_defer: restored forced GFX clock/voltage after modeset
+```
+
+Those should always appear in balanced pairs. Details, the hardware A/B tables
+and what was ruled out are in
+[docs/PATCHES.md](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug).
 
 ## FSR4-capable Proton (opt-in)
 
@@ -574,8 +641,8 @@ Each of these is genuinely optional; the defaults are fine.
   disabled compute units with `amdgpu.bc250_cc_write_mode=3`. **Read the thermal
   notes first**: it raises power draw, and not every board is stable at 40 CUs.
 - **[4K120 at 4:4:4 over HDMI 2.1](#4k120-at-444-over-an-hdmi-21-adapter)** —
-  **off by default**; `amdgpu.bc250_hdmi21=1` opts in to DSC and HDMI 2.1 PCON
-  negotiation. Only does anything with an active DP→HDMI 2.1 FRL adapter.
+  on by default; `amdgpu.bc250_hdmi21=0` switches DSC and HDMI 2.1 PCON
+  negotiation off. Only does anything with an active DP→HDMI 2.1 FRL adapter.
 - **[AMDGPU scheduler tuning](#optional-amdgpu-scheduler-tuning)** — `sched_policy=2`
   helps some systems and hurts others. Workload-dependent; measure it.
 - **[GPU telemetry cache](docs/PATCHES.md#bc-250-apu-telemetry)** — tunables for
@@ -629,7 +696,7 @@ For [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governo
 
 - Use `set-method = "kernel"`. The widened Cyan Skillfish SMU SCLK range above exists specifically to make this option viable end to end. Setting frequency through the kernel interface avoids the extra SMU mailbox round-trips that `set-method = "smu"` requires, and excessive SMU traffic is a real crash risk on this board.
 - Leave `fix-metrics = false` and `fix-freq = false`. Both bind-mount a corrected value over a sysfs file to work around inaccurate stock telemetry, but this repository's kernel patches already fix that telemetry at the source: `gpu_metrics`'s `average_gfx_activity` and `gpu_busy_percent` are populated by the same corrected kernel function, and `freq1_input` is read straight from the same already-cached SMU metrics table, not a separate mailbox round-trip. Enabling either on this kernel only adds an extra bind mount (and, for `fix-freq`, a second independent SMU connection) to duplicate a number the kernel already reports correctly.
-- If you have a DP→HDMI 2.1 adapter or a native HDMI 2.1 FRL display and saw a black screen or a late sync at boot with the governor running: that was the governor's own clock/voltage commit racing HDMI link training. It only happens with `amdgpu.bc250_hdmi21=1`, which is no longer the default, so a default install does not hit it. See [Solved: black screen from kernel takeover until a hotplug](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug) for the mechanism.
+- If you lose the picture on a mode change with the governor running — typically returning from the desktop to gamescope — that is the governor's forced clock/voltage override being *held* while the display link is brought up. The kernel now releases it across a modeset and restores it afterwards, so there is nothing to configure in the governor itself. If it still happens, raise `amdgpu.cs_od_unforce_ms` (default 3000 ms) — see [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change).
 
 ---
 
@@ -658,7 +725,7 @@ When unset, the resolver follows the configured upstream branch.
 
 | Document | What's in it |
 |---|---|
-| [docs/PATCHES.md](docs/PATCHES.md) | Every kernel and Mesa patch, the HDMI 2.1 backport, 4K120 over DSC, the 40 CU unlock, APU telemetry layouts |
+| [docs/PATCHES.md](docs/PATCHES.md) | Every kernel and Mesa patch, the HDMI 2.1 backport, 4K120 over DSC, the modeset clock-override release, the 40 CU unlock, APU telemetry layouts |
 | [docs/FSR4-PROTON.md](docs/FSR4-PROTON.md) | How the FSR4 Proton packages are pinned and built |
 | [docs/ROCM.md](docs/ROCM.md) | Experimental ROCm / KFD support |
 | [docs/BUILDING.md](docs/BUILDING.md) | CI, ccache, the self-hosted runner, published assets, local builds, signing |

@@ -1,0 +1,413 @@
+cs: release a held GFX clock/voltage override across a display modeset
+
+On a BC-250 driving HDMI through an active DP->HDMI adapter, a *held* forced
+GFX clock/voltage override makes the adapter's downstream link bring-up fail.
+The DP side trains fine and reports success, so DC never sees a fault -- the
+screen simply goes dark on a mode change, typically returning from a desktop
+session to gamescope, and sometimes on the first gamescope start after boot.
+
+Not specific to DSC. It reproduces with amdgpu.bc250_hdmi21=0, on an
+uncompressed 4-lane HBR2 link, with no display patches of ours applied at all.
+
+Two things are needed, and both were established by hardware A/B:
+
+1) The override must come off around the modeset. Toggling cs_od_unforce_ms
+   within a single boot, governor active and holding the override in both arms:
+   3000 -> KDE<->gamescope survives, 0 -> signal lost, 3000 -> survives again.
+   Deferring OD commits is NOT sufficient; observed failures had no commit
+   anywhere near them. It is the held state that breaks the link.
+
+2) The release must genuinely un-force the clock. RequestGfxclk (0xE) is a
+   manual request with no "stop requesting" counterpart, so releasing by
+   requesting the firmware's default clock through it leaves the clock under
+   manual control. A build identical to this one except for that still lost the
+   display on a mode change, with the release firing correctly every time.
+   ForceGfxFreq (0x39) and UnForceGfxFreq (0x3A) are a matched pair, so the
+   driver forces with 0x39 and releases with 0x3A. 0x3A is declared in
+   smu_v11_8_ppsmc.h but was never added to the message map.
+
+Commits arriving during the release window are refused with -EBUSY; their
+settings are still recorded, and the restore applies them when the window
+closes, so nothing is lost -- it is just applied a few seconds later.
+
+The window is amdgpu.cs_od_unforce_ms, default 3000 ms, 0 disables the release
+entirely and restores the behaviour of a kernel without this patch.
+
+The modeset gate matters: amdgpu_dm_atomic_commit_tail() runs on every atomic
+commit including every page flip, and an ungated call re-arms the restore timer
+every frame so it never fires, locking the governor out of the GPU.
+---
+--- a/drivers/gpu/drm/amd/pm/swsmu/inc/smu_types.h
++++ b/drivers/gpu/drm/amd/pm/swsmu/inc/smu_types.h
+@@ -246,6 +246,8 @@
+ 	__SMU_DUMMY_MAP(ForceGfxVid),             \
+ 	__SMU_DUMMY_MAP(Spare0),                  \
+ 	__SMU_DUMMY_MAP(UnforceGfxVid),           \
++	__SMU_DUMMY_MAP(ForceGfxFreq),            \
++	__SMU_DUMMY_MAP(UnForceGfxFreq),          \
+ 	__SMU_DUMMY_MAP(HeavySBR),			\
+ 	__SMU_DUMMY_MAP(SetBadHBMPagesRetiredFlagsPerChannel), \
+ 	__SMU_DUMMY_MAP(EnableGfxImu), \
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
+@@ -126,6 +126,48 @@
+ 		 "Force 8-core SMU metrics layout");
+ 
+ /*
++ * Log every release/restore to dmesg. Off by default; the whole mechanism is
++ * invisible otherwise, and knowing whether it fired is the difference between
++ * diagnosing a display fault in one boot and guessing at it for days.
++ */
++bool cs_od_defer_debug;
++module_param(cs_od_defer_debug, bool, 0644);
++MODULE_PARM_DESC(cs_od_defer_debug,
++		 "BC-250: log when a forced GPU clock/voltage override is released and restored around a display modeset");
++
++/*
++ * How long the forced GFX clock/voltage state stays released after a modeset
++ * starts. 0 disables the release entirely, restoring the behaviour of a kernel
++ * without this patch -- which is also how this fix was isolated on hardware:
++ * with it at 0 the link dies on a mode change, at 3000 it survives.
++ */
++static uint cs_od_unforce_ms = 3000;
++module_param(cs_od_unforce_ms, uint, 0644);
++MODULE_PARM_DESC(cs_od_unforce_ms,
++		 "BC-250: how long to release a forced GPU clock/voltage override across a display modeset, in ms (0 = never release)");
++
++/*
++ * The SMU this ASIC implementation is driving, recorded once its tables are up.
++ * Needed because the release is requested from DC, which has no route to a
++ * struct smu_context. A single pointer rather than a per-device lookup: Cyan
++ * Skillfish is a one-GPU APU and this file is already specific to it.
++ */
++static struct smu_context *cs_od_smu;
++
++static DEFINE_MUTEX(cs_od_force_lock);
++static bool cs_od_force_suspended;
++static void cs_od_force_restore_work_fn(struct work_struct *work);
++static DECLARE_DELAYED_WORK(cs_od_force_restore_work, cs_od_force_restore_work_fn);
++
++/*
++ * Called from amdgpu_dm.c, which declares it extern rather than sharing a
++ * header -- there is no header common to the display and powerplay trees that
++ * either would naturally include. Declared here so the definition has a
++ * visible prototype.
++ */
++void cs_od_force_suspend(void);
++
++/*
+  * An 8-core board is assumed to carry the 8-core metrics SMU firmware patch
+  * (see smu11_driver_if_cyan_skillfish.h's SmuMetricsTable_8core_t comment for
+  * how to get it). A board reporting 8 cores without that firmware patch is
+@@ -344,6 +386,8 @@
+ 	MSG_MAP(RequestGfxclk,                  PPSMC_MSG_RequestGfxclk,		0),
+ 	MSG_MAP(ForceGfxVid,                    PPSMC_MSG_ForceGfxVid,			0),
+ 	MSG_MAP(UnforceGfxVid,                  PPSMC_MSG_UnforceGfxVid,		0),
++	MSG_MAP(ForceGfxFreq,                   PPSMC_MSG_ForceGfxFreq,		0),
++	MSG_MAP(UnForceGfxFreq,                 PPSMC_MSG_UnForceGfxFreq,	0),
+ };
+ 
+ static struct cmn2asic_mapping cyan_skillfish_table_map[SMU_TABLE_COUNT] = {
+@@ -395,7 +439,50 @@
+ 	if (ret)
+ 		return ret;
+ 
+-	return smu_v11_0_init_smc_tables(smu);
++	ret = smu_v11_0_init_smc_tables(smu);
++	if (ret)
++		return ret;
++
++	/*
++	 * Only now is this smu usable for the release below. Published under
++	 * the same lock the release and teardown take, so there is one
++	 * consistent owner of this pointer.
++	 */
++	mutex_lock(&cs_od_force_lock);
++	cs_od_smu = smu;
++	mutex_unlock(&cs_od_force_lock);
++
++	return 0;
++}
++
++static int cyan_skillfish_fini_smc_tables(struct smu_context *smu)
++{
++	bool was_ours;
++
++	/*
++	 * Drop the reference under the lock, so anything already inside
++	 * cs_od_force_suspend() or the restore work has either finished with
++	 * this smu or will now see NULL and send nothing.
++	 */
++	mutex_lock(&cs_od_force_lock);
++	was_ours = cs_od_smu == smu;
++	if (was_ours)
++		cs_od_smu = NULL;
++	mutex_unlock(&cs_od_force_lock);
++
++	if (was_ours) {
++		/*
++		 * Outside the lock: the work takes it, so cancelling while
++		 * holding it would deadlock against a restore already running.
++		 */
++		cancel_delayed_work_sync(&cs_od_force_restore_work);
++
++		mutex_lock(&cs_od_force_lock);
++		cs_od_force_suspended = false;
++		mutex_unlock(&cs_od_force_lock);
++	}
++
++	return smu_v11_0_fini_smc_tables(smu);
+ }
+ 
+ static int cyan_skillfish_refresh_metrics_table(struct smu_context *smu)
+@@ -894,12 +981,149 @@
+ 	return sizeof(struct gpu_metrics_v2_2);
+ }
+ 
++/*
++ * Push one GFX clock/voltage state to the SMU. Shared by the OD commit path
++ * and by the release/restore below so the two cannot drift apart. A vddc of
++ * CYAN_SKILLFISH_VDDC_MAGIC means "do not force a voltage", which is what
++ * PP_OD_RESTORE_DEFAULT_TABLE selects.
++ *
++ * Forcing goes through ForceGfxFreq (0x39), not RequestGfxclk (0xE), because
++ * only 0x39 can be undone: UnForceGfxFreq (0x3A) is its counterpart, while 0xE
++ * is a manual request with no "stop requesting" message at all. Measured on
++ * hardware: force 1800MHz via 0xE, send 0x3A, and the clock stays at 1800.
++ *
++ * This distinction is load-bearing, not cosmetic. A build identical to this one
++ * except that it released by requesting the default clock through 0xE still lost
++ * the display on a mode change, with the release firing correctly every time.
++ * The override has to actually come off.
++ */
++static int cs_od_send_gfx_state(struct smu_context *smu, uint32_t sclk,
++				uint32_t vddc)
++{
++	uint32_t vid;
++	int ret;
++
++	if (vddc == CYAN_SKILLFISH_VDDC_MAGIC) {
++		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_UnForceGfxFreq, NULL);
++		if (ret) {
++			dev_err(smu->adev->dev, "Unforce sclk failed!\n");
++			return ret;
++		}
++
++		ret = smu_cmn_send_smc_msg(smu, SMU_MSG_UnforceGfxVid, NULL);
++		if (ret) {
++			dev_err(smu->adev->dev, "Unforce vddc failed!\n");
++			return ret;
++		}
++
++		return 0;
++	}
++
++	ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_ForceGfxFreq,
++					      sclk, NULL);
++	if (ret) {
++		dev_err(smu->adev->dev, "Force sclk failed!\n");
++		return ret;
++	}
++
++	/*
++	 * PMFW accepts SVI2 VID code, convert voltage to VID:
++	 * vid = (uint32_t)((1.55 - voltage) * 160.0 + 0.00001)
++	 */
++	vid = (1550 - vddc) * 160 / 1000;
++	ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_ForceGfxVid, vid, NULL);
++	if (ret) {
++		dev_err(smu->adev->dev, "Force vddc failed!\n");
++		return ret;
++	}
++
++	return 0;
++}
++
++/*
++ * Release a held GFX clock/voltage override for the duration of a display
++ * modeset, and arm a restore.
++ *
++ * Why this exists: on a BC-250 driving HDMI 2.1 through an active DP->HDMI
++ * PCON, a *held* override makes the PCON's downstream link bring-up fail. The
++ * DP side trains fine and reports success, so DC never sees a problem -- the
++ * screen simply goes dark. Deferring OD commits around the modeset is not
++ * enough, because the damage is done by the override being held, not by a
++ * commit landing at a bad moment: measured on hardware, failures happened with
++ * no commit anywhere near them.
++ */
++void cs_od_force_suspend(void)
++{
++	struct smu_context *smu;
++	bool armed = false;
++
++	if (!cs_od_unforce_ms)
++		return;
++
++	mutex_lock(&cs_od_force_lock);
++	/*
++	 * Read inside the lock, not before it: cyan_skillfish_fini_smc_tables()
++	 * clears this under the same lock, so a teardown racing a modeset
++	 * cannot leave us sending mailbox messages to a device on its way out.
++	 */
++	smu = cs_od_smu;
++	if (!smu) {
++		mutex_unlock(&cs_od_force_lock);
++		return;
++	}
++
++	if (cs_od_force_suspended) {
++		/* Already released -- just hold it open a while longer. */
++		armed = true;
++	} else if (cyan_skillfish_user_settings.vddc != CYAN_SKILLFISH_VDDC_MAGIC) {
++		if (!cs_od_send_gfx_state(smu, cyan_skillfish_sclk_default,
++					  CYAN_SKILLFISH_VDDC_MAGIC)) {
++			WRITE_ONCE(cs_od_force_suspended, true);
++			armed = true;
++			if (cs_od_defer_debug)
++				dev_info(smu->adev->dev,
++					 "cs_od_defer: released forced GFX clock/voltage for modeset\n");
++		}
++	}
++	mutex_unlock(&cs_od_force_lock);
++
++	if (armed)
++		mod_delayed_work(system_wq, &cs_od_force_restore_work,
++				 msecs_to_jiffies(cs_od_unforce_ms));
++}
++
++static void cs_od_force_restore_work_fn(struct work_struct *work)
++{
++	struct smu_context *smu;
++
++	mutex_lock(&cs_od_force_lock);
++	smu = cs_od_smu;
++	if (cs_od_force_suspended && smu) {
++		/*
++		 * Whatever the user's settings are *now* -- an OD commit that
++		 * arrived while the release was open updated them and was
++		 * refused, so this is where it lands.
++		 */
++		cs_od_send_gfx_state(smu, cyan_skillfish_user_settings.sclk,
++				     cyan_skillfish_user_settings.vddc);
++		if (cs_od_defer_debug)
++			dev_info(smu->adev->dev,
++				 "cs_od_defer: restored forced GFX clock/voltage after modeset\n");
++	}
++	/*
++	 * Cleared even if the restore failed: leaving it set would wedge the
++	 * override off permanently, and unforced is the safe state to be
++	 * stuck in.
++	 */
++	WRITE_ONCE(cs_od_force_suspended, false);
++	mutex_unlock(&cs_od_force_lock);
++}
++
+ static int cyan_skillfish_od_edit_dpm_table(struct smu_context *smu,
+ 					enum PP_OD_DPM_TABLE_COMMAND type,
+ 					long input[], uint32_t size)
+ {
+ 	int ret = 0;
+-	uint32_t vid;
+ 
+ 	switch (type) {
+ 	case PP_OD_EDIT_VDDC_CURVE:
+@@ -957,31 +1181,24 @@
+ 			return -EINVAL;
+ 		}
+ 
+-		ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_RequestGfxclk,
+-					cyan_skillfish_user_settings.sclk, NULL);
+-		if (ret) {
+-			dev_err(smu->adev->dev, "Set sclk failed!\n");
+-			return ret;
++		/*
++		 * Refuse while the override is released for a modeset.
++		 * Re-forcing here would defeat the whole point. The settings
++		 * above have already been updated, and the restore work
++		 * applies them when the window closes -- so nothing is lost,
++		 * it is just applied later.
++		 */
++		if (READ_ONCE(cs_od_force_suspended)) {
++			if (cs_od_defer_debug)
++				dev_info(smu->adev->dev,
++					 "cs_od_defer: deferring OD commit, GFX override released for modeset\n");
++			return -EBUSY;
+ 		}
+ 
+-		if (cyan_skillfish_user_settings.vddc == CYAN_SKILLFISH_VDDC_MAGIC) {
+-			ret = smu_cmn_send_smc_msg(smu, SMU_MSG_UnforceGfxVid, NULL);
+-			if (ret) {
+-				dev_err(smu->adev->dev, "Unforce vddc failed!\n");
+-				return ret;
+-			}
+-		} else {
+-			/*
+-			 * PMFW accepts SVI2 VID code, convert voltage to VID:
+-			 * vid = (uint32_t)((1.55 - voltage) * 160.0 + 0.00001)
+-			 */
+-			vid = (1550 - cyan_skillfish_user_settings.vddc) * 160 / 1000;
+-			ret = smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_ForceGfxVid, vid, NULL);
+-			if (ret) {
+-				dev_err(smu->adev->dev, "Force vddc failed!\n");
+-				return ret;
+-			}
+-		}
++		ret = cs_od_send_gfx_state(smu, cyan_skillfish_user_settings.sclk,
++					   cyan_skillfish_user_settings.vddc);
++		if (ret)
++			return ret;
+ 
+ 		break;
+ 	default:
+@@ -1039,7 +1256,7 @@
+ 	.init_power = smu_v11_0_init_power,
+ 	.fini_power = smu_v11_0_fini_power,
+ 	.init_smc_tables = cyan_skillfish_init_smc_tables,
+-	.fini_smc_tables = smu_v11_0_fini_smc_tables,
++	.fini_smc_tables = cyan_skillfish_fini_smc_tables,
+ 	.read_sensor = cyan_skillfish_read_sensor,
+ 	.emit_clk_levels = cyan_skillfish_emit_clk_levels,
+ 	.get_enabled_mask = cyan_skillfish_get_enabled_mask,
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -109,6 +109,13 @@
+ 
+ static_assert(AMDGPU_DMUB_NOTIFICATION_MAX == DMUB_NOTIFICATION_MAX, "AMDGPU_DMUB_NOTIFICATION_MAX mismatch");
+ 
++/*
++ * Releases a held GFX clock/voltage override across a display modeset. Defined
++ * in drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c; a no-op on any
++ * GPU that is not a Cyan Skillfish.
++ */
++extern void cs_od_force_suspend(void);
++
+ #define FIRMWARE_RENOIR_DMUB "amdgpu/renoir_dmcub.bin"
+ MODULE_FIRMWARE(FIRMWARE_RENOIR_DMUB);
+ #define FIRMWARE_SIENNA_CICHLID_DMUB "amdgpu/sienna_cichlid_dmcub.bin"
+@@ -11615,6 +11622,26 @@
+ 
+ 	trace_amdgpu_dm_atomic_commit_tail_begin(state);
+ 
++	/*
++	 * BC-250: release a held GFX clock/voltage override before *any*
++	 * display work starts -- before streams are disabled, before the link
++	 * is torn down, before training.
++	 *
++	 * Gated on an actual modeset. This runs on every atomic commit,
++	 * including every page flip, and calling it unconditionally re-arms
++	 * the restore timer on each frame so it never fires -- which locks the
++	 * governor out of the GPU for as long as anything is on screen. That
++	 * was a real regression, not a hypothetical.
++	 *
++	 * Inert on any non-Cyan-Skillfish GPU -- see cs_od_force_suspend().
++	 */
++	for_each_new_crtc_in_state(state, crtc, new_crtc_state, i) {
++		if (drm_atomic_crtc_needs_modeset(new_crtc_state)) {
++			cs_od_force_suspend();
++			break;
++		}
++	}
++
+ 	drm_atomic_helper_update_legacy_modeset_state(dev, state);
+ 	drm_dp_mst_atomic_wait_for_dependencies(state);
+ 
