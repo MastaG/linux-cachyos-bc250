@@ -735,7 +735,7 @@ fix-metrics = false
 fix-freq    = false
 method      = "kernel"
 flush-every = 10
-# temp-read = "sysfs"   # not in a released build yet -- see below
+temp-read   = "sysfs"   # needs governor v0.4.13 or newer -- see below
 
 [gpu]
 set-method = "kernel"
@@ -745,13 +745,29 @@ Everything else can stay at its default. The file lives at
 `/etc/cyan-skillfish-governor-smu/config.toml`; restart the service after
 editing it.
 
-`temp-read` is **not in a released governor yet** — it is
-[pull request #30](https://github.com/filippor/cyan-skillfish-governor/pull/30),
-still open. Leave that line commented out until it is merged and you are running
-a build that has it; an unknown key is ignored, but the quotes matter when you
-do enable it (`"sysfs"`, not bare `sysfs`). Until then the governor reads the
-temperature over DRM, which works — it just makes session handovers slower, and
-the kernel now recovers from that by itself.
+`temp-read` needs **cyan-skillfish-governor v0.4.13 or newer**. It landed in
+[pull request #30](https://github.com/filippor/cyan-skillfish-governor/pull/30).
+Note the quotes: `"sysfs"`, not bare `sysfs`.
+
+**Check that your build actually has it**, because an unknown key is silently
+ignored — a governor that does not understand `temp-read` will quietly keep
+using DRM:
+
+```bash
+sudo journalctl -u cyan-skillfish-governor-smu | grep "temperature read"
+```
+
+A build that supports it logs `temperature read: sysfs` at startup. **No output
+at all means your governor predates the option**, whatever the config file says.
+
+If you installed the governor from the AUR or the COPR, update the package. If
+some setup script or "one-click" toolkit built it from source for you, it may
+never update on its own — those installs tend to be pinned to whatever commit
+was current on the day they ran. In that case reinstall from the AUR/COPR, or
+just leave `temp-read` out: the governor then reads the temperature over DRM,
+which works fine. It only makes session handovers slower, and the kernel now
+recovers from that by itself, so nothing is broken — you simply do not get the
+reduction in how often the display has to be re-detected.
 
 ---
 
