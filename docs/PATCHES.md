@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these ten BC-250 patches, ten patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same ten patches plus its own one series-specific carry, eleven in total:
+The stable and BORE kernels carry these eleven BC-250 patches, eleven patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same eleven patches plus its own one series-specific carry, twelve in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -46,9 +46,10 @@ The stable and BORE kernels carry these ten BC-250 patches, ten patches in `patc
 0008-bc250-40cu-unlock.patch
 0009-dcn201-hdmi21-pcon.patch
 0010-dcn201-enable-dsc.patch
+0011-cs-relink-after-long-blank.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same ten patches (content-identical, renumbered around its own extra series-specific carry) plus the entry below:
+`patches/linux-cachyos-rc` carries the same eleven patches (content-identical, renumbered around its own extra series-specific carry) plus the entry below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -290,44 +291,67 @@ back to what fits — 4K120 4:2:0 or 4K60 4:4:4 — rather than failing visibly.
 
 ### Solved: black screen from kernel takeover until a hotplug
 
-> **Status: NOT FIXED. The fix was shipped and then WITHDRAWN.**
+> **Status: mode 2 is FIXED. Mode 1 remains withdrawn, and is falsified as the
+> operative mechanism anyway.**
 >
-> `cs-release-gfx-override-at-modeset.patch` released a held GFX clock/voltage
-> override across a modeset. It is now unapplied in `patches/<set>/disabled/`
-> because it **broke boot on a machine with no governor running at all**.
+> **Mode 2 — the converter dropping its HDMI side — is fixed** by
+> `cs-relink-after-long-blank.patch` (`0011` stable, `0012` RC). It times how
+> long the display stream has been off, and if it returns after more than
+> `amdgpu.cs_relink_ms` (default 1000) it runs the `trigger_hotplug` sequence
+> a quarter second after the commit, instead of letting DC bring the stream
+> back on cached converter state. All of it lives in `amdgpu_dm.c`: no new SMU
+> message, no DPCD polling, no DC core change.
 >
-> The bug: the release is guarded on
-> `cyan_skillfish_user_settings.vddc != CYAN_SKILLFISH_VDDC_MAGIC`, intended to
-> mean "something is currently forced". But that struct is `static`, so `vddc`
-> starts at **0**, and 0 != MAGIC — so on a fresh boot, with nothing ever
-> forced, the guard is true and the release fires anyway, sending
-> `UnForceGfxFreq`/`UnforceGfxVid` to the SMU during every modeset including the
-> boot ones. That is exactly the class of SMU traffic this whole investigation
-> identified as breaking link bring-up. Symptom: no picture at boot, governor
-> disabled, and `amdgpu.cs_od_unforce_ms=0` (which makes the patch inert) was
-> what recovered it.
+> Runtime-writable parameters: `cs_relink_ms` (0 disables),
+> `cs_relink_delay_ms` (250), `cs_relink_cooldown_ms` (10000, a hard loop
+> breaker), `cs_relink_debug` (on).
 >
-> **Fix before re-enabling:** track whether *we* forced, with our own flag, and
-> never infer it from `user_settings.vddc`. Then re-test with the governor
+> **Mode 1 — a held GFX override — is still withdrawn**, and is also no longer
+> believed to be what breaks bring-up. `cs-release-gfx-override-at-modeset.patch`
+> sits unapplied in `patches/<set>/disabled/` because it **broke boot on a
+> machine with no governor running at all**: the release is guarded on
+> `cyan_skillfish_user_settings.vddc != CYAN_SKILLFISH_VDDC_MAGIC`, but that
+> struct is `static`, so `vddc` starts at **0**, and 0 != MAGIC — on a fresh
+> boot with nothing forced the guard is true and the release fires anyway,
+> sending `UnForceGfxFreq`/`UnforceGfxVid` during every modeset including the
+> boot ones. `amdgpu.cs_od_unforce_ms=0` (making it inert) was what recovered
+> the machine. If it is ever revived: track whether *we* forced with our own
+> flag, never infer it from `user_settings.vddc`, and test with the governor
 > **disabled** as well as enabled — that case was never tested before shipping,
 > which is how this escaped.
 >
+> **The mode 1 A/B is now considered confounded.** The `cs_od_unforce_ms`
+> 3000 → 0 → 3000 result (pass → fail → pass) was read as proof that a held
+> override breaks bring-up. It is not: in a single boot with the governor
+> running throughout, a 0.73 s handover passed and a 4.44 s handover failed,
+> so a held override is not sufficient. The window lengths differed across
+> those A/B runs, and blank length is the variable that actually tracks the
+> fault.
+>
 > **What remains true from the analysis below:**
 >
-> - Mode 1 is real: a *held* override breaks link bring-up. The
->   `cs_od_unforce_ms` 3000 → 0 → 3000 A/B (governor active, pass → fail → pass)
->   stands.
 > - `RequestGfxclk` (0xE) has no release counterpart; only the matched
 >   `ForceGfxFreq`/`UnForceGfxFreq` (0x39/0x3A) pair genuinely un-forces.
 > - It is **not** a DSC problem — reproduced with `amdgpu.bc250_hdmi21=0` on an
 >   uncompressed 4-lane HBR2 link.
-> - **Mode 2 is separate and unfixed**: after the stream is off longer than about
->   a second, the converter drops its HDMI side and DC never calls `link_detect`,
->   so the bring-up reports success into a dead link. No window length helps — it
->   failed with a 12.9 s release window. Only a hotplug recovers it.
+> - A governor is not the cause but is a strong aggravator: it lengthens
+>   session handovers (0.09 s without, 4.44 s with, same switch), and a long
+>   handover is what makes the converter drop out.
 >
-> **Workaround for users today:** if the picture is lost on a mode change,
-> re-seat the cable, or trigger a software hotplug:
+> **There is no clean blank-length threshold.** Below ~3.4 s the fault has never
+> occurred; above ~4.4 s it is probabilistic — 6 blanks went dark, 2 came back
+> unaided. An earlier revision of this document claimed a clean split with zero
+> overlap across 19 transitions; that was overfitting to a sample containing no
+> surviving long blank. A long blank is necessary, not sufficient.
+>
+> **How well the fix is verified:** it arms on every blank over the threshold,
+> recovers each time, leaves shorter blanks alone, and has not looped. It is
+> *not* verified that each recovery was necessary — with the patch enabled the
+> counterfactual cannot be observed. `amdgpu.cs_relink_ms=0` at runtime turns it
+> off for an A/B.
+>
+> **If you still lose the picture:** re-seat the cable, or trigger a software
+> hotplug:
 > `echo 0 > /sys/kernel/debug/dri/*/DP-1/trigger_hotplug; sleep 3; echo 1 > ...`
 
 Not caused by the DCN201 display patches above, but found while testing them,

@@ -247,7 +247,7 @@ sudo grep -H . /sys/kernel/debug/dri/*/DP-1/dsc_clock_en
 mode falls back to what fits, which is the 4K120 4:2:0 or 4K60 4:4:4 you had
 before.
 
-**A separate issue, now fixed.** Losing the picture on a mode change is a
+**A separate issue, also fixed.** Losing the picture on a mode change is a
 different problem, and **not** a DSC one — see
 [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change) below.
 
@@ -269,49 +269,104 @@ a crash. Details in
 
 ## Losing the picture on a mode change
 
-**Known issue, not currently fixed.**
+**Fixed.** The kernels now recover from this on their own; you should not have to
+do anything.
 
-On some setups the display goes black on a mode change — most often returning
-from the desktop session to gamescope, sometimes switching *to* the desktop, and
-sometimes on the first gamescope start after boot. The driver reports success at
-every step; only re-seating the cable brings it back.
+The symptom: the screen goes black when the display switches mode — most often
+moving between your desktop session and gamescope, or on the first gamescope
+start after boot — and stays black. Re-seating the cable brings it back.
 
-### Getting the picture back
+### What was going wrong
 
-Re-seat the DisplayPort cable, or trigger a software hotplug over SSH:
+The BC-250 reaches your TV through a DisplayPort-to-HDMI 2.1 converter. When the
+picture is switched off for more than a few seconds — which is what a slow
+session handover looks like — the converter drops its HDMI side and stops
+driving the TV.
+
+The driver does not notice. From its point of view nothing was unplugged, so it
+brings the picture back using what it **remembers** about the connection rather
+than looking again. The DisplayPort side trains, the mode is set, every step
+reports success, and the screen stays dark.
+
+Re-seating the cable worked because it forced the driver to look at the
+connection again instead of trusting its memory.
+
+### What the kernels do now
+
+`cs-relink-after-long-blank.patch` measures how long the picture has been off. If
+it comes back after more than a second, the driver re-detects the connection
+instead of trusting cached state — the same thing re-seating the cable does,
+done automatically a quarter of a second after the mode is set.
+
+Normal switches are untouched. A quick session handover blanks the screen for
+about a tenth of a second, nowhere near the threshold, and nothing happens.
+
+### Settings
+
+All four can be changed at boot on the kernel command line, or written live under
+`/sys/module/amdgpu/parameters/`.
+
+| Parameter | Default | What it does |
+| --- | --- | --- |
+| `amdgpu.cs_relink_ms` | `1000` | How long the picture must have been off before the connection is re-detected. `0` turns the whole thing off. |
+| `amdgpu.cs_relink_delay_ms` | `250` | How long after the mode is set to run the re-detect. |
+| `amdgpu.cs_relink_cooldown_ms` | `10000` | Shortest time allowed between two re-detects. Stops any possibility of it retriggering itself in a loop. |
+| `amdgpu.cs_relink_debug` | `1` | Log what it does. Off with `0`. |
+
+To turn it off without rebooting:
+
+```bash
+echo 0 | sudo tee /sys/module/amdgpu/parameters/cs_relink_ms
+```
+
+To see what it has been doing:
+
+```bash
+sudo dmesg | grep 'bc250 relink'
+```
+
+A normal short switch logs `blank was 110 ms, under the 1000 ms threshold`. A
+recovery logs `arming a forced re-detect` followed by `forced re-detect: done`.
+
+### How well it works, honestly
+
+On the test machine it has fired on every blank longer than a second and
+recovered each time, with no loops and no other display trouble. Blanks below the
+threshold are left alone, as intended.
+
+What cannot be claimed is that every one of those would have gone black without
+it. Long blanks did **not** always lose the picture before this patch existed —
+roughly one in four survived on its own — and once the patch is enabled there is
+no way to see what would have happened. So treat it as a fix that removes a
+failure we can reproduce and explain, not as a measured before-and-after.
+
+### If you still lose the picture
+
+Re-seat the DisplayPort cable, or force a hotplug over SSH:
 
 ```bash
 d=$(ls -d /sys/kernel/debug/dri/*/DP-1 | head -1)
 sudo sh -c "echo 0 > $d/trigger_hotplug; sleep 3; echo 1 > $d/trigger_hotplug"
 ```
 
-### What is known
+If that is happening often, two things make long blanks less likely in the first
+place:
 
-It is **not** a DSC problem. It reproduces with `amdgpu.bc250_hdmi21=0` on an
-uncompressed 4-lane HBR2 link, with no display patches applied.
+- **Run the GPU governor with `temp-read = "sysfs"`** if your build of
+  cyan-skillfish-governor supports it. A governor that keeps a DRM connection
+  open for temperature readings makes session handovers dramatically slower —
+  measured at 0.09 s versus 4.4 s for the same switch on this hardware — and a
+  slow handover is what trips the converter.
+- **Running without a GPU governor at all** removes the effect entirely.
 
-There are two separate causes, and only one is understood:
+Neither is required now that the kernel recovers by itself; they just reduce how
+often it has to.
 
-1. **A held GPU clock/voltage override.** A governor writing `pp_od_clk_voltage`
-   holds a forced clock and voltage on the SMU; while it is held, the adapter's
-   HDMI side fails to come up even though the DisplayPort side trains fine. This
-   one is proven and reproducible.
-2. **The adapter dropping its HDMI side.** If the display stream stays off longer
-   than roughly a second — a slow compositor handover — the converter drops its
-   HDMI output, and the driver brings the stream back using cached state without
-   ever re-detecting the link. Every step reports success into a dead link. A
-   hotplug recovers it because it forces a full re-detect.
+It is **not** a DSC problem, despite appearances. It reproduces with
+`amdgpu.bc250_hdmi21=0` on an uncompressed 4-lane HBR2 link with no display
+patches applied.
 
-A kernel fix for (1) was shipped briefly and **withdrawn**: its guard was wrong
-and it disturbed the SMU during boot even with no governor running, which cost
-the picture at boot on a machine that was otherwise fine. It is not worth
-shipping again until that is fixed and tested with the governor both enabled and
-disabled. Nothing yet addresses (2).
-
-If you are hitting this, running without a GPU governor makes (1) impossible and
-leaves only (2), which is rarer.
-
-Full analysis, including the hardware A/B tables and the approaches that were
+Full analysis, including the hardware measurements and the approaches that were
 ruled out, is in
 [docs/PATCHES.md](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug).
 
@@ -660,7 +715,7 @@ For [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governo
 
 - Use `set-method = "kernel"`. The widened Cyan Skillfish SMU SCLK range above exists specifically to make this option viable end to end. Setting frequency through the kernel interface avoids the extra SMU mailbox round-trips that `set-method = "smu"` requires, and excessive SMU traffic is a real crash risk on this board.
 - Leave `fix-metrics = false` and `fix-freq = false`. Both bind-mount a corrected value over a sysfs file to work around inaccurate stock telemetry, but this repository's kernel patches already fix that telemetry at the source: `gpu_metrics`'s `average_gfx_activity` and `gpu_busy_percent` are populated by the same corrected kernel function, and `freq1_input` is read straight from the same already-cached SMU metrics table, not a separate mailbox round-trip. Enabling either on this kernel only adds an extra bind mount (and, for `fix-freq`, a second independent SMU connection) to duplicate a number the kernel already reports correctly.
-- If you lose the picture on a mode change with the governor running — typically returning from the desktop to gamescope — that is the governor's forced clock/voltage override being *held* while the display link is brought up. This is a **known unfixed issue**; see [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change) for the workaround and what is known. Running without a governor avoids this particular cause.
+- A GPU governor makes the display more likely to go black on a mode change, but the kernels now recover from that by themselves — see [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change). The governor is not the cause; what it does is make session handovers much slower (measured at 4.4 s against 0.09 s for the same switch), and a slow handover is what makes the HDMI converter drop out. If your build of cyan-skillfish-governor supports `temp-read = "sysfs"`, use it: a governor holding a DRM connection open just to read the GPU temperature is what makes the handover slow.
 
 ---
 
