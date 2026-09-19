@@ -269,86 +269,50 @@ a crash. Details in
 
 ## Losing the picture on a mode change
 
-Some setups lost the display on a mode change — most often returning from the
-desktop session to gamescope, sometimes when switching *to* the desktop, and
-sometimes on the very first gamescope start after boot. The screen went black
-and only a cable re-seat (or a software hotplug) brought it back.
+**Known issue, not currently fixed.**
 
-**This is fixed in the shipped kernels.** Nothing to configure.
+On some setups the display goes black on a mode change — most often returning
+from the desktop session to gamescope, sometimes switching *to* the desktop, and
+sometimes on the first gamescope start after boot. The driver reports success at
+every step; only re-seating the cable brings it back.
 
-### What was happening
+### Getting the picture back
 
-A GPU governor — `cyan-skillfish-governor` or anything else writing to
-`pp_od_clk_voltage` — holds a *forced* clock and voltage override on the SMU.
-While that override is held, the display link cannot be brought up properly
-through a DP→HDMI adapter: the DisplayPort side trains and reports success at
-every step, so the driver sees no fault at all, but the adapter's HDMI side
-never comes up and the sink stays dark.
-
-It is the override being **held** that breaks it, not any particular write.
-Failures were observed with no clock commit anywhere near the mode change.
-
-**It is not a DSC problem.** It was reproduced with `amdgpu.bc250_hdmi21=0`, on
-an uncompressed 4-lane HBR2 link, with none of the display patches applied. DSC
-was briefly disabled by default on that suspicion and has since been restored.
-
-### What the fix does
-
-Two things, and neither is sufficient alone:
-
-1. **The override is released across the modeset.** The release happens at the
-   very start of the display commit — before streams are disabled, before the
-   link is torn down, before training — and the user's values are restored a
-   few seconds later. Clock commits arriving during that window are recorded and
-   applied by the restore rather than rejected, so nothing is lost.
-2. **The release genuinely un-forces the clock.** The driver now forces with
-   `ForceGfxFreq` and releases with `UnForceGfxFreq`, which are a matched pair.
-   It previously used `RequestGfxclk`, which has no "stop requesting"
-   counterpart — releasing through it left the clock under manual control, and
-   the link still died.
-
-### Tuning the window
-
-```text
-amdgpu.cs_od_unforce_ms=3000
-```
-
-How long the override stays released after a modeset, in milliseconds.
-**Default 3000.** `0` disables the release entirely and restores the behaviour
-of a kernel without this patch.
-
-The window is re-armed if another mode change lands inside it, so back-to-back
-modesets extend it rather than cutting it short.
-
-If you still lose the picture on a mode change, **raise this before anything
-else**. During development a 3-second window passed once and then failed on the
-same kernel, while 8 seconds held across ten consecutive switches — the adapter
-keeps bringing its HDMI side up after the driver has finished and reported
-success, and how long that takes varies. It is a runtime parameter, so trying a
-larger value costs nothing:
+Re-seat the DisplayPort cable, or trigger a software hotplug over SSH:
 
 ```bash
-echo 8000 | sudo tee /sys/module/amdgpu/parameters/cs_od_unforce_ms
+d=$(ls -d /sys/kernel/debug/dri/*/DP-1 | head -1)
+sudo sh -c "echo 0 > $d/trigger_hotplug; sleep 3; echo 1 > $d/trigger_hotplug"
 ```
 
-That takes effect immediately for the next mode change. To make it permanent,
-append `amdgpu.cs_od_unforce_ms=8000` to `KERNEL_CMDLINE[default]+="…"` in
-`/etc/default/limine` and run `sudo limine-mkinitcpio`.
+### What is known
 
-The cost of a larger window is that the GPU sits at the firmware's default clock
-for that long after each mode change, so it is a few seconds before the governor
-takes over again. Mode changes are rare during play, so this is mostly a delay
-to reaching full clocks rather than a sustained penalty.
+It is **not** a DSC problem. It reproduces with `amdgpu.bc250_hdmi21=0` on an
+uncompressed 4-lane HBR2 link, with no display patches applied.
 
-To watch it working, add `amdgpu.cs_od_defer_debug=1` and check `dmesg`:
+There are two separate causes, and only one is understood:
 
-```text
-cs_od_defer: released forced GFX clock/voltage for modeset
-cs_od_defer: restored forced GFX clock/voltage after modeset
-```
+1. **A held GPU clock/voltage override.** A governor writing `pp_od_clk_voltage`
+   holds a forced clock and voltage on the SMU; while it is held, the adapter's
+   HDMI side fails to come up even though the DisplayPort side trains fine. This
+   one is proven and reproducible.
+2. **The adapter dropping its HDMI side.** If the display stream stays off longer
+   than roughly a second — a slow compositor handover — the converter drops its
+   HDMI output, and the driver brings the stream back using cached state without
+   ever re-detecting the link. Every step reports success into a dead link. A
+   hotplug recovers it because it forces a full re-detect.
 
-Those should always appear in balanced pairs. Details, the hardware A/B tables
-and what was ruled out are in
+A kernel fix for (1) was shipped briefly and **withdrawn**: its guard was wrong
+and it disturbed the SMU during boot even with no governor running, which cost
+the picture at boot on a machine that was otherwise fine. It is not worth
+shipping again until that is fixed and tested with the governor both enabled and
+disabled. Nothing yet addresses (2).
+
+If you are hitting this, running without a GPU governor makes (1) impossible and
+leaves only (2), which is rarer.
+
+Full analysis, including the hardware A/B tables and the approaches that were
+ruled out, is in
 [docs/PATCHES.md](docs/PATCHES.md#solved-black-screen-from-kernel-takeover-until-a-hotplug).
 
 ## FSR4-capable Proton (opt-in)
@@ -696,7 +660,7 @@ For [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governo
 
 - Use `set-method = "kernel"`. The widened Cyan Skillfish SMU SCLK range above exists specifically to make this option viable end to end. Setting frequency through the kernel interface avoids the extra SMU mailbox round-trips that `set-method = "smu"` requires, and excessive SMU traffic is a real crash risk on this board.
 - Leave `fix-metrics = false` and `fix-freq = false`. Both bind-mount a corrected value over a sysfs file to work around inaccurate stock telemetry, but this repository's kernel patches already fix that telemetry at the source: `gpu_metrics`'s `average_gfx_activity` and `gpu_busy_percent` are populated by the same corrected kernel function, and `freq1_input` is read straight from the same already-cached SMU metrics table, not a separate mailbox round-trip. Enabling either on this kernel only adds an extra bind mount (and, for `fix-freq`, a second independent SMU connection) to duplicate a number the kernel already reports correctly.
-- If you lose the picture on a mode change with the governor running — typically returning from the desktop to gamescope — that is the governor's forced clock/voltage override being *held* while the display link is brought up. The kernel now releases it across a modeset and restores it afterwards, so there is nothing to configure in the governor itself. If it still happens, raise `amdgpu.cs_od_unforce_ms` (default 3000 ms) — see [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change).
+- If you lose the picture on a mode change with the governor running — typically returning from the desktop to gamescope — that is the governor's forced clock/voltage override being *held* while the display link is brought up. This is a **known unfixed issue**; see [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change) for the workaround and what is known. Running without a governor avoids this particular cause.
 
 ---
 
@@ -725,7 +689,7 @@ When unset, the resolver follows the configured upstream branch.
 
 | Document | What's in it |
 |---|---|
-| [docs/PATCHES.md](docs/PATCHES.md) | Every kernel and Mesa patch, the HDMI 2.1 backport, 4K120 over DSC, the modeset clock-override release, the 40 CU unlock, APU telemetry layouts |
+| [docs/PATCHES.md](docs/PATCHES.md) | Every kernel and Mesa patch, the HDMI 2.1 backport, 4K120 over DSC, the 40 CU unlock, APU telemetry layouts |
 | [docs/FSR4-PROTON.md](docs/FSR4-PROTON.md) | How the FSR4 Proton packages are pinned and built |
 | [docs/ROCM.md](docs/ROCM.md) | Experimental ROCm / KFD support |
 | [docs/BUILDING.md](docs/BUILDING.md) | CI, ccache, the self-hosted runner, published assets, local builds, signing |

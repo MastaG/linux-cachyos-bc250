@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these eleven BC-250 patches, eleven patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same eleven patches plus its own one series-specific carry, twelve in total:
+The stable and BORE kernels carry these ten BC-250 patches, ten patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same ten patches plus its own one series-specific carry, eleven in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -46,10 +46,9 @@ The stable and BORE kernels carry these eleven BC-250 patches, eleven patches in
 0008-bc250-40cu-unlock.patch
 0009-dcn201-hdmi21-pcon.patch
 0010-dcn201-enable-dsc.patch
-0011-cs-release-gfx-override-at-modeset.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same eleven patches (content-identical, renumbered around its own extra series-specific carry) plus the entry below:
+`patches/linux-cachyos-rc` carries the same ten patches (content-identical, renumbered around its own extra series-specific carry) plus the entry below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -63,12 +62,11 @@ The stable and BORE kernels carry these eleven BC-250 patches, eleven patches in
 0009-gud-bound-tv-mode-count.patch
 0010-dcn201-hdmi21-pcon.patch
 0011-dcn201-enable-dsc.patch
-0012-cs-release-gfx-override-at-modeset.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
 
-`cs-release-gfx-override-at-modeset.patch` fixes the display going dark on a mode change — see [Solved: black screen from kernel takeover until a hotplug](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below. It is **not** DSC-specific: the fault reproduces with `amdgpu.bc250_hdmi21=0` on an uncompressed link.
+The display going dark on a mode change is a **known, unfixed** issue — see [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below. A fix was shipped briefly and withdrawn; the patch is in `disabled/`.
 
 #### Disabled patches
 
@@ -82,7 +80,7 @@ cs-release-gfx-override-during-link-bringup.patch
 cs-map-unforce-gfxfreq.patch
 ```
 
-They are superseded by `cs-release-gfx-override-at-modeset.patch`, which is applied and does the job in one patch. Two of them were also shown to be *ineffective*: the release path went through `RequestGfxclk` (0xE), which has no counterpart and does not actually un-force the clock, so a held override survived the release and the display still died. See [Solved: black screen from kernel takeover until a hotplug](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below for the evidence. They are kept because the deferral analysis in the three `cs-defer-*` ones is sound and may be wanted again.
+**Six** patches now sit here, including `cs-release-gfx-override-at-modeset.patch`, which was shipped and then withdrawn — see the status box in [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below for why. Two of the older five were also shown to be *ineffective*: their release path went through `RequestGfxclk` (0xE), which has no counterpart and does not actually un-force the clock. They are all kept because the analysis behind them is sound and will be needed again.
 
 There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
@@ -116,7 +114,6 @@ This patch set contains:
 - integration of the external `nct6687` hwmon/PWM driver;
 - an **opt-in** 40 CU unlock for the harvested shader engines (`amdgpu.bc250_cc_write_mode=3`), described below;
 - HDMI 2.1 PCON negotiation and the two on-die DCN201 DSC engines, **on by default** (`amdgpu.bc250_hdmi21=0` switches them off) — see [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below;
-- a kernel-side release of a held GPU clock/voltage override across a display modeset, fixing the screen going dark on a mode change (`amdgpu.cs_od_unforce_ms`, default 3000 ms, `0` disables it) — see [Solved: black screen from kernel takeover until a hotplug](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below.
 
 ## HDMI 2.1 VRR and ALLM backport (removed)
 
@@ -164,7 +161,7 @@ These were briefly shipped off-by-default while a display blackout on a mode
 change was suspected to be a DSC problem. It was then reproduced on hardware
 with `amdgpu.bc250_hdmi21=0`, on an uncompressed 4-lane HBR2 link, with none of
 our display workarounds applied — so DSC was not the cause and the default went
-back on. The actual fix is `cs-release-gfx-override-at-modeset.patch`.
+back on. The blackout is a separate, still-unfixed issue -- see the status box in [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below.
 
 `0012` defines the parameter in `amdgpu_drv.c` (default 0), `amdgpu_dm.c`
 copies it into `dc_init_data.flags`, and it arrives in the resource pool as
@@ -293,32 +290,45 @@ back to what fits — 4K120 4:2:0 or 4K60 4:4:4 — rather than failing visibly.
 
 ### Solved: black screen from kernel takeover until a hotplug
 
-> **Status: FIXED by `cs-release-gfx-override-at-modeset.patch`**, which is
-> applied in both sets. The five older `cs-*` patches described below are **not**
-> shipped — they live unapplied in `patches/<set>/disabled/`.
+> **Status: NOT FIXED. The fix was shipped and then WITHDRAWN.**
 >
-> **Two claims below are now known to be wrong, and both cost real time.**
+> `cs-release-gfx-override-at-modeset.patch` released a held GFX clock/voltage
+> override across a modeset. It is now unapplied in `patches/<set>/disabled/`
+> because it **broke boot on a machine with no governor running at all**.
 >
-> **1. It is not a DSC problem.** The fault was reproduced on hardware with
-> `amdgpu.bc250_hdmi21=0`, on an uncompressed 4-lane HBR2 link, with none of our
-> display patches applied. DSC was briefly defaulted off on that suspicion and
-> the default has since been restored.
+> The bug: the release is guarded on
+> `cyan_skillfish_user_settings.vddc != CYAN_SKILLFISH_VDDC_MAGIC`, intended to
+> mean "something is currently forced". But that struct is `static`, so `vddc`
+> starts at **0**, and 0 != MAGIC — so on a fresh boot, with nothing ever
+> forced, the guard is true and the release fires anyway, sending
+> `UnForceGfxFreq`/`UnforceGfxVid` to the SMU during every modeset including the
+> boot ones. That is exactly the class of SMU traffic this whole investigation
+> identified as breaking link bring-up. Symptom: no picture at boot, governor
+> disabled, and `amdgpu.cs_od_unforce_ms=0` (which makes the patch inert) was
+> what recovered it.
 >
-> **2. `cs-release-gfx-override-during-link-bringup.patch` did not fix the
-> runtime case.** It released the override by requesting the firmware's default
-> clock through `RequestGfxclk` (0xE), and 0xE is a manual request with *no*
-> release counterpart — the clock stays under manual control, so the link still
-> dies. Only the matched `ForceGfxFreq` (0x39) / `UnForceGfxFreq` (0x3A) pair
-> genuinely un-forces, and the shipped patches never used it for the force path.
-> A build that did survived the switch where an otherwise identical build using
-> 0xE did not. The boot black screen *was* genuinely fixed by the three
-> `cs-defer-*` patches; that result stands.
+> **Fix before re-enabling:** track whether *we* forced, with our own flag, and
+> never infer it from `user_settings.vddc`. Then re-test with the governor
+> **disabled** as well as enabled — that case was never tested before shipping,
+> which is how this escaped.
 >
-> A second failure mode was also identified and is **not** addressed here: after
-> a long stream-off the converter drops its HDMI side and DC never re-detects the
-> link, so the bring-up reports success while the sink stays dark. A hotplug
-> recovers it. Detecting it via the PCON's DPCD readiness bits does **not** work
-> on this adapter — they read 0 even on a healthy link.
+> **What remains true from the analysis below:**
+>
+> - Mode 1 is real: a *held* override breaks link bring-up. The
+>   `cs_od_unforce_ms` 3000 → 0 → 3000 A/B (governor active, pass → fail → pass)
+>   stands.
+> - `RequestGfxclk` (0xE) has no release counterpart; only the matched
+>   `ForceGfxFreq`/`UnForceGfxFreq` (0x39/0x3A) pair genuinely un-forces.
+> - It is **not** a DSC problem — reproduced with `amdgpu.bc250_hdmi21=0` on an
+>   uncompressed 4-lane HBR2 link.
+> - **Mode 2 is separate and unfixed**: after the stream is off longer than about
+>   a second, the converter drops its HDMI side and DC never calls `link_detect`,
+>   so the bring-up reports success into a dead link. No window length helps — it
+>   failed with a 12.9 s release window. Only a hotplug recovers it.
+>
+> **Workaround for users today:** if the picture is lost on a mode change,
+> re-seat the cable, or trigger a software hotplug:
+> `echo 0 > /sys/kernel/debug/dri/*/DP-1/trigger_hotplug; sleep 3; echo 1 > ...`
 
 Not caused by the DCN201 display patches above, but found while testing them,
 and anyone with a DP→HDMI 2.1 adapter (active PCON, e.g. a Chrontel CH7218) or
