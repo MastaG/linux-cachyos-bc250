@@ -267,6 +267,88 @@ a crash. Details in
 
 ---
 
+## Black screen at 4K120 on a UGREEN / CH7218 adapter (opt-in fix)
+
+**Only turn this on if it describes your symptom.** It is off by default and
+should stay off unless you need it.
+
+### Does this apply to you?
+
+All of these have to be true:
+
+- you use a **DP→HDMI 2.1 adapter**, and
+- **4K60 works fine**, but
+- **4K90 or 4K120 gives a black screen** — no picture at all, not a glitchy one
+
+Then check which chip your adapter uses:
+
+```bash
+sudo dmesg | grep -i 'branch\|CH7218'
+```
+
+If the branch name is **`CH7218`** (OUI `2B:02:F0`), this is probably your
+problem. If your adapter reports something else, this will not help you and you
+should leave it alone.
+
+### What is going wrong
+
+Some adapters built on the Chrontel **CH7218** ship firmware that describes
+itself incorrectly. It tells the driver it has no HDMI output — or that its
+output is DisplayPort — when it is in fact a DP-to-HDMI 2.1 converter.
+
+The driver believes it, so it never sets up the HDMI 2.1 high-bandwidth mode
+and instead sends 4K120 as plain DisplayPort video. The adapter physically
+cannot put that out over an HDMI cable, so the TV shows nothing. 4K60 is low
+enough bandwidth to work either way, which is why only the high modes break.
+
+### Turning it on
+
+Add this to your kernel command line:
+
+```
+amdgpu.bc250_ch7218_quirk=1
+```
+
+(Keep `amdgpu.bc250_hdmi21=1` as well — it is the default, and the quirk needs
+it.) Reboot, and check it took effect:
+
+```bash
+sudo dmesg | grep 'CH7218 quirk'
+```
+
+You should see `forced HDMI 2.1 FRL PCON identity, 48 Gbps`. If there is no
+output, either the parameter did not reach the kernel or your adapter is not a
+CH7218.
+
+### Why it is not on by default
+
+**Plenty of CH7218 adapters work perfectly**, and there is no way for the
+driver to tell a good one from a bad one — they identify themselves
+identically. Switching this on for everybody would mean ignoring what
+correctly-working adapters report about themselves, and would break setups
+that are currently fine.
+
+So it is strictly opt-in. With the parameter unset, the kernel behaves exactly
+as it would without the patch — not "mostly", but literally: every part of the
+workaround checks the switch before doing anything at all.
+
+### If 4K120 is still missing after enabling it
+
+Check whether your TV advertises **VIC 118** in its EDID. Some sets omit it,
+and no kernel option can conjure a mode the display never offered. That one is
+fixed by injecting a corrected EDID, which is outside what this repository
+does.
+
+Found and diagnosed by **@dejan_994**, who traced the black screen to the
+adapter's DPCD misreporting its downstream port and wrote the original patch.
+The version here is his work made opt-in and gated.
+
+Technical detail, including exactly what is gated and what was deliberately
+left out, is in
+[docs/PATCHES.md](docs/PATCHES.md#adapters-that-misreport-themselves-the-ch7218-quirk).
+
+---
+
 ## Losing the picture on a mode change
 
 **Fixed.** The kernels now recover from this on their own; you should not have to
@@ -825,6 +907,9 @@ When unset, the resolver follows the configured upstream branch.
   OptiScaler from disk instead of downloading them at launch.  
   <https://github.com/daniel-h-0/bc250-fsr4-fork>
 - FilippoR / ViRazY - For the kernel GPU frequency ranges
+- @dejan_994 — the CH7218 DP-to-HDMI 2.1 adapter quirk: identifying the DPCD
+  misreport behind the black screen at 4K120, and the original patch this
+  repository's opt-in version is derived from.
 - duggasco — BC-250 40 CU unlock: dual-register (CC + SPI) research, testing and tooling.  
   <https://github.com/duggasco/bc250-40cu-unlock>
 - rw-r-r-0644 — BC-250 SMU unlock, including the 8-core metrics firmware patch this repository's kernel decoding is derived from.  

@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these eleven BC-250 patches, eleven patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same eleven patches plus its own one series-specific carry, twelve in total:
+The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same twelve patches plus its own one series-specific carry, thirteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -47,9 +47,10 @@ The stable and BORE kernels carry these eleven BC-250 patches, eleven patches in
 0009-dcn201-hdmi21-pcon.patch
 0010-dcn201-enable-dsc.patch
 0011-cs-relink-after-long-blank.patch
+0012-ch7218-pcon-quirk.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same eleven patches (content-identical, renumbered around its own extra series-specific carry) plus the entry below:
+`patches/linux-cachyos-rc` carries the same twelve patches (content-identical, renumbered around its own extra series-specific carry) plus the entry below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -288,6 +289,98 @@ sudo grep -H . /sys/kernel/debug/dri/*/DP-1/dsc_clock_en \
 value for a CTA 4K120 timing) is the working state seen on the LG G5; the gist's
 LG CX capture shows `224` (14 bpp). If DSC is not engaged the mode simply falls
 back to what fits — 4K120 4:2:0 or 4K60 4:4:4 — rather than failing visibly.
+
+### Adapters that misreport themselves: the CH7218 quirk
+
+`ch7218-pcon-quirk.patch` (`0012` stable, `0013` RC). **Opt-in, default off**,
+behind `amdgpu.bc250_ch7218_quirk=1`.
+
+Some DP→HDMI 2.1 adapters built on a **Chrontel CH7218** ship firmware that
+misreports the downstream port. It clears `DP_DOWNSTREAMPORT_PRESENT`, or
+reports the detailed downstream port as DP, while the device identity and the
+EDID describe a DP→HDMI 2.1 PCON. DC then classifies the adapter
+`DISPLAY_DONGLE_NONE`, never runs FRL negotiation, and sends 4K90/4K120 as DP
+RGB that the adapter cannot emit over TMDS. The sink stays black.
+
+**4K60 still works**, which is what makes it look like a mode problem rather
+than a detection problem.
+
+Found and diagnosed by **@dejan_994**, who traced it to the DPCD misreport and
+wrote the original patch; the version here is his work made opt-in and gated.
+Reported against a UGREEN DP→HDMI 2.1 adapter, DPCD branch OUI `2B:02:F0`,
+branch name `CH7218`. A Cable Matters 102101 on the same board does not need
+it — that one already identifies as an HDMI converter.
+
+#### Why it is off by default, and must stay that way
+
+**Healthy CH7218 units report themselves correctly, and nothing in the DPCD
+distinguishes an affected unit from a healthy one.** The OUI and the branch
+name are identical either way. Applying the quirk to everyone with a CH7218
+would override correct information coming from a working adapter — trading one
+group's broken 4K120 for another group's working setup.
+
+So the requirement is stronger than "it has a switch": with
+`amdgpu.bc250_ch7218_quirk` unset, **nothing the patch adds may take effect**.
+Every function that mutates link state begins with the same gate:
+
+```c
+static bool bc250_ch7218_quirk_wanted(const struct dc_link *link)
+{
+	if (!link || !link->dc)
+		return false;
+
+	if (!link->dc->config.bc250_ch7218_quirk ||
+	    !link->dc->caps.dp_hdmi21_pcon_support)
+		return false;
+
+	return link->dpcd_caps.branch_dev_id == BC250_CH7218_BRANCH_DEV_ID &&
+	       !memcmp(link->dpcd_caps.branch_dev_name, "CH7218", 6);
+}
+```
+
+`bc250_hdmi21` is required as well, since the quirk restores HDMI 2.1 PCON
+ceilings that mean nothing when PCON support is off.
+
+`test_ch7218_quirk_is_opt_in_and_every_change_is_behind_the_switch` pins all of
+this: the default, the gate at the top of each mutating helper, and the absence
+of any static-table edit. **A static table entry cannot be gated at runtime**,
+which is why the patch adds none.
+
+#### What it does when enabled
+
+1. Forces `DISPLAY_DONGLE_DP_HDMI_CONVERTER` at the two points where the
+   firmware's misreport would otherwise produce `DISPLAY_DONGLE_NONE` — no
+   downstream port present, and detailed downstream port reported as DP.
+2. Restores the documented ceilings: 12 bpc, FRL 48 Gbps, YCbCr 4:2:2 and 4:2:0
+   pass-through.
+3. Re-asserts those ceilings **after** the DFP capability extension is parsed,
+   which would otherwise overwrite them with the firmware's own wrong values.
+4. Restores `DP_DSC_SUPPORT` when firmware clears the bit while still returning
+   a populated DSC decoder capability block — and only then, so a genuinely
+   DSC-less adapter is left alone even with the quirk on.
+
+#### What was deliberately left out
+
+The version this was adapted from also added `DP_BRANCH_DEVICE_ID_2B02F0` to
+`ddc_service_types.h` and an entry to the FreeSync PCON allowlist. Neither
+ships here:
+
+- **The branch-ID define**: 7.2 **already defines it**, 7.3-rc does not.
+  Touching that header would either duplicate a define on one series or make
+  the two patch sets diverge. A file-local constant in `link_dp_capability.c`
+  avoids both.
+- **The FreeSync allowlist entry**: 7.2 already lists the ID in
+  `dm_helpers_is_vrr_pcon_allowlist()`; 7.3-rc uses a different structure
+  (`dm_freesync_pcon_whitelist[]`) for the same thing. It is also an
+  ungateable change to a static table, and the reporter states VRR does not
+  work on this adapter regardless (`vrr_capable=0`, no Ignore-MSA / Adaptive
+  Sync SDP). No observed benefit, so no entry.
+
+#### Not a kernel problem
+
+If 4K120 is still missing from the mode list after enabling the quirk, check
+the sink EDID for CTA **VIC 118**. Some TVs omit it, and injecting EDID is a
+userspace matter rather than something that belongs in this kernel.
 
 ### Solved: black screen from kernel takeover until a hotplug
 

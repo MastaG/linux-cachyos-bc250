@@ -466,6 +466,60 @@ class KernelPatchSetTests(unittest.TestCase):
             self.assertIn("(0 = disabled, 1 = enabled (default))", pcon,
                           "the parm description must say which way it defaults")
 
+    def test_ch7218_quirk_is_opt_in_and_every_change_is_behind_the_switch(self):
+        """The CH7218 adapter quirk must default OFF and be fully gated.
+
+        Working CH7218 adapters are indistinguishable from broken ones in the
+        DPCD, so a quirk that applied itself would override correct information
+        reported by a healthy adapter. The requirement is stronger than "has a
+        switch": with amdgpu.bc250_ch7218_quirk unset, *nothing* the patch adds
+        may take effect.
+
+        The version this was adapted from failed exactly that. It gated only
+        its capability helper on dp_hdmi21_pcon_support -- which defaults on --
+        and left the dongle_type reclassification, the DSC_SUPPORT bit and a
+        FreeSync allowlist entry with no gate at all.
+
+        So this pins three things: the default is off, every function that
+        mutates link state begins by consulting the switch, and no static
+        table is edited (a table entry cannot be gated at all).
+        """
+        for patch_set, by_content in (
+            (self.STABLE, self.stable_by_content()),
+            (self.RC, self.rc_by_content()),
+        ):
+            text = by_content["ch7218-pcon-quirk.patch"].read_text()
+            added = [line[1:] for line in text.splitlines()
+                     if line.startswith("+") and not line.startswith("+++")]
+            body = "\n".join(added)
+            with self.subTest(patch=patch_set.name):
+                self.assertIn("int amdgpu_bc250_ch7218_quirk;", body,
+                              "the switch must default to off, i.e. no ' = 1'")
+                self.assertNotIn("int amdgpu_bc250_ch7218_quirk = 1;", body)
+                self.assertIn("module_param_named(bc250_ch7218_quirk, "
+                              "amdgpu_bc250_ch7218_quirk, int, 0444);", body)
+                self.assertIn("(0 = disabled (default), 1 = enabled)", body,
+                              "the parm description must say which way it defaults")
+
+                # every mutating helper consults the switch before touching
+                # anything; bc250_ch7218_quirk_wanted() is that single gate
+                self.assertIn("if (!link->dc->config.bc250_ch7218_quirk ||", body)
+                for helper in ("bc250_ch7218_force_converter_identity",
+                               "bc250_ch7218_restore_dsc_support"):
+                    defn = body.split(f"static void {helper}(struct dc_link *link)\n{{", 1)
+                    self.assertEqual(len(defn), 2, f"{helper} must be defined")
+                    self.assertIn("if (!bc250_ch7218_quirk_wanted(link))\n\t\treturn;",
+                                  defn[1][:400],
+                                  f"{helper} must return before mutating anything")
+
+                # a static table entry cannot be switched off at runtime, so
+                # the quirk must not add one
+                self.assertNotIn("dm_freesync_pcon_whitelist", body)
+                self.assertNotIn("dm_helpers_is_vrr_pcon_allowlist", body)
+                self.assertNotIn("DP_BRANCH_DEVICE_ID_2B02F0", body,
+                                 "7.2 already defines this and 7.3-rc does not; "
+                                 "use the file-local constant instead")
+
     @staticmethod
     def number_word(n):
         words = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve",
