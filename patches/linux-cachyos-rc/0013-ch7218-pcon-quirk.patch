@@ -37,11 +37,10 @@ With the quirk enabled and a CH7218 present:
 Not done, deliberately. No DP_BRANCH_DEVICE_ID_2B02F0 added to
 ddc_service_types.h: 7.2 already defines it and 7.3-rc does not, so touching
 that header would either duplicate a define or make the two patch sets
-diverge. A file-local constant avoids both. No FreeSync PCON allowlist
-entry either: 7.2 already lists the ID, 7.3-rc uses a different structure
-for the same thing, and the reporter states VRR does not work on this
-adapter regardless, so it would be an ungateable change to a static table
-for no observed benefit.
+diverge. A file-local constant avoids both. No FreeSync PCON allowlist entry either, because a static table cannot
+be gated: 7.2 already lists the ID via CachyOS's 7.2/hdmi branch; 7.3-rc
+does not, so the RC set carries that one line as its own unconditional
+patch, ch7218-vrr-allowlist.patch.
 
 DCN201 PCON support and the DSC engines are enabled by separate patches.
 

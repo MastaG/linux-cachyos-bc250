@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same twelve patches plus its own one series-specific carry, thirteen in total:
+The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same twelve patches plus its own two series-specific carries, fourteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -50,7 +50,7 @@ The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in
 0012-ch7218-pcon-quirk.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same twelve patches (content-identical, renumbered around its own extra series-specific carry) plus the entry below:
+`patches/linux-cachyos-rc` carries the same twelve patches (content-identical, renumbered around its own series-specific carries) plus the two RC-only entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -64,6 +64,9 @@ The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in
 0009-gud-bound-tv-mode-count.patch
 0010-dcn201-hdmi21-pcon.patch
 0011-dcn201-enable-dsc.patch
+0012-cs-relink-after-long-blank.patch
+0013-ch7218-pcon-quirk.patch
+0014-ch7218-vrr-allowlist.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -84,6 +87,10 @@ sees, so the quirk can be regenerated against it locally. A full build then
 confirms the result, and **our patches applying silently is the pass condition**
 — any `Hunk #N succeeded ... (offset ...)` line naming one of them means they
 have drifted apart again.
+
+`ch7218-vrr-allowlist.patch` (RC only) touches `amdgpu_dm_helpers.c` and
+`ddc_service_types.h`, which no other patch in either set touches, so it
+cannot drift against the others.
 
 Known pre-existing noise that is *not* a regression: `cyan-skillfish-sclk-range`
 applies with `offset 1` on stable, `gud-bound-tv-mode-count` with `fuzz 1` on
@@ -115,6 +122,8 @@ There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That
   ```
 
   Upstream **reverted** the commit that causes this on the branch the stable/BORE kernels track, so the vulnerable code is gone there and the workaround was dropped from `patches/linux-cachyos` — confirmed by reading the reverted-to state directly, not by assuming a version bump fixed it. The 7.3-rc branch still carries the vulnerable code verbatim, confirmed the same way and by a real `-O3`/ThinLTO build that reproduces the failure without this patch and passes with it, so it stays in `patches/linux-cachyos-rc` until 7.3 either reverts it too or lands its own fix. **Do not drop this from the RC set on a version bump alone** — verify with `git apply --check -R gud-bound-tv-mode-count.patch` against the new tree (should fail cleanly if the patch is still needed) and, ideally, a real build.
+
+- `ch7218-vrr-allowlist.patch` — RC only. One line: the Chrontel CH7218 (DPCD branch OUI `2B:02:F0`) added to `dm_freesync_pcon_whitelist`, plus its `DP_BRANCH_DEVICE_ID_2B02F0` define. CachyOS's 7.2 kernel already has this through its `7.2/hdmi` branch, which is why VRR through a CH7218 works on `linux-cachyos-bc250`; its `7.3/hdmi` branch was rebuilt on a different VRR series (HF-VSDB / ALLM / passive VRR, Aug 2026) and dropped the entry, so on 7.3-rc the same adapter fails the allowlist and DC refuses to pass FreeSync through — VRR silently absent on `linux-cachyos-rc-bc250`, identical hardware. Unconditional on purpose: a static table cannot be gated, and the entry only states that this converter may carry FreeSync-over-HDMI, which the chip does. Unrelated to the opt-in `ch7218-pcon-quirk.patch`, which is about capability *misreporting*. **Drop it when the RC source carries the ID itself** — the duplicate define then fails the build, which is the intended signal.
 
 This patch set contains:
 

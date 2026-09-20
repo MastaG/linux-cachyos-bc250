@@ -339,6 +339,15 @@ and no kernel option can conjure a mode the display never offered. That one is
 fixed by injecting a corrected EDID, which is outside what this repository
 does.
 
+### VRR through a CH7218 on the RC kernel
+
+Separate from the quirk: the RC kernel (`linux-cachyos-rc-bc250`) carries a
+one-line allowlist entry so that FreeSync passes through a CH7218 on 7.3-rc
+the way it already does on 7.2. Nothing to enable — it is unconditional,
+because it only tells the driver this converter may carry VRR. If VRR works on
+the stable kernel but not on the RC one with the same adapter, you are on an RC
+build from before this was added.
+
 Found and diagnosed by **@dejan_994**, who traced the black screen to the
 adapter's DPCD misreporting its downstream port and wrote the original patch.
 The version here is his work made opt-in and gated.

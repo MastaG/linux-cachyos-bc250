@@ -369,6 +369,10 @@ class KernelPatchSetTests(unittest.TestCase):
             "FORTIFY workaround for a bug upstream reverted on the 7.2 branch "
             "but that is still present on 7.3-rc"
         ),
+        "ch7218-vrr-allowlist.patch": (
+            "CachyOS 7.2/hdmi already lists the CH7218 in the FreeSync PCON "
+            "allowlist; its 7.3 HDMI branch does not, so the RC set adds it"
+        ),
     }
 
     @staticmethod
@@ -570,6 +574,29 @@ class KernelPatchSetTests(unittest.TestCase):
                 self.assertNotIn("DP_BRANCH_DEVICE_ID_2B02F0", body,
                                  "7.2 already defines this and 7.3-rc does not; "
                                  "use the file-local constant instead")
+
+    def test_rc_vrr_allowlist_patch_adds_exactly_one_entry(self):
+        """The RC-only allowlist patch is one table entry and its define.
+
+        It exists because CachyOS's 7.3 HDMI branch dropped the CH7218 from
+        dm_freesync_pcon_whitelist that its 7.2 branch carries. It must stay
+        that small: anything else belongs in the gated quirk, and when the RC
+        source gains the ID itself the duplicate define must make the build
+        fail rather than be papered over.
+        """
+        text = self.rc_by_content()["ch7218-vrr-allowlist.patch"].read_text()
+        touched, changed = self.substance(self.rc_by_content()["ch7218-vrr-allowlist.patch"])
+        self.assertEqual(
+            [t.split(" b/")[1] for t in touched],
+            ["drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c",
+             "drivers/gpu/drm/amd/display/include/ddc_service_types.h"])
+        self.assertEqual(changed, [
+            "+\tDP_BRANCH_DEVICE_ID_2B02F0,",
+            "+#define DP_BRANCH_DEVICE_ID_2B02F0 0x2B02F0 /* Chrontel CH7218 */",
+        ])
+        # and the gated quirk must not have quietly absorbed it
+        quirk = self.rc_by_content()["ch7218-pcon-quirk.patch"].read_text()
+        self.assertNotIn("dm_freesync_pcon_whitelist", quirk)
 
     @staticmethod
     def number_word(n):
