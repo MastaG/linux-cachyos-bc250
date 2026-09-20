@@ -373,6 +373,10 @@ class KernelPatchSetTests(unittest.TestCase):
             "CachyOS 7.2/hdmi already lists the CH7218 in the FreeSync PCON "
             "allowlist; its 7.3 HDMI branch does not, so the RC set adds it"
         ),
+        "pcon-vrr-hf-vsdb.patch": (
+            "7.3 reads a PCON's VRR range only from the AMD VSDB via DMUB/DMCU "
+            "firmware DCN201 lacks; 7.2/hdmi already falls back to the HF-VSDB"
+        ),
     }
 
     @staticmethod
@@ -613,6 +617,32 @@ class KernelPatchSetTests(unittest.TestCase):
                 # no static tables
                 self.assertNotIn("dm_freesync_pcon_whitelist", body)
                 self.assertNotIn("DP_BRANCH_DEVICE_ID_", body)
+
+    def test_rc_pcon_vrr_fallback_keeps_the_dpcd_gates(self):
+        """The HF-VSDB fallback fills a range; it must not loosen the gates.
+
+        It exists because the firmware EDID parser cannot run on DCN201. It
+        has to stay inside the allowlisted-PCON block (so the Adaptive-Sync
+        SDP, Ignore-MSA and allowlist checks still decide), fire only when the
+        AMD VSDB path produced nothing, and touch one file.
+        """
+        touched, changed = self.substance(self.rc_by_content()["pcon-vrr-hf-vsdb.patch"])
+        self.assertEqual([t.split(" b/")[1] for t in touched],
+                         ["drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c"])
+        body = "\n".join(l[1:] for l in changed if l.startswith("+"))
+        self.assertIn("if (!freesync_capable && connector->display_info.hdmi.vrr_cap.supported) {", body)
+        self.assertIn("amdgpu_dm_connector->pack_sdp_v1_3 = true;", body)
+        self.assertIn("amdgpu_dm_connector->as_type = as_type;", body)
+        self.assertNotIn("dm_get_adaptive_sync_support_type", body)
+        self.assertNotIn("dm_freesync_pcon_whitelist", body)
+        self.assertFalse([l for l in changed if l.startswith("-")], "must only add")
+        # one hunk, inside amdgpu_dm_update_freesync_caps, and it reuses the
+        # as_type the gate function computed rather than inventing one
+        text = self.rc_by_content()["pcon-vrr-hf-vsdb.patch"].read_text()
+        hunks = [l for l in text.splitlines() if l.startswith("@@")]
+        self.assertEqual(len(hunks), 1)
+        self.assertIn("amdgpu_dm_update_freesync_caps", hunks[0])
+        self.assertNotIn("as_type = FREESYNC_TYPE", body)
 
     def test_rc_vrr_allowlist_patch_adds_exactly_one_entry(self):
         """The RC-only allowlist patch is one table entry and its define.

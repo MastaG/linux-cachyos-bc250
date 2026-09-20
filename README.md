@@ -358,12 +358,20 @@ does.
 
 ### VRR through a CH7218 on the RC kernel
 
-Separate from the quirk: the RC kernel (`linux-cachyos-rc-bc250`) carries a
-one-line allowlist entry so that FreeSync passes through a CH7218 on 7.3-rc
-the way it already does on 7.2. Nothing to enable — it is unconditional,
-because it only tells the driver this converter may carry VRR. If VRR works on
+Separate from the quirk: the RC kernel (`linux-cachyos-rc-bc250`) carries two
+small patches so that VRR through a CH7218 works on 7.3-rc the way it already
+does on 7.2. One is the allowlist entry for the chip; the other makes the
+driver take the VRR range from the TV's HDMI Forum VRR block, because the
+upstream 7.3 code only reads it from the AMD FreeSync block **through display
+firmware the BC-250 does not have** — so on this board that path can never
+produce a range, whatever the TV advertises. Nothing to enable. If VRR works on
 the stable kernel but not on the RC one with the same adapter, you are on an RC
-build from before this was added.
+build from before build 201. To see the decision:
+
+```bash
+sudo dmesg | grep 'VRR:'          # needs drm.debug=0x2 on the kernel command line
+sudo cat /sys/kernel/debug/dri/*/DP-1/vrr_range
+```
 
 Found and diagnosed by **@dejan_994**, who traced the black screen to the
 adapter's DPCD misreporting its downstream port and wrote the original patch.

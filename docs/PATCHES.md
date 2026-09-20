@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same thirteen patches plus its own two series-specific carries, fifteen in total:
+The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same thirteen patches plus its own three series-specific carries, sixteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -51,7 +51,7 @@ The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patche
 0013-pcon-force-dsc.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same thirteen patches (content-identical, renumbered around its own series-specific carries) plus the two RC-only entries below:
+`patches/linux-cachyos-rc` carries the same thirteen patches (content-identical, renumbered around its own series-specific carries) plus the three RC-only entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -69,6 +69,7 @@ The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patche
 0013-ch7218-pcon-quirk.patch
 0014-ch7218-vrr-allowlist.patch
 0015-pcon-force-dsc.patch
+0016-pcon-vrr-hf-vsdb.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -130,6 +131,8 @@ There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That
   Upstream **reverted** the commit that causes this on the branch the stable/BORE kernels track, so the vulnerable code is gone there and the workaround was dropped from `patches/linux-cachyos` — confirmed by reading the reverted-to state directly, not by assuming a version bump fixed it. The 7.3-rc branch still carries the vulnerable code verbatim, confirmed the same way and by a real `-O3`/ThinLTO build that reproduces the failure without this patch and passes with it, so it stays in `patches/linux-cachyos-rc` until 7.3 either reverts it too or lands its own fix. **Do not drop this from the RC set on a version bump alone** — verify with `git apply --check -R gud-bound-tv-mode-count.patch` against the new tree (should fail cleanly if the patch is still needed) and, ideally, a real build.
 
 - `ch7218-vrr-allowlist.patch` — RC only. One line: the Chrontel CH7218 (DPCD branch OUI `2B:02:F0`) added to `dm_freesync_pcon_whitelist`, plus its `DP_BRANCH_DEVICE_ID_2B02F0` define. CachyOS's 7.2 kernel already has this through its `7.2/hdmi` branch, which is why VRR through a CH7218 works on `linux-cachyos-bc250`; its `7.3/hdmi` branch was rebuilt on a different VRR series (HF-VSDB / ALLM / passive VRR, Aug 2026) and dropped the entry, so on 7.3-rc the same adapter fails the allowlist and DC refuses to pass FreeSync through — VRR silently absent on `linux-cachyos-rc-bc250`, identical hardware. Unconditional on purpose: a static table cannot be gated, and the entry only states that this converter may carry FreeSync-over-HDMI, which the chip does. Unrelated to the opt-in `ch7218-pcon-quirk.patch`, which is about capability *misreporting*. **Drop it when the RC source carries the ID itself** — the duplicate define then fails the build, which is the intended signal.
+
+- `pcon-vrr-hf-vsdb.patch` — RC only. The allowlist entry above turned out to be necessary but not sufficient: with it in place a CH7218 still reported `vrr_capable=0` and a `0/0` `vrr_range` on 7.3-rc, on a TV that advertises both HDMI Forum VRR and AMD FreeSync. The three DPCD gates (`0x2214` bit 0 Adaptive-Sync SDP, `0x007` bit 6 Ignore-MSA, allowlist) all pass on this adapter — read back as `0x15`, `0xc1`, OUI `2B02F0` — so the connector reaches the `FREESYNC_TYPE_PCON_IN_WHITELIST` block. That block takes its range **only from the AMD VSDB, parsed by DMUB or DMCU firmware**. DCN201 has neither (`dm_dmub_sw_init()` has no case for it; `dcn201_resource` sets `disable_dmcu`), so `dc_edid_parser_send_cea()` returns false, the parse fails with `-ENODEV` on every Cyan Skillfish, and no range is ever set. 7.2 works because CachyOS's `7.2/hdmi` branch prefers the HDMI 2.1 VRR range the DRM core parses in software from the HF-VSDB; the 7.3 branch does that only on the native HDMI path. This patch adds the same fallback to the PCON block: no range from the AMD VSDB and the sink advertises HF-VSDB VRR → take `vrr_min`/`vrr_max` from there (VRRMAX = 0 resolved to the base refresh rate the way the HDMI branch does), set `pack_sdp_v1_3` and the adaptive-sync type, publish the range. DPCD gates untouched; a sink with a usable AMD VSDB still takes that path first; also covers TVs with no AMD VSDB at all (an LG G5 carries only the HDMI and HF-VSDB blocks). `drm.debug=0x2` shows the decision as `VRR: PCON HF-VSDB fallback: …` next to the tag's own `VRR:` lines. Regenerate whenever the RC tag moves — CachyOS's `7.3/hdmi` HEAD already reworks the MCCS clause in this function.
 
 This patch set contains:
 
