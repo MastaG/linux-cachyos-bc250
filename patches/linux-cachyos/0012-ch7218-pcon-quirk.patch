@@ -9,8 +9,6 @@ DP RGB that the adapter cannot emit over TMDS. The sink stays black. 4K60
 still works, which is what makes it look like a mode problem rather than a
 detection problem.
 
-Found, diagnosed and originally written by @dejan_994.
-
 Reported against a UGREEN DP to HDMI 2.1 adapter, DPCD branch OUI 2B:02:F0,
 branch name CH7218, on a BC-250 driving an HDMI 2.1 TV. A Cable Matters
 102101 on the same board does not need this: it already identifies as an
@@ -100,7 +98,7 @@ diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgp
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -2437,6 +2437,7 @@
+@@ -2544,6 +2544,7 @@
  		init_data.flags.enable_frl = true;
  
  	init_data.flags.bc250_hdmi21 = (amdgpu_bc250_hdmi21 != 0);

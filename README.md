@@ -376,12 +376,16 @@ connection again instead of trusting its memory.
 ### What the kernels do now
 
 `cs-relink-after-long-blank.patch` measures how long the picture has been off. If
-it comes back after more than a second, the driver re-detects the connection
-instead of trusting cached state — the same thing re-seating the cable does,
-done automatically a quarter of a second after the mode is set.
+it comes back after more than three seconds, the driver re-detects the
+connection instead of trusting cached state — the same thing re-seating the
+cable does, done automatically a quarter of a second after the mode is set.
 
 Normal switches are untouched. A quick session handover blanks the screen for
-about a tenth of a second, nowhere near the threshold, and nothing happens.
+about a tenth of a second, and even a slow one measured in the field only
+reached 2.1 seconds, so nothing happens. The threshold sits deliberately
+between those and the shortest blank ever observed to go dark (4.4 seconds),
+because a re-detect is not free — it costs a real mode change, so firing when
+it was not needed is worse than not firing.
 
 ### Settings
 
@@ -390,9 +394,10 @@ All four can be changed at boot on the kernel command line, or written live unde
 
 | Parameter | Default | What it does |
 | --- | --- | --- |
-| `amdgpu.cs_relink_ms` | `1000` | How long the picture must have been off before the connection is re-detected. `0` turns the whole thing off. |
+| `amdgpu.cs_relink_ms` | `3000` | How long the picture must have been off before the connection is re-detected. `0` turns the whole thing off. |
 | `amdgpu.cs_relink_delay_ms` | `250` | How long after the mode is set to run the re-detect. |
 | `amdgpu.cs_relink_cooldown_ms` | `10000` | Shortest time allowed between two re-detects. Stops any possibility of it retriggering itself in a loop. |
+| `amdgpu.cs_relink_at_boot` | `0` | **Off.** Also re-detect once on the first screen of a boot, for the case where the adapter was already stuck before the machine started. Experimental — see below. |
 | `amdgpu.cs_relink_debug` | `1` | Log what it does. Off with `0`. |
 
 To turn it off without rebooting:
@@ -407,20 +412,58 @@ To see what it has been doing:
 sudo dmesg | grep 'bc250 relink'
 ```
 
-A normal short switch logs `blank was 110 ms, under the 1000 ms threshold`. A
+A normal short switch logs `blank was 110 ms, under the 3000 ms threshold`. A
 recovery logs `arming a forced re-detect` followed by `forced re-detect: done`.
 
-### How well it works, honestly
+### The boot case (experimental, off by default)
 
-On the test machine it has fired on every blank longer than a second and
-recovered each time, with no loops and no other display trouble. Blanks below the
-threshold are left alone, as intended.
+The check above measures how long the picture was off. That only works while
+the machine is running — if your adapter was **already** stuck before you
+switched the machine on, there is no blank to measure and nothing to react to.
 
-What cannot be claimed is that every one of those would have gone black without
-it. Long blanks did **not** always lose the picture before this patch existed —
-roughly one in four survived on its own — and once the patch is enabled there is
-no way to see what would have happened. So treat it as a fix that removes a
-failure we can reproduce and explain, not as a measured before-and-after.
+That happens: it has been reported surviving several reboots in a row and then
+clearing on its own, which fits the adapter holding its state across a warm
+reboot (it keeps power from the DisplayPort side, so restarting the machine
+does not reset it).
+
+`amdgpu.cs_relink_at_boot=1` re-detects once on the first screen of a boot as
+well. **It is off by default and you should leave it off unless you are
+chasing exactly that symptom.**
+
+Two reasons it is not on for everyone:
+
+- **We do not know that it helps.** The driver already does a full detection
+  during startup, about three seconds before the first picture appears, so this
+  may simply be doing the same thing twice. Nothing can tell a stuck adapter
+  from a healthy one — it reports itself as healthy either way.
+- **It is not free.** Re-detecting releases and recreates the connection state,
+  so it drives a real mode change and a hotplug event, not a quiet probe.
+
+If you want to try it, add `amdgpu.cs_relink_at_boot=1` and then read what it
+decided:
+
+```bash
+sudo dmesg | grep 'bc250 relink'
+```
+
+You will see one line for the first screen of the boot, saying either that it
+forced a re-detect or that it left the link alone, followed by the result:
+
+```text
+  bc250 relink: first bring-up of this boot at 9180 ms, forcing a re-detect (cs_relink_at_boot=1)
+  bc250 relink: running the boot re-detect in 250 ms
+  bc250 relink: boot re-detect: done
+```
+
+With it off — the default — that first line reads `cs_relink_at_boot=0,
+leaving the link alone`, so you can always tell which way it went.
+
+Two details worth knowing if you do enable it. The boot attempt only counts
+during the **first 60 seconds of uptime**, so a machine switched on before its
+TV does not spend it hours later when you finally turn the TV on. And it
+deliberately does not start the cooldown timer, so it cannot swallow the first
+genuine long blank of the boot — which is the case the main mechanism exists
+for.
 
 ### If you still lose the picture
 

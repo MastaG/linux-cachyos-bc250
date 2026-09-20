@@ -466,6 +466,57 @@ class KernelPatchSetTests(unittest.TestCase):
             self.assertIn("(0 = disabled, 1 = enabled (default))", pcon,
                           "the parm description must say which way it defaults")
 
+    def test_relink_defaults_are_pinned(self):
+        """The relink patch's four defaults decide what every user gets.
+
+        cs_relink_at_boot is the one to watch: it fires a forced re-detect on
+        the first bring-up of every boot, on every board with a converter, and
+        it is ON. It exists because a machine can boot with the converter
+        already dropped and the rest of the mechanism cannot see a blank that
+        predates the driver. Whether a second detect clears that state is not
+        established -- DC already runs a full link_detect about three seconds
+        earlier -- so if boot regressions appear, this is the first thing to
+        turn off.
+
+        Changing any of these should be a deliberate act that fails here first.
+        """
+        for patch_set, by_content in (
+            (self.STABLE, self.stable_by_content()),
+            (self.RC, self.rc_by_content()),
+        ):
+            text = by_content["cs-relink-after-long-blank.patch"].read_text()
+            added = "\n".join(l[1:] for l in text.splitlines()
+                               if l.startswith("+") and not l.startswith("+++"))
+            with self.subTest(patch=patch_set.name):
+                # 3000 sits below every observed failure (>= 4.44 s) and above
+                # every observed healthy handover (<= 2.1 s measured in the
+                # field). 1000 fired on healthy 1.8 s and 2.1 s switches, and a
+                # re-detect costs a real modeset, so firing needlessly is worse
+                # than not firing.
+                self.assertIn("static uint cs_relink_ms = 3000;", added)
+                self.assertNotIn("static uint cs_relink_ms = 1000;", added)
+                self.assertIn("static uint cs_relink_delay_ms = 250;", added)
+                self.assertIn("static uint cs_relink_cooldown_ms = 10000;", added)
+                self.assertIn("static bool cs_relink_at_boot;", added,
+                              "the boot re-detect must default to OFF")
+                self.assertNotIn("static bool cs_relink_at_boot = true;", added)
+                # one shot: it must clear its own pending flag
+                self.assertIn("cs_relink_boot_pending = false;", added)
+                # and it must never fire while the mechanism itself is off
+                self.assertIn("if (!cs_relink_ms || cs_relink_running)", added)
+                # the cooldown is the loop breaker and must stay stamped on
+                # every exit path, including the failures
+                self.assertIn("cs_relink_last_run = jiffies ? jiffies : 1;", added)
+                # ...but the speculative boot shot must NOT start that clock,
+                # or the first genuine long blank of the boot is refused --
+                # and on a normal startup that blank lands inside the cooldown
+                self.assertIn("if (!cs_relink_is_boot_run)\n\t\tcs_relink_last_run", added,
+                              "the boot shot must not burn the cooldown")
+                # the boot shot must expire, or a board powered up before its
+                # TV spends it hours later on an unrelated hotplug
+                self.assertIn("CS_RELINK_BOOT_WINDOW_MS", added)
+                self.assertIn("time_after(jiffies, (unsigned long)INITIAL_JIFFIES +", added)
+
     def test_ch7218_quirk_is_opt_in_and_every_change_is_behind_the_switch(self):
         """The CH7218 adapter quirk must default OFF and be fully gated.
 

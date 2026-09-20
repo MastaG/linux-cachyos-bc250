@@ -15,7 +15,11 @@ Measured on this hardware:
 
 So a long blank is necessary but not sufficient: below the threshold the
 fault never occurs, above it the outcome is probabilistic and something
-other than elapsed time decides. An earlier revision of this message
+other than elapsed time decides. The default threshold is 3000, which sits
+below every observed failure while leaving ordinary handovers alone: an
+earlier default of 1000 fired on healthy 1.8 s and 2.1 s session switches,
+and since a re-detect releases and recreates the sink it costs a real
+modeset, so firing needlessly is worse than not firing. An earlier revision of this message
 claimed a clean split with no overlap; that was overfitting to a sample
 that happened to contain no surviving long blank.
 
@@ -60,10 +64,27 @@ not verified is that each recovery was necessary, since with the patch
 enabled the counterfactual cannot be observed. Set cs_relink_ms=0 at runtime
 to A/B it.
 
+The first bring-up of a boot has no measured blank, so it is handled
+separately under cs_relink_at_boot. Without it a machine that boots with the
+converter already dropped gets no help at all -- reported from the field,
+surviving several reboots before clearing on its own. Whether a second detect
+clears that state is not known: DC already runs a full link_detect about three
+seconds before the first mode is committed, so this may simply repeat it, and
+nothing can tell a dropped converter from a healthy one because the DPCD
+readiness bits read 0x00 in both cases. It is OFF by default: dc_link_detect()
+releases and recreates link->local_sink, so the recovery is a real modeset plus
+a hotplug uevent rather than a passive probe, and doing that 250 ms into every
+boot for an unproven benefit is not a trade worth making for everyone. The boot
+shot is also bounded to the first 60 s of uptime, so a board powered up before
+its TV does not spend it hours later, and it deliberately does not start the
+cooldown clock -- otherwise the first genuine long blank of the boot, which is
+the case this mechanism exists for, would be refused.
+
 Parameters (all runtime-writable under /sys/module/amdgpu/parameters/):
-  amdgpu.cs_relink_ms=1000            blank length that triggers a re-detect, 0 = off
+  amdgpu.cs_relink_ms=3000            blank length that triggers a re-detect, 0 = off
   amdgpu.cs_relink_delay_ms=250       how long after the commit to run it
   amdgpu.cs_relink_cooldown_ms=10000  minimum spacing between re-detects
+  amdgpu.cs_relink_at_boot=0          also re-detect once on the first bring-up
   amdgpu.cs_relink_debug=1            log arm / run / skip
 
 ---
@@ -71,7 +92,7 @@ Parameters (all runtime-writable under /sys/module/amdgpu/parameters/):
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -103,6 +103,295 @@
+@@ -103,6 +103,402 @@
  #include <drm/drm_vblank.h>
  #include <drm/drm_colorop.h>
  #include <drm/drm_gem_atomic_helper.h>
@@ -103,7 +124,18 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
 + * only trigger shown to discriminate, and cs_relink_cooldown_ms is a hard loop
 + * breaker on top of it.
 + */
-+static uint cs_relink_ms = 1000;
++/*
++ * Blank length that triggers a re-detect.
++ *
++ * 3000 rather than something tighter because a re-detect is not free: it
++ * releases and recreates the sink, so it costs a real modeset. Measured on
++ * this hardware, every blank that recovered on its own was <= 3.32 s and every
++ * blank that went dark was >= 4.44 s, so 3000 sits below every observed
++ * failure while leaving the ordinary 0.1-2.1 s handovers alone. An earlier
++ * default of 1000 fired on 1.8 s and 2.1 s session switches that were
++ * perfectly healthy, which was worse than doing nothing.
++ */
++static uint cs_relink_ms = 3000;
 +module_param(cs_relink_ms, uint, 0644);
 +MODULE_PARM_DESC(cs_relink_ms,
 +		 "BC-250: re-detect the link when a display stream has been off longer than this many ms (0 = disabled)");
@@ -123,6 +155,46 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
 +MODULE_PARM_DESC(cs_relink_debug,
 +		 "BC-250: log when a forced link re-detect is armed, run or skipped");
 +
++/*
++ * Also re-detect once on the first bring-up of a boot.
++ *
++ * The rest of this mechanism only ever sees blanks that happen while the
++ * driver is running: cs_relink_off_at is set when a stream goes down, so the
++ * very first bring-up of a boot has nothing to measure and would otherwise be
++ * skipped. A machine that boots with the converter already in the dropped
++ * state therefore gets no help at all -- reported from the field, surviving
++ * several reboots before clearing on its own.
++ *
++ * Whether a second detect actually clears that state is genuinely unknown. DC
++ * already runs a full link_detect during startup, roughly three seconds before
++ * the first mode is committed, so this may well just repeat it to no effect;
++ * and nothing here can tell a dropped converter from a healthy one, because
++ * this adapter's DPCD readiness bits read 0x00 in both cases.
++ *
++ * OFF by default, because it is not free. dc_link_detect() releases and
++ * recreates link->local_sink, so amdgpu_dm_update_connector_after_detect()
++ * sees a new sink and drives a real modeset plus a hotplug uevent -- not a
++ * passive probe. Doing that 250 ms into every boot, for an unproven benefit,
++ * is not a trade worth making for everyone.
++ *
++ * Enable it only to investigate a machine that boots black. Look for the
++ * "first bring-up" line in dmesg to see what it decided.
++ */
++static bool cs_relink_at_boot;
++module_param(cs_relink_at_boot, bool, 0644);
++MODULE_PARM_DESC(cs_relink_at_boot,
++		 "BC-250: also force one link re-detect on the first bring-up after boot (0 = disabled (default), 1 = enabled)");
++
++/*
++ * How long after boot a bring-up still counts as "the first one".
++ *
++ * Without a bound the one shot is spent whenever a stream first appears on the
++ * converter, which on a board powered up before its TV can be hours later --
++ * forcing a redundant modeset just as the user's picture arrives. It also
++ * retires the shot if the parameters are toggled at runtime long after boot.
++ */
++#define CS_RELINK_BOOT_WINDOW_MS 60000U
++
 +static void cs_relink_work_fn(struct work_struct *work);
 +static DECLARE_DELAYED_WORK(cs_relink_work, cs_relink_work_fn);
 +
@@ -133,6 +205,8 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
 + */
 +static struct drm_connector *cs_relink_connector;
 +static unsigned long cs_relink_off_at;		/* jiffies; 0 = nothing pending */
++static bool cs_relink_boot_pending = true;	/* first bring-up not seen yet */
++static bool cs_relink_is_boot_run;		/* the run in flight is the boot shot */
 +static unsigned long cs_relink_last_run;	/* jiffies; 0 = never run */
 +static bool cs_relink_armed;
 +static bool cs_relink_running;			/* recovery in flight */
@@ -182,6 +256,9 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
 +	/* 0 means "nothing pending", so never store it. */
 +	cs_relink_off_at = jiffies ? jiffies : 1;
 +
++	/* A measured blank exists from here on, so the boot case is over. */
++	cs_relink_boot_pending = false;
++
 +	if (cs_relink_debug && stream && stream->link)
 +		pr_info("bc250 relink: stream down (signal=%d connector_signal=%d dongle_type=%d pcon=%d)\n",
 +			stream->signal, stream->link->connector_signal,
@@ -196,11 +273,44 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
 +	struct drm_connector_list_iter iter;
 +	struct drm_connector *connector;
 +	struct dc_link *link = NULL;
++	bool first_bringup;
 +	unsigned int off_ms;
 +	int i;
 +
-+	if (!cs_relink_ms || cs_relink_running || !cs_relink_off_at)
++	if (!cs_relink_ms || cs_relink_running)
 +		return;
++
++	/*
++	 * No measured blank means this is the first bring-up of the boot. There
++	 * is nothing to time, so it only qualifies when explicitly opted into,
++	 * and then only once, and only while it still plausibly is the boot.
++	 */
++	first_bringup = !cs_relink_off_at;
++	if (first_bringup && cs_relink_boot_pending &&
++	    time_after(jiffies, (unsigned long)INITIAL_JIFFIES +
++			        msecs_to_jiffies(CS_RELINK_BOOT_WINDOW_MS))) {
++		cs_relink_boot_pending = false;
++		if (cs_relink_debug)
++			pr_info("bc250 relink: first stream on the converter came %u ms after boot, outside the %u ms boot window - not re-detecting\n",
++				jiffies_to_msecs(jiffies - (unsigned long)INITIAL_JIFFIES),
++				CS_RELINK_BOOT_WINDOW_MS);
++	}
++	if (first_bringup) {
++		if (!cs_relink_boot_pending)
++			return;			/* already spent or retired */
++
++		if (!cs_relink_at_boot) {
++			/* Decline once and stay quiet for the rest of the boot.
++			 * This also means enabling the parameter at runtime
++			 * cannot arm a re-detect out of nowhere.
++			 */
++			cs_relink_boot_pending = false;
++			if (cs_relink_debug)
++				pr_info("bc250 relink: first bring-up of this boot at %u ms; cs_relink_at_boot=0, leaving the link alone\n",
++					jiffies_to_msecs(jiffies - (unsigned long)INITIAL_JIFFIES));
++			return;
++		}
++	}
 +
 +	/*
 +	 * Only a commit that actually brings a stream up on the converter
@@ -219,20 +329,30 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
 +
 +	if (!link) {
 +		if (cs_relink_debug)
-+			pr_info("bc250 relink: commit with %d stream(s), none on a converter - not consuming the %u ms blank\n",
-+				params->stream_count,
-+				jiffies_to_msecs(jiffies - cs_relink_off_at));
++			pr_info("bc250 relink: commit with %d stream(s), none on a converter - nothing consumed\n",
++				params->stream_count);
 +		return;
 +	}
 +
-+	off_ms = jiffies_to_msecs(jiffies - cs_relink_off_at);
-+	cs_relink_off_at = 0;
-+
-+	if (off_ms < cs_relink_ms) {
++	if (first_bringup) {
++		/* One shot, whether or not it ends up arming below. */
++		cs_relink_boot_pending = false;
++		cs_relink_is_boot_run = true;
++		off_ms = cs_relink_ms;
 +		if (cs_relink_debug)
-+			pr_info("bc250 relink: blank was %u ms, under the %u ms threshold\n",
-+				off_ms, cs_relink_ms);
-+		return;
++			pr_info("bc250 relink: first bring-up of this boot at %u ms, forcing a re-detect (cs_relink_at_boot=1)\n",
++				jiffies_to_msecs(jiffies - (unsigned long)INITIAL_JIFFIES));
++	} else {
++		cs_relink_is_boot_run = false;
++		off_ms = jiffies_to_msecs(jiffies - cs_relink_off_at);
++		cs_relink_off_at = 0;
++
++		if (off_ms < cs_relink_ms) {
++			if (cs_relink_debug)
++				pr_info("bc250 relink: blank was %u ms, under the %u ms threshold\n",
++					off_ms, cs_relink_ms);
++			return;
++		}
 +	}
 +
 +	if (cs_relink_last_run &&
@@ -277,8 +397,8 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
 +	cs_relink_running = true;
 +
 +	if (cs_relink_debug)
-+		pr_info("bc250 relink: forcing a link re-detect in %u ms\n",
-+			cs_relink_delay_ms);
++		pr_info("bc250 relink: running the %s re-detect in %u ms\n",
++			cs_relink_is_boot_run ? "boot" : "blank", cs_relink_delay_ms);
 +
 +	schedule_delayed_work(&cs_relink_work,
 +			      msecs_to_jiffies(cs_relink_delay_ms));
@@ -355,19 +475,27 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
 +	 * Stamp the cooldown even on the failure paths: a re-detect that cannot
 +	 * complete will not complete any better if it is retried immediately,
 +	 * and this is the only thing standing between a bad probe and a loop.
++	 *
++	 * Except for the boot shot. That one is speculative and already
++	 * one-shot by construction, so letting it start the clock would refuse
++	 * the first genuine long blank of the boot -- which is the case this
++	 * mechanism actually exists for, and which lands well inside the
++	 * cooldown on a normal startup.
 +	 */
-+	cs_relink_last_run = jiffies ? jiffies : 1;
++	if (!cs_relink_is_boot_run)
++		cs_relink_last_run = jiffies ? jiffies : 1;
 +	cs_relink_connector = NULL;
 +	cs_relink_off_at = 0;
 +	cs_relink_running = false;
 +
 +	if (cs_relink_debug)
-+		pr_info("bc250 relink: forced re-detect: %s\n", outcome);
++		pr_info("bc250 relink: %s re-detect: %s\n",
++			cs_relink_is_boot_run ? "boot" : "blank", outcome);
 +}
  
  #include <media/cec-notifier.h>
  #include <acpi/video.h>
-@@ -852,6 +1141,11 @@
+@@ -852,6 +1248,11 @@
  {
  	int i;
  
@@ -379,7 +507,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  	if (adev->dm.vblank_control_workqueue) {
  		destroy_workqueue(adev->dm.vblank_control_workqueue);
  		adev->dm.vblank_control_workqueue = NULL;
-@@ -4501,6 +4795,8 @@
+@@ -4501,6 +4902,8 @@
  		    (!new_crtc_state->active ||
  		     drm_atomic_crtc_needs_modeset(new_crtc_state))) {
  			manage_dm_interrupts(adev, acrtc, NULL);
@@ -388,7 +516,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  			dc_stream_release(dm_old_crtc_state->stream);
  		}
  	}
-@@ -4601,6 +4897,11 @@
+@@ -4601,6 +5004,11 @@
  			flush_workqueue(dm->vblank_control_workqueue);
  	}
  
@@ -400,7 +528,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  	dm_enable_per_frame_crtc_master_sync(dc_state);
  	mutex_lock(&dm->dc_lock);
  	dc_exit_ips_for_hw_access(dm->dc);
-@@ -5285,6 +5586,9 @@
+@@ -5285,6 +5693,9 @@
  	/* Signal HW programming completion */
  	drm_atomic_helper_commit_hw_done(state);
  

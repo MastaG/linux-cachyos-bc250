@@ -70,6 +70,25 @@ The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in
 
 The display going dark on a mode change is a **known, unfixed** issue — see [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below. A fix was shipped briefly and withdrawn; the patch is in `disabled/`.
 
+#### Patches that must be regenerated together
+
+`cs-relink-after-long-blank.patch` and `ch7218-pcon-quirk.patch` both touch
+`amdgpu_dm.c`, so **changing the relink patch shifts the quirk's hunk** and the
+quirk starts applying with an offset. It still applies — `patch` absorbs it —
+but an offset is the drift that eventually becomes a failed apply after an
+upstream change, so regenerate both whenever either changes.
+
+That is cheap and needs no container round trip: applying the new relink patch
+to the saved pre-relink `amdgpu_dm.c` reproduces exactly the tree the quirk
+sees, so the quirk can be regenerated against it locally. A full build then
+confirms the result, and **our patches applying silently is the pass condition**
+— any `Hunk #N succeeded ... (offset ...)` line naming one of them means they
+have drifted apart again.
+
+Known pre-existing noise that is *not* a regression: `cyan-skillfish-sclk-range`
+applies with `offset 1` on stable, `gud-bound-tv-mode-count` with `fuzz 1` on
+RC, and upstream's own `dkms-clang.patch` with `offset -5` on both.
+
 #### Disabled patches
 
 `patches/linux-cachyos/disabled/` and `patches/linux-cachyos-rc/disabled/` hold five `cs-*` patches that are **not applied**. The build only globs `*.patch` at the top level of a patch set, so a patch in `disabled/` ships to nobody; they are kept in-tree because the analysis behind them is sound and they will be needed again.
@@ -390,14 +409,55 @@ userspace matter rather than something that belongs in this kernel.
 > **Mode 2 — the converter dropping its HDMI side — is fixed** by
 > `cs-relink-after-long-blank.patch` (`0011` stable, `0012` RC). It times how
 > long the display stream has been off, and if it returns after more than
-> `amdgpu.cs_relink_ms` (default 1000) it runs the `trigger_hotplug` sequence
+> `amdgpu.cs_relink_ms` (default 3000) it runs the `trigger_hotplug` sequence
 > a quarter second after the commit, instead of letting DC bring the stream
 > back on cached converter state. All of it lives in `amdgpu_dm.c`: no new SMU
 > message, no DPCD polling, no DC core change.
 >
-> Runtime-writable parameters: `cs_relink_ms` (0 disables),
+> Runtime-writable parameters: `cs_relink_ms` (3000; 0 disables),
 > `cs_relink_delay_ms` (250), `cs_relink_cooldown_ms` (10000, a hard loop
-> breaker), `cs_relink_debug` (on).
+> breaker), `cs_relink_at_boot` (0, off), `cs_relink_debug` (on).
+>
+> **`cs_relink_at_boot` covers a gap and is OFF by default.** The timestamp is
+> only set when *we* observe a stream go down, so the first bring-up of a boot
+> has nothing to measure and is skipped — a machine that boots with the
+> converter already dropped gets no help at all. Reported from the field: black
+> across several reboots, then clearing on its own, which fits the adapter
+> holding state across a warm reboot since it stays powered from the DP side.
+>
+> It stays off because adversarial review established that the cost is higher
+> than first assumed and the benefit remains unproven:
+>
+> - **It is not a passive probe.** `dc_link_detect()` does
+>   `dc_sink_release(link->local_sink); link->local_sink = NULL;` and recreates
+>   the sink, so `amdgpu_dm_update_connector_after_detect()` sees a new sink and
+>   drives a real modeset plus a hotplug uevent.
+> - **It may be redundant.** Every capture shows DC already running a full
+>   detect at boot, about three seconds before the first mode:
+>
+>   ```text
+>     t=6.24  retrieve_link_cap
+>     t=6.41  link_detect
+>     t=9.18  first dpms_on
+>   ```
+>
+>   and the DPCD readiness bits cannot tell a dropped converter from a healthy
+>   one (`0x00` either way).
+>
+> Two defects found in review and fixed before shipping, both worth knowing if
+> the feature is ever revisited:
+>
+> 1. **It must not start the cooldown.** `cs_relink_work_fn` stamps
+>    `cs_relink_last_run` on every exit as a loop breaker. A speculative boot
+>    detect at ~9 s would then refuse every genuine recovery until ~19 s — and
+>    the real 9.8 s boot blank in our own captures lands inside that window. The
+>    boot run is one-shot by construction, so it is exempt from stamping.
+> 2. **It must expire.** Without a bound, `boot_pending` is spent on whatever
+>    commit first carries a converter stream. A board powered up before its TV
+>    would hold the shot for hours and then force a redundant modeset 250 ms
+>    after the user's picture finally arrives. Bounded to
+>    `CS_RELINK_BOOT_WINDOW_MS` (60 s of uptime), which also stops a runtime
+>    parameter toggle from arming a live re-detect long after boot.
 >
 > **Mode 1 — a held GFX override — is still withdrawn**, and is also no longer
 > believed to be what breaks bring-up. `cs-release-gfx-override-at-modeset.patch`
