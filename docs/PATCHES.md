@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same twelve patches plus its own two series-specific carries, fourteen in total:
+The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same thirteen patches plus its own two series-specific carries, fifteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -48,9 +48,10 @@ The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in
 0010-dcn201-enable-dsc.patch
 0011-cs-relink-after-long-blank.patch
 0012-ch7218-pcon-quirk.patch
+0013-pcon-force-dsc.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same twelve patches (content-identical, renumbered around its own series-specific carries) plus the two RC-only entries below:
+`patches/linux-cachyos-rc` carries the same thirteen patches (content-identical, renumbered around its own series-specific carries) plus the two RC-only entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -67,6 +68,7 @@ The stable and BORE kernels carry these twelve BC-250 patches, twelve patches in
 0012-cs-relink-after-long-blank.patch
 0013-ch7218-pcon-quirk.patch
 0014-ch7218-vrr-allowlist.patch
+0015-pcon-force-dsc.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -87,6 +89,10 @@ sees, so the quirk can be regenerated against it locally. A full build then
 confirms the result, and **our patches applying silently is the pass condition**
 — any `Hunk #N succeeded ... (offset ...)` line naming one of them means they
 have drifted apart again.
+
+`pcon-force-dsc.patch` is anchored on lines the quirk adds in all five of its
+files, so it comes **after** the quirk and must be regenerated whenever the
+relink or quirk patch changes — the same rule, one patch longer.
 
 `ch7218-vrr-allowlist.patch` (RC only) touches `amdgpu_dm_helpers.c` and
 `ddc_service_types.h`, which no other patch in either set touches, so it
@@ -397,18 +403,85 @@ ships here:
   Touching that header would either duplicate a define on one series or make
   the two patch sets diverge. A file-local constant in `link_dp_capability.c`
   avoids both.
-- **The FreeSync allowlist entry**: 7.2 already lists the ID in
-  `dm_helpers_is_vrr_pcon_allowlist()`; 7.3-rc uses a different structure
-  (`dm_freesync_pcon_whitelist[]`) for the same thing. It is also an
-  ungateable change to a static table, and the reporter states VRR does not
-  work on this adapter regardless (`vrr_capable=0`, no Ignore-MSA / Adaptive
-  Sync SDP). No observed benefit, so no entry.
+- **The FreeSync allowlist entry**: not in this patch, because a static
+  table cannot be gated. 7.2 already lists the ID (CachyOS `7.2/hdmi`); 7.3-rc
+  does not, and that turned out to be exactly why VRR worked on 7.2 and not on
+  7.3-rc with the same adapter — so the RC set carries it as its own
+  unconditional one-liner, `ch7218-vrr-allowlist.patch` (see [Patches that
+  exist in one set only](#patches-that-exist-in-one-set-only)).
+
+#### The DSC bit also vanishes on healthy units after a re-detect
+
+Found 2026-09-20 on a UGREEN CH7218 that identifies itself correctly and
+never needed the rest of the quirk. At boot the adapter advertised DSC and DC
+selected it — `DSC is selected from DP-HDMI PCON`, stream `pixel_encoding:RGB,
+color_depth:12-bpc, dsc: 1`. After the TV was switched off and on again, the
+converter re-initialised its HDMI side, the driver re-detected the link, and
+the same adapter now answered `DSC_Basic_Sink_Support: no`: DC fell back to
+`pixel_encoding:YUV422, color_depth:10-bpc, dsc: 0`, silently, with the
+picture still there. Both TV-on cycles that day did this. Reading the DPCD
+afterwards shows the shape the quirk's restore heuristic was written for —
+`0x060` = `00 21 00 07 3b 04 01 c0 …`, a fully populated DSC 1.2 decoder block
+with only `DSC_SUPPORT` clear.
+
+So `bc250_ch7218_restore_dsc_support()` is useful on a healthy unit too, and
+the honest guidance is: **if your CH7218 comes back at 4:2:2 after the TV was
+in standby, enable the quirk.** The other three parts of it are inert on a
+unit that reports its port correctly (they only fire on `PORT_PRESENT=0` /
+downstream-DP), so the cost is nil. Check with
+
+```bash
+sudo cat /sys/kernel/debug/dri/*/DP-1/dsc_clock_en     # 1 = DSC engaged
+sudo dmesg | grep -E 'DSC_Basic_Sink_Support|restored cleared DSC'
+```
 
 #### Not a kernel problem
 
 If 4K120 is still missing from the mode list after enabling the quirk, check
 the sink EDID for CTA **VIC 118**. Some TVs omit it, and injecting EDID is a
 userspace matter rather than something that belongs in this kernel.
+
+### Adapters that hide their DSC decoder: the force-DSC experiment
+
+`pcon-force-dsc.patch` (`0013` stable, `0015` RC). **Experimental, opt-in,
+default off**, behind `amdgpu.bc250_pcon_force_dsc=1`.
+
+A Cable Matters 102101 (Synaptics VMM7100, DPCD branch OUI `90:CC:24`, name
+`SYNA`, firmware `07.02.120`) on this board advertises **no DSC and no FEC at
+all**: `0x060`–`0x06F` all zero, `0x0A0`–`0x0A2` zero, `0x090` zero. DC
+believes it, and since HBR3×4 (25.92 Gbit/s) cannot carry 4K120 RGB
+uncompressed, the stream is built as YUV 4:2:2 10-bit — the same TV on a
+CH7218 gets RGB 12-bit with DSC. The chip is documented as a DSC 1.2a decoder,
+and the vendor's other firmware images target 4K240, which needs DSC, so the
+suspicion is that this particular firmware hides a decoder it has.
+
+With the parameter set, a DP-to-HDMI converter whose 16-byte DSC capability
+block is **entirely zero** is treated as a DSC 1.2a decoder with FEC. The
+capability block substituted is the one the known-good CH7218 reports
+(`01 21 00 07 3b 04 01 c0 00 07 0e 71 08 01 00 00`: DSC 1.2, 12 bpp max,
+RGB/4:4:4/4:2:2, 8/10/12 bpc, 2560-px slices, `DSC_SUPPORT` set, passthrough
+clear), and `FEC_CAPABLE` is set because DP 1.4 requires FEC under DSC. From
+there DC does what it does for any decoder: enables FEC, encodes DSC on the
+link, writes DSC enable to the PCON. Adapters that advertise any DSC byte at
+all are left exactly as reported, so a CH7218 — populated block, cleared bit
+— is never touched by this; that case belongs to the quirk above.
+
+**This is a probe, not a fix.** If the firmware really cannot decode, every
+mode that needs DSC comes up black or corrupted, and the parameter has to go.
+It logs at warning level, visible in a plain `dmesg`:
+
+```text
+BC-250: pcon_force_dsc: advertising a DSC 1.2a decoder and FEC on behalf of branch 90cc24 'SYNA' fw 07.02, which reported none
+```
+
+and success is `dsc_clock_en: 1` plus `pixel_encoding:RGB` in the stream log.
+The gate is the module parameter, `dp_hdmi21_pcon_support`, a DP-to-HDMI
+converter dongle type, and the all-zero block; with the parameter unset the
+helper returns before touching anything. Plumbing mirrors the CH7218 quirk
+(module parameter → `dc_config` flag → one gated helper), and it is called
+right after the quirk's DSC restore in `retrieve_link_cap()`, where
+`dongle_type` is already known — which also means it must be regenerated
+whenever the quirk patch changes.
 
 ### Solved: black screen from kernel takeover until a hotplug
 

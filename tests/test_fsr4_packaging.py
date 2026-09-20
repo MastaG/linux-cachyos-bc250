@@ -575,6 +575,45 @@ class KernelPatchSetTests(unittest.TestCase):
                                  "7.2 already defines this and 7.3-rc does not; "
                                  "use the file-local constant instead")
 
+    def test_pcon_force_dsc_is_opt_in_and_only_fills_an_empty_block(self):
+        """The force-DSC experiment must default OFF and touch only silence.
+
+        It invents a DSC decoder for an adapter that reports none. That is a
+        probe of the adapter's firmware, so it must never reach an adapter
+        that said anything about DSC (a CH7218 with a cleared bit belongs to
+        the quirk, not to this), must not edit any static table, and must
+        return before mutating anything unless the parameter is set.
+        """
+        for patch_set, by_content in (
+            (self.STABLE, self.stable_by_content()),
+            (self.RC, self.rc_by_content()),
+        ):
+            with self.subTest(patch_set=patch_set.name):
+                text = by_content["pcon-force-dsc.patch"].read_text()
+                added = [line[1:] for line in text.splitlines()
+                         if line.startswith("+") and not line.startswith("+++")]
+                body = "\n".join(added)
+                # default off: a bare int definition, no initialiser
+                self.assertIn("int amdgpu_bc250_pcon_force_dsc;", body)
+                self.assertIn("module_param_named(bc250_pcon_force_dsc, amdgpu_bc250_pcon_force_dsc, int, 0444);", body)
+                self.assertIn("init_data.flags.bc250_pcon_force_dsc = (amdgpu_bc250_pcon_force_dsc != 0);", body)
+                # the helper consults the switch before it touches anything
+                defn = body.split("static void bc250_pcon_force_dsc(struct dc_link *link)\n{", 1)
+                self.assertEqual(len(defn), 2)
+                head = defn[1][:400]
+                self.assertIn("if (!link->dc->config.bc250_pcon_force_dsc ||", head)
+                self.assertLess(head.index("config.bc250_pcon_force_dsc"), head.index("memcpy") if "memcpy" in head else 10**6)
+                # only an all-zero block is filled in
+                self.assertIn("if (dsc_caps->dsc_basic_caps.raw[i])\n\t\t\treturn;", defn[1])
+                self.assertIn("dongle_type != DISPLAY_DONGLE_DP_HDMI_CONVERTER", defn[1])
+                # template: DSC_SUPPORT set, passthrough clear, DSC 1.2
+                self.assertIn("0x01, 0x21, 0x00, 0x07, 0x3b, 0x04, 0x01, 0xc0,", body)
+                # it is called right after the quirk's restore, inside the DC_OK branch
+                self.assertIn("bc250_pcon_force_dsc(link);", body)
+                # no static tables
+                self.assertNotIn("dm_freesync_pcon_whitelist", body)
+                self.assertNotIn("DP_BRANCH_DEVICE_ID_", body)
+
     def test_rc_vrr_allowlist_patch_adds_exactly_one_entry(self):
         """The RC-only allowlist patch is one table entry and its define.
 

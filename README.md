@@ -332,6 +332,23 @@ So it is strictly opt-in. With the parameter unset, the kernel behaves exactly
 as it would without the patch — not "mostly", but literally: every part of the
 workaround checks the switch before doing anything at all.
 
+### Also: RGB turns into 4:2:2 after the TV was in standby
+
+This one affects **correctly-reporting** CH7218 adapters too. At boot the
+adapter advertises its DSC decoder and you get 4K120 RGB 12-bit. After the TV
+has been off and comes back, the adapter re-detects and — on the unit this was
+found on, every time — no longer advertises DSC. The driver quietly falls back
+to 4K120 **YCbCr 4:2:2 10-bit**: picture still there, fine colour edges and
+text slightly fringed. Check:
+
+```bash
+sudo cat /sys/kernel/debug/dri/*/DP-1/dsc_clock_en     # 1 = DSC in use, 0 = it is not
+```
+
+If it reads `0` after a TV standby cycle but `1` after a fresh boot, enable
+the quirk above: its DSC-restore part fixes exactly this, and the rest of it
+does nothing on an adapter that reports its port correctly.
+
 ### If 4K120 is still missing after enabling it
 
 Check whether your TV advertises **VIC 118** in its EDID. Some sets omit it,
@@ -355,6 +372,40 @@ The version here is his work made opt-in and gated.
 Technical detail, including exactly what is gated and what was deliberately
 left out, is in
 [docs/PATCHES.md](docs/PATCHES.md#adapters-that-misreport-themselves-the-ch7218-quirk).
+
+---
+
+## 4:2:2 instead of RGB at 4K120 on a Cable Matters / VMM7100 adapter (experimental)
+
+**Experimental. Off by default. Expect it to either work or give you a black
+screen at 4K120 — and be ready to remove it again.**
+
+Some DP→HDMI 2.1 adapters tell the driver they have no DSC decoder even though
+the chip has one. The Cable Matters 102101 (Synaptics VMM7100, firmware
+7.02.120) does this on the BC-250: it reports no DSC and no FEC at all, so the
+driver — which cannot fit 4K120 RGB through a DP 1.4 link uncompressed — builds
+the picture as **4K120 YCbCr 4:2:2 10-bit**. Check:
+
+```bash
+sudo dmesg | grep -E 'DSC_Basic_Sink_Support|FEC_Sink_Support'   # both "no"
+sudo cat /sys/kernel/debug/dri/*/DP-1/dsc_clock_en                # 0
+```
+
+`amdgpu.bc250_pcon_force_dsc=1` makes the driver advertise a DSC 1.2a decoder
+and FEC on the adapter's behalf and drive it as if it had said so. It only
+touches an adapter that reports **nothing** — a CH7218, which reports a decoder
+and merely clears one bit, is never affected (that case is the quirk above).
+After boot:
+
+```bash
+sudo dmesg | grep pcon_force_dsc      # says which adapter it overrode
+sudo cat /sys/kernel/debug/dri/*/DP-1/dsc_clock_en    # 1 = it worked
+```
+
+If instead 4K120 is black or garbled, the adapter's firmware genuinely cannot
+decode DSC: drop the parameter, you are back to 4:2:2. Either outcome is
+useful to know — tell us which you got and the adapter's firmware version
+(`sudo dmesg | grep pcon_force_dsc` prints it).
 
 ---
 
