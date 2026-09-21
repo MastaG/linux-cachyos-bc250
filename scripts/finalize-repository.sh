@@ -12,6 +12,7 @@ REPO_NAME="bc250-cachyos"
 : "${LIB32_MESA_FINGERPRINT:?LIB32_MESA_FINGERPRINT is required}"
 : "${MESA_GIT_FINGERPRINT:?MESA_GIT_FINGERPRINT is required}"
 : "${BC250_DUAL_AUDIO_FINGERPRINT:?BC250_DUAL_AUDIO_FINGERPRINT is required}"
+: "${AIC8800D80_DKMS_FINGERPRINT:?AIC8800D80_DKMS_FINGERPRINT is required}"
 : "${LINUX_CACHYOS_BC250_META_FINGERPRINT:?LINUX_CACHYOS_BC250_META_FINGERPRINT is required}"
 : "${PROTONGE_LATEST_BC250_FINGERPRINT:?PROTONGE_LATEST_BC250_FINGERPRINT is required}"
 : "${PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT:?PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT is required}"
@@ -23,6 +24,7 @@ BUILD_MESA="${BUILD_MESA:-false}"
 BUILD_LIB32_MESA="${BUILD_LIB32_MESA:-false}"
 BUILD_MESA_GIT="${BUILD_MESA_GIT:-false}"
 BUILD_BC250_DUAL_AUDIO="${BUILD_BC250_DUAL_AUDIO:-false}"
+BUILD_AIC8800D80_DKMS="${BUILD_AIC8800D80_DKMS:-false}"
 BUILD_LINUX_CACHYOS_BC250_META="${BUILD_LINUX_CACHYOS_BC250_META:-false}"
 BUILD_PROTONGE_LATEST_BC250="${BUILD_PROTONGE_LATEST_BC250:-false}"
 BUILD_PROTON_CACHYOS_NATIVE_BC250="${BUILD_PROTON_CACHYOS_NATIVE_BC250:-false}"
@@ -35,6 +37,7 @@ required_metadata=(
     lib32-mesa-info.env
     mesa-git-info.env
     bc250-dual-audio-info.env
+    aic8800d80-dkms-info.env
     linux-cachyos-bc250-meta-info.env
     protonge-latest-bc250-info.env
     proton-cachyos-native-bc250-info.env
@@ -110,6 +113,10 @@ bc250_dual_audio_info="$OUT_DIR/bc250-dual-audio-info.env"
 bc250_dual_audio_pkgver="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGVER)"
 bc250_dual_audio_pkgrel="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGREL)"
 
+aic8800d80_dkms_info="$OUT_DIR/aic8800d80-dkms-info.env"
+aic8800d80_dkms_pkgver="$(value "$aic8800d80_dkms_info" AIC8800D80_DKMS_PKGVER)"
+aic8800d80_dkms_pkgrel="$(value "$aic8800d80_dkms_info" AIC8800D80_DKMS_PKGREL)"
+
 linux_cachyos_bc250_meta_info="$OUT_DIR/linux-cachyos-bc250-meta-info.env"
 linux_cachyos_bc250_meta_pkgver="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGVER)"
 linux_cachyos_bc250_meta_pkgrel="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGREL)"
@@ -147,6 +154,7 @@ for field in \
     mesa_pkgver mesa_pkgrel lib32_pkgver lib32_pkgrel \
     mesa_git_commit mesa_git_pkgver mesa_git_pkgrel mesa_git_lib32 \
     bc250_dual_audio_pkgver bc250_dual_audio_pkgrel \
+    aic8800d80_dkms_pkgver aic8800d80_dkms_pkgrel \
     linux_cachyos_bc250_meta_pkgver linux_cachyos_bc250_meta_pkgrel \
     protonge_pkgver protonge_pkgrel protonge_ge_tag protonge_optiscaler \
     proton_native_pkgver proton_native_pkgrel proton_native_optiscaler; do
@@ -192,6 +200,7 @@ mesa_count="$(pkgbase_count mesa)"
 lib32_count="$(pkgbase_count lib32-mesa)"
 mesa_git_count="$(pkgbase_count mesa-git)"
 bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
+aic8800d80_dkms_count="$(pkgbase_count aic8800d80-dkms)"
 linux_cachyos_bc250_meta_count="$(pkgbase_count linux-cachyos-bc250-meta)"
 protonge_count="$(pkgbase_count protonge-latest-bc250)"
 proton_native_count="$(pkgbase_count proton-cachyos-native-bc250)"
@@ -205,6 +214,7 @@ proton_slr_count="$(pkgbase_count proton-cachyos-slr-bc250)"
 (( lib32_count >= 1 )) || { printf 'ERROR: lib32-mesa packages are missing\n' >&2; exit 1; }
 (( mesa_git_count == 2 )) || { printf 'ERROR: expected mesa-git + lib32-mesa-git; found %d package(s)\n' "$mesa_git_count" >&2; exit 1; }
 (( bc250_dual_audio_count == 1 )) || { printf 'ERROR: expected exactly one bc250-dual-audio package; found %d\n' "$bc250_dual_audio_count" >&2; exit 1; }
+(( aic8800d80_dkms_count == 1 )) || { printf 'ERROR: expected exactly one aic8800d80-dkms package; found %d\n' "$aic8800d80_dkms_count" >&2; exit 1; }
 (( linux_cachyos_bc250_meta_count == 1 )) || { printf 'ERROR: expected exactly one linux-cachyos-bc250-meta package; found %d\n' "$linux_cachyos_bc250_meta_count" >&2; exit 1; }
 (( protonge_count == 1 )) || { printf 'ERROR: expected exactly one protonge-latest-bc250 package; found %d\n' "$protonge_count" >&2; exit 1; }
 (( proton_native_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-native-bc250 package; found %d\n' "$proton_native_count" >&2; exit 1; }
@@ -244,6 +254,7 @@ MESA_FINGERPRINT="$(fingerprint_from "$mesa_info" MESA_FINGERPRINT "$MESA_FINGER
 LIB32_MESA_FINGERPRINT="$(fingerprint_from "$lib32_info" LIB32_MESA_FINGERPRINT "$LIB32_MESA_FINGERPRINT")"
 MESA_GIT_FINGERPRINT="$(fingerprint_from "$mesa_git_info" MESA_GIT_FINGERPRINT "$MESA_GIT_FINGERPRINT")"
 BC250_DUAL_AUDIO_FINGERPRINT="$(fingerprint_from "$bc250_dual_audio_info" BC250_DUAL_AUDIO_FINGERPRINT "$BC250_DUAL_AUDIO_FINGERPRINT")"
+AIC8800D80_DKMS_FINGERPRINT="$(fingerprint_from "$aic8800d80_dkms_info" AIC8800D80_DKMS_FINGERPRINT "$AIC8800D80_DKMS_FINGERPRINT")"
 LINUX_CACHYOS_BC250_META_FINGERPRINT="$(fingerprint_from "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_FINGERPRINT "$LINUX_CACHYOS_BC250_META_FINGERPRINT")"
 PROTONGE_LATEST_BC250_FINGERPRINT="$(fingerprint_from "$protonge_info" PROTONGE_LATEST_BC250_FINGERPRINT "$PROTONGE_LATEST_BC250_FINGERPRINT")"
 PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$(fingerprint_from "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT")"
@@ -251,7 +262,7 @@ PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$(fingerprint_from "$proton_native_info
 SOURCE_FINGERPRINT="$(printf '%s\n' \
     "$KERNEL_STABLE_FINGERPRINT" "$KERNEL_RC_FINGERPRINT" "$KERNEL_BORE_FINGERPRINT" \
     "$MESA_FINGERPRINT" "$LIB32_MESA_FINGERPRINT" "$MESA_GIT_FINGERPRINT" \
-    "$BC250_DUAL_AUDIO_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
+    "$BC250_DUAL_AUDIO_FINGERPRINT" "$AIC8800D80_DKMS_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
     "$PROTONGE_LATEST_BC250_FINGERPRINT" "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" | \
     sha256sum | awk '{print $1}')"
 
@@ -264,6 +275,7 @@ MESA_FINGERPRINT=${MESA_FINGERPRINT}
 LIB32_MESA_FINGERPRINT=${LIB32_MESA_FINGERPRINT}
 MESA_GIT_FINGERPRINT=${MESA_GIT_FINGERPRINT}
 BC250_DUAL_AUDIO_FINGERPRINT=${BC250_DUAL_AUDIO_FINGERPRINT}
+AIC8800D80_DKMS_FINGERPRINT=${AIC8800D80_DKMS_FINGERPRINT}
 LINUX_CACHYOS_BC250_META_FINGERPRINT=${LINUX_CACHYOS_BC250_META_FINGERPRINT}
 PROTONGE_LATEST_BC250_FINGERPRINT=${PROTONGE_LATEST_BC250_FINGERPRINT}
 PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT=${PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT}
@@ -274,6 +286,7 @@ LAST_RUN_MESA_BUILD=${BUILD_MESA}
 LAST_RUN_LIB32_MESA_BUILD=${BUILD_LIB32_MESA}
 LAST_RUN_MESA_GIT_BUILD=${BUILD_MESA_GIT}
 LAST_RUN_BC250_DUAL_AUDIO_BUILD=${BUILD_BC250_DUAL_AUDIO}
+LAST_RUN_AIC8800D80_DKMS_BUILD=${BUILD_AIC8800D80_DKMS}
 LAST_RUN_LINUX_CACHYOS_BC250_META_BUILD=${BUILD_LINUX_CACHYOS_BC250_META}
 LAST_RUN_PROTONGE_LATEST_BC250_BUILD=${BUILD_PROTONGE_LATEST_BC250}
 LAST_RUN_PROTON_CACHYOS_NATIVE_BC250_BUILD=${BUILD_PROTON_CACHYOS_NATIVE_BC250}
@@ -301,6 +314,8 @@ MESA_GIT_PKGREL=${mesa_git_pkgrel}
 MESA_GIT_LIB32=${mesa_git_lib32}
 BC250_DUAL_AUDIO_PKGVER=${bc250_dual_audio_pkgver}
 BC250_DUAL_AUDIO_PKGREL=${bc250_dual_audio_pkgrel}
+AIC8800D80_DKMS_PKGVER=${aic8800d80_dkms_pkgver}
+AIC8800D80_DKMS_PKGREL=${aic8800d80_dkms_pkgrel}
 LINUX_CACHYOS_BC250_META_PKGVER=${linux_cachyos_bc250_meta_pkgver}
 LINUX_CACHYOS_BC250_META_PKGREL=${linux_cachyos_bc250_meta_pkgrel}
 PROTONGE_LATEST_BC250_PKGVER=${protonge_pkgver}
@@ -440,6 +455,23 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 /usr/share/bc250-dual-audio/check.sh
 \`\`\`
 
+## aic8800d80-dkms (opt-in, for AIC8800D80 USB WiFi sticks)
+
+- Package version: \`${aic8800d80_dkms_pkgver}-${aic8800d80_dkms_pkgrel}\`
+- A mirror of the AUR \`aic8800d80-dkms\` package built from
+  [our fork](https://github.com/MastaG/aic8800d80/tree/fix-linux-7.3-cfg80211)
+  of [shenmintao/aic8800d80](https://github.com/shenmintao/aic8800d80): upstream
+  main plus the Linux 7.3 cfg80211 fix from
+  [PR #91](https://github.com/shenmintao/aic8800d80/pull/91), which upstream is
+  holding until radxa ships its own. Without it the driver does not build on
+  \`linux-cachyos-rc-bc250\`, which on a WiFi-only board means no network at all.
+- Only for boards using one of these AliExpress/Tenda AX900-class USB sticks;
+  nothing else needs it. Replaces the AUR package (same name, higher pkgrel).
+
+\`\`\`bash
+sudo pacman -S aic8800d80-dkms    # DKMS builds it for every installed kernel with headers
+\`\`\`
+
 ## protonge-latest-bc250 (opt-in)
 
 - Package version: \`${protonge_pkgver}-${protonge_pkgrel}\` (\`${protonge_ge_tag}\`)
@@ -532,6 +564,7 @@ printf '    mesa:          %s-%s\n' "$mesa_pkgver" "$mesa_pkgrel"
 printf '    lib32-mesa:    %s-%s\n' "$lib32_pkgver" "$lib32_pkgrel"
 printf '    mesa-git:      %s-%s (64-bit + lib32)\n' "$mesa_git_pkgver" "$mesa_git_pkgrel"
 printf '    bc250-dual-audio: %s-%s\n' "$bc250_dual_audio_pkgver" "$bc250_dual_audio_pkgrel"
+printf '    aic8800d80-dkms: %s-%s\n' "$aic8800d80_dkms_pkgver" "$aic8800d80_dkms_pkgrel"
 printf '    linux-cachyos-bc250-meta: %s-%s\n' "$linux_cachyos_bc250_meta_pkgver" "$linux_cachyos_bc250_meta_pkgrel"
 printf '    protonge-latest-bc250: %s-%s (%s, OptiScaler %s)\n' \
     "$protonge_pkgver" "$protonge_pkgrel" "$protonge_ge_tag" "$protonge_optiscaler"

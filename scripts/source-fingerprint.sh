@@ -35,6 +35,7 @@ case "$COMPONENT" in
         ;;
     mesa|lib32-mesa|mesa-git) ;;
     bc250-dual-audio) ;;
+    aic8800d80-dkms) ;;
     linux-cachyos-bc250-meta) ;;
     protonge-latest-bc250) ;;
     proton-cachyos-native-bc250) ;;
@@ -109,6 +110,21 @@ case "$COMPONENT" in
         {
             hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-dual-audio.install"
             hash_files "$ROOT_DIR/scripts/build-bc250-dual-audio-package.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    aic8800d80-dkms)
+        # Same shape as bc250-dual-audio: our own PKGBUILD, source= pinned to a
+        # commit hash on our fork, so our packaging files determine the build.
+        pkg_dir="$ROOT_DIR/packages/aic8800d80-dkms"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        {
+            hash_files "$pkg_dir/PKGBUILD"
+            hash_files "$ROOT_DIR/scripts/build-aic8800d80-dkms-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

@@ -24,6 +24,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `proton-cachyos-slr-bc250` | The same, on the Steam Linux Runtime: the one for anti-cheat games |
 | `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
+| `aic8800d80-dkms` | AIC8800D80 USB WiFi driver (DKMS) that also builds on the 7.3-rc kernel |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 ---
@@ -830,6 +831,34 @@ Then verify with the diagnostic script it ships:
 Rebased on and tested against **WirePlumber 0.5.17**. Installing prints a warning if your WirePlumber version differs, or if its stock ALSA monitor is not the exact file this override was rebased onto — that override is a full replacement of that script, so a WirePlumber update can silently leave it based on the wrong source. See the [upstream README](https://github.com/MastaG/bc250-dual-audio) for the full mode-authority model, mutual-exclusion behavior and expected log output while switching.
 
 Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplumber/scripts/monitors/alsa.lua` rather than `/usr/share`. That is not a leftover — `wireplumber`'s own package owns the `/usr/share` copy of that exact file, and `/usr/local/share` precedes `/usr/share` in `XDG_DATA_DIRS`, so this shadows the stock script without a package conflict and without being overwritten when `wireplumber` updates. This package's other script, which has no name collision with anything `wireplumber` ships, installs normally under `/usr/share`.
+
+---
+
+## aic8800d80-dkms (WiFi on AIC8800D80 USB sticks, including the RC kernel)
+
+Only relevant if your BC-250 gets its network from one of the cheap AX900-class
+USB WiFi sticks built on the AICSemi **AIC8800D80** (Tenda and many AliExpress
+brands). Those need the out-of-tree
+[shenmintao/aic8800d80](https://github.com/shenmintao/aic8800d80) driver, which
+Arch users normally get from the AUR as `aic8800d80-dkms` — and that stops
+building on Linux 7.3 because of cfg80211 API changes. On a WiFi-only board that
+means booting `linux-cachyos-rc-bc250` leaves you with no network.
+
+This repository carries the same package built from
+[our fork](https://github.com/MastaG/aic8800d80/tree/fix-linux-7.3-cfg80211):
+upstream `main` plus the 7.3 fix from
+[PR #91](https://github.com/shenmintao/aic8800d80/pull/91), pinned by commit.
+Upstream is holding that PR until radxa ships its own 7.3 patch; the moment
+either lands, this package goes back to plain upstream.
+
+```bash
+sudo pacman -S aic8800d80-dkms
+```
+
+DKMS builds the three modules for every installed kernel that has its headers
+package (`linux-cachyos-bc250-headers`, `linux-cachyos-rc-bc250-headers`, ...).
+It has the same name as the AUR package with a higher release number, so an
+AUR-installed copy is replaced on a normal `pacman -Syu`.
 
 ---
 

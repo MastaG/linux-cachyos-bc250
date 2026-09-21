@@ -845,6 +845,45 @@ class SlrPackageTests(unittest.TestCase):
                 self.assertIn(needle, (ROOT / path).read_text())
 
 
+class Aic8800d80DkmsPackageTests(unittest.TestCase):
+    """The DKMS mirror must stay pinned and stay wired in.
+
+    It exists only because upstream will not build on 7.3 and will not take
+    the fix yet. A floating branch would silently ship whatever the fork's
+    branch becomes; a package nothing builds is a package nobody gets.
+    """
+
+    PKGBUILD = ROOT / "packages/aic8800d80-dkms/PKGBUILD"
+
+    def test_source_is_pinned_to_a_commit_on_the_fork(self):
+        text = self.PKGBUILD.read_text()
+        self.assertIn('_fork="https://github.com/MastaG/aic8800d80"', text)
+        self.assertRegex(text, r'(?m)^_commit=[0-9a-f]{40}$', "pin a full commit hash, not a branch or tag")
+        self.assertIn('#commit=${_commit}', text)
+        # same pkgname as the AUR package, and a release above its pkgrel=6 so
+        # an AUR install upgrades to this one instead of sitting beside it
+        self.assertIn("pkgname=aic8800d80-dkms", text)
+        self.assertRegex(text, r'(?m)^pkgrel=([7-9]|[1-9][0-9]+)$')
+
+    def test_it_ships_what_the_aur_package_ships(self):
+        text = self.PKGBUILD.read_text()
+        for needle in ("usr/lib/udev/rules.d/aic.rules", "fw/aic8800D80",
+                       "usr/src/aic8800-$pkgver", "depends=('dkms')"):
+            self.assertIn(needle, text)
+
+    def test_the_component_is_wired_into_ci(self):
+        for path, needle in (
+            ("scripts/ci-build.sh", "build-aic8800d80-dkms-package.sh"),
+            ("scripts/source-fingerprint.sh", "aic8800d80-dkms)"),
+            ("scripts/finalize-repository.sh", "aic8800d80-dkms-info.env"),
+            (".github/workflows/build-release.yml", "BUILD_AIC8800D80_DKMS"),
+            (".github/workflows/build-release.yml", '"aic8800d80-dkms:$BUILD_AIC8800D80_DKMS"'),
+            (".github/workflows/build-release.yml", "aic8800d80-dkms-info.env"),
+        ):
+            with self.subTest(path=path):
+                self.assertIn(needle, (ROOT / path).read_text())
+
+
 class LocalPatchGateTests(unittest.TestCase):
     """local-patches/ must reach a local build and nothing else.
 
