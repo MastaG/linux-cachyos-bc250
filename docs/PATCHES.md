@@ -391,7 +391,14 @@ which is why the patch adds none.
 2. Restores the documented ceilings: 12 bpc, FRL 48 Gbps, YCbCr 4:2:2 and 4:2:0
    pass-through.
 3. Re-asserts those ceilings **after** the DFP capability extension is parsed,
-   which would otherwise overwrite them with the firmware's own wrong values.
+   which would otherwise overwrite them with the firmware's own wrong values —
+   but only in a detection where step 1 actually fired. An adapter that
+   reported its port correctly keeps every value DC derived from it, including
+   the FRL rate intersected with the PCON's own training status. (Until
+   2026-09-21 this re-assert ran unconditionally on every CH7218 detect, which
+   on a healthy unit replaced a measured value with a constant; it was found
+   while chasing an audio loss that turned out to be unrelated, and tightened
+   because a no-op quirk should be a no-op.)
 4. Restores `DP_DSC_SUPPORT` when firmware clears the bit while still returning
    a populated DSC decoder capability block — and only then, so a genuinely
    DSC-less adapter is left alone even with the quirk on.

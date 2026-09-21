@@ -313,12 +313,16 @@ amdgpu.bc250_ch7218_quirk=1
 it.) Reboot, and check it took effect:
 
 ```bash
+cat /sys/module/amdgpu/parameters/bc250_ch7218_quirk   # 1 = the parameter reached the kernel
 sudo dmesg | grep 'CH7218 quirk'
 ```
 
-You should see `forced HDMI 2.1 FRL PCON identity, 48 Gbps`. If there is no
-output, either the parameter did not reach the kernel or your adapter is not a
-CH7218.
+`forced HDMI 2.1 FRL PCON identity, 48 Gbps` appears **only when the adapter
+actually misreported itself** in that detection, and `restored cleared
+DSC_SUPPORT` only when it dropped its DSC bit. On an adapter that reports
+correctly the quirk stays silent and changes nothing — that is by design, so
+no output with the parameter at `1` just means your adapter behaved on that
+boot.
 
 ### Why it is not on by default
 

@@ -105,7 +105,7 @@ index b0c8426..6df6bcf 100644
  	bool use_default_clock_table;
  	bool force_bios_enable_lttpr;
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-index 9bafb88..2c26a45 100644
+index c76ad02..537aec3 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 @@ -1250,6 +1250,61 @@ static void bc250_ch7218_restore_dsc_support(struct dc_link *link)
@@ -170,7 +170,7 @@ index 9bafb88..2c26a45 100644
  static void get_active_converter_info(
  	uint8_t data, struct dc_link *link)
  {
-@@ -2133,6 +2188,8 @@ static bool retrieve_link_cap(struct dc_link *link)
+@@ -2139,6 +2194,8 @@ static bool retrieve_link_cap(struct dc_link *link)
  		if (status == DC_OK) {
  			/* BC-250: no-op unless amdgpu.bc250_ch7218_quirk is set. */
  			bc250_ch7218_restore_dsc_support(link);
