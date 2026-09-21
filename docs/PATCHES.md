@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same thirteen patches plus its own three series-specific carries, sixteen in total:
+The stable and BORE kernels carry these fourteen BC-250 patches, fourteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same fourteen patches plus its own three series-specific carries, seventeen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -49,9 +49,10 @@ The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patche
 0011-cs-relink-after-long-blank.patch
 0012-ch7218-pcon-quirk.patch
 0013-pcon-force-dsc.patch
+0014-bc250-psp-ccp.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same thirteen patches (content-identical, renumbered around its own series-specific carries) plus the three RC-only entries below:
+`patches/linux-cachyos-rc` carries the same fourteen patches (content-identical, renumbered around its own series-specific carries) plus the three RC-only entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -70,6 +71,7 @@ The stable and BORE kernels carry these thirteen BC-250 patches, thirteen patche
 0014-ch7218-vrr-allowlist.patch
 0015-pcon-force-dsc.patch
 0016-pcon-vrr-hf-vsdb.patch
+0017-bc250-psp-ccp.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -799,6 +801,34 @@ A module parameter aids debugging without needing a debugger: enable
 at runtime) and dmesg logs when link training starts/ends and whenever an OD
 commit is actually deferred because of it.
 
+
+## The BC-250 secure processor (ccp)
+
+`bc250-psp-ccp.patch` (`0014` stable, `0017` RC) carries a three-patch series by
+**Mattia Tadini** posted to linux-crypto/LKML on 2026-09-19
+([cover letter](https://lore.kernel.org/lkml/178984289056.12336.17662860552012704364@mtsistemi.it/)),
+unmerged at the time of carrying. The BC-250's AMD Secure Processor sits at PCI
+`1022:143e` (`01:00.2`) and matches nothing in the `ccp` driver's ID table, so it
+has always been left unbound with its memory windows disabled. The series:
+
+1. fixes a NULL dereference in `psp_firmware_is_visible()` — the sysfs callback
+   tests the hardware TEE capability bit and then dereferences the driver's
+   `vdata->tee` pointer without checking it, an oops at probe on any part whose
+   firmware advertises a TEE the driver was given no data for;
+2. makes `psp_init()` require both the capability bit **and** the vdata before
+   starting the SEV and TEE sub-devices, so a vdata that deliberately omits TEE
+   keeps platform access instead of losing the whole PSP;
+3. adds the board: pspv3/pspv4 register layout read off the device, platform
+   access only (this firmware's TEE ring never initialises, there is no SEV and
+   no CCP crypto engine behind the function).
+
+What you get is modest and honest: the device is no longer `(no driver)`, the
+PSP platform mailbox answers, `bootloader_version` in sysfs reads `00.1c.01.02`,
+dynamic boost control is probed and cleanly rejected, HSTI reports nothing.
+Nothing user-facing depends on it today; it is carried so the board is fully
+enumerated and so the two generic fixes are in. The two `ccp` files it touches
+are byte-identical on the 7.2 and 7.3-rc trees, so one patch serves both sets.
+Drop it when the series lands upstream.
 
 ## Optional 40 CU unlock
 
