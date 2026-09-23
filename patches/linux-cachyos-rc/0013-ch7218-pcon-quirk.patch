@@ -36,8 +36,10 @@ With the quirk enabled and a CH7218 present:
     including the FRL rate intersected with the PCON's training status.
     (Earlier revisions re-asserted unconditionally on every CH7218 detect;
     on a healthy unit that overrode a measured value with a constant.)
-  - restore DP_DSC_SUPPORT when firmware clears the bit while still
-    returning a populated DSC decoder capability block
+
+The DSC_SUPPORT restore that used to live here is now its own patch,
+ch7218-dsc-restore, and is not gated on this parameter: unlike the identity
+forcing it cannot reach an adapter that describes itself correctly.
 
 Not done, deliberately. No DP_BRANCH_DEVICE_ID_2B02F0 added to
 ddc_service_types.h: 7.2 already defines it and 7.3-rc does not, so touching
@@ -52,7 +54,7 @@ DCN201 PCON support and the DSC engines are enabled by separate patches.
 ---
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index a96f2cb..5e5052c 100644
+index 6c40b34..a44390d 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 @@ -256,6 +256,7 @@ extern int amdgpu_num_kcq;
@@ -102,7 +104,7 @@ index 5b73811..4320891 100644
   * DOC: umsch_mm (int)
   * Enable Multi Media User Mode Scheduler. This is a HW scheduling engine for VCN and VPE.
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-index 2ad44e6..f7da6d0 100644
+index 8c23cc9..f9861b5 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 @@ -962,6 +962,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
@@ -126,10 +128,10 @@ index 159ab43..b0c8426 100644
  	bool use_default_clock_table;
  	bool force_bios_enable_lttpr;
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-index 24e3bbe..c76ad02 100644
+index 24e3bbe..a0f0118 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-@@ -1166,18 +1166,106 @@ static void read_and_intersect_post_frl_lt_status(
+@@ -1166,18 +1166,89 @@ static void read_and_intersect_post_frl_lt_status(
  	}
  }
  
@@ -153,18 +155,27 @@ index 24e3bbe..c76ad02 100644
 + */
 +#define BC250_CH7218_BRANCH_DEV_ID 0x2B02F0
 +
-+static bool bc250_ch7218_quirk_wanted(const struct dc_link *link)
++/*
++ * Is the link a CH7218 on a board where the PCON path is live? This says
++ * nothing about whether any workaround is wanted -- see the two callers.
++ */
++static bool bc250_ch7218_detected(const struct dc_link *link)
 +{
 +	if (!link || !link->dc)
 +		return false;
 +
-+	if (!link->dc->config.bc250_ch7218_quirk ||
-+	    !link->dc->caps.dp_hdmi21_pcon_support)
++	if (!link->dc->caps.dp_hdmi21_pcon_support)
 +		return false;
 +
 +	/* branch_dev_name is int8_t[6], so this reads exactly the array. */
 +	return link->dpcd_caps.branch_dev_id == BC250_CH7218_BRANCH_DEV_ID &&
 +	       !memcmp(link->dpcd_caps.branch_dev_name, "CH7218", 6);
++}
++
++static bool bc250_ch7218_quirk_wanted(const struct dc_link *link)
++{
++	return bc250_ch7218_detected(link) &&
++	       link->dc->config.bc250_ch7218_quirk;
 +}
 +
 +/*
@@ -191,32 +202,6 @@ index 24e3bbe..c76ad02 100644
 +	DC_LOG_DC("BC-250: CH7218 quirk: forced HDMI 2.1 FRL PCON identity, 48 Gbps\n");
 +}
 +
-+/*
-+ * Some CH7218 firmware clears DP_DSC_SUPPORT while still returning a populated
-+ * DSC decoder capability block. Only restore the bit when the block really is
-+ * populated, so a genuinely DSC-less adapter is left alone even with the quirk
-+ * enabled.
-+ */
-+static void bc250_ch7218_restore_dsc_support(struct dc_link *link)
-+{
-+	struct dpcd_dsc_capabilities *dsc_caps;
-+
-+	if (!bc250_ch7218_quirk_wanted(link))
-+		return;
-+
-+	dsc_caps = &link->dpcd_caps.dsc_caps;
-+	if (dsc_caps->dsc_basic_caps.fields.dsc_support.DSC_SUPPORT)
-+		return;
-+
-+	if (!dsc_caps->dsc_basic_caps.raw[DP_DSC_REV - DP_DSC_SUPPORT] &&
-+	    !dsc_caps->dsc_basic_caps.raw[DP_DSC_SLICE_CAP_1 - DP_DSC_SUPPORT] &&
-+	    !dsc_caps->dsc_basic_caps.raw[DP_DSC_MAX_BITS_PER_PIXEL_LOW - DP_DSC_SUPPORT])
-+		return;
-+
-+	dsc_caps->dsc_basic_caps.fields.dsc_support.DSC_SUPPORT = true;
-+	DC_LOG_DC("BC-250: CH7218 quirk: restored cleared DSC_SUPPORT\n");
-+}
-+
  static void get_active_converter_info(
  	uint8_t data, struct dc_link *link)
  {
@@ -237,7 +222,7 @@ index 24e3bbe..c76ad02 100644
  		return;
  	}
  
-@@ -1209,6 +1297,9 @@ static void get_active_converter_info(
+@@ -1209,6 +1280,9 @@ static void get_active_converter_info(
  			/*Handle DP case as DONGLE_NONE*/
  			case DOWN_STREAM_DETAILED_DP:
  				link->dpcd_caps.dongle_type = DISPLAY_DONGLE_NONE;
@@ -247,7 +232,7 @@ index 24e3bbe..c76ad02 100644
  				break;
  			case DOWN_STREAM_DETAILED_VGA:
  				link->dpcd_caps.dongle_type =
-@@ -1335,6 +1426,17 @@ static void get_active_converter_info(
+@@ -1335,6 +1409,17 @@ static void get_active_converter_info(
  		DC_LOG_DP2("\tdfp_cap_ext.max_video_h_active_width = %d", link->dpcd_caps.dongle_caps.dfp_cap_ext.max_video_h_active_width);
  		DC_LOG_DP2("\tdfp_cap_ext.max_video_v_active_height = %d", link->dpcd_caps.dongle_caps.dfp_cap_ext.max_video_v_active_height);
  	}
@@ -265,12 +250,3 @@ index 24e3bbe..c76ad02 100644
  }
  
  static void apply_usbc_combo_phy_reset_wa(struct dc_link *link,
-@@ -2035,6 +2137,8 @@ static bool retrieve_link_cap(struct dc_link *link)
- 				link->dpcd_caps.dsc_caps.dsc_basic_caps.raw,
- 				sizeof(link->dpcd_caps.dsc_caps.dsc_basic_caps.raw));
- 		if (status == DC_OK) {
-+			/* BC-250: no-op unless amdgpu.bc250_ch7218_quirk is set. */
-+			bc250_ch7218_restore_dsc_support(link);
- 			is_fec_supported = link->dpcd_caps.fec_cap.bits.FEC_CAPABLE;
- 			is_dsc_basic_supported = link->dpcd_caps.dsc_caps.dsc_basic_caps.fields.dsc_support.DSC_SUPPORT;
- 			is_dsc_passthrough_supported = link->dpcd_caps.dsc_caps.dsc_basic_caps.fields.dsc_support.DSC_PASSTHROUGH_SUPPORT;

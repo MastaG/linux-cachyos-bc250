@@ -339,20 +339,28 @@ workaround checks the switch before doing anything at all.
 
 ### Also: RGB turns into 4:2:2 after the TV was in standby
 
-This one affects **correctly-reporting** CH7218 adapters too. At boot the
-adapter advertises its DSC decoder and you get 4K120 RGB 12-bit. After the TV
-has been off and comes back, the adapter re-detects and — on the unit this was
-found on, every time — no longer advertises DSC. The driver quietly falls back
-to 4K120 **YCbCr 4:2:2 10-bit**: picture still there, fine colour edges and
-text slightly fringed. Check:
+**This one is already fixed for you — nothing to enable.** It is worth knowing
+about because it affects **correctly-reporting** CH7218 adapters too, the ones
+that need none of the quirk above.
+
+At boot the adapter advertises its DSC decoder and you get 4K120 RGB 12-bit.
+After the TV has been off and comes back, the adapter re-detects and — on the
+unit this was found on, every time — no longer advertises DSC, while still
+reporting the decoder's revision, slice capabilities and bits-per-pixel. The
+driver used to believe the missing bit and quietly fall back to 4K120 **YCbCr
+4:2:2 10-bit**: picture still there, fine colour edges and text slightly
+fringed, nothing logged.
+
+Since build 1.207 a separate patch puts that bit back whenever the rest of the
+block contradicts it, with no parameter — it cannot affect an adapter that
+reports its DSC support honestly, so there is nothing to opt into.
+`amdgpu.bc250_hdmi21=0` turns it off along with the rest of the HDMI 2.1 path.
+Check it is working with:
 
 ```bash
-sudo cat /sys/kernel/debug/dri/*/DP-1/dsc_clock_en     # 1 = DSC in use, 0 = it is not
+sudo cat /sys/kernel/debug/dri/*/DP-1/dsc_clock_en   # 1 = DSC in use, after a standby cycle too
+sudo dmesg | grep 'restored cleared DSC_SUPPORT'     # prints when it actually had to step in
 ```
-
-If it reads `0` after a TV standby cycle but `1` after a fresh boot, enable
-the quirk above: its DSC-restore part fixes exactly this, and the rest of it
-does nothing on an adapter that reports its port correctly.
 
 ### If 4K120 is still missing after enabling it
 

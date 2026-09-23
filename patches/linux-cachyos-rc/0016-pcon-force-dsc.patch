@@ -31,10 +31,10 @@ retrieve_link_cap(), where dongle_type is already known.
 ---
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index a48ccc9..7c1440c 100644
+index a44390d..7ec3301 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-@@ -261,6 +261,7 @@ extern int amdgpu_vcnfw_log;
+@@ -257,6 +257,7 @@ extern int amdgpu_vcnfw_log;
  extern int amdgpu_sg_display;
  extern int amdgpu_bc250_hdmi21;
  extern int amdgpu_bc250_ch7218_quirk;
@@ -43,10 +43,10 @@ index a48ccc9..7c1440c 100644
  extern int amdgpu_seamless;
  extern int amdgpu_umsch_mm_fwlog;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-index 817307a..5cb3017 100644
+index 4320891..14f9123 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-@@ -238,6 +238,7 @@ int amdgpu_vcnfw_log;
+@@ -237,6 +237,7 @@ int amdgpu_vcnfw_log;
  int amdgpu_sg_display = -1; /* auto */
  int amdgpu_bc250_hdmi21 = 1;
  int amdgpu_bc250_ch7218_quirk;
@@ -54,7 +54,7 @@ index 817307a..5cb3017 100644
  int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
  int amdgpu_umsch_mm;
  int amdgpu_seamless = -1; /* auto */
-@@ -1017,6 +1018,25 @@ module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
+@@ -1007,6 +1008,25 @@ module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
  MODULE_PARM_DESC(bc250_ch7218_quirk, "BC-250: opt-in CH7218 DP-to-HDMI 2.1 adapter quirk (0 = disabled (default), 1 = enabled)");
  module_param_named(bc250_ch7218_quirk, amdgpu_bc250_ch7218_quirk, int, 0444);
  
@@ -81,10 +81,10 @@ index 817307a..5cb3017 100644
   * DOC: umsch_mm (int)
   * Enable Multi Media User Mode Scheduler. This is a HW scheduling engine for VCN and VPE.
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-index db653d8..d114e6a 100644
+index f9861b5..8906549 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -2545,6 +2545,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
+@@ -963,6 +963,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
  
  	init_data.flags.bc250_hdmi21 = (amdgpu_bc250_hdmi21 != 0);
  	init_data.flags.bc250_ch7218_quirk = (amdgpu_bc250_ch7218_quirk != 0);
@@ -93,23 +93,23 @@ index db653d8..d114e6a 100644
  	init_data.flags.seamless_boot_edp_requested = false;
  
 diff --git a/drivers/gpu/drm/amd/display/dc/dc.h b/drivers/gpu/drm/amd/display/dc/dc.h
-index 2ef59b1..acf8a66 100644
+index b0c8426..6df6bcf 100644
 --- a/drivers/gpu/drm/amd/display/dc/dc.h
 +++ b/drivers/gpu/drm/amd/display/dc/dc.h
-@@ -592,6 +592,7 @@ struct dc_config {
+@@ -604,6 +604,7 @@ struct dc_config {
  	bool enable_frl;
  	bool bc250_hdmi21;
  	bool bc250_ch7218_quirk;
 +	bool bc250_pcon_force_dsc;
  	bool force_hdmi21_frl_enc_enable;
- 	bool skip_frl_pretraining;
  	bool use_default_clock_table;
+ 	bool force_bios_enable_lttpr;
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-index da4f245..06e8b45 100644
+index 19779a5..3bcec12 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-@@ -1244,6 +1244,61 @@ static void bc250_ch7218_restore_dsc_support(struct dc_link *link)
- 	DC_LOG_DC("BC-250: CH7218 quirk: restored cleared DSC_SUPPORT\n");
+@@ -1269,6 +1269,61 @@ static void bc250_ch7218_restore_dsc_support(struct dc_link *link)
+ 	DC_LOG_DC("BC-250: CH7218: restored cleared DSC_SUPPORT\n");
  }
  
 +/*
@@ -170,9 +170,9 @@ index da4f245..06e8b45 100644
  static void get_active_converter_info(
  	uint8_t data, struct dc_link *link)
  {
-@@ -2133,6 +2188,8 @@ static bool retrieve_link_cap(struct dc_link *link)
+@@ -2158,6 +2213,8 @@ static bool retrieve_link_cap(struct dc_link *link)
  		if (status == DC_OK) {
- 			/* BC-250: no-op unless amdgpu.bc250_ch7218_quirk is set. */
+ 			/* BC-250: only acts on a CH7218 that contradicts itself. */
  			bc250_ch7218_restore_dsc_support(link);
 +			/* BC-250: no-op unless amdgpu.bc250_pcon_force_dsc is set. */
 +			bc250_pcon_force_dsc(link);

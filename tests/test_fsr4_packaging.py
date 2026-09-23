@@ -542,6 +542,10 @@ class KernelPatchSetTests(unittest.TestCase):
         So this pins three things: the default is off, every function that
         mutates link state begins by consulting the switch, and no static
         table is edited (a table entry cannot be gated at all).
+
+        The DSC_SUPPORT restore is deliberately NOT here any more -- it lives
+        in ch7218-dsc-restore.patch and is unconditional, for the reasons that
+        patch's own test records.
         """
         for patch_set, by_content in (
             (self.STABLE, self.stable_by_content()),
@@ -562,14 +566,20 @@ class KernelPatchSetTests(unittest.TestCase):
 
                 # every mutating helper consults the switch before touching
                 # anything; bc250_ch7218_quirk_wanted() is that single gate
-                self.assertIn("if (!link->dc->config.bc250_ch7218_quirk ||", body)
-                for helper in ("bc250_ch7218_force_converter_identity",
-                               "bc250_ch7218_restore_dsc_support"):
-                    defn = body.split(f"static void {helper}(struct dc_link *link)\n{{", 1)
-                    self.assertEqual(len(defn), 2, f"{helper} must be defined")
-                    self.assertIn("if (!bc250_ch7218_quirk_wanted(link))\n\t\treturn;",
-                                  defn[1][:400],
-                                  f"{helper} must return before mutating anything")
+                # the switch is consulted in the gate the mutating helper calls
+                self.assertIn("static bool bc250_ch7218_quirk_wanted(const struct dc_link *link)",
+                              body)
+                self.assertIn("return bc250_ch7218_detected(link) &&\n\t       link->dc->config.bc250_ch7218_quirk;", body)
+                helper = "bc250_ch7218_force_converter_identity"
+                defn = body.split(f"static void {helper}(struct dc_link *link)\n{{", 1)
+                self.assertEqual(len(defn), 2, f"{helper} must be defined")
+                self.assertIn("if (!bc250_ch7218_quirk_wanted(link))\n\t\treturn;",
+                              defn[1][:400],
+                              f"{helper} must return before mutating anything")
+                # the DSC restore moved to its own, unconditional patch: this
+                # one must not carry it back in, gated or otherwise
+                self.assertNotIn("bc250_ch7218_restore_dsc_support", body)
+                self.assertNotIn("DSC_SUPPORT = true", body)
 
                 # a static table entry cannot be switched off at runtime, so
                 # the quirk must not add one
@@ -578,6 +588,49 @@ class KernelPatchSetTests(unittest.TestCase):
                 self.assertNotIn("DP_BRANCH_DEVICE_ID_2B02F0", body,
                                  "7.2 already defines this and 7.3-rc does not; "
                                  "use the file-local constant instead")
+
+    def test_ch7218_dsc_restore_is_unconditional_but_cannot_lie(self):
+        """The DSC restore runs without a parameter, so its gate is the proof.
+
+        It is split out of the opt-in quirk precisely because it cannot
+        override a correct report: it must return when DSC_SUPPORT is already
+        set, and return when the capability block is empty. What is left is the
+        one state that cannot describe real hardware -- a decoder that reports
+        its revision, slices and bits-per-pixel while claiming not to exist.
+        If a future edit gates it on the module parameter, the split has been
+        undone; if an edit drops either early return, it starts inventing a
+        decoder on adapters that never had one.
+        """
+        for patch_set, by_content in (
+            (self.STABLE, self.stable_by_content()),
+            (self.RC, self.rc_by_content()),
+        ):
+            with self.subTest(patch_set=patch_set.name):
+                text = by_content["ch7218-dsc-restore.patch"].read_text()
+                added = [line[1:] for line in text.splitlines()
+                         if line.startswith("+") and not line.startswith("+++")]
+                body = "\n".join(added)
+                defn = body.split(
+                    "static void bc250_ch7218_restore_dsc_support(struct dc_link *link)\n{", 1)
+                self.assertEqual(len(defn), 2, "the helper must be defined here")
+                helper = defn[1]
+                # identity only -- never the module parameter
+                self.assertIn("if (!bc250_ch7218_detected(link))\n\t\treturn;", helper[:400])
+                self.assertNotIn("bc250_ch7218_quirk_wanted", body)
+                self.assertNotIn("config.bc250_ch7218_quirk", body)
+                # and it still refuses the two cases where it would be lying
+                self.assertIn(
+                    "if (dsc_caps->dsc_basic_caps.fields.dsc_support.DSC_SUPPORT)\n\t\treturn;",
+                    helper)
+                self.assertIn("DP_DSC_REV - DP_DSC_SUPPORT", helper)
+                self.assertIn("DP_DSC_SLICE_CAP_1 - DP_DSC_SUPPORT", helper)
+                self.assertIn("DP_DSC_MAX_BITS_PER_PIXEL_LOW - DP_DSC_SUPPORT", helper)
+                # no static tables, and it adds no module parameter of its own
+                self.assertNotIn("module_param_named", body)
+                self.assertNotIn("dm_freesync_pcon_whitelist", body)
+                # it is in both sets, so it is not an RC-only carry
+                self.assertIn("ch7218-dsc-restore.patch", self.stable_by_content())
+                self.assertIn("ch7218-dsc-restore.patch", self.rc_by_content())
 
     def test_pcon_force_dsc_is_opt_in_and_only_fills_an_empty_block(self):
         """The force-DSC experiment must default OFF and touch only silence.

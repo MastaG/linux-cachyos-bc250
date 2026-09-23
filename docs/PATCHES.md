@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these fourteen BC-250 patches, fourteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same fourteen patches plus its own three series-specific carries, seventeen in total:
+The stable and BORE kernels carry these fifteen BC-250 patches, fifteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same fifteen patches plus its own three series-specific carries, eighteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -48,11 +48,12 @@ The stable and BORE kernels carry these fourteen BC-250 patches, fourteen patche
 0010-dcn201-enable-dsc.patch
 0011-cs-relink-after-long-blank.patch
 0012-ch7218-pcon-quirk.patch
-0013-pcon-force-dsc.patch
-0014-bc250-psp-ccp.patch
+0013-ch7218-dsc-restore.patch
+0014-pcon-force-dsc.patch
+0015-bc250-psp-ccp.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same fourteen patches (content-identical, renumbered around its own series-specific carries) plus the three RC-only entries below:
+`patches/linux-cachyos-rc` carries the same fifteen patches (content-identical, renumbered around its own series-specific carries) plus the three RC-only entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -68,10 +69,11 @@ The stable and BORE kernels carry these fourteen BC-250 patches, fourteen patche
 0011-dcn201-enable-dsc.patch
 0012-cs-relink-after-long-blank.patch
 0013-ch7218-pcon-quirk.patch
-0014-ch7218-vrr-allowlist.patch
-0015-pcon-force-dsc.patch
-0016-pcon-vrr-hf-vsdb.patch
-0017-bc250-psp-ccp.patch
+0014-ch7218-dsc-restore.patch
+0015-ch7218-vrr-allowlist.patch
+0016-pcon-force-dsc.patch
+0017-pcon-vrr-hf-vsdb.patch
+0018-bc250-psp-ccp.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -93,9 +95,13 @@ confirms the result, and **our patches applying silently is the pass condition**
 — any `Hunk #N succeeded ... (offset ...)` line naming one of them means they
 have drifted apart again.
 
-`pcon-force-dsc.patch` is anchored on lines the quirk adds in all five of its
-files, so it comes **after** the quirk and must be regenerated whenever the
-relink or quirk patch changes — the same rule, one patch longer.
+`ch7218-dsc-restore.patch` sits between the quirk and `pcon-force-dsc.patch`:
+it adds `bc250_ch7218_restore_dsc_support()` next to the quirk's helpers and
+uses the quirk's `bc250_ch7218_detected()`, and `pcon-force-dsc.patch` is in
+turn anchored on the lines it adds. So the chain is **relink → quirk →
+dsc-restore → force-dsc**, and a change anywhere in it means regenerating
+everything downstream of the change. All four applying silently is the pass
+condition.
 
 `ch7218-vrr-allowlist.patch` (RC only) touches `amdgpu_dm_helpers.c` and
 `ddc_service_types.h`, which no other patch in either set touches, so it
@@ -401,9 +407,10 @@ which is why the patch adds none.
    on a healthy unit replaced a measured value with a constant; it was found
    while chasing an audio loss that turned out to be unrelated, and tightened
    because a no-op quirk should be a no-op.)
-4. Restores `DP_DSC_SUPPORT` when firmware clears the bit while still returning
-   a populated DSC decoder capability block — and only then, so a genuinely
-   DSC-less adapter is left alone even with the quirk on.
+
+The DSC-support restore that used to be step 4 here is now its own patch,
+[`ch7218-dsc-restore.patch`](#the-dsc-bit-also-vanishes-on-healthy-units), and
+is **not** behind this parameter.
 
 #### What was deliberately left out
 
@@ -436,15 +443,23 @@ afterwards shows the shape the quirk's restore heuristic was written for —
 `0x060` = `00 21 00 07 3b 04 01 c0 …`, a fully populated DSC 1.2 decoder block
 with only `DSC_SUPPORT` clear.
 
-So `bc250_ch7218_restore_dsc_support()` is useful on a healthy unit too, and
-the honest guidance is: **if your CH7218 comes back at 4:2:2 after the TV was
-in standby, enable the quirk.** The other three parts of it are inert on a
-unit that reports its port correctly (they only fire on `PORT_PRESENT=0` /
-downstream-DP), so the cost is nil. Check with
+That is why the restore is **`ch7218-dsc-restore.patch` (`0013` stable, `0014`
+RC), always on when a CH7218 is present** — no parameter, nothing to enable.
+It was part of the opt-in quirk until 2026-09-23 and was split out because the
+two do very different things. The identity quirk *overrides* what the adapter
+says about its downstream port, which a healthy adapter reports correctly, so
+it has to be opt-in. The DSC restore cannot override a correct report at all:
+if `DSC_SUPPORT` is set there is nothing to do, and if the capability block is
+empty the adapter genuinely has no decoder and is left alone. It fires only on
+the one combination that cannot describe real hardware, and then only
+re-states what the rest of the block already says. `amdgpu.bc250_hdmi21=0`
+switches it off with the rest of the PCON path.
+
+Check with
 
 ```bash
 sudo cat /sys/kernel/debug/dri/*/DP-1/dsc_clock_en     # 1 = DSC engaged
-sudo dmesg | grep -E 'DSC_Basic_Sink_Support|restored cleared DSC'
+sudo dmesg | grep -E 'DSC_Basic_Sink_Support|restored cleared DSC_SUPPORT'
 ```
 
 #### Not a kernel problem
@@ -455,7 +470,7 @@ userspace matter rather than something that belongs in this kernel.
 
 ### Adapters that hide their DSC decoder: the force-DSC experiment
 
-`pcon-force-dsc.patch` (`0013` stable, `0015` RC). **Experimental, opt-in,
+`pcon-force-dsc.patch` (`0014` stable, `0016` RC). **Experimental, opt-in,
 default off**, behind `amdgpu.bc250_pcon_force_dsc=1`.
 
 A Cable Matters 102101 (Synaptics VMM7100, DPCD branch OUI `90:CC:24`, name
@@ -804,7 +819,7 @@ commit is actually deferred because of it.
 
 ## The BC-250 secure processor (ccp)
 
-`bc250-psp-ccp.patch` (`0014` stable, `0017` RC) carries a three-patch series by
+`bc250-psp-ccp.patch` (`0015` stable, `0018` RC) carries a three-patch series by
 **Mattia Tadini** posted to linux-crypto/LKML on 2026-09-19
 ([cover letter](https://lore.kernel.org/lkml/178984289056.12336.17662860552012704364@mtsistemi.it/)),
 unmerged at the time of carrying. The BC-250's AMD Secure Processor sits at PCI

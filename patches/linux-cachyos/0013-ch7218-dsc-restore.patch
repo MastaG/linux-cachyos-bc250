@@ -1,0 +1,86 @@
+bc250: restore the CH7218's DSC decoder when its firmware denies it
+
+Split out of ch7218-pcon-quirk, and unlike the rest of that patch this one
+is always on when a CH7218 is present.
+
+Some CH7218 firmware clears DP_DSC_SUPPORT while still returning a fully
+populated DSC decoder capability block: a revision, slice capabilities and a
+maximum bits-per-pixel, all describing a decoder the same block says is not
+there. DC believes the bit, and since DP 1.4 HBR3 x4 cannot carry 4K120 RGB
+uncompressed, the stream is rebuilt as YCbCr 4:2:2 10-bit. Nothing fails and
+nothing is logged at any normal level -- the picture is simply worse.
+
+Observed on an adapter that reports everything else correctly, so it is not
+a property of the "broken" units the identity quirk exists for: DSC is
+advertised at boot and selected (RGB 12-bpc, dsc:1), and after the display
+had been in standby the next link bring-up re-read the capability block with
+the bit clear and fell back to 4:2:2. Both standby cycles that day did it.
+
+This is deliberately not behind amdgpu.bc250_ch7218_quirk. That parameter
+guards a workaround that overrides what the adapter says about its
+downstream port, which a healthy adapter reports correctly -- so it has to
+be opt-in. This one cannot override a correct report at all: if DSC_SUPPORT
+is set there is nothing to do, and if the capability block is empty the
+adapter really has no decoder and is left alone. It only fires on the one
+state that cannot be true, and then only re-states what the rest of the
+block already says. amdgpu.bc250_hdmi21=0 switches it off with the rest of
+the PCON path.
+
+---
+
+diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
+index fad85a5..a7d082a 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
++++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
+@@ -1227,6 +1227,42 @@ static void bc250_ch7218_force_converter_identity(struct dc_link *link)
+ 	DC_LOG_DC("BC-250: CH7218 quirk: forced HDMI 2.1 FRL PCON identity, 48 Gbps\n");
+ }
+ 
++/*
++ * Some CH7218 firmware clears DP_DSC_SUPPORT while still returning a fully
++ * populated DSC decoder capability block -- a combination that cannot describe
++ * real hardware, since a decoder that reports its revision, slice capabilities
++ * and maximum bits per pixel is a decoder that exists. Seen on an adapter that
++ * reports everything else correctly: DSC is advertised at boot, and the bit is
++ * gone after the display returns from standby, which silently drops 4K120 from
++ * RGB to YCbCr 4:2:2 on the next link bring-up.
++ *
++ * Unlike the identity quirk above this needs no module parameter, because it
++ * cannot reach an adapter that reports its DSC support truthfully: if the bit
++ * is set there is nothing to do, and if the capability block is empty the
++ * adapter really has no decoder and is left alone. Restoring the bit only
++ * re-states what the rest of the block already says. amdgpu.bc250_hdmi21=0
++ * switches it off along with the rest of the PCON path.
++ */
++static void bc250_ch7218_restore_dsc_support(struct dc_link *link)
++{
++	struct dpcd_dsc_capabilities *dsc_caps;
++
++	if (!bc250_ch7218_detected(link))
++		return;
++
++	dsc_caps = &link->dpcd_caps.dsc_caps;
++	if (dsc_caps->dsc_basic_caps.fields.dsc_support.DSC_SUPPORT)
++		return;
++
++	if (!dsc_caps->dsc_basic_caps.raw[DP_DSC_REV - DP_DSC_SUPPORT] &&
++	    !dsc_caps->dsc_basic_caps.raw[DP_DSC_SLICE_CAP_1 - DP_DSC_SUPPORT] &&
++	    !dsc_caps->dsc_basic_caps.raw[DP_DSC_MAX_BITS_PER_PIXEL_LOW - DP_DSC_SUPPORT])
++		return;
++
++	dsc_caps->dsc_basic_caps.fields.dsc_support.DSC_SUPPORT = true;
++	DC_LOG_DC("BC-250: CH7218: restored cleared DSC_SUPPORT\n");
++}
++
+ static void get_active_converter_info(
+ 	uint8_t data, struct dc_link *link)
+ {
+@@ -2114,6 +2150,8 @@ static bool retrieve_link_cap(struct dc_link *link)
+ 				link->dpcd_caps.dsc_caps.dsc_basic_caps.raw,
+ 				sizeof(link->dpcd_caps.dsc_caps.dsc_basic_caps.raw));
+ 		if (status == DC_OK) {
++			/* BC-250: only acts on a CH7218 that contradicts itself. */
++			bc250_ch7218_restore_dsc_support(link);
+ 			is_fec_supported = link->dpcd_caps.fec_cap.bits.FEC_CAPABLE;
+ 			is_dsc_basic_supported = link->dpcd_caps.dsc_caps.dsc_basic_caps.fields.dsc_support.DSC_SUPPORT;
+ 			is_dsc_passthrough_supported = link->dpcd_caps.dsc_caps.dsc_basic_caps.fields.dsc_support.DSC_PASSTHROUGH_SUPPORT;
