@@ -19,7 +19,7 @@ url="https://github.com/shenmintao/aic8800d80"
 license=('GPL-2.0-only')
 depends=('dkms')
 _fork="https://github.com/MastaG/aic8800d80"
-_commit=bbabacb3bce72f4b9e10ba71fe387366d3b9cff4
+_commit=2c4ab4b421d6a780842deeef700f23ba9ecf7578
 source=("aic8800d80::git+${_fork}.git#commit=${_commit}")
 sha256sums=('SKIP')
 
