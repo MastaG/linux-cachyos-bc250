@@ -16,8 +16,16 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${ROOT_DIR}/out/repo"
 REPO_NAME="bc250-cachyos"
 
+# shellcheck source=scripts/repo-package-helpers.sh
+source "${ROOT_DIR}/scripts/repo-package-helpers.sh"
+# shellcheck source=scripts/retired-packages.sh
+source "${ROOT_DIR}/scripts/retired-packages.sh"
+
 cd -- "$OUT_DIR"
 shopt -s nullglob
+# Packages this repository has stopped shipping must not be re-published from
+# the seeded copy of the previous release -- see scripts/retired-packages.sh.
+retire_packages "$OUT_DIR"
 packages=(./*.pkg.tar.zst)
 (( ${#packages[@]} > 0 )) || {
     printf 'ERROR: no packages staged in %s\n' "$OUT_DIR" >&2

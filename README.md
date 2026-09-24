@@ -24,7 +24,6 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `proton-cachyos-slr-bc250` | The same, on the Steam Linux Runtime: the one for anti-cheat games |
 | `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
-| `aic8800d80-dkms` | AIC8800D80 USB WiFi driver (DKMS) that also builds on the 7.3-rc kernel |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 ---
@@ -842,31 +841,31 @@ Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplum
 
 ---
 
-## aic8800d80-dkms (WiFi on AIC8800D80 USB sticks, including the RC kernel)
+## aic8800d80-dkms — removed, use the AUR package
 
-Only relevant if your BC-250 gets its network from one of the cheap AX900-class
-USB WiFi sticks built on the AICSemi **AIC8800D80** (Tenda and many AliExpress
-brands). Those need the out-of-tree
-[shenmintao/aic8800d80](https://github.com/shenmintao/aic8800d80) driver, which
-Arch users normally get from the AUR as `aic8800d80-dkms` — and that stops
-building on Linux 7.3 because of cfg80211 API changes. On a WiFi-only board that
-means booting `linux-cachyos-rc-bc250` leaves you with no network.
+This repository briefly (2026-09-21 to 2026-09-24) carried its own build of the
+AUR `aic8800d80-dkms` package, from a fork with a Linux 7.3 fix, because the
+upstream driver did not build on the RC kernel and on a WiFi-only board that
+meant no network at all. Upstream merged that fix
+([shenmintao/aic8800d80#91](https://github.com/shenmintao/aic8800d80/pull/91))
+on 2026-09-24, and the AUR package builds from upstream `main`, so the AUR one
+is now correct on every kernel this repository ships and ours has been
+retired from the repository database.
 
-This repository carries the same package built from
-[our fork](https://github.com/MastaG/aic8800d80/tree/fix-linux-7.3-cfg80211):
-upstream `main` plus the 7.3 fix from
-[PR #91](https://github.com/shenmintao/aic8800d80/pull/91), pinned by commit.
-Upstream is holding that PR until radxa ships its own 7.3 patch; the moment
-either lands, this package goes back to plain upstream.
+If you installed ours, `pacman -Syu` will **not** replace it: it is no longer in
+this repository's database, so pacman treats it as a foreign package, and AUR
+helpers will not downgrade it to the AUR's lower release number. Swap it by
+hand once — build the AUR package and install it in a single transaction, so
+there is never a moment without a driver (removing the package first would
+delete the DKMS modules from every kernel before the replacement exists):
 
 ```bash
-sudo pacman -S aic8800d80-dkms
+git clone https://aur.archlinux.org/aic8800d80-dkms.git
+cd aic8800d80-dkms && makepkg -si     # pacman -U replaces ours in one step
 ```
 
-DKMS builds the three modules for every installed kernel that has its headers
-package (`linux-cachyos-bc250-headers`, `linux-cachyos-rc-bc250-headers`, ...).
-It has the same name as the AUR package with a higher release number, so an
-AUR-installed copy is replaced on a normal `pacman -Syu`.
+DKMS rebuilds the modules for every installed kernel that has its headers
+package (`linux-cachyos-bc250-headers`, `linux-cachyos-rc-bc250-headers`).
 
 ---
 

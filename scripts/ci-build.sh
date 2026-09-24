@@ -281,7 +281,6 @@ runuser -u builder -- env \
                 lib32-mesa)                  /workspace/scripts/build-lib32-mesa-package.sh ;;
                 mesa-git)                    /workspace/scripts/build-mesa-git-package.sh ;;
                 bc250-dual-audio)            /workspace/scripts/build-bc250-dual-audio-package.sh ;;
-                aic8800d80-dkms)             /workspace/scripts/build-aic8800d80-dkms-package.sh ;;
                 linux-cachyos-bc250-meta)    /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh ;;
                 protonge-latest-bc250)       /workspace/scripts/build-protonge-latest-bc250-package.sh ;;
                 proton-cachyos-native-bc250) /workspace/scripts/build-proton-cachyos-native-bc250-package.sh ;;

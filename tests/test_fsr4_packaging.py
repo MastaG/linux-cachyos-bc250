@@ -898,43 +898,92 @@ class SlrPackageTests(unittest.TestCase):
                 self.assertIn(needle, (ROOT / path).read_text())
 
 
-class Aic8800d80DkmsPackageTests(unittest.TestCase):
-    """The DKMS mirror must stay pinned and stay wired in.
+class RetiredPackageTests(unittest.TestCase):
+    """A package this repository stops shipping must also leave the published database.
 
-    It exists only because upstream will not build on 7.3 and will not take
-    the fix yet. A floating branch would silently ship whatever the fork's
-    branch becomes; a package nothing builds is a package nobody gets.
+    out/repo is seeded from the previous release on every run and the database
+    is rebuilt from whatever *.pkg.tar.zst is there, so deleting a PKGBUILD on
+    its own leaves the last build published forever. aic8800d80-dkms was
+    published at pkgrel 7, above the AUR package's 6, so left in place it would
+    shadow the AUR package -- correct since upstream merged our fix -- for
+    everyone with this repository enabled. RETIRED_PACKAGES in
+    scripts/retired-packages.sh is what removes it, and it has to run in both
+    database builders, before either enumerates the package set.
+
+    Every assertion here is anchored to a live, uncommented line: a
+    commented-out call, a commented-out list entry or a dropped `source` line
+    with its shellcheck directive left behind all used to pass a looser
+    version of these tests.
     """
 
-    PKGBUILD = ROOT / "packages/aic8800d80-dkms/PKGBUILD"
+    RETIRED = ROOT / "scripts/retired-packages.sh"
+    BUILDERS = ("scripts/update-repo-db.sh", "scripts/finalize-repository.sh")
 
-    def test_source_is_pinned_to_a_commit_on_the_fork(self):
-        text = self.PKGBUILD.read_text()
-        self.assertIn('_fork="https://github.com/MastaG/aic8800d80"', text)
-        self.assertRegex(text, r'(?m)^_commit=[0-9a-f]{40}$', "pin a full commit hash, not a branch or tag")
-        self.assertIn('#commit=${_commit}', text)
-        # same pkgname as the AUR package, and a release above its pkgrel=6 so
-        # an AUR install upgrades to this one instead of sitting beside it
-        self.assertIn("pkgname=aic8800d80-dkms", text)
-        self.assertRegex(text, r'(?m)^pkgrel=([7-9]|[1-9][0-9]+)$')
-
-    def test_it_ships_what_the_aur_package_ships(self):
-        text = self.PKGBUILD.read_text()
-        for needle in ("usr/lib/udev/rules.d/aic.rules", "fw/aic8800D80",
-                       "usr/src/aic8800-$pkgver", "depends=('dkms')"):
-            self.assertIn(needle, text)
-
-    def test_the_component_is_wired_into_ci(self):
-        for path, needle in (
-            ("scripts/ci-build.sh", "build-aic8800d80-dkms-package.sh"),
-            ("scripts/source-fingerprint.sh", "aic8800d80-dkms)"),
-            ("scripts/finalize-repository.sh", "aic8800d80-dkms-info.env"),
-            (".github/workflows/build-release.yml", "BUILD_AIC8800D80_DKMS"),
-            (".github/workflows/build-release.yml", '"aic8800d80-dkms:$BUILD_AIC8800D80_DKMS"'),
-            (".github/workflows/build-release.yml", "aic8800d80-dkms-info.env"),
-        ):
+    def test_aic8800d80_dkms_is_retired_and_gone_from_the_source_tree(self):
+        text = self.RETIRED.read_text()
+        array = text[text.index("RETIRED_PACKAGES=("):]
+        array = array[:array.index(")")]
+        self.assertRegex(array, r"(?m)^\s*aic8800d80-dkms\s*$",
+                         "the entry must be a live line inside the array, not a comment")
+        self.assertIn("retire_packages() {", text)
+        self.assertFalse((ROOT / "packages/aic8800d80-dkms").exists())
+        self.assertFalse((ROOT / "scripts/build-aic8800d80-dkms-package.sh").exists())
+        for path in ("scripts/ci-build.sh", "scripts/source-fingerprint.sh",
+                     ".github/workflows/build-release.yml"):
             with self.subTest(path=path):
-                self.assertIn(needle, (ROOT / path).read_text())
+                self.assertNotIn("aic8800", (ROOT / path).read_text().lower())
+        # finalize and update-repo-db legitimately mention the package in prose
+        # (the release notes), so scan them for the env/metadata token instead:
+        # one surviving `: "${AIC8800D80_DKMS_FINGERPRINT:?...}"` would fail
+        # every publish while a lowercase scan of the other files stays green.
+        for path in self.BUILDERS:
+            with self.subTest(path=path):
+                self.assertNotIn("AIC8800D80_DKMS", (ROOT / path).read_text())
+        readme = (ROOT / "README.md").read_text()
+        self.assertNotIn("| `aic8800d80-dkms` |", readme)
+        self.assertIn("makepkg -si", readme)
+        # never tell people to remove the driver before its replacement exists
+        self.assertNotIn("pacman -Rns aic8800d80-dkms", readme)
+        self.assertNotIn("pacman -Rns aic8800d80-dkms", (ROOT / "scripts/finalize-repository.sh").read_text())
+
+    def test_retirement_runs_in_both_database_builders_before_enumeration(self):
+        for path in self.BUILDERS:
+            text = (ROOT / path).read_text()
+            with self.subTest(path=path):
+                src = re.search(r'(?m)^source "\$\{ROOT_DIR\}/scripts/retired-packages\.sh"$', text)
+                self.assertIsNotNone(src, "a live source line, not just the shellcheck directive")
+                call = re.search(r'(?m)^retire_packages "\$OUT_DIR"$', text)
+                self.assertIsNotNone(call, "a live, uncommented call")
+                self.assertLess(src.start(), call.start())
+                self.assertLess(call.start(), text.index("packages=(./*.pkg.tar.zst)"),
+                                "retire before the package set is enumerated")
+
+    def test_retirement_removes_the_sidecar_assets_too(self):
+        # The delta publisher deletes whatever left out/repo, so the info.env,
+        # PKGBUILD and SRCINFO copies have to go with the package or they stay
+        # on the release forever -- and the rm has to be the real one.
+        text = self.RETIRED.read_text()
+        fn = text[text.index("retire_packages() {"):]
+        fn = fn[:fn.index("\n}\n")]
+        self.assertRegex(fn, r'(?m)^\s*remove_pkgbase_from_repo "\$out_dir" "\$pkgbase"$')
+        self.assertRegex(fn, r'(?m)^\s*rm -f -- "\$out_dir/\$sidecar"$')
+        for sidecar in ('"$pkgbase-info.env"', '"$pkgbase-PKGBUILD"', '"$pkgbase.SRCINFO"'):
+            self.assertIn(sidecar, fn)
+
+    def test_the_retired_list_is_fingerprinted_by_the_metapackage_only(self):
+        # It has to be hashed somewhere, or a retirement never triggers a run;
+        # it must not be hashed into a kernel/Mesa/Proton fingerprint, or a
+        # one-package retirement rebuilds everything. The metapackage is the
+        # cheapest package there is.
+        text = (ROOT / "scripts/source-fingerprint.sh").read_text()
+        self.assertEqual(text.count('hash_files "$ROOT_DIR/scripts/retired-packages.sh"'), 1)
+        meta = text[text.index("    linux-cachyos-bc250-meta)\n"):]
+        meta = meta[:meta.index(";;")]
+        self.assertIn("scripts/retired-packages.sh", meta)
+        # and repo-package-helpers.sh, which every component hashes, is untouched
+        helpers = (ROOT / "scripts/repo-package-helpers.sh").read_text()
+        self.assertNotIn("RETIRED_PACKAGES", helpers)
+        self.assertNotIn("retire_packages", helpers)
 
 
 class LocalPatchGateTests(unittest.TestCase):
