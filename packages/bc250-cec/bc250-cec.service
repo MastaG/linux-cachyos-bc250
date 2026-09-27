@@ -1,0 +1,24 @@
+[Unit]
+Description=BC-250 CEC: announce as SteamOS and replug the HDMI link on display power-on
+Documentation=https://github.com/MastaG/linux-cachyos-bc250
+# The CEC adapter this depends on only exists once amdgpu has brought up a
+# CEC-tunneling-capable display and udev has created /dev/cecN; graphical.target
+# is a reasonable proxy for "that has had a chance to happen" without a hard
+# dependency on any specific display manager or session type.
+After=graphical.target systemd-udev-settle.service
+Wants=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/bc250-cec/bc250-cec-daemon.sh
+Restart=on-failure
+RestartSec=10
+# Needs root: the debugfs trigger_hotplug write requires it outright
+# (/sys/kernel/debug is 0700 root:root on this system), and splitting a
+# script this small across a privilege boundary for one write is not worth
+# the extra moving parts. The CEC calls themselves would work unprivileged
+# (/dev/cecN is group `video`), but there is nothing else in this service to
+# sandbox away from.
+
+[Install]
+WantedBy=graphical.target

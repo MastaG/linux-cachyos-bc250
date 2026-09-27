@@ -1,0 +1,21 @@
+post_install() {
+    echo "==> BC-250 CEC installed: identifies as 'SteamOS' on the HDMI CEC bus and"
+    echo "==>   replugs the HDMI link when the display reports powering on."
+    echo "==> Not enabled by default. Needs a CEC-capable adapter -- check first:"
+    echo "==>   cec-ctl --list-devices"
+    echo "==> If that lists a /dev/cecN device, enable with:"
+    echo "==>   sudo systemctl enable --now bc250-cec.service"
+    echo "==> Then watch it react to the display turning on:"
+    echo "==>   sudo journalctl -u bc250-cec -f"
+}
+
+post_upgrade() {
+    echo "==> BC-250 CEC updated. Restart to pick it up:"
+    echo "==>   sudo systemctl restart bc250-cec.service"
+}
+
+post_remove() {
+    echo "==> BC-250 CEC removed. If it was enabled, pacman has already stopped it;"
+    echo "==>   nothing else to clean up (it never claims a CEC logical address the"
+    echo "==>   display treats as a lasting registration)."
+}

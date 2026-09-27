@@ -35,6 +35,7 @@ case "$COMPONENT" in
         ;;
     mesa|lib32-mesa|mesa-git) ;;
     bc250-dual-audio) ;;
+    bc250-cec) ;;
     linux-cachyos-bc250-meta) ;;
     protonge-latest-bc250) ;;
     proton-cachyos-native-bc250) ;;
@@ -109,6 +110,23 @@ case "$COMPONENT" in
         {
             hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-dual-audio.install"
             hash_files "$ROOT_DIR/scripts/build-bc250-dual-audio-package.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    bc250-cec)
+        # Same shape as bc250-dual-audio, except the source files live right
+        # here rather than in a separate repo -- small enough that a dedicated
+        # repo would be pure overhead. Hash everything that determines the build.
+        pkg_dir="$ROOT_DIR/packages/bc250-cec"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        {
+            hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-cec-daemon.sh" \
+                "$pkg_dir/bc250-cec.service" "$pkg_dir/bc250-cec.install"
+            hash_files "$ROOT_DIR/scripts/build-bc250-cec-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

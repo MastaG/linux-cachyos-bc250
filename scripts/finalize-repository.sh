@@ -17,6 +17,7 @@ source "${ROOT_DIR}/scripts/retired-packages.sh"
 : "${LIB32_MESA_FINGERPRINT:?LIB32_MESA_FINGERPRINT is required}"
 : "${MESA_GIT_FINGERPRINT:?MESA_GIT_FINGERPRINT is required}"
 : "${BC250_DUAL_AUDIO_FINGERPRINT:?BC250_DUAL_AUDIO_FINGERPRINT is required}"
+: "${BC250_CEC_FINGERPRINT:?BC250_CEC_FINGERPRINT is required}"
 : "${LINUX_CACHYOS_BC250_META_FINGERPRINT:?LINUX_CACHYOS_BC250_META_FINGERPRINT is required}"
 : "${PROTONGE_LATEST_BC250_FINGERPRINT:?PROTONGE_LATEST_BC250_FINGERPRINT is required}"
 : "${PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT:?PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT is required}"
@@ -28,6 +29,7 @@ BUILD_MESA="${BUILD_MESA:-false}"
 BUILD_LIB32_MESA="${BUILD_LIB32_MESA:-false}"
 BUILD_MESA_GIT="${BUILD_MESA_GIT:-false}"
 BUILD_BC250_DUAL_AUDIO="${BUILD_BC250_DUAL_AUDIO:-false}"
+BUILD_BC250_CEC="${BUILD_BC250_CEC:-false}"
 BUILD_LINUX_CACHYOS_BC250_META="${BUILD_LINUX_CACHYOS_BC250_META:-false}"
 BUILD_PROTONGE_LATEST_BC250="${BUILD_PROTONGE_LATEST_BC250:-false}"
 BUILD_PROTON_CACHYOS_NATIVE_BC250="${BUILD_PROTON_CACHYOS_NATIVE_BC250:-false}"
@@ -40,6 +42,7 @@ required_metadata=(
     lib32-mesa-info.env
     mesa-git-info.env
     bc250-dual-audio-info.env
+    bc250-cec-info.env
     linux-cachyos-bc250-meta-info.env
     protonge-latest-bc250-info.env
     proton-cachyos-native-bc250-info.env
@@ -115,6 +118,10 @@ bc250_dual_audio_info="$OUT_DIR/bc250-dual-audio-info.env"
 bc250_dual_audio_pkgver="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGVER)"
 bc250_dual_audio_pkgrel="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGREL)"
 
+bc250_cec_info="$OUT_DIR/bc250-cec-info.env"
+bc250_cec_pkgver="$(value "$bc250_cec_info" BC250_CEC_PKGVER)"
+bc250_cec_pkgrel="$(value "$bc250_cec_info" BC250_CEC_PKGREL)"
+
 linux_cachyos_bc250_meta_info="$OUT_DIR/linux-cachyos-bc250-meta-info.env"
 linux_cachyos_bc250_meta_pkgver="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGVER)"
 linux_cachyos_bc250_meta_pkgrel="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGREL)"
@@ -152,6 +159,7 @@ for field in \
     mesa_pkgver mesa_pkgrel lib32_pkgver lib32_pkgrel \
     mesa_git_commit mesa_git_pkgver mesa_git_pkgrel mesa_git_lib32 \
     bc250_dual_audio_pkgver bc250_dual_audio_pkgrel \
+    bc250_cec_pkgver bc250_cec_pkgrel \
     linux_cachyos_bc250_meta_pkgver linux_cachyos_bc250_meta_pkgrel \
     protonge_pkgver protonge_pkgrel protonge_ge_tag protonge_optiscaler \
     proton_native_pkgver proton_native_pkgrel proton_native_optiscaler; do
@@ -199,6 +207,7 @@ mesa_count="$(pkgbase_count mesa)"
 lib32_count="$(pkgbase_count lib32-mesa)"
 mesa_git_count="$(pkgbase_count mesa-git)"
 bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
+bc250_cec_count="$(pkgbase_count bc250-cec)"
 linux_cachyos_bc250_meta_count="$(pkgbase_count linux-cachyos-bc250-meta)"
 protonge_count="$(pkgbase_count protonge-latest-bc250)"
 proton_native_count="$(pkgbase_count proton-cachyos-native-bc250)"
@@ -212,6 +221,7 @@ proton_slr_count="$(pkgbase_count proton-cachyos-slr-bc250)"
 (( lib32_count >= 1 )) || { printf 'ERROR: lib32-mesa packages are missing\n' >&2; exit 1; }
 (( mesa_git_count == 2 )) || { printf 'ERROR: expected mesa-git + lib32-mesa-git; found %d package(s)\n' "$mesa_git_count" >&2; exit 1; }
 (( bc250_dual_audio_count == 1 )) || { printf 'ERROR: expected exactly one bc250-dual-audio package; found %d\n' "$bc250_dual_audio_count" >&2; exit 1; }
+(( bc250_cec_count == 1 )) || { printf 'ERROR: expected exactly one bc250-cec package; found %d\n' "$bc250_cec_count" >&2; exit 1; }
 (( linux_cachyos_bc250_meta_count == 1 )) || { printf 'ERROR: expected exactly one linux-cachyos-bc250-meta package; found %d\n' "$linux_cachyos_bc250_meta_count" >&2; exit 1; }
 (( protonge_count == 1 )) || { printf 'ERROR: expected exactly one protonge-latest-bc250 package; found %d\n' "$protonge_count" >&2; exit 1; }
 (( proton_native_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-native-bc250 package; found %d\n' "$proton_native_count" >&2; exit 1; }
@@ -251,6 +261,7 @@ MESA_FINGERPRINT="$(fingerprint_from "$mesa_info" MESA_FINGERPRINT "$MESA_FINGER
 LIB32_MESA_FINGERPRINT="$(fingerprint_from "$lib32_info" LIB32_MESA_FINGERPRINT "$LIB32_MESA_FINGERPRINT")"
 MESA_GIT_FINGERPRINT="$(fingerprint_from "$mesa_git_info" MESA_GIT_FINGERPRINT "$MESA_GIT_FINGERPRINT")"
 BC250_DUAL_AUDIO_FINGERPRINT="$(fingerprint_from "$bc250_dual_audio_info" BC250_DUAL_AUDIO_FINGERPRINT "$BC250_DUAL_AUDIO_FINGERPRINT")"
+BC250_CEC_FINGERPRINT="$(fingerprint_from "$bc250_cec_info" BC250_CEC_FINGERPRINT "$BC250_CEC_FINGERPRINT")"
 LINUX_CACHYOS_BC250_META_FINGERPRINT="$(fingerprint_from "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_FINGERPRINT "$LINUX_CACHYOS_BC250_META_FINGERPRINT")"
 PROTONGE_LATEST_BC250_FINGERPRINT="$(fingerprint_from "$protonge_info" PROTONGE_LATEST_BC250_FINGERPRINT "$PROTONGE_LATEST_BC250_FINGERPRINT")"
 PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$(fingerprint_from "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT")"
@@ -258,7 +269,7 @@ PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$(fingerprint_from "$proton_native_info
 SOURCE_FINGERPRINT="$(printf '%s\n' \
     "$KERNEL_STABLE_FINGERPRINT" "$KERNEL_RC_FINGERPRINT" "$KERNEL_BORE_FINGERPRINT" \
     "$MESA_FINGERPRINT" "$LIB32_MESA_FINGERPRINT" "$MESA_GIT_FINGERPRINT" \
-    "$BC250_DUAL_AUDIO_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
+    "$BC250_DUAL_AUDIO_FINGERPRINT" "$BC250_CEC_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
     "$PROTONGE_LATEST_BC250_FINGERPRINT" "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" | \
     sha256sum | awk '{print $1}')"
 
@@ -271,6 +282,7 @@ MESA_FINGERPRINT=${MESA_FINGERPRINT}
 LIB32_MESA_FINGERPRINT=${LIB32_MESA_FINGERPRINT}
 MESA_GIT_FINGERPRINT=${MESA_GIT_FINGERPRINT}
 BC250_DUAL_AUDIO_FINGERPRINT=${BC250_DUAL_AUDIO_FINGERPRINT}
+BC250_CEC_FINGERPRINT=${BC250_CEC_FINGERPRINT}
 LINUX_CACHYOS_BC250_META_FINGERPRINT=${LINUX_CACHYOS_BC250_META_FINGERPRINT}
 PROTONGE_LATEST_BC250_FINGERPRINT=${PROTONGE_LATEST_BC250_FINGERPRINT}
 PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT=${PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT}
@@ -281,6 +293,7 @@ LAST_RUN_MESA_BUILD=${BUILD_MESA}
 LAST_RUN_LIB32_MESA_BUILD=${BUILD_LIB32_MESA}
 LAST_RUN_MESA_GIT_BUILD=${BUILD_MESA_GIT}
 LAST_RUN_BC250_DUAL_AUDIO_BUILD=${BUILD_BC250_DUAL_AUDIO}
+LAST_RUN_BC250_CEC_BUILD=${BUILD_BC250_CEC}
 LAST_RUN_LINUX_CACHYOS_BC250_META_BUILD=${BUILD_LINUX_CACHYOS_BC250_META}
 LAST_RUN_PROTONGE_LATEST_BC250_BUILD=${BUILD_PROTONGE_LATEST_BC250}
 LAST_RUN_PROTON_CACHYOS_NATIVE_BC250_BUILD=${BUILD_PROTON_CACHYOS_NATIVE_BC250}
@@ -308,6 +321,8 @@ MESA_GIT_PKGREL=${mesa_git_pkgrel}
 MESA_GIT_LIB32=${mesa_git_lib32}
 BC250_DUAL_AUDIO_PKGVER=${bc250_dual_audio_pkgver}
 BC250_DUAL_AUDIO_PKGREL=${bc250_dual_audio_pkgrel}
+BC250_CEC_PKGVER=${bc250_cec_pkgver}
+BC250_CEC_PKGREL=${bc250_cec_pkgrel}
 LINUX_CACHYOS_BC250_META_PKGVER=${linux_cachyos_bc250_meta_pkgver}
 LINUX_CACHYOS_BC250_META_PKGREL=${linux_cachyos_bc250_meta_pkgrel}
 PROTONGE_LATEST_BC250_PKGVER=${protonge_pkgver}
@@ -443,6 +458,20 @@ All three kernels use:
   Steam or KDE.
 - Not installed by default; install with \`sudo pacman -S bc250-dual-audio\`.
 
+## BC-250 CEC (opt-in)
+
+- Package version: \`${bc250_cec_pkgver}-${bc250_cec_pkgrel}\`
+- Identifies this board to the HDMI CEC bus as \`SteamOS\`, and replugs the
+  HDMI link (the same re-detect a physical cable pull triggers) when the
+  display reports powering on over CEC -- catching cases the kernel's own
+  blank-duration relink heuristic does not, since it reacts to the display's
+  actual power state instead of a timer. Detection only: it never sends a
+  power command to the display.
+- Needs a CEC-capable link -- most DP-to-HDMI adapters do not tunnel CEC.
+  Check with \`cec-ctl --list-devices\` before enabling.
+- Not enabled by default; after installing:
+  \`sudo systemctl enable --now bc250-cec.service\`.
+
 \`\`\`bash
 sudo pacman -S bc250-dual-audio
 systemctl --user restart pipewire pipewire-pulse wireplumber
@@ -556,6 +585,7 @@ printf '    mesa:          %s-%s\n' "$mesa_pkgver" "$mesa_pkgrel"
 printf '    lib32-mesa:    %s-%s\n' "$lib32_pkgver" "$lib32_pkgrel"
 printf '    mesa-git:      %s-%s (64-bit + lib32)\n' "$mesa_git_pkgver" "$mesa_git_pkgrel"
 printf '    bc250-dual-audio: %s-%s\n' "$bc250_dual_audio_pkgver" "$bc250_dual_audio_pkgrel"
+printf '    bc250-cec: %s-%s\n' "$bc250_cec_pkgver" "$bc250_cec_pkgrel"
 printf '    linux-cachyos-bc250-meta: %s-%s\n' "$linux_cachyos_bc250_meta_pkgver" "$linux_cachyos_bc250_meta_pkgrel"
 printf '    protonge-latest-bc250: %s-%s (%s, OptiScaler %s)\n' \
     "$protonge_pkgver" "$protonge_pkgrel" "$protonge_ge_tag" "$protonge_optiscaler"

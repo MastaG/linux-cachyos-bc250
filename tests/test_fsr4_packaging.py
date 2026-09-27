@@ -898,6 +898,84 @@ class SlrPackageTests(unittest.TestCase):
                 self.assertIn(needle, (ROOT / path).read_text())
 
 
+class Bc250CecPackageTests(unittest.TestCase):
+    """The CEC package's safety properties, checked at the source.
+
+    It runs as root and writes to a debugfs entry that forces a real DRM
+    hotplug cycle -- the two things worth pinning are that it can never do
+    that on a false read at startup (a display already on when the service
+    starts must not glitch the picture), and that a power command is never
+    sent to the display, both promised in the README and the PKGBUILD.
+    """
+
+    PKG_DIR = ROOT / "packages/bc250-cec"
+    DAEMON = PKG_DIR / "bc250-cec-daemon.sh"
+
+    def test_never_sends_a_power_command_to_the_display(self):
+        # Flag-shaped, not a bare word: the daemon's own top-of-file comment
+        # legitimately says "no <standby>" in prose explaining this promise.
+        text = self.DAEMON.read_text()
+        for flag in ("--standby", "--image-view-on", "--text-view-on", "--active-source"):
+            self.assertNotIn(flag, text,
+                             f"the daemon must only query power state, never pass {flag} to cec-ctl")
+        # The three real invocations this feature needs: discover, claim, query.
+        for flag in ("--list-devices", "--playback", "--give-device-power-status"):
+            self.assertIn(flag, text)
+
+    def test_a_display_already_on_at_startup_does_not_trigger_a_replug(self):
+        # The first poll must only ever set the baseline, never fire the
+        # trigger branch -- that branch is gated on baseline_set already
+        # being true, so this pins the gate exists rather than being lost in
+        # a future rewrite.
+        text = self.DAEMON.read_text()
+        self.assertIn("(( baseline_set )) &&", text)
+        self.assertIn("baseline_set=1", text)
+
+    def test_the_debugfs_path_is_discovered_not_hardcoded(self):
+        text = self.DAEMON.read_text()
+        self.assertIn("/sys/kernel/debug/dri/*/", text)
+        self.assertNotIn("DP-1/trigger_hotplug", text)
+
+    def test_pkgbuild_depends_on_v4l_utils(self):
+        text = (self.PKG_DIR / "PKGBUILD").read_text()
+        self.assertIn("'v4l-utils'", text)
+
+    def test_service_requires_root_and_documents_why(self):
+        # No User= override: the debugfs write needs root outright
+        # (/sys/kernel/debug is 0700 root:root), so this must stay unset
+        # rather than someone adding User= to "harden" it and silently
+        # breaking the one privileged write the service exists to do.
+        text = (self.PKG_DIR / "bc250-cec.service").read_text()
+        self.assertNotIn("User=", text)
+
+    def test_not_enabled_by_default(self):
+        text = (self.PKG_DIR / "bc250-cec.install").read_text()
+        self.assertIn("Not enabled by default", text)
+        self.assertNotIn("systemctl enable --now bc250-cec.service\"\n}", text,
+                         "the install scriptlet must not enable the service itself")
+
+    def test_readme_agrees_it_is_detection_only(self):
+        text = (ROOT / "README.md").read_text()
+        section = text[text.index("## Optional BC-250 CEC"):]
+        section = section[:section.index("\n## ")]
+        self.assertIn("never sends a power command", section)
+
+    def test_the_component_is_wired_into_ci(self):
+        for path, needle in (
+            ("scripts/ci-build.sh", "build-bc250-cec-package.sh"),
+            ("scripts/source-fingerprint.sh", "bc250-cec)"),
+            ("scripts/finalize-repository.sh", "bc250-cec-info.env"),
+            (".github/workflows/build-release.yml", "BUILD_BC250_CEC"),
+            (".github/workflows/build-release.yml", '"bc250-cec:$BUILD_BC250_CEC"'),
+        ):
+            with self.subTest(path=path):
+                self.assertIn(needle, (ROOT / path).read_text())
+
+    def test_the_metapackage_depends_on_it(self):
+        pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()
+        self.assertIn("'bc250-cec'", pkgbuild)
+
+
 class RetiredPackageTests(unittest.TestCase):
     """A package this repository stops shipping must also leave the published database.
 

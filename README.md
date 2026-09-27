@@ -24,6 +24,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `proton-cachyos-slr-bc250` | The same, on the Steam Linux Runtime: the one for anti-cheat games |
 | `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
+| `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; replugs the HDMI link when the display powers on |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 ---
@@ -841,6 +842,38 @@ Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplum
 
 ---
 
+## Optional BC-250 CEC
+
+`bc250-cec` identifies this board to the HDMI CEC bus as `SteamOS`, and replugs the HDMI link — the same re-detect a physical cable pull triggers, via the kernel's `trigger_hotplug` debugfs entry — when the display reports powering on over CEC. This exists for the same black-screen-on-wake symptom as [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change): the kernel's automatic relink reacts to how long the link was blanked, which is a proxy for "the display was off," not the display's actual power state. CEC gives that directly, as an event instead of a timer.
+
+Deliberately narrow: it only detects and reacts. It never sends a power command to the display — no waking it, no putting it to sleep.
+
+**Needs a CEC-capable link.** Most cheap active DP-to-HDMI adapters do not tunnel CEC at all; ones built on a Chrontel CH7218 have been confirmed to. Check before installing:
+
+```bash
+sudo pacman -S v4l-utils   # cec-ctl, if you don't already have it
+cec-ctl --list-devices
+```
+
+If that lists an `amdgpu (DP-1):` entry with a `/dev/cecN` device, it works. If it lists nothing, this package will install fine but the service will find no CEC adapter and exit in a restart loop — harmless, but pointless.
+
+Not enabled by default:
+
+```bash
+sudo pacman -S bc250-cec
+sudo systemctl enable --now bc250-cec.service
+```
+
+Watch it react to the display turning on:
+
+```bash
+sudo journalctl -u bc250-cec -f
+```
+
+Runs as root — the debugfs write it needs (`/sys/kernel/debug/dri/*/DP-1/trigger_hotplug`) requires it outright, regardless of how the CEC side is set up.
+
+---
+
 ## aic8800d80-dkms — removed, use the AUR package
 
 This repository briefly (2026-09-21 to 2026-09-24) carried its own build of the
@@ -876,6 +909,7 @@ A pure metapackage — it installs no files of its own, it just depends on the r
 - `linux-cachyos-bc250`
 - `linux-cachyos-bc250-headers`
 - `bc250-dual-audio`
+- `bc250-cec`
 - `proton-cachyos-native-bc250`
 - `proton-cachyos-slr-bc250`
 - `protonge-latest-bc250`
