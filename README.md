@@ -844,9 +844,11 @@ Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplum
 
 ## Optional BC-250 CEC
 
-`bc250-cec` identifies this board to the HDMI CEC bus as `SteamOS`, and replugs the HDMI link — the same re-detect a physical cable pull triggers, via the kernel's `trigger_hotplug` debugfs entry — when the display reports powering on over CEC, or when another device (a TV or AVR) switches its active input to this board while the display never actually went to standby. This exists for the same black-screen-on-wake symptom as [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change): the kernel's automatic relink reacts to how long the link was blanked, which is a proxy for "the display was off," not the display's actual power state or which input is selected. CEC gives that directly, as an event instead of a timer.
+**This is a workaround, not a fix.** There is a still-unfixed underlying bug where the DP/HDMI link can drop the picture after the board has sat idle for a while combined with the display being power-cycled multiple times — a narrower and harder-to-hit trigger than a single power-on, in the same family as the symptom in [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change). Nobody has root-caused *why* the link drops in this case; `bc250-cec` only detects that it likely has and reacts, the same way the kernel's own long-blank relink heuristic does for its own trigger condition (blank duration as a proxy for "the display was off," which this bug does not reliably trip).
 
-Deliberately narrow: it only detects and reacts. It never sends a power command to the display — no waking it, no putting it to sleep.
+`bc250-cec` identifies this board to the HDMI CEC bus as `SteamOS`, and replugs the HDMI link — the same re-detect a physical cable pull triggers, via the kernel's `trigger_hotplug` debugfs entry — when the display reports powering on over CEC, or when another device (a TV or AVR) switches its active input to this board while the display never actually went to standby.
+
+Deliberately narrow: it only detects and reacts. It never sends a power command to the display — no waking it, no putting it to sleep. And it only helps at all on a display chain that actually tunnels CEC — see below.
 
 **Needs a CEC-capable link.** Most cheap active DP-to-HDMI adapters do not tunnel CEC at all; ones built on a Chrontel CH7218 have been confirmed to. Check before installing:
 
@@ -855,7 +857,7 @@ sudo pacman -S v4l-utils   # cec-ctl, if you don't already have it
 cec-ctl --list-devices
 ```
 
-If that lists an `amdgpu (DP-1):` entry with a `/dev/cecN` device, it works. If it lists nothing, this package will install fine but the service will find no CEC adapter and exit in a restart loop — harmless, but pointless.
+If that lists an `amdgpu (DP-1):` entry with a `/dev/cecN` device, it works. If it lists nothing, this package will install fine but the service will find no CEC adapter and exit in a restart loop — harmless, but pointless. Without a CEC-capable link there is currently no workaround for the underlying bug at all.
 
 Enabled by default on install, including when pulled in as a dependency of `linux-cachyos-bc250-meta`:
 
