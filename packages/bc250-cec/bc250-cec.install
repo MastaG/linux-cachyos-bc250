@@ -1,21 +1,32 @@
 post_install() {
-    echo "==> BC-250 CEC installed: identifies as 'SteamOS' on the HDMI CEC bus and"
-    echo "==>   replugs the HDMI link when the display reports powering on."
-    echo "==> Not enabled by default. Needs a CEC-capable adapter -- check first:"
+    echo "==> BC-250 CEC installed: identifies as 'SteamOS' on the HDMI CEC bus,"
+    echo "==>   replugs the HDMI link when the display reports powering on, and"
+    echo "==>   watches for another device switching the active input to it."
+    echo "==> Enabled by default. No CEC-capable adapter? It starts fine regardless"
+    echo "==>   and just exits in a harmless restart loop -- check with:"
     echo "==>   cec-ctl --list-devices"
-    echo "==> If that lists a /dev/cecN device, enable with:"
-    echo "==>   sudo systemctl enable --now bc250-cec.service"
-    echo "==> Then watch it react to the display turning on:"
+    systemctl enable --now bc250-cec.service >/dev/null 2>&1 || true
+    echo "==> Watch it react to the display turning on:"
     echo "==>   sudo journalctl -u bc250-cec -f"
 }
 
 post_upgrade() {
-    echo "==> BC-250 CEC updated. Restart to pick it up:"
-    echo "==>   sudo systemctl restart bc250-cec.service"
+    echo "==> BC-250 CEC updated."
+    # enable ensures the boot-time symlink exists for anyone upgrading from
+    # a version that shipped disabled by default; restart (not just --now,
+    # which is a no-op start on an already-active unit) makes sure the new
+    # code is actually running rather than the old one carrying on.
+    systemctl enable bc250-cec.service >/dev/null 2>&1 || true
+    systemctl restart bc250-cec.service >/dev/null 2>&1 || true
+}
+
+# Runs before pacman removes this package's files, while the unit file this
+# names still exists -- disabling/stopping from post_remove instead would
+# ask systemd to act on a unit whose file is already gone.
+pre_remove() {
+    systemctl disable --now bc250-cec.service >/dev/null 2>&1 || true
 }
 
 post_remove() {
-    echo "==> BC-250 CEC removed. If it was enabled, pacman has already stopped it;"
-    echo "==>   nothing else to clean up (it never claims a CEC logical address the"
-    echo "==>   display treats as a lasting registration)."
+    echo "==> BC-250 CEC removed."
 }

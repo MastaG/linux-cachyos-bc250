@@ -948,11 +948,55 @@ class Bc250CecPackageTests(unittest.TestCase):
         text = (self.PKG_DIR / "bc250-cec.service").read_text()
         self.assertNotIn("User=", text)
 
-    def test_not_enabled_by_default(self):
+    def test_pkgbuild_wires_up_the_install_scriptlet(self):
+        # Found 2026-09-27: the .install file existed and was pinned by
+        # tests that read it straight off disk, but the PKGBUILD never had
+        # an install= line, so makepkg never actually embedded it in the
+        # built package -- none of post_install/post_upgrade/pre_remove/
+        # post_remove had ever run for any real user, on any version.
+        text = (self.PKG_DIR / "PKGBUILD").read_text()
+        self.assertIn("install=bc250-cec.install", text)
+
+    def test_enabled_by_default(self):
         text = (self.PKG_DIR / "bc250-cec.install").read_text()
-        self.assertIn("Not enabled by default", text)
-        self.assertNotIn("systemctl enable --now bc250-cec.service\"\n}", text,
-                         "the install scriptlet must not enable the service itself")
+        self.assertIn("systemctl enable --now bc250-cec.service", text,
+                      "post_install must enable and start the service")
+        self.assertIn("pre_remove()", text)
+        self.assertIn("systemctl disable --now bc250-cec.service", text,
+                      "removal must disable/stop it, and from pre_remove (while the"
+                      " unit file this names still exists), not post_remove")
+
+    def test_self_heals_a_lost_logical_address_claim(self):
+        # Hardware-observed 2026-09-27: a real display power cycle can leave
+        # the adapter fully unconfigured (LA mask 0x0000), which a pre-fix
+        # daemon read as plain "off" forever with no way back. Must detect
+        # and re-claim rather than silently going blind.
+        text = self.DAEMON.read_text()
+        self.assertIn("unconfigured", text)
+        self.assertIn("claim_logical_address", text)
+
+    def test_watches_for_active_source_switches_to_us(self):
+        # The power-status poll alone cannot see an input switch that
+        # happens while the display never goes to standby -- this is the
+        # second, independent trigger path added to cover that case.
+        text = self.DAEMON.read_text()
+        self.assertIn("SET_STREAM_PATH", text)
+        self.assertIn("ACTIVE_SOURCE", text)
+        self.assertIn("own_physical_address", text)
+
+    def test_monitor_loop_reattaches_instead_of_exiting(self):
+        # Hardware-observed 2026-09-27: firing our own trigger_hotplug
+        # invalidates the active-source monitor's open cec-ctl handle.
+        # Treating that as fatal to the whole service (as a first version
+        # did) forces a systemd restart that briefly blinds the power-poll
+        # loop's baseline tracking too, right as a real transition can
+        # land. It must retry in place instead.
+        text = self.DAEMON.read_text()
+        self.assertIn("reattaching", text)
+
+    def test_poll_interval_defaults_to_5s(self):
+        text = self.DAEMON.read_text()
+        self.assertIn('POLL_INTERVAL_S="${BC250_CEC_POLL_INTERVAL_S:-5}"', text)
 
     def test_readme_agrees_it_is_detection_only(self):
         text = (ROOT / "README.md").read_text()

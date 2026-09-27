@@ -844,7 +844,7 @@ Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplum
 
 ## Optional BC-250 CEC
 
-`bc250-cec` identifies this board to the HDMI CEC bus as `SteamOS`, and replugs the HDMI link — the same re-detect a physical cable pull triggers, via the kernel's `trigger_hotplug` debugfs entry — when the display reports powering on over CEC. This exists for the same black-screen-on-wake symptom as [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change): the kernel's automatic relink reacts to how long the link was blanked, which is a proxy for "the display was off," not the display's actual power state. CEC gives that directly, as an event instead of a timer.
+`bc250-cec` identifies this board to the HDMI CEC bus as `SteamOS`, and replugs the HDMI link — the same re-detect a physical cable pull triggers, via the kernel's `trigger_hotplug` debugfs entry — when the display reports powering on over CEC, or when another device (a TV or AVR) switches its active input to this board while the display never actually went to standby. This exists for the same black-screen-on-wake symptom as [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change): the kernel's automatic relink reacts to how long the link was blanked, which is a proxy for "the display was off," not the display's actual power state or which input is selected. CEC gives that directly, as an event instead of a timer.
 
 Deliberately narrow: it only detects and reacts. It never sends a power command to the display — no waking it, no putting it to sleep.
 
@@ -857,11 +857,10 @@ cec-ctl --list-devices
 
 If that lists an `amdgpu (DP-1):` entry with a `/dev/cecN` device, it works. If it lists nothing, this package will install fine but the service will find no CEC adapter and exit in a restart loop — harmless, but pointless.
 
-Not enabled by default:
+Enabled by default on install, including when pulled in as a dependency of `linux-cachyos-bc250-meta`:
 
 ```bash
 sudo pacman -S bc250-cec
-sudo systemctl enable --now bc250-cec.service
 ```
 
 Watch it react to the display turning on:
