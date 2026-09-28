@@ -911,16 +911,32 @@ class Bc250CecPackageTests(unittest.TestCase):
     PKG_DIR = ROOT / "packages/bc250-cec"
     DAEMON = PKG_DIR / "bc250-cec-daemon.sh"
 
-    def test_never_sends_a_power_command_to_the_display(self):
+    def test_never_sends_a_power_or_unconditional_input_switch_command(self):
         # Flag-shaped, not a bare word: the daemon's own top-of-file comment
         # legitimately says "no <standby>" in prose explaining this promise.
+        # --active-source is the one deliberate, opt-in exception (off by
+        # default -- see test_switch_input_is_opt_in_and_off_by_default),
+        # so it is checked separately rather than forbidden outright here.
         text = self.DAEMON.read_text()
-        for flag in ("--standby", "--image-view-on", "--text-view-on", "--active-source"):
+        for flag in ("--standby", "--image-view-on", "--text-view-on"):
             self.assertNotIn(flag, text,
                              f"the daemon must only query power state, never pass {flag} to cec-ctl")
         # The three real invocations this feature needs: discover, claim, query.
         for flag in ("--list-devices", "--playback", "--give-device-power-status"):
             self.assertIn(flag, text)
+
+    def test_switch_input_is_opt_in_and_off_by_default(self):
+        # The one command in the whole daemon that can change the display's
+        # active input -- must default to off, and must only ever be wired
+        # to the power-on trigger (switching input again after the TV
+        # already switched to us via the active-source trigger would be
+        # pointless, and is not what the user asked for).
+        text = self.DAEMON.read_text()
+        self.assertIn('SWITCH_INPUT_ON_POWER_ON="${BC250_CEC_SWITCH_INPUT_ON_POWER_ON:-0}"', text)
+        self.assertIn('SWITCH_INPUT_DELAY_S="${BC250_CEC_SWITCH_INPUT_DELAY_S:-3}"', text)
+        self.assertIn('--active-source "phys-addr=$own_addr"', text)
+        self.assertIn("do_switch_input=0", text,
+                      "the active_source trigger branch must hardcode this off")
 
     def test_a_display_already_on_at_startup_does_not_trigger_a_replug(self):
         # The first poll must only ever set the baseline, never fire the
@@ -989,6 +1005,8 @@ class Bc250CecPackageTests(unittest.TestCase):
             "BC250_CEC_WAKE_DELAY_S",
             "BC250_CEC_POLL_INTERVAL_S",
             "BC250_CEC_TRIGGER_COOLDOWN_S",
+            "BC250_CEC_SWITCH_INPUT_ON_POWER_ON",
+            "BC250_CEC_SWITCH_INPUT_DELAY_S",
         ):
             with self.subTest(var=var):
                 self.assertIn(var, conf, f"{var} must be documented in bc250-cec.conf")
@@ -1004,8 +1022,8 @@ class Bc250CecPackageTests(unittest.TestCase):
         self.assertIn('HOTPLUG_ON_ACTIVE_SOURCE="${BC250_CEC_HOTPLUG_ON_ACTIVE_SOURCE:-1}"', text)
         self.assertIn('WAKE_KEY_ON_POWER_ON="${BC250_CEC_WAKE_KEY_ON_POWER_ON:-1}"', text)
         self.assertIn('WAKE_KEY_ON_ACTIVE_SOURCE="${BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE:-1}"', text)
-        self.assertIn('fire_trigger "$trigger_path" "$connector" power_on', text)
-        self.assertIn('fire_trigger "$trigger_path" "$connector" active_source', text)
+        self.assertIn('fire_trigger "$trigger_path" "$connector" "$cec_dev" "$own_addr" power_on', text)
+        self.assertIn('fire_trigger "$trigger_path" "$connector" "$cec_dev" "$own_addr" active_source', text)
 
     def test_display_name_is_configurable(self):
         text = self.DAEMON.read_text()

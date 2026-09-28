@@ -848,7 +848,7 @@ Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplum
 
 `bc250-cec` identifies this board to the HDMI CEC bus as `SteamOS`, and replugs the HDMI link — the same re-detect a physical cable pull triggers, via the kernel's `trigger_hotplug` debugfs entry — when the display reports powering on over CEC, or when another device (a TV or AVR) switches its active input to this board while the display never actually went to standby.
 
-Deliberately narrow: it only detects and reacts. It never sends a power command to the display — no waking it, no putting it to sleep. And it only helps at all on a display chain that actually tunnels CEC — see below.
+Deliberately narrow: by default it only detects and reacts. It never sends a power command to the display — no waking it, no putting it to sleep — and by default never sends a command that could change the input either. One opt-in exception exists, off by default: see `BC250_CEC_SWITCH_INPUT_ON_POWER_ON` below. It only helps at all on a display chain that actually tunnels CEC — see below.
 
 Separately, it also works around a Steam/gamescope UI quirk: after the replug, Steam can be left showing a black screen instead of its usual screensaver until something is pressed. A second after the replug, the service injects one synthetic keypress (`F15` by default — not present on physical keyboards, and essentially never bound to anything in a game) through a throwaway virtual keyboard — not a CEC command, just a workaround for the UI's own redraw.
 
@@ -888,6 +888,8 @@ Runs as root — the debugfs write it needs (`/sys/kernel/debug/dri/*/DP-1/trigg
 | `BC250_CEC_WAKE_DELAY_S` | `1` | Seconds after a replug before injecting the keypress |
 | `BC250_CEC_POLL_INTERVAL_S` | `5` | How often to poll the display's power status |
 | `BC250_CEC_TRIGGER_COOLDOWN_S` | `30` | Minimum seconds between replugs, shared across both trigger sources |
+| `BC250_CEC_SWITCH_INPUT_ON_POWER_ON` | `0` | Broadcast `<Active Source>` after a power-on so the TV switches its input to this board on its own — the one setting that can change what's on screen, off by default |
+| `BC250_CEC_SWITCH_INPUT_DELAY_S` | `3` | Seconds after a power-on replug to wait before switching the input |
 
 ---
 

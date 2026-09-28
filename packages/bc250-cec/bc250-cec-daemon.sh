@@ -16,15 +16,16 @@
 #      display never actually powered off. The power-state poll alone
 #      cannot see this, since the display was "on" throughout.
 #
-# Deliberately does not send any power or input-switching commands over
-# CEC (no <Standby>, no <Active Source>, no <Image View On>) -- detection
-# only, per the feature request this shipped for. Verified on a real CEC
-# bus trace that claiming a logical address never transmits anything
-# beyond the mandatory address-claim broadcasts and our own power-status
-# queries. Separately, after the replug settles, it injects one synthetic
-# keypress via uinput -- not a CEC command at all, just a workaround for
-# Steam/gamescope's own UI being left on a black screen instead of its
-# usual screensaver after a hotplug replug.
+# Never sends <Standby> or <Image View On> -- detection only, per the
+# feature request this shipped for. Verified on a real CEC bus trace that
+# claiming a logical address never transmits anything beyond the mandatory
+# address-claim broadcasts and our own power-status queries. Separately,
+# after the replug settles, it injects one synthetic keypress via uinput
+# -- not a CEC command at all, just a workaround for Steam/gamescope's own
+# UI being left on a black screen instead of its usual screensaver after a
+# hotplug replug. The one opt-in exception, off by default
+# (SWITCH_INPUT_ON_POWER_ON), broadcasts <Active Source> after a power-on
+# so the TV switches to this board's input on its own.
 #
 # The debugfs trigger_hotplug write needs root; the CEC calls do not
 # (/dev/cecN is group `video`), but the whole service runs as root anyway
@@ -60,6 +61,15 @@ readonly WAKE_KEY_ON_ACTIVE_SOURCE="${BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE:-1}"
 # fires. Empty disables the wake keypress entirely.
 readonly WAKE_KEY="${BC250_CEC_WAKE_KEY:-KEY_F15}"
 readonly WAKE_DELAY_S="${BC250_CEC_WAKE_DELAY_S:-1}"
+# Opt-in and off by default: this is the one thing the rest of this daemon
+# deliberately never does on its own (see the top-of-file note on why) --
+# broadcast ACTIVE_SOURCE so the TV switches its input to us. Only wired
+# to the power-on trigger (an active-source trigger means the TV already
+# switched to us, so sending it again would be pointless). The delay lets
+# the replug and the display's own post-power-on settling happen first
+# rather than racing a CEC broadcast against them.
+readonly SWITCH_INPUT_ON_POWER_ON="${BC250_CEC_SWITCH_INPUT_ON_POWER_ON:-0}"
+readonly SWITCH_INPUT_DELAY_S="${BC250_CEC_SWITCH_INPUT_DELAY_S:-3}"
 # Shared between the poll loop and the active-source monitor loop, which
 # run as two concurrent background jobs -- a plain shell variable is not
 # visible across them, but a file is. RuntimeDirectory=bc250-cec in the
@@ -162,22 +172,34 @@ with UInput({e.EV_KEY: [key]}, name="bc250-cec-wake") as ui:
 PYEOF
 }
 
-# Fire the debugfs replug and/or the wake keypress for one trigger
-# source ("power_on" or "active_source"), each independently switchable.
-# Shares one cooldown across both sources via TRIGGER_STATE_FILE so a
-# power-on and an active-source switch landing close together cannot
-# double-trigger.
+# Broadcast ACTIVE_SOURCE naming our own physical address, so the TV
+# switches its input to us. The one command in this whole daemon that can
+# change the display's active input -- opt-in only, see
+# SWITCH_INPUT_ON_POWER_ON above.
+switch_input_to_us() {
+    local dev="$1" own_addr="$2"
+    cec-ctl -d "$dev" --active-source "phys-addr=$own_addr" >/dev/null 2>&1 \
+        || log "failed to send active-source"
+}
+
+# Fire the debugfs replug, the wake keypress, and/or (power-on only,
+# opt-in) the active-source switch, for one trigger source ("power_on" or
+# "active_source") -- each independently switchable. Shares one cooldown
+# across both sources via TRIGGER_STATE_FILE so a power-on and an
+# active-source switch landing close together cannot double-trigger.
 fire_trigger() {
-    local trigger_path="$1" connector="$2" source="$3" reason="$4"
-    local do_hotplug do_wake now last
+    local trigger_path="$1" connector="$2" cec_dev="$3" own_addr="$4" source="$5" reason="$6"
+    local do_hotplug do_wake do_switch_input now last
 
     case "$source" in
-        power_on) do_hotplug="$HOTPLUG_ON_POWER_ON"; do_wake="$WAKE_KEY_ON_POWER_ON" ;;
-        active_source) do_hotplug="$HOTPLUG_ON_ACTIVE_SOURCE"; do_wake="$WAKE_KEY_ON_ACTIVE_SOURCE" ;;
+        power_on) do_hotplug="$HOTPLUG_ON_POWER_ON"; do_wake="$WAKE_KEY_ON_POWER_ON"
+                  do_switch_input="$SWITCH_INPUT_ON_POWER_ON" ;;
+        active_source) do_hotplug="$HOTPLUG_ON_ACTIVE_SOURCE"; do_wake="$WAKE_KEY_ON_ACTIVE_SOURCE"
+                  do_switch_input=0 ;;
     esac
 
-    if [[ "$do_hotplug" != 1 && "$do_wake" != 1 ]]; then
-        log "$reason, but both the replug and the wake key are disabled for this trigger; skipping"
+    if [[ "$do_hotplug" != 1 && "$do_wake" != 1 && "$do_switch_input" != 1 ]]; then
+        log "$reason, but everything is disabled for this trigger; skipping"
         return 0
     fi
 
@@ -194,6 +216,11 @@ fire_trigger() {
             sleep "$WAKE_DELAY_S"
             inject_wake_key
         fi
+        if [[ "$do_switch_input" == 1 ]]; then
+            sleep "$SWITCH_INPUT_DELAY_S"
+            log "switching TV input to us ($own_addr)"
+            switch_input_to_us "$cec_dev" "$own_addr"
+        fi
     else
         log "$reason, but within the ${TRIGGER_COOLDOWN_S}s cooldown; skipping"
     fi
@@ -203,14 +230,14 @@ fire_trigger() {
 # transition. Baseline-only on the first reading, so a display already on
 # when this service (re)starts does not glitch the picture.
 poll_power_loop() {
-    local cec_dev="$1" trigger_path="$2" connector="$3"
+    local cec_dev="$1" trigger_path="$2" connector="$3" own_addr="$4"
     local state prev_state="" baseline_set=0
 
     while :; do
         state="$(query_power_state "$cec_dev")"
 
         if (( baseline_set )) && [[ "$prev_state" != on && "$state" == on ]]; then
-            fire_trigger "$trigger_path" "$connector" power_on "display powered on ($prev_state -> on)"
+            fire_trigger "$trigger_path" "$connector" "$cec_dev" "$own_addr" power_on "display powered on ($prev_state -> on)"
         elif (( ! baseline_set )); then
             log "baseline display power state: $state"
         fi
@@ -259,7 +286,7 @@ monitor_active_source_loop() {
             fi
             if (( pending )) && grep -qE 'phys-addr:' <<<"$line"; then
                 if grep -qF "$own_addr" <<<"$line"; then
-                    fire_trigger "$trigger_path" "$connector" active_source "active source switched to us ($own_addr)"
+                    fire_trigger "$trigger_path" "$connector" "$cec_dev" "$own_addr" active_source "active source switched to us ($own_addr)"
                 fi
                 pending=0
             fi
@@ -295,7 +322,7 @@ main() {
 
     mkdir -p "$(dirname "$TRIGGER_STATE_FILE")"
 
-    poll_power_loop "$cec_dev" "$trigger_path" "$connector" &
+    poll_power_loop "$cec_dev" "$trigger_path" "$connector" "$own_addr" &
     local poll_pid=$!
     monitor_active_source_loop "$cec_dev" "$trigger_path" "$connector" "$own_addr" &
     local monitor_pid=$!
