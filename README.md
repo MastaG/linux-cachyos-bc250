@@ -890,6 +890,10 @@ Runs as root — the debugfs write it needs (`/sys/kernel/debug/dri/*/DP-1/trigg
 | `BC250_CEC_TRIGGER_COOLDOWN_S` | `30` | Minimum seconds between replugs, shared across both trigger sources |
 | `BC250_CEC_SWITCH_INPUT_ON_POWER_ON` | `0` | Broadcast `<Active Source>` and `<System Audio Mode Request>` after a power-on, so the TV switches its input and the AVR its audio to this board on their own — the one setting that can change what's on screen or playing, off by default |
 | `BC250_CEC_SWITCH_INPUT_DELAY_S` | `3` | Seconds after a power-on replug to wait before switching the input |
+| `BC250_CEC_ON_POWER_ON_COMMAND` | (none) | Full path to a script to run (as root, in the background) on a genuine display power-on |
+| `BC250_CEC_ON_POWER_OFF_COMMAND` | (none) | Same, on a genuine display power-off |
+
+`BC250_CEC_ON_POWER_ON_COMMAND`/`BC250_CEC_ON_POWER_OFF_COMMAND` always come from this file, never from anything received over CEC — the CEC bus only ever supplies the trigger (a boolean "the display just turned on/off"), never the payload, so nothing on the bus can influence what runs, only whether it does. The script itself still runs as root, same as the rest of this service.
 
 ---
 

@@ -25,7 +25,11 @@
 # UI being left on a black screen instead of its usual screensaver after a
 # hotplug replug. The one opt-in exception, off by default
 # (SWITCH_INPUT_ON_POWER_ON), broadcasts <Active Source> after a power-on
-# so the TV switches to this board's input on its own.
+# so the TV switches to this board's input on its own. Separately, two
+# more opt-in hooks (ON_POWER_ON_COMMAND/ON_POWER_OFF_COMMAND) can run an
+# arbitrary user script on a genuine power transition -- the command
+# always comes from the config file, never from anything received over
+# CEC, so nothing on the bus can influence what gets executed.
 #
 # The debugfs trigger_hotplug write needs root; the CEC calls do not
 # (/dev/cecN is group `video`), but the whole service runs as root anyway
@@ -72,6 +76,17 @@ readonly WAKE_DELAY_S="${BC250_CEC_WAKE_DELAY_S:-1}"
 # CEC broadcast against them.
 readonly SWITCH_INPUT_ON_POWER_ON="${BC250_CEC_SWITCH_INPUT_ON_POWER_ON:-0}"
 readonly SWITCH_INPUT_DELAY_S="${BC250_CEC_SWITCH_INPUT_DELAY_S:-3}"
+# Run an arbitrary user-provided script on a genuine power transition --
+# e.g. smart-home integration, muting/pausing something, anything else
+# scriptable. Empty (the default) disables each independently. The
+# command always comes from this trusted, root-owned config file, never
+# from anything received over CEC -- CEC only ever supplies the trigger
+# (a boolean "the display just turned on/off"), never the payload, so
+# there is no path for a CEC message from any device on the bus to
+# influence what gets executed. The script itself still runs as root,
+# same as the rest of this daemon; write it carefully.
+readonly ON_POWER_ON_COMMAND="${BC250_CEC_ON_POWER_ON_COMMAND:-}"
+readonly ON_POWER_OFF_COMMAND="${BC250_CEC_ON_POWER_OFF_COMMAND:-}"
 # Shared between the poll loop and the active-source monitor loop, which
 # run as two concurrent background jobs -- a plain shell variable is not
 # visible across them, but a file is. RuntimeDirectory=bc250-cec in the
@@ -125,16 +140,29 @@ own_physical_address() {
 }
 
 # "on" if the display answered GIVE_DEVICE_POWER_STATUS with pwr-state: on;
-# "off" for standby, any other reported state, or no reply at all (display
-# fully powered off, or unreachable through a currently-off AVR in the
-# chain). CEC's logical address 0 is always the TV by the spec's own
-# convention, regardless of how many CEC repeaters (an AVR, for instance)
-# sit between this board and it, so this needs no topology-specific logic.
+# "off" only for a confirmed pwr-state: standby reply; "unknown" for
+# anything else (no reply, a communication error, the in-transition
+# states) -- display fully powered off, or unreachable through a
+# currently-off AVR in the chain, are indistinguishable from a transient
+# hiccup without a real reply, so neither can safely be called "off".
+# CEC's logical address 0 is always the TV by the spec's own convention,
+# regardless of how many CEC repeaters (an AVR, for instance) sit between
+# this board and it, so this needs no topology-specific logic.
 #
 # If our own adapter has lost its logical address claim (cec-ctl reports
 # "unconfigured"), that is not a display power state at all -- re-claim and
 # retry once immediately, so a lost claim costs at most one extra query
 # rather than blinding every poll until the service is restarted.
+#
+# The on/off/unknown distinction matters beyond that retry: confirmed on
+# hardware 2026-09-28 that this board's own replug and active-source
+# broadcasts transiently disrupt CEC communication for a few seconds
+# afterward, which previously read back as a plain "off" -- indistinguishable
+# from the display actually reporting standby. That is a safe default for
+# power-ON detection (worst case, a delayed "on" reading), but it let a
+# self-inflicted comms hiccup fire the power-OFF custom command
+# (ON_POWER_OFF_COMMAND) during the settling window right after a real
+# power-ON, which is a much worse false positive for that feature.
 query_power_state() {
     local dev="$1" out
     out="$(cec-ctl -d "$dev" --to "$TV_LOGICAL_ADDRESS" --give-device-power-status 2>&1)" || true
@@ -145,8 +173,10 @@ query_power_state() {
     fi
     if grep -qE 'pwr-state: on\b' <<<"$out"; then
         printf 'on\n'
-    else
+    elif grep -qE 'pwr-state: standby\b' <<<"$out"; then
         printf 'off\n'
+    else
+        printf 'unknown\n'
     fi
 }
 
@@ -193,23 +223,33 @@ switch_input_to_us() {
         || log "failed to send system-audio-mode-request"
 }
 
-# Fire the debugfs replug, the wake keypress, and/or (power-on only,
-# opt-in) the active-source switch, for one trigger source ("power_on" or
-# "active_source") -- each independently switchable. Shares one cooldown
-# across both sources via TRIGGER_STATE_FILE so a power-on and an
-# active-source switch landing close together cannot double-trigger.
+# Fire the debugfs replug, the wake keypress, the active-source switch,
+# and/or (power-on only) the custom power-on command, for one trigger
+# source ("power_on" or "active_source") -- each independently
+# switchable. Shares one cooldown across both sources via
+# TRIGGER_STATE_FILE so a power-on and an active-source switch landing
+# close together cannot double-trigger. The custom command is folded in
+# here (rather than called separately from the poll loop) specifically
+# so it shares this same protection: hardware-observed 2026-09-28, this
+# board's own replug/active-source broadcasts transiently disrupt CEC
+# communication for a few seconds afterward, which the poll loop could
+# briefly misread as an off->on blip and fire the custom command a
+# second time even though the replug itself was correctly cooldown-
+# suppressed.
 fire_trigger() {
     local trigger_path="$1" connector="$2" cec_dev="$3" own_addr="$4" source="$5" reason="$6"
-    local do_hotplug do_wake do_switch_input now last
+    local do_hotplug do_wake do_switch_input do_custom_command now last
 
     case "$source" in
         power_on) do_hotplug="$HOTPLUG_ON_POWER_ON"; do_wake="$WAKE_KEY_ON_POWER_ON"
-                  do_switch_input="$SWITCH_INPUT_ON_POWER_ON" ;;
+                  do_switch_input="$SWITCH_INPUT_ON_POWER_ON"
+                  [[ -n "$ON_POWER_ON_COMMAND" ]] && do_custom_command=1 || do_custom_command=0 ;;
         active_source) do_hotplug="$HOTPLUG_ON_ACTIVE_SOURCE"; do_wake="$WAKE_KEY_ON_ACTIVE_SOURCE"
-                  do_switch_input=0 ;;
+                  do_switch_input=0
+                  do_custom_command=0 ;;
     esac
 
-    if [[ "$do_hotplug" != 1 && "$do_wake" != 1 && "$do_switch_input" != 1 ]]; then
+    if [[ "$do_hotplug" != 1 && "$do_wake" != 1 && "$do_switch_input" != 1 && "$do_custom_command" != 1 ]]; then
         log "$reason, but everything is disabled for this trigger; skipping"
         return 0
     fi
@@ -232,14 +272,33 @@ fire_trigger() {
             log "switching TV input and AVR audio to us ($own_addr)"
             switch_input_to_us "$cec_dev" "$own_addr"
         fi
+        if [[ "$do_custom_command" == 1 ]]; then
+            run_custom_command "$ON_POWER_ON_COMMAND" "power-on"
+        fi
     else
         log "$reason, but within the ${TRIGGER_COOLDOWN_S}s cooldown; skipping"
     fi
 }
 
+# Run a user-configured script (ON_POWER_ON_COMMAND/ON_POWER_OFF_COMMAND)
+# in the background -- fire-and-forget, so an arbitrarily slow script
+# (a home-automation API call, etc.) never blocks the poll loop's own
+# detection. Its stdout/stderr are left connected to this service's own
+# (i.e. land in `journalctl -u bc250-cec` alongside our own log lines),
+# deliberately not silenced, so a broken script is visible for debugging
+# rather than failing invisibly.
+run_custom_command() {
+    local cmd="$1" event="$2"
+    [[ -n "$cmd" ]] || return 0
+    log "running configured $event command: $cmd"
+    "$cmd" &
+    disown
+}
+
 # Loop 1: poll the display's power state, trigger on a genuine off -> on
-# transition. Baseline-only on the first reading, so a display already on
-# when this service (re)starts does not glitch the picture.
+# or on -> off transition. Baseline-only on the first reading, so a
+# display already on (or off) when this service (re)starts does not
+# glitch the picture or spuriously fire a power-off command.
 poll_power_loop() {
     local cec_dev="$1" trigger_path="$2" connector="$3" own_addr="$4"
     local state prev_state="" baseline_set=0
@@ -247,9 +306,20 @@ poll_power_loop() {
     while :; do
         state="$(query_power_state "$cec_dev")"
 
-        if (( baseline_set )) && [[ "$prev_state" != on && "$state" == on ]]; then
-            fire_trigger "$trigger_path" "$connector" "$cec_dev" "$own_addr" power_on "display powered on ($prev_state -> on)"
-        elif (( ! baseline_set )); then
+        if (( baseline_set )); then
+            if [[ "$prev_state" != on && "$state" == on ]]; then
+                # The custom power-on command runs from inside
+                # fire_trigger() itself, not here -- see its own comment
+                # for why.
+                fire_trigger "$trigger_path" "$connector" "$cec_dev" "$own_addr" power_on "display powered on ($prev_state -> on)"
+            elif [[ "$prev_state" == on && "$state" == off ]]; then
+                # Strictly "off" (a confirmed pwr-state: standby reply),
+                # not just "not on" -- a transient comms hiccup reads as
+                # "unknown", never "off", so it can no longer masquerade
+                # as a genuine power-off here. See query_power_state().
+                run_custom_command "$ON_POWER_OFF_COMMAND" "power-off"
+            fi
+        else
             log "baseline display power state: $state"
         fi
 

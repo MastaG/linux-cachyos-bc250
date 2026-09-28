@@ -951,13 +951,70 @@ class Bc250CecPackageTests(unittest.TestCase):
         self.assertIn('--to "$AUDIO_SYSTEM_LOGICAL_ADDRESS"', text)
         self.assertIn('--system-audio-mode-request "phys-addr=$own_addr"', text)
 
+    def test_custom_power_commands_come_only_from_the_config_file(self):
+        # The service runs unconfined as root, so the safety property that
+        # matters is not "this can't run arbitrary code" (it deliberately
+        # can, on request) but "nothing received over CEC can choose what
+        # runs" -- the command path is read once from the environment
+        # (ultimately /etc/bc250-cec.conf, root-owned) and never built
+        # from, or influenced by, any cec-ctl output.
+        text = self.DAEMON.read_text()
+        self.assertIn('ON_POWER_ON_COMMAND="${BC250_CEC_ON_POWER_ON_COMMAND:-}"', text)
+        self.assertIn('ON_POWER_OFF_COMMAND="${BC250_CEC_ON_POWER_OFF_COMMAND:-}"', text)
+        self.assertIn('run_custom_command "$ON_POWER_ON_COMMAND" "power-on"', text)
+        self.assertIn('run_custom_command "$ON_POWER_OFF_COMMAND" "power-off"', text)
+        # Backgrounded: an arbitrarily slow user script must never block
+        # the poll loop's own CEC detection.
+        self.assertIn('"$cmd" &', text)
+
+    def test_power_off_command_requires_a_confirmed_standby_reply(self):
+        # Hardware-observed 2026-09-28: this board's own replug/
+        # active-source broadcasts transiently disrupt CEC communication
+        # for a few seconds afterward. query_power_state() previously
+        # collapsed any non-"on" reply (including no reply / a comms
+        # error) into a plain "off", which let a self-inflicted hiccup
+        # right after a real power-ON fire the power-OFF custom command.
+        # Only a literal "pwr-state: standby" reply may now read as "off".
+        text = self.DAEMON.read_text()
+        self.assertIn("pwr-state: standby", text)
+        self.assertIn('printf \'unknown\\n\'', text)
+        self.assertIn('"$prev_state" == on && "$state" == off', text)
+
+    def test_power_on_command_shares_the_replug_cooldown(self):
+        # Hardware-observed 2026-09-28: calling run_custom_command for
+        # ON_POWER_ON_COMMAND directly from the poll loop (outside
+        # fire_trigger()'s cooldown gate) let a noise-induced repeat
+        # off->on blip fire the custom command a second time even when
+        # fire_trigger() itself correctly cooldown-suppressed the replug.
+        # It must run from inside fire_trigger()'s cooldown-gated branch,
+        # not be called separately from poll_power_loop.
+        text = self.DAEMON.read_text()
+        self.assertIn("do_custom_command", text)
+        self.assertNotIn('run_custom_command "$ON_POWER_ON_COMMAND" "power-on"\n                run_custom_command',
+                          text)
+        # Only one call site for the power-on command, and it must be
+        # inside fire_trigger (between its def and the next top-level
+        # function), not inside poll_power_loop.
+        fire_trigger_body = text[text.index("fire_trigger() {"):text.index("run_custom_command() {")]
+        self.assertIn('run_custom_command "$ON_POWER_ON_COMMAND" "power-on"', fire_trigger_body)
+        poll_loop_body = text[text.index("poll_power_loop() {"):text.index("monitor_active_source_loop() {")]
+        self.assertNotIn("ON_POWER_ON_COMMAND", poll_loop_body)
+
+    def test_custom_power_commands_documented_and_off_by_default(self):
+        conf = (self.PKG_DIR / "bc250-cec.conf").read_text()
+        self.assertIn("BC250_CEC_ON_POWER_ON_COMMAND", conf)
+        self.assertIn("BC250_CEC_ON_POWER_OFF_COMMAND", conf)
+        # Commented out (no bare "KEY=" line) -- disabled unless the user
+        # opts in by uncommenting and pointing it at their own script.
+        self.assertNotRegex(conf, r'(?m)^BC250_CEC_ON_POWER_(ON|OFF)_COMMAND=')
+
     def test_a_display_already_on_at_startup_does_not_trigger_a_replug(self):
         # The first poll must only ever set the baseline, never fire the
-        # trigger branch -- that branch is gated on baseline_set already
-        # being true, so this pins the gate exists rather than being lost in
-        # a future rewrite.
+        # power-on/power-off branches -- both are gated behind
+        # baseline_set already being true, so this pins the gate exists
+        # rather than being lost in a future rewrite.
         text = self.DAEMON.read_text()
-        self.assertIn("(( baseline_set )) &&", text)
+        self.assertIn("if (( baseline_set )); then", text)
         self.assertIn("baseline_set=1", text)
 
     def test_the_debugfs_path_is_discovered_not_hardcoded(self):
