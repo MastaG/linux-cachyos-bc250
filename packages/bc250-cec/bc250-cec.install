@@ -8,6 +8,8 @@ post_install() {
     systemctl enable --now bc250-cec.service >/dev/null 2>&1 || true
     echo "==> Watch it react to the display turning on:"
     echo "==>   sudo journalctl -u bc250-cec -f"
+    echo "==> To change its display name, which triggers it reacts to, or the wake"
+    echo "==>   keypress, edit /etc/bc250-cec.conf and restart the service."
 }
 
 post_upgrade() {

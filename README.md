@@ -850,6 +850,8 @@ Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplum
 
 Deliberately narrow: it only detects and reacts. It never sends a power command to the display — no waking it, no putting it to sleep. And it only helps at all on a display chain that actually tunnels CEC — see below.
 
+Separately, it also works around a Steam/gamescope UI quirk: after the replug, Steam can be left showing a black screen instead of its usual screensaver until something is pressed. A second after the replug, the service injects one synthetic keypress (`F15` by default — not present on physical keyboards, and essentially never bound to anything in a game) through a throwaway virtual keyboard — not a CEC command, just a workaround for the UI's own redraw.
+
 **Needs a CEC-capable link.** Most cheap active DP-to-HDMI adapters do not tunnel CEC at all; ones built on a Chrontel CH7218 have been confirmed to. Check before installing:
 
 ```bash
@@ -872,6 +874,20 @@ sudo journalctl -u bc250-cec -f
 ```
 
 Runs as root — the debugfs write it needs (`/sys/kernel/debug/dri/*/DP-1/trigger_hotplug`) requires it outright, regardless of how the CEC side is set up.
+
+**Configuration**: `/etc/bc250-cec.conf`, commented out by default — uncomment a line to override that default, then `sudo systemctl restart bc250-cec.service`. It is read by systemd itself (`EnvironmentFile=`), not sourced as a shell script, so it cannot run arbitrary commands even if edited carelessly.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `BC250_CEC_DISPLAY_NAME` | `SteamOS` | The name this board reports to the CEC bus |
+| `BC250_CEC_HOTPLUG_ON_POWER_ON` | `1` | Replug on the display reporting power-on |
+| `BC250_CEC_HOTPLUG_ON_ACTIVE_SOURCE` | `1` | Replug on another device switching its active input to this board |
+| `BC250_CEC_WAKE_KEY_ON_POWER_ON` | `1` | Inject the wake keypress after a power-on replug |
+| `BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE` | `1` | Inject the wake keypress after an active-source replug |
+| `BC250_CEC_WAKE_KEY` | `KEY_F15` | The `evdev` `KEY_*` name to inject; empty disables it entirely |
+| `BC250_CEC_WAKE_DELAY_S` | `1` | Seconds after a replug before injecting the keypress |
+| `BC250_CEC_POLL_INTERVAL_S` | `5` | How often to poll the display's power status |
+| `BC250_CEC_TRIGGER_COOLDOWN_S` | `30` | Minimum seconds between replugs, shared across both trigger sources |
 
 ---
 

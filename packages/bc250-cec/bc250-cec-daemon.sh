@@ -16,23 +16,50 @@
 #      display never actually powered off. The power-state poll alone
 #      cannot see this, since the display was "on" throughout.
 #
-# Deliberately does not send any power or input-switching commands (no
-# <Standby>, no <Active Source>, no <Image View On>) -- detection only, per
-# the feature request this shipped for. Verified on a real CEC bus trace
-# that claiming a logical address never transmits anything beyond the
-# mandatory address-claim broadcasts and our own power-status queries.
+# Deliberately does not send any power or input-switching commands over
+# CEC (no <Standby>, no <Active Source>, no <Image View On>) -- detection
+# only, per the feature request this shipped for. Verified on a real CEC
+# bus trace that claiming a logical address never transmits anything
+# beyond the mandatory address-claim broadcasts and our own power-status
+# queries. Separately, after the replug settles, it injects one synthetic
+# keypress via uinput -- not a CEC command at all, just a workaround for
+# Steam/gamescope's own UI being left on a black screen instead of its
+# usual screensaver after a hotplug replug.
 #
 # The debugfs trigger_hotplug write needs root; the CEC calls do not
 # (/dev/cecN is group `video`), but the whole service runs as root anyway
 # to keep this one small rather than split across a privilege boundary for
 # a single write.
+#
+# All tunables below read from the environment, which is how
+# /etc/bc250-cec.conf reaches this script: it is wired up as
+# EnvironmentFile=-/etc/bc250-cec.conf in the unit, parsed by systemd
+# itself as plain KEY=value (not sourced as shell), so an edited config
+# file can never inject shell code here.
 
 set -Eeuo pipefail
 
-readonly OSD_NAME="SteamOS"
+readonly OSD_NAME="${BC250_CEC_DISPLAY_NAME:-SteamOS}"
 readonly POLL_INTERVAL_S="${BC250_CEC_POLL_INTERVAL_S:-5}"
 readonly TRIGGER_COOLDOWN_S="${BC250_CEC_TRIGGER_COOLDOWN_S:-30}"
 readonly TV_LOGICAL_ADDRESS=0
+# Independently toggle the replug and the wake keypress per trigger
+# source, so e.g. one source's detection can be disabled without losing
+# the other, or the keypress can be disabled while keeping the replug.
+readonly HOTPLUG_ON_POWER_ON="${BC250_CEC_HOTPLUG_ON_POWER_ON:-1}"
+readonly HOTPLUG_ON_ACTIVE_SOURCE="${BC250_CEC_HOTPLUG_ON_ACTIVE_SOURCE:-1}"
+readonly WAKE_KEY_ON_POWER_ON="${BC250_CEC_WAKE_KEY_ON_POWER_ON:-1}"
+readonly WAKE_KEY_ON_ACTIVE_SOURCE="${BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE:-1}"
+# Steam/gamescope can be left showing a black screen instead of its usual
+# screensaver after a hotplug replug -- confirmed on hardware 2026-09-28,
+# fixed by one synthetic keypress. F15 is the user's explicit choice of
+# default: not present on physical keyboards at all (unlike F13, which
+# some extended keyboards do have) and essentially never bound to
+# anything in a game or in Steam's own UI, unlike a real key that could
+# double as an in-game action if a game happens to be running when this
+# fires. Empty disables the wake keypress entirely.
+readonly WAKE_KEY="${BC250_CEC_WAKE_KEY:-KEY_F15}"
+readonly WAKE_DELAY_S="${BC250_CEC_WAKE_DELAY_S:-1}"
 # Shared between the poll loop and the active-source monitor loop, which
 # run as two concurrent background jobs -- a plain shell variable is not
 # visible across them, but a file is. RuntimeDirectory=bc250-cec in the
@@ -111,17 +138,62 @@ query_power_state() {
     fi
 }
 
-# Fire the debugfs replug, respecting a cooldown shared with the other
-# loop via TRIGGER_STATE_FILE so a power-on and an active-source switch
-# landing close together cannot double-trigger.
+# One synthetic keypress via a throwaway uinput virtual keyboard --
+# python-evdev is already present on this system (confirmed 2026-09-28),
+# so this needs no new input-injection tool like ydotool. A fresh
+# UInput() per call is deliberately simple/stateless, matching how the
+# rest of this daemon shells out to cec-ctl fresh each time rather than
+# holding a persistent handle; this only runs after an actual trigger,
+# gated by the same cooldown, so it is not a hot path.
+inject_wake_key() {
+    [[ -n "$WAKE_KEY" ]] || return 0
+    python3 - "$WAKE_KEY" <<'PYEOF' 2>/dev/null || log "failed to inject the wake keypress"
+import sys, time
+from evdev import UInput, ecodes as e
+
+key = getattr(e, sys.argv[1])
+with UInput({e.EV_KEY: [key]}, name="bc250-cec-wake") as ui:
+    time.sleep(0.1)  # let udev/libinput enumerate the new virtual device
+    ui.write(e.EV_KEY, key, 1)
+    ui.syn()
+    time.sleep(0.05)
+    ui.write(e.EV_KEY, key, 0)
+    ui.syn()
+PYEOF
+}
+
+# Fire the debugfs replug and/or the wake keypress for one trigger
+# source ("power_on" or "active_source"), each independently switchable.
+# Shares one cooldown across both sources via TRIGGER_STATE_FILE so a
+# power-on and an active-source switch landing close together cannot
+# double-trigger.
 fire_trigger() {
-    local trigger_path="$1" connector="$2" reason="$3" now last
+    local trigger_path="$1" connector="$2" source="$3" reason="$4"
+    local do_hotplug do_wake now last
+
+    case "$source" in
+        power_on) do_hotplug="$HOTPLUG_ON_POWER_ON"; do_wake="$WAKE_KEY_ON_POWER_ON" ;;
+        active_source) do_hotplug="$HOTPLUG_ON_ACTIVE_SOURCE"; do_wake="$WAKE_KEY_ON_ACTIVE_SOURCE" ;;
+    esac
+
+    if [[ "$do_hotplug" != 1 && "$do_wake" != 1 ]]; then
+        log "$reason, but both the replug and the wake key are disabled for this trigger; skipping"
+        return 0
+    fi
+
     now="$(date +%s)"
     last="$(cat "$TRIGGER_STATE_FILE" 2>/dev/null || printf '0')"
     if (( now - last >= TRIGGER_COOLDOWN_S )); then
-        log "$reason; triggering hotplug replug on $connector"
-        echo 1 > "$trigger_path" || log "failed to write $trigger_path"
+        log "$reason"
+        if [[ "$do_hotplug" == 1 ]]; then
+            log "triggering hotplug replug on $connector"
+            echo 1 > "$trigger_path" || log "failed to write $trigger_path"
+        fi
         printf '%s\n' "$now" > "$TRIGGER_STATE_FILE"
+        if [[ "$do_wake" == 1 ]]; then
+            sleep "$WAKE_DELAY_S"
+            inject_wake_key
+        fi
     else
         log "$reason, but within the ${TRIGGER_COOLDOWN_S}s cooldown; skipping"
     fi
@@ -138,7 +210,7 @@ poll_power_loop() {
         state="$(query_power_state "$cec_dev")"
 
         if (( baseline_set )) && [[ "$prev_state" != on && "$state" == on ]]; then
-            fire_trigger "$trigger_path" "$connector" "display powered on ($prev_state -> on)"
+            fire_trigger "$trigger_path" "$connector" power_on "display powered on ($prev_state -> on)"
         elif (( ! baseline_set )); then
             log "baseline display power state: $state"
         fi
@@ -187,7 +259,7 @@ monitor_active_source_loop() {
             fi
             if (( pending )) && grep -qE 'phys-addr:' <<<"$line"; then
                 if grep -qF "$own_addr" <<<"$line"; then
-                    fire_trigger "$trigger_path" "$connector" "active source switched to us ($own_addr)"
+                    fire_trigger "$trigger_path" "$connector" active_source "active source switched to us ($own_addr)"
                 fi
                 pending=0
             fi

@@ -10,6 +10,10 @@ Wants=graphical.target
 
 [Service]
 Type=simple
+# Leading '-': optional, no error if the file does not exist. Parsed by
+# systemd itself as plain KEY=value, not sourced as shell -- an edited
+# config file can set the daemon's tunables but never inject shell code.
+EnvironmentFile=-/etc/bc250-cec.conf
 ExecStart=/usr/lib/bc250-cec/bc250-cec-daemon.sh
 Restart=on-failure
 RestartSec=10

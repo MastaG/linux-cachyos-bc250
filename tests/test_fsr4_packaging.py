@@ -940,6 +940,77 @@ class Bc250CecPackageTests(unittest.TestCase):
         text = (self.PKG_DIR / "PKGBUILD").read_text()
         self.assertIn("'v4l-utils'", text)
 
+    def test_pkgbuild_depends_on_the_wake_key_injection_stack(self):
+        text = (self.PKG_DIR / "PKGBUILD").read_text()
+        self.assertIn("'python'", text)
+        self.assertIn("'python-evdev'", text)
+
+    def test_injects_a_wake_keypress_after_the_replug_not_a_cec_command(self):
+        # Steam/gamescope can be left on a black screen instead of its
+        # screensaver after a hotplug replug -- this is a uinput keypress,
+        # not a CEC message, so it must not appear alongside the other
+        # forbidden cec-ctl flags and must be skippable via an empty key.
+        # F15 (not F13): not present on physical keyboards at all, the
+        # user's explicit choice over the original default.
+        text = self.DAEMON.read_text()
+        self.assertIn("from evdev import UInput", text)
+        self.assertIn('WAKE_KEY="${BC250_CEC_WAKE_KEY:-KEY_F15}"', text)
+        self.assertIn('[[ -n "$WAKE_KEY" ]] || return 0', text)
+
+    def test_config_file_is_wired_up_as_an_environment_file_not_sourced(self):
+        # /etc/bc250-cec.conf must be read by systemd itself
+        # (EnvironmentFile=), never sourced as shell inside the daemon --
+        # an edited config file must not be able to run arbitrary commands.
+        service = (self.PKG_DIR / "bc250-cec.service").read_text()
+        self.assertIn("EnvironmentFile=-/etc/bc250-cec.conf", service)
+        self.assertNotIn("source /etc/bc250-cec.conf", self.DAEMON.read_text())
+        self.assertNotIn(". /etc/bc250-cec.conf", self.DAEMON.read_text())
+
+    def test_config_file_is_shipped_and_backed_up(self):
+        # backup= so pacman preserves a user's edits across upgrades
+        # (.pacnew if the shipped defaults ever change) instead of
+        # silently overwriting them.
+        pkgbuild = (self.PKG_DIR / "PKGBUILD").read_text()
+        self.assertIn("backup=('etc/bc250-cec.conf')", pkgbuild)
+        self.assertIn("'bc250-cec.conf'", pkgbuild)
+        self.assertIn('"$pkgdir/etc/bc250-cec.conf"', pkgbuild)
+        self.assertTrue((self.PKG_DIR / "bc250-cec.conf").exists())
+
+    def test_config_file_documents_every_setting_the_daemon_reads(self):
+        conf = (self.PKG_DIR / "bc250-cec.conf").read_text()
+        daemon = self.DAEMON.read_text()
+        for var in (
+            "BC250_CEC_DISPLAY_NAME",
+            "BC250_CEC_HOTPLUG_ON_POWER_ON",
+            "BC250_CEC_HOTPLUG_ON_ACTIVE_SOURCE",
+            "BC250_CEC_WAKE_KEY_ON_POWER_ON",
+            "BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE",
+            "BC250_CEC_WAKE_KEY",
+            "BC250_CEC_WAKE_DELAY_S",
+            "BC250_CEC_POLL_INTERVAL_S",
+            "BC250_CEC_TRIGGER_COOLDOWN_S",
+        ):
+            with self.subTest(var=var):
+                self.assertIn(var, conf, f"{var} must be documented in bc250-cec.conf")
+                self.assertIn(var, daemon, f"{var} must actually be read by the daemon")
+
+    def test_hotplug_and_wake_key_are_independently_switchable_per_trigger(self):
+        # The two trigger sources (power-on, active-source) must each be
+        # able to turn the replug and the wake keypress on or off on their
+        # own -- e.g. disabling one source's replug must not silently also
+        # disable its wake keypress, or the other source's behavior.
+        text = self.DAEMON.read_text()
+        self.assertIn('HOTPLUG_ON_POWER_ON="${BC250_CEC_HOTPLUG_ON_POWER_ON:-1}"', text)
+        self.assertIn('HOTPLUG_ON_ACTIVE_SOURCE="${BC250_CEC_HOTPLUG_ON_ACTIVE_SOURCE:-1}"', text)
+        self.assertIn('WAKE_KEY_ON_POWER_ON="${BC250_CEC_WAKE_KEY_ON_POWER_ON:-1}"', text)
+        self.assertIn('WAKE_KEY_ON_ACTIVE_SOURCE="${BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE:-1}"', text)
+        self.assertIn('fire_trigger "$trigger_path" "$connector" power_on', text)
+        self.assertIn('fire_trigger "$trigger_path" "$connector" active_source', text)
+
+    def test_display_name_is_configurable(self):
+        text = self.DAEMON.read_text()
+        self.assertIn('OSD_NAME="${BC250_CEC_DISPLAY_NAME:-SteamOS}"', text)
+
     def test_service_requires_root_and_documents_why(self):
         # No User= override: the debugfs write needs root outright
         # (/sys/kernel/debug is 0700 root:root), so this must stay unset
