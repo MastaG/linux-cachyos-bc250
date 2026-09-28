@@ -888,7 +888,7 @@ Runs as root — the debugfs write it needs (`/sys/kernel/debug/dri/*/DP-1/trigg
 | `BC250_CEC_WAKE_DELAY_S` | `1` | Seconds after a replug before injecting the keypress |
 | `BC250_CEC_POLL_INTERVAL_S` | `5` | How often to poll the display's power status |
 | `BC250_CEC_TRIGGER_COOLDOWN_S` | `30` | Minimum seconds between replugs, shared across both trigger sources |
-| `BC250_CEC_SWITCH_INPUT_ON_POWER_ON` | `0` | Broadcast `<Active Source>` after a power-on so the TV switches its input to this board on its own — the one setting that can change what's on screen, off by default |
+| `BC250_CEC_SWITCH_INPUT_ON_POWER_ON` | `0` | Broadcast `<Active Source>` and `<System Audio Mode Request>` after a power-on, so the TV switches its input and the AVR its audio to this board on their own — the one setting that can change what's on screen or playing, off by default |
 | `BC250_CEC_SWITCH_INPUT_DELAY_S` | `3` | Seconds after a power-on replug to wait before switching the input |
 
 ---

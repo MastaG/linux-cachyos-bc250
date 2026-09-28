@@ -926,17 +926,30 @@ class Bc250CecPackageTests(unittest.TestCase):
             self.assertIn(flag, text)
 
     def test_switch_input_is_opt_in_and_off_by_default(self):
-        # The one command in the whole daemon that can change the display's
-        # active input -- must default to off, and must only ever be wired
-        # to the power-on trigger (switching input again after the TV
-        # already switched to us via the active-source trigger would be
-        # pointless, and is not what the user asked for).
+        # The one command pair in the whole daemon that can change the
+        # display's active input or the AVR's audio selection -- must
+        # default to off, and must only ever be wired to the power-on
+        # trigger (switching again after the TV already switched to us
+        # via the active-source trigger would be pointless, and is not
+        # what the user asked for).
         text = self.DAEMON.read_text()
         self.assertIn('SWITCH_INPUT_ON_POWER_ON="${BC250_CEC_SWITCH_INPUT_ON_POWER_ON:-0}"', text)
         self.assertIn('SWITCH_INPUT_DELAY_S="${BC250_CEC_SWITCH_INPUT_DELAY_S:-3}"', text)
         self.assertIn('--active-source "phys-addr=$own_addr"', text)
         self.assertIn("do_switch_input=0", text,
                       "the active_source trigger branch must hardcode this off")
+
+    def test_switch_input_also_requests_avr_audio(self):
+        # Hardware-observed 2026-09-28: <Active Source> alone only
+        # switches the TV's picture -- the AVR's own audio-source
+        # selection is independent and falls back to "TV Audio (ARC)"
+        # otherwise, the same as it does for a native TV app.
+        # SYSTEM_AUDIO_MODE_REQUEST must go unicast to logical address 5
+        # (the AVR, spec-fixed like the TV always being 0), not broadcast.
+        text = self.DAEMON.read_text()
+        self.assertIn("AUDIO_SYSTEM_LOGICAL_ADDRESS=5", text)
+        self.assertIn('--to "$AUDIO_SYSTEM_LOGICAL_ADDRESS"', text)
+        self.assertIn('--system-audio-mode-request "phys-addr=$own_addr"', text)
 
     def test_a_display_already_on_at_startup_does_not_trigger_a_replug(self):
         # The first poll must only ever set the baseline, never fire the
@@ -1072,6 +1085,16 @@ class Bc250CecPackageTests(unittest.TestCase):
         self.assertIn("SET_STREAM_PATH", text)
         self.assertIn("ACTIVE_SOURCE", text)
         self.assertIn("own_physical_address", text)
+
+    def test_active_source_monitor_ignores_its_own_broadcasts(self):
+        # Hardware-observed 2026-09-28: with SWITCH_INPUT_ON_POWER_ON on,
+        # our own ACTIVE_SOURCE broadcast shows up in `cec-ctl -m` as
+        # "Transmitted by Playback Device 1 to all (...): ACTIVE_SOURCE"
+        # -- confirmed the monitor loop detected its own transmission as
+        # if the TV had switched to us. Must only match "Received from"
+        # lines, never "Transmitted by" ones.
+        text = self.DAEMON.read_text()
+        self.assertIn("^Received from.*(SET_STREAM_PATH|ACTIVE_SOURCE)", text)
 
     def test_monitor_loop_reattaches_instead_of_exiting(self):
         # Hardware-observed 2026-09-27: firing our own trigger_hotplug

@@ -44,6 +44,7 @@ readonly OSD_NAME="${BC250_CEC_DISPLAY_NAME:-SteamOS}"
 readonly POLL_INTERVAL_S="${BC250_CEC_POLL_INTERVAL_S:-5}"
 readonly TRIGGER_COOLDOWN_S="${BC250_CEC_TRIGGER_COOLDOWN_S:-30}"
 readonly TV_LOGICAL_ADDRESS=0
+readonly AUDIO_SYSTEM_LOGICAL_ADDRESS=5
 # Independently toggle the replug and the wake keypress per trigger
 # source, so e.g. one source's detection can be disabled without losing
 # the other, or the keypress can be disabled while keeping the replug.
@@ -63,11 +64,12 @@ readonly WAKE_KEY="${BC250_CEC_WAKE_KEY:-KEY_F15}"
 readonly WAKE_DELAY_S="${BC250_CEC_WAKE_DELAY_S:-1}"
 # Opt-in and off by default: this is the one thing the rest of this daemon
 # deliberately never does on its own (see the top-of-file note on why) --
-# broadcast ACTIVE_SOURCE so the TV switches its input to us. Only wired
-# to the power-on trigger (an active-source trigger means the TV already
-# switched to us, so sending it again would be pointless). The delay lets
-# the replug and the display's own post-power-on settling happen first
-# rather than racing a CEC broadcast against them.
+# broadcast ACTIVE_SOURCE so the TV switches its input to us, and request
+# the AVR route its audio from us too. Only wired to the power-on trigger
+# (an active-source trigger means the TV already switched to us, so
+# sending it again would be pointless). The delay lets the replug and the
+# display's own post-power-on settling happen first rather than racing a
+# CEC broadcast against them.
 readonly SWITCH_INPUT_ON_POWER_ON="${BC250_CEC_SWITCH_INPUT_ON_POWER_ON:-0}"
 readonly SWITCH_INPUT_DELAY_S="${BC250_CEC_SWITCH_INPUT_DELAY_S:-3}"
 # Shared between the poll loop and the active-source monitor loop, which
@@ -173,13 +175,22 @@ PYEOF
 }
 
 # Broadcast ACTIVE_SOURCE naming our own physical address, so the TV
-# switches its input to us. The one command in this whole daemon that can
-# change the display's active input -- opt-in only, see
-# SWITCH_INPUT_ON_POWER_ON above.
+# switches its input to us, then separately ask the AVR (always logical
+# address 5 by the CEC spec, like the TV always being 0) to route its
+# audio from us too. Confirmed on hardware 2026-09-28: Active Source alone
+# only switches the picture -- this AVR's own audio-source selection is
+# independent and falls back to "TV Audio (ARC)" otherwise, the same as
+# it does for a native TV app, until SYSTEM_AUDIO_MODE_REQUEST tells it
+# which HDMI input should actually be feeding its speakers. The one
+# command pair in this whole daemon that can change what the display
+# shows or plays -- opt-in only, see SWITCH_INPUT_ON_POWER_ON above.
 switch_input_to_us() {
     local dev="$1" own_addr="$2"
     cec-ctl -d "$dev" --active-source "phys-addr=$own_addr" >/dev/null 2>&1 \
         || log "failed to send active-source"
+    cec-ctl -d "$dev" --to "$AUDIO_SYSTEM_LOGICAL_ADDRESS" \
+        --system-audio-mode-request "phys-addr=$own_addr" >/dev/null 2>&1 \
+        || log "failed to send system-audio-mode-request"
 }
 
 # Fire the debugfs replug, the wake keypress, and/or (power-on only,
@@ -218,7 +229,7 @@ fire_trigger() {
         fi
         if [[ "$do_switch_input" == 1 ]]; then
             sleep "$SWITCH_INPUT_DELAY_S"
-            log "switching TV input to us ($own_addr)"
+            log "switching TV input and AVR audio to us ($own_addr)"
             switch_input_to_us "$cec_dev" "$own_addr"
         fi
     else
@@ -279,8 +290,16 @@ monitor_active_source_loop() {
         # (e.g. "phys-addr: 2.3.0.0") on the following indented lines --
         # track whether the last opcode line was one we care about, then
         # check the next phys-addr line against our own address.
+        #
+        # Only "Received from" lines: confirmed on hardware 2026-09-28
+        # that our own SWITCH_INPUT_ON_POWER_ON broadcast shows up here
+        # as "Transmitted by Playback Device 1 to all (...): ACTIVE_SOURCE"
+        # -- without this filter the monitor detects its own broadcast as
+        # if the TV had switched to us and re-fires (the 30s cooldown
+        # happened to still be active when this was first caught, but
+        # reacting to our own transmissions is wrong regardless of timing).
         while IFS= read -r line; do
-            if grep -qE 'SET_STREAM_PATH|ACTIVE_SOURCE' <<<"$line"; then
+            if grep -qE '^Received from.*(SET_STREAM_PATH|ACTIVE_SOURCE)' <<<"$line"; then
                 pending=1
                 continue
             fi
