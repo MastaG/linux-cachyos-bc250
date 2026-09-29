@@ -87,7 +87,7 @@ The stable kernel is the recommended default:
 sudo pacman -Syu linux-cachyos-bc250 linux-cachyos-bc250-headers
 ```
 
-Or install [`linux-cachyos-bc250-meta`](#linux-cachyos-bc250-meta) instead, which pulls in the stable kernel, its headers, and the other BC-250 extras (currently `bc250-dual-audio` and all three FSR4 Proton packages) together, and picks up any new ones added to it in the future on a normal `pacman -Syu`.
+Or install [`linux-cachyos-bc250-meta`](#linux-cachyos-bc250-meta) instead, which pulls in the stable kernel, its headers, and the other BC-250 extras (currently `bc250-dual-audio`, `bc250-cec`, and all three FSR4 Proton packages) together, and picks up any new ones added to it in the future on a normal `pacman -Syu`.
 
 Optional RC/testing kernel:
 
