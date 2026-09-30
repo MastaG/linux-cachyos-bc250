@@ -387,20 +387,29 @@ monitor_active_source_loop() {
 }
 
 main() {
-    local cec_info cec_dev connector trigger_path own_addr
+    local cec_info cec_dev connector trigger_path own_addr waiting=""
 
-    cec_info="$(discover_cec)" || {
-        log "no CEC adapter found (no /dev/cecN yet); exiting for a restart"
-        exit 1
-    }
-    cec_dev="$(sed -n 1p <<<"$cec_info")"
-    connector="$(sed -n 2p <<<"$cec_info")"
+    # The adapter only exists once amdgpu has brought up a CEC-capable
+    # display, which can be much later than boot (TV off, adapter unplugged)
+    # or never (a display without CEC). Wait for it here, quietly: exiting
+    # for a systemd restart logged the same failure every 10 seconds.
+    # Logged once on entering the wait and once when it ends.
+    while :; do
+        if cec_info="$(discover_cec)"; then
+            cec_dev="$(sed -n 1p <<<"$cec_info")"
+            connector="$(sed -n 2p <<<"$cec_info")"
+            trigger_path="$(find_trigger_hotplug "$connector")" && break
+            if [[ "$waiting" != hotplug ]]; then
+                log "found $cec_dev on connector $connector, but no trigger_hotplug debugfs entry yet; waiting"
+                waiting=hotplug
+            fi
+        elif [[ "$waiting" != adapter ]]; then
+            log "no CEC adapter yet (no /dev/cecN); waiting for one to appear"
+            waiting=adapter
+        fi
+        sleep "$POLL_INTERVAL_S"
+    done
     log "found $cec_dev on connector $connector"
-
-    trigger_path="$(find_trigger_hotplug "$connector")" || {
-        log "no trigger_hotplug debugfs entry for $connector; exiting for a restart"
-        exit 1
-    }
 
     cec-ctl -d "$cec_dev" --playback --osd-name "$OSD_NAME" >/dev/null || {
         log "failed to claim a CEC logical address on $cec_dev; exiting for a restart"

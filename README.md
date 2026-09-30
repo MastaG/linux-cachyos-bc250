@@ -868,7 +868,7 @@ sudo pacman -S v4l-utils   # cec-ctl, if you don't already have it
 cec-ctl --list-devices
 ```
 
-If that lists an `amdgpu (DP-1):` entry with a `/dev/cecN` device, it works. If it lists nothing, this package will install fine but the service will find no CEC adapter and exit in a restart loop — harmless, but pointless. Without a CEC-capable link there is currently no workaround for the underlying bug at all.
+If that lists an `amdgpu (DP-1):` entry with a `/dev/cecN` device, it works. If it lists nothing, this package will install fine but the service will log once that it is waiting for a CEC adapter and then sit idle — harmless, but pointless. (It also means the service can start before the display is on: it picks up the adapter as soon as one appears.) Without a CEC-capable link there is currently no workaround for the underlying bug at all.
 
 Enabled by default on install, including when pulled in as a dependency of `linux-cachyos-bc250-meta`:
 
