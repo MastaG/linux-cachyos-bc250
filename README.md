@@ -18,7 +18,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | Package | What it is |
 |---|---|
 | `linux-cachyos-bc250` | Stable BC-250 kernel (`-rc` and `-bore` variants also built), with the `nct6687` fan and temperature driver built in |
-| `mesa` / `lib32-mesa` | Patched Mesa: GFX1013 async compute on by default, FSR4 support |
+| `mesa` / `lib32-mesa` | Patched Mesa: GFX1013 async compute on by default, mesh/task shaders (opt-in, `RADV_DIRECTMESH=1`), FSR4 support |
 | `mesa-git` / `lib32-mesa-git` | Same patches on Mesa main, optional |
 | `proton-cachyos-native-bc250` | CachyOS Proton with FSR4, built for Zen 2 |
 | `proton-cachyos-slr-bc250` | The same, on the Steam Linux Runtime: the one for anti-cheat games |
@@ -174,8 +174,17 @@ Games that benefit from async compute can see a significant performance improvem
 Async compute can also increase GPU load and voltage requirements.  
 Some BC-250 systems that were previously stable have shown green-screen or black-screen GPU crashes after enabling the async-compute path. Community reports indicate that some boards need a small GPU-voltage increase to remain stable, with around +25 mV being sufficient in several cases. This is not required on every BC-250: if the GPU is stable, no voltage change is needed.
 
-`RADV_GFX103=1` is separate from async compute and should **not** be enabled globally.  
-Use it only per-game for titles that need the experimental GFX10.3 mesh-shader path. It has been tested successfully with Final Fantasy VII Rebirth, which currently does not start on the BC-250 without the override in community testing. Mesh shaders work for this test case, but **task shaders are still not working correctly**. Games that depend on task shaders may render incorrectly, hang or crash when `RADV_GFX103=1` is enabled.
+### Mesh and task shaders (DirectMesh)
+
+The patched Mesa packages include [DirectMesh](https://github.com/lonewolf0622/bc250meshtaskwork) by lonewolf0622: `VK_EXT_mesh_shader` (Mesh **and** Task shaders) and `VK_KHR_fragment_shader_barycentric` for the BC-250, so D3D12 games that need mesh shaders run through Proton / vkd3d-proton. It is opt-in per game — set this in the game's Steam launch options:
+
+```text
+RADV_DIRECTMESH=1 %command%
+```
+
+The value must be exactly `1`. The same switch also turns on fragment shader barycentrics and a no-op variable-rate-shading extension (always full-rate shading), which vkd3d-proton needs before it reports DirectX 12 Ultimate. Without the switch none of this is exposed and the driver is the plain BC-250 driver, with FSR4 support still on; other GPUs are never affected. Mesh workgroups are drawn on a safe direct path that rules out the index patterns that hang this chip; a shader nothing can prove safe falls back to an older protected path or is refused at pipeline creation, never drawn unprotected. Its author reports 3,558/3,558 Vulkan CTS mesh-shader cases passing on real hardware with no hangs, and Final Fantasy VII Rebirth, Control, Hellblade 2 and Alan Wake 2 running with mesh shaders.
+
+This replaces the older `RADV_GFX103=1` override, which only worked for Final Fantasy VII Rebirth and had broken task shaders; that variable no longer does anything. While mesh shaders are enabled, `VK_EXT_device_generated_commands`, graphics pipeline libraries and shader objects are hidden, and mesh pipeline-statistics queries and multiview with mesh shaders are not supported, so a small number of games that need state-changing `ExecuteIndirect` may not render fully. `RADV_DEBUG=nomeshshader` hides mesh shaders again for comparison. If a game hangs, boot with `amdgpu.gpu_recovery=0` so the machine stays reachable over SSH, and include `dmesg`, the game and your launch options in the report. Details: [docs/PATCHES.md](docs/PATCHES.md#patched-stable-cachyos-mesa).
 
 ---
 

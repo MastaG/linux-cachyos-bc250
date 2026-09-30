@@ -1,13 +1,14 @@
-From 97c52029e4a392738e1cb2430504de9118856b47 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: fish <fish@bc250-fsr4-research>
-Date: Sun, 6 Sep 2026 00:00:00 +0000
-Subject: [PATCH 6/9] radv: BC-250 FSR4 combined-unroll selection (2.84)
+Date: Sat, 6 Sep 2026 00:00:00 +0000
+Subject: [PATCH 6/7] radv: BC-250 FSR4 combined-unroll selection (2.84)
 
 Downstream FSR4 optimization from the BC-250 research kit dated
 2026-09-06, rebased onto our existing series. This is the delta between
-that kit's "accepted 2.84" checkpoint and our patches 0001-0005; the
-parts of that checkpoint we already carry (gfx1013 enablement, mesh/task
-shaders, the V3 deferred SDot lowering) are excluded.
+that kit's "accepted 2.84" checkpoint and the series it was rebased onto;
+the parts of that checkpoint the series already carried are excluded:
+gfx1013 enablement (0001), the kit's mesh/task shaders (since replaced by
+DirectMesh, 0002) and the V3 deferred SDot lowering (0003).
 
 NIR-level pattern matching and rematerialization over FSR4's dot and
 convolution loops: grouped dots, loop/cooperative rematerialization,
@@ -27,16 +28,11 @@ Measured by the kit at 8.015 ms -> 5.843 ms per FSR4.1.1 INT8 upscale
 
 Origin: bc250-fsr4-20260906 research kit, source/accepted-2.84.patch
 ---
- .../nir/ac_nir_fixup_smem_loads_null_prt.c    |     2 +-
- src/amd/vulkan/radv_physical_device.c         |     5 +
- src/amd/vulkan/radv_shader.c                  | 10281 +++++++++++++++-
- 3 files changed, 10284 insertions(+), 4 deletions(-)
-
 diff --git a/src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c b/src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c
-index 1f57984b58c..8682e6042ea 100644
+index 2d091a7d7cb..13790ab4adc 100644
 --- a/src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c
 +++ b/src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c
-@@ -117,5 +117,5 @@ ac_nir_fixup_smem_loads_null_prt(nir_shader *nir, uint8_t address_prt_wa_control
+@@ -118,5 +118,5 @@ ac_nir_fixup_smem_loads_null_prt(nir_shader *nir, uint8_t address_prt_wa_control
        .control_bit = address_prt_wa_control_bit,
     };
  
@@ -44,10 +40,10 @@ index 1f57984b58c..8682e6042ea 100644
 +   return nir_shader_intrinsics_pass(nir, fixup_smem_loads_null_prt, nir_metadata_control_flow, &s);
  }
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index be2676e7c01..cfdf14d9033 100644
+index 2c643ff34de..a403bf802db 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -361,6 +361,11 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -379,6 +379,11 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
        return -1;
  #endif
  
@@ -60,10 +56,10 @@ index be2676e7c01..cfdf14d9033 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 21c7edeca9c..90235308be8 100644
+index fd647f38d00..f6afe3746ca 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
-@@ -179,6 +179,10260 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
+@@ -182,6 +182,10260 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
   * signed dot instructions are eligible. This leaves ED7 (2048), 0d64 (512)
   * and the short 20-dot kernels on the B2 path.
   */
@@ -10324,7 +10320,7 @@ index 21c7edeca9c..90235308be8 100644
  struct bc250_dot_density {
     unsigned sdot;
     unsigned iadd;
-@@ -479,7 +10733,7 @@ radv_spirv_nir_debug(void *private_data, enum nir_spirv_debug_level level, size_
+@@ -482,7 +10736,7 @@ radv_spirv_nir_debug(void *private_data, enum nir_spirv_debug_level level, size_
  
  static void
  radv_shader_choose_subgroup_size(const struct radv_compiler_info *compiler_info, nir_shader *nir,
@@ -10333,7 +10329,7 @@ index 21c7edeca9c..90235308be8 100644
  {
     VkPipelineShaderStageRequiredSubgroupSizeCreateInfo rss_info = {
        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
-@@ -513,6 +10767,11 @@ radv_shader_choose_subgroup_size(const struct radv_compiler_info *compiler_info,
+@@ -516,6 +10770,11 @@ radv_shader_choose_subgroup_size(const struct radv_compiler_info *compiler_info,
        else
           default_wave_size = compiler_info->key.cs_wave_size;
  
@@ -10345,7 +10341,7 @@ index 21c7edeca9c..90235308be8 100644
        /* Games don't always request full subgroups when they should, which can cause bugs if cswave32
         * is enabled. Furthermore, if cooperative matrices or subgroup info are used, we can't transparently change
         * the subgroup size.
-@@ -604,7 +10863,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -607,7 +10866,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        nir_validate_shader(nir, "in internal shader");
  
        assert(exec_list_length(&nir->functions) == 1);
@@ -10354,7 +10350,7 @@ index 21c7edeca9c..90235308be8 100644
     } else {
        uint32_t *spirv = (uint32_t *)stage->spirv.data;
        assert(stage->spirv.size % 4 == 0);
-@@ -709,7 +10968,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -708,7 +10967,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
         */
        NIR_PASS(_, nir, nir_lower_variable_initializers, ~0);
  
@@ -10363,8 +10359,8 @@ index 21c7edeca9c..90235308be8 100644
 +         compiler_info->debug.family == CHIP_GFX1013 && (bc250_fsr4_profile(stage->spirv.data, stage->spirv.size) & 2));
  
        progress = false;
-       struct nir_lower_coopmat_args coopmat_args = {
-@@ -928,7 +11188,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+       NIR_PASS(progress, nir, nir_lower_cooperative_matrix_flexible_dimensions, 16, 16, 16);
+@@ -921,7 +11181,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
           deferred_options.has_sdot_4x8 = true;
           nir->options = &deferred_options;
           radv_optimize_nir(nir, false);
@@ -10387,6 +10383,3 @@ index 21c7edeca9c..90235308be8 100644
           radv_optimize_nir(nir, false);
        } else {
           radv_optimize_nir(nir, false);
--- 
-2.55.0
-

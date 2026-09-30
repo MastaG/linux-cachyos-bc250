@@ -425,10 +425,11 @@ All three kernels use:
 
 - CachyOS packaging commit: \`${mesa_cachyos_commit}\`
 - Version: \`${mesa_pkgver}-${mesa_pkgrel}\`${mesa_epoch:+ (epoch ${mesa_epoch})}
-- Applied patches: \`0001\` compute-queue fix, \`0002\` mesh/task support, \`0003\` mesh queries, \`0004\` RADV_GFX103 runtime override, \`0005\` BC-250 FSR4 EXP-042B (V3) deferred SDot lowering, \`0006\` FSR4 combined-unroll selection, \`0007\` FSR4 image-preparation and texture candidates, \`0008\` FSR4 resolution-variant coverage and 8K masked-store guard, \`0009\` FSR4 production defaults.
-- \`0006\`-\`0009\` are all active by default: \`0009\` flips the \`0007\`/\`0008\` candidates on, so \`BC250_FSR4_IMAGEPREP\`, \`BC250_FSR4_TEXTURE\` and \`BC250_FSR4_RESOLUTION_VARIANTS\` default to enabled and are set to \`0\` to turn them off, not to \`1\` to turn them on. \`BC250_FSR4_DISABLE=1\` switches off the profile-specific rewrites entirely. Every FSR4 rewrite is gated on exact shader identity, so an unmatched shader is left untouched.
-- \`0006\`-\`0008\` are the work of fish / @iamastrangeloop, \`0009\` of daniel-h-0, rebased onto this tree. Their reported figure for \`0006\` is 8.015 ms to 5.843 ms per FSR4.1.1 INT8 upscale at 1440p Balanced (27.1%); the opt-in candidates measure around 1% each and are not independently verified here.
-- \`0001\` and \`0005\` are always active; GFX1013 mesh/task feature exposure remains disabled unless \`RADV_GFX103=1\` is set for the application.
+- Applied patches: \`0001\` compute-queue fix, \`0002\` DirectMesh v1.1 mesh/task shaders, \`0003\` BC-250 FSR4 EXP-042B (V3) deferred SDot lowering, \`0004\` FSR4 combined-unroll selection, \`0005\` FSR4 image-preparation and texture candidates, \`0006\` FSR4 resolution-variant coverage and 8K masked-store guard, \`0007\` FSR4 production defaults.
+- **Mesh and task shaders (DirectMesh v1.1 by lonewolf0622)**: \`VK_EXT_mesh_shader\` (Mesh and Task) and \`VK_KHR_fragment_shader_barycentric\` on the BC-250, opt-in per game with \`RADV_DIRECTMESH=1 %command%\`. The value must be exactly \`1\`; the same switch also enables fragment shader barycentrics and a no-op variable-rate-shading extension for DirectX 12 Ultimate. Without it none of this is exposed (unlike upstream v1.1, which exposes mesh on every BC-250 by default), and other GPUs are never affected. Mesh is drawn on a safe direct path that rules out the index patterns that hang this chip, and anything that cannot be proven safe is refused rather than drawn unprotected. The author reports 3,558/3,558 mesh-shader CTS cases passing on hardware with no hangs, and Final Fantasy VII Rebirth, Control, Hellblade 2 and Alan Wake 2 running; not yet re-tested on hardware with this build. Replaces the old \`RADV_GFX103=1\` override, which no longer does anything. While enabled, device-generated commands, graphics pipeline libraries and shader objects are hidden; mesh pipeline-statistics queries and multiview with mesh shaders are not supported. \`RADV_DEBUG=nomeshshader\` hides mesh shaders for comparison.
+- \`0004\`-\`0007\` are all active by default: \`0007\` flips the \`0005\`/\`0006\` candidates on, so \`BC250_FSR4_IMAGEPREP\`, \`BC250_FSR4_TEXTURE\` and \`BC250_FSR4_RESOLUTION_VARIANTS\` default to enabled and are set to \`0\` to turn them off, not to \`1\` to turn them on. \`BC250_FSR4_DISABLE=1\` switches off the profile-specific rewrites entirely. Every FSR4 rewrite is gated on exact shader identity, so an unmatched shader is left untouched.
+- \`0004\`-\`0006\` are the work of fish / @iamastrangeloop, \`0007\` of daniel-h-0, rebased onto this tree. Their reported figure for \`0004\` is 8.015 ms to 5.843 ms per FSR4.1.1 INT8 upscale at 1440p Balanced (27.1%); the opt-in candidates measure around 1% each and are not independently verified here.
+- \`0001\` and \`0003\` are always active. \`0003\`'s multiply-chain \`SDot\` lowering is restricted to RADV/ACO on GFX1013 (upstream applied it to every driver without hardware dot product, including ones that cannot compile the opcode it emits). The FSR4 shader-cache separation is likewise limited to the BC-250, so other AMD GPUs keep upstream's cache UUID.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 
 ## Patched stable CachyOS lib32-mesa
@@ -444,8 +445,8 @@ All three kernels use:
 - Mesa main commit: \`${mesa_git_commit}\`
 - Package version: \`${mesa_git_pkgver}-${mesa_git_pkgrel}\`
 - Builds both \`mesa-git\` and \`lib32-mesa-git\` from the same pinned Mesa commit.
-- Applies the same separately rebased \`0001\`-\`0009\` series, in order, as the stable Mesa packages.
-- \`0001\`, \`0005\` and \`0006\`-\`0009\` are active; the experimental GFX1013 mesh/task path is opt-in with \`RADV_GFX103=1\`.
+- Applies the same separately rebased \`0001\`-\`0007\` series, in order, as the stable Mesa packages.
+- \`0001\` and the FSR4 patches \`0003\`-\`0007\` are active; DirectMesh mesh/task shaders are opt-in with \`RADV_DIRECTMESH=1\`. The mesa-git DirectMesh is a port onto Mesa main (it targets 26.2): it carries a taskmesh firmware-bug workaround main deleted, which the BC-250 still needs.
 - CPU target: \`-march=x86-64-v3 -mtune=znver2\`
 
 ## BC-250 dual-output audio (opt-in)

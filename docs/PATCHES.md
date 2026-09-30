@@ -995,43 +995,76 @@ amdgpu.cs_activity_cache_ms=50 amdgpu.cs_metrics_cache_ms=50
 The workflow resolves a single exact commit from `CachyOS/CachyOS-PKGBUILDS` and downloads the current stable Mesa packaging from that revision.  
 The upstream Mesa version and epoch remain unchanged; the GitHub Actions run number is appended to `pkgrel`.
 
-All nine BC-250 Mesa patches are applied at build time, in order:
+All seven BC-250 Mesa patches are applied at build time, in order:
 
 ```text
 patches/mesa/0001-gfx1013-compute-queue-fix.patch
-patches/mesa/0002-gfx1013-mesh-task-shaders.patch
-patches/mesa/0003-gfx1013-taskmesh-queries.patch
-patches/mesa/0004-radv-gfx103.patch
-patches/mesa/0005-bc250-fsr4-v3.patch
-patches/mesa/0006-bc250-fsr4-combined-unroll.patch
-patches/mesa/0007-bc250-fsr4-imageprep-texture.patch
-patches/mesa/0008-bc250-fsr4-resolution-variants.patch
-patches/mesa/0009-bc250-fsr4-production-defaults.patch
+patches/mesa/0002-bc250-directmesh.patch
+patches/mesa/0003-bc250-fsr4-v3.patch
+patches/mesa/0004-bc250-fsr4-combined-unroll.patch
+patches/mesa/0005-bc250-fsr4-imageprep-texture.patch
+patches/mesa/0006-bc250-fsr4-resolution-variants.patch
+patches/mesa/0007-bc250-fsr4-production-defaults.patch
 ```
 
-`0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.  
-`0002` and `0003` contain the experimental mesh/task-shader and mesh-query plumbing. For GFX1013 their user-visible feature path remains disabled unless `0004` sees `RADV_GFX103=1` at runtime.  
-`0005` is always active regardless of environment variables. GFX1013 has no working packed signed dot product, so `sdot_4x8_iadd` (used by `[iu]dp4a`) falls back to software. The patch makes that fallback much cheaper in two ways: a dense-reduction prepass that expands the largest FSR4 reduction kernels into signed 24-bit multiply chains, and a deferred lowering round that holds the remaining packed `SDot` operations through one full NIR optimization pass before restoring the real capability set and lowering them. Keeping the `SDot` intact lets Mesa's own `iadd(sdot(a, b, 0), c)` fold absorb FSR4's accumulator wrapper, which is what shortens the live ranges that were spilling. A 64-shader FSR4 capture found register pressure and occupancy, not static instruction count, are what actually govern runtime: the worst shader in the corpus dropped from 1314 VGPR spills at 4 waves/SIMD to 0 spills at 6 waves/SIMD, despite a higher naive instruction-cost estimate. This never advertises hardware dot-product support and never emits the broken `v_dot4_i32_i8`. Based on EXP-042B (V3) from BC-250 FSR4 testing (David Moraza Sanchez, [dmorazasanchez/bc250-fsr4, `v3` branch](https://github.com/dmorazasanchez/bc250-fsr4/tree/v3)), verified with FSR 4.1.1 in Cyberpunk 2077 at 63 FPS (up from 58 FPS pre-V3), superseding the earlier EXP-028 selective-reassociation patch.
+`0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.
 
-The patch is carried as upstream wrote it, apart from two hunks dropped while rebasing onto this tree: the GFX1013 compute-queue change and the `RADV_GFX103` override, which duplicate `0001` and `0004` byte-for-byte and would otherwise fail to apply twice. The patch header records that.
+### Mesh and task shaders: DirectMesh (`0002`)
 
-One part of it is easy to misread. `0005` raises the LDS spill-slot budget for GFX1013 compute shaders that are already spilling heavily (128–255 spill slots). That deliberately costs occupancy, because in ACO every spill slot which does not fit in LDS goes to scratch instead, and scratch on this APU is backed by shared system memory. Keeping that traffic on-die is worth more here than the lost waves: removing this override measured roughly 12 ms versus 8 ms of OptiScaler frame time on real BC-250 hardware. It is not a mistake, and it should not be "simplified" away.
+`0002` is [DirectMesh v1.1](https://github.com/lonewolf0622/bc250meshtaskwork) by lonewolf0622: `VK_EXT_mesh_shader` (Mesh **and** Task) and `VK_KHR_fragment_shader_barycentric` on the BC-250, so D3D12 games that need mesh shaders run through Proton / vkd3d-proton. It is off unless a game sets it:
 
-`0006` and `0007` come from the downstream BC-250 FSR4 research kit dated 2026-09-06 (by "fish"), rebased onto this tree. That kit's own base patch is a squash of work this repository already carries plus its newer optimization; only the part we did not already have is kept here, so `0001`-`0005` are not duplicated. The kit ships its own measurement harness, evidence and prebuilt drivers, and its numbers below are the kit's, not ours.
+```text
+RADV_DIRECTMESH=1 %command%
+```
 
-`0006` is the "combined-unroll" selection and is **active by default**. It adds NIR-level pattern matching and rematerialization over FSR4's dot and convolution loops — grouped dots, loop and cooperative rematerialization, and pointwise column streaming. Every rewrite is gated on exact shader identity: the `bc250_*_expected[]` tables verify the incoming shader's constants before any `bc250_*_prepacked[]` replacement is used, so a shader that does not match is passed through untouched. It also carries two supporting changes it depends on — correct NIR metadata invalidation in `ac_nir_fixup_smem_loads_null_prt()`, and separation of the FSR4 pipeline cache key so cached shaders cannot be served across `BC250_FSR4_DISABLE` settings. The kit measures 8.015 ms to 5.843 ms per FSR4.1.1 INT8 upscale (1506x848 to 2560x1440 Balanced, 40 CU at 1850 MHz): 2.172 ms, 27.1%, against a within-window standard deviation of about 0.01 ms.
+The value must be exactly `1`. Without it, nothing `0002` adds is exposed or active: no mesh or task shaders, no fragment shader barycentrics, no no-op `VK_KHR_fragment_shading_rate`, and the base driver's command-buffer reuse — the driver is the plain BC-250 driver with `0001` and the FSR4 patches. No other GPU is ever affected. (Upstream v1.1 turns mesh, barycentrics and the no-op VRS on for every GFX1013 device whether or not the switch is set, and without the switch its fail-closed safety settings are not filled in; this repository gates all of it behind the switch — see below.) Any `RADV_BC250_*` / `BC250_*` variable set explicitly still takes priority over what the switch selects, which is what makes the individual parts testable.
 
-`0007` adds two candidates that are **off unless their environment variable is set**. `BC250_FSR4_IMAGEPREP=1` swaps FSR4's image-preparation shader for a rewritten SPIR-V module that interleaves the sixteen feature channels across quad phases; the arithmetic, addresses and packing are unchanged, only channel ownership moves. Selection is a whole-module `memcmp`, so any other shader passes through untouched, and the cooperative region is additionally guarded by even output dimensions. `BC250_FSR4_TEXTURE=1` groups eight output columns instead of four in the final texture shader's pointwise streaming schedule, for one shader identity only.
+What the switch turns on besides mesh, per the author's validated configuration, and worth knowing when reading a bug report:
 
-Treat `0007`'s numbers with more caution than `0006`'s. The kit measures imageprep alone at 0.062 ms (1.07%), texture alone at 0.057 ms (0.97%) and both together at 0.069 ms (1.19%) — they overlap rather than sum. Each arm is two launches, and the six control runs across those campaigns span 0.061 ms, which is the size of the effect being claimed. The kit's own stated next step is to replicate this with more launches on a second board. That is why these are opt-in and `0006` is not.
+- **Barycentrics and a no-op VRS.** vkd3d-proton only reports DirectX 12 Ultimate (feature level 12_2) with variable-rate shading tier 2. GFX10.1 has no VRS hardware, so the extension is exposed and shading is always full rate. `RADV_BC250_VRS_NOOP=0` or `RADV_BC250_NO_BARYCENTRICS=1` turn either off.
+- **Experimental memory and submission settings** the author validated along with mesh: private buffers in GTT, local BOs, known-signal submission, retained command-buffer memory (`RADV_BC250_KEEP_IB_KB=640`), and the NIR cache (`RADV_PERFTEST=nircache`, only when `RADV_PERFTEST` is otherwise unset).
+- **`maxDrawIndirectCount` is 4096**, below the Vulkan minimum; vkd3d-proton copes, a strict Vulkan application may not.
+- **A shader the direct path cannot prove safe fails pipeline creation** with `VK_ERROR_FEATURE_NOT_PRESENT`, instead of hanging the GPU. vkd3d-proton reports that as a failed pipeline.
+- **The shader cache key does not cover every sub-switch.** After changing an individual `RADV_BC250_*` / `BC250_*` variable (not the main switch), clear the game's shader cache or old compiled shaders can be reused.
+- The switch is applied with `setenv()` while the Vulkan instance is created, so an application that reads or writes its own environment from another thread at that moment could race it. No real game does this.
+
+The name is the design: each Mesh workgroup is drawn in a single launch, with no split/replay, and after culling the driver picks per workgroup the cheapest vertex export it can prove safe on this chip — shared vertices when the surviving triangles use every vertex with small index backjumps, renumbered vertices when culling left unused ones, and otherwise private triangle corners, which rule out the index patterns that hang the BC-250 by construction. An automatic converter rewrites application Mesh and Task shaders into a form that path accepts, with no per-game profiles: it splits large meshlets into pieces (Task pipelines included), keeps written `gl_PrimitiveID` values across pieces, runs subgroup-free wave32 shaders in wave64, drops task payload declarations a Mesh shader never reads, and folds unbounded Task launch counts into their own grid dimension. It fails closed: a shape nothing can prove safe takes the older split/expansion path (also private corners) or is refused at pipeline creation, and is never drawn on the unprotected raw route.
+
+The author's validation, on real hardware with `RADV_DIRECTMESH=1`: all 3,558 `dEQP-VK.mesh_shader.ext.*` and fragment-barycentric Mesh CTS cases that run on this device pass with no hangs and every pipeline direct, plus 10,036 Mesh/Task-stage cases in other groups; Final Fantasy VII Rebirth, Control, Hellblade 2 and Alan Wake 2 run with Mesh direct. Those are the author's numbers, not ours — the patch has not been run on hardware by this repository in this form. What was verified here: it applies and compiles cleanly in both series, and the rebased code was reviewed.
+
+It is not a complete mesh implementation. While Mesh uses the hybrid Task path, `VK_EXT_device_generated_commands`, graphics pipeline libraries and shader objects are hidden (vkd3d-proton still handles `ExecuteIndirect` for Mesh draws, but a few games needing state-changing `ExecuteIndirect` may not render fully), and Mesh pipeline-statistics queries and multiview with Mesh are not supported. `RADV_DEBUG=nomeshshader` hides mesh shaders so a game uses its non-mesh path, for comparison. If a game hangs, set `amdgpu.gpu_recovery=0` so the machine stays reachable over SSH and collect `dmesg` (and a `umr` wave dump if possible) with the game and launch options — the upstream README asks for exactly that.
+
+`0002` replaces this repository's earlier `0002`-`0004` (mesh/task plumbing, mesh queries, and a `RADV_GFX103=1` override that promoted GFX1013's software level to GFX10.3). That approach only ever worked for Final Fantasy VII Rebirth and never had working task shaders; `RADV_GFX103` no longer does anything.
+
+The upstream patch is carried as its author wrote it (sha256 `71f84adc…329d7` of `bc250-directmesh-mesa-26.2.1.patch`), with the differences below, all recorded in the patch header. **The switch gates everything:** upstream v1.1 exposes mesh/task shaders, barycentrics and the no-op VRS, and changes command-buffer reuse, on every GFX1013 device by default; here each of those requires `RADV_DIRECTMESH=1` through one helper (`radv_bc250_directmesh_requested()`), the same exact-`1` test the switch itself uses, so a user who never sets it gets the plain driver. A source comment claiming mesh is exposed through `RADV_PERFTEST=mesh` is corrected (there is no such flag; unknown names are ignored). The two `ac_gpu_info.c` hunks that expose the GFX1013 compute queue and route it through the async-compute threadgroup workaround are dropped, because they are the same code `0001` already carries. And CachyOS' stable Mesa is 26.2.3, not the 26.2.1 the patch targets; the one real conflict is `radv_pipeline_cache.c`, where 26.2.3 backported upstream's fix for the same descriptor-set-layout hashing bug DirectMesh fixed independently (`9679ac6cf19`). DirectMesh's version is kept: it also hashes which set slots are empty, and it is the version that was validated on hardware.
+
+### FSR4 (`0003`-`0007`)
+
+`0003` is always active regardless of environment variables. GFX1013 has no working packed signed dot product, so `sdot_4x8_iadd` (used by `[iu]dp4a`) falls back to software. The patch makes that fallback much cheaper in two ways: a dense-reduction prepass that expands the largest FSR4 reduction kernels into signed 24-bit multiply chains, and a deferred lowering round that holds the remaining packed `SDot` operations through one full NIR optimization pass before restoring the real capability set and lowering them. Keeping the `SDot` intact lets Mesa's own `iadd(sdot(a, b, 0), c)` fold absorb FSR4's accumulator wrapper, which is what shortens the live ranges that were spilling. A 64-shader FSR4 capture found register pressure and occupancy, not static instruction count, are what actually govern runtime: the worst shader in the corpus dropped from 1314 VGPR spills at 4 waves/SIMD to 0 spills at 6 waves/SIMD, despite a higher naive instruction-cost estimate. This never advertises hardware dot-product support and never emits the broken `v_dot4_i32_i8`. Based on EXP-042B (V3) from BC-250 FSR4 testing (David Moraza Sanchez, [dmorazasanchez/bc250-fsr4, `v3` branch](https://github.com/dmorazasanchez/bc250-fsr4/tree/v3)), verified with FSR 4.1.1 in Cyberpunk 2077 at 63 FPS (up from 58 FPS pre-V3), superseding the earlier EXP-028 selective-reassociation patch.
+
+The patch is carried as upstream wrote it, apart from two hunks dropped while rebasing onto this tree: the GFX1013 compute-queue change, which duplicates `0001` byte-for-byte, and a `RADV_GFX103` override that this repository no longer carries at all (DirectMesh replaced that approach; nothing in the FSR4 patches depends on it). The patch header records the drop.
+
+One fix is made here, also recorded in the header. The multiply-chain rules in `nir_opt_algebraic.py` emit `imad24_ir3`, an opcode only the Adreno compiler and ACO (with this patch) implement, but upstream gated them only on "no hardware dot product", which is true for many drivers. Any of them handed an `SDot` — RADV or radeonsi running on LLVM, for one — would have got an opcode it cannot compile. The rules now also require a new compiler option, `bc250_sdot_mad24`, which RADV sets only for ACO on GFX1013; every other driver keeps Mesa's normal lowering, byte for byte.
+
+A second fix is in `0007`. The FSR4 patches separate their shader caches by hashing their version strings and `BC250_FSR4_*` switches into the driver's cache UUID. As written, that happened on every AMD GPU. It is now done only on GFX1013, and the bytes hashed there are unchanged, so existing BC-250 shader caches stay valid.
+
+One part of the upstream V3 patch is deliberately **not** carried: its override in `aco_spill.cpp` that raised the LDS spill-slot budget for heavily spilling GFX1013 compute shaders. Bisecting on real hardware showed that restoring it alone to an otherwise-trimmed build reproduced the full regression, so it earns nothing and trades occupancy away; the patch header records this.
+
+`0004` and `0005` come from the downstream BC-250 FSR4 research kit dated 2026-09-06 (by "fish"), rebased onto this tree. That kit's own base patch is a squash of work this repository already carries plus its newer optimization; only the part we did not already have is kept here, so `0001` and `0003` are not duplicated. The kit ships its own measurement harness, evidence and prebuilt drivers, and its numbers below are the kit's, not ours.
+
+`0004` is the "combined-unroll" selection and is **active by default**. It adds NIR-level pattern matching and rematerialization over FSR4's dot and convolution loops — grouped dots, loop and cooperative rematerialization, and pointwise column streaming. Every rewrite is gated on exact shader identity: the `bc250_*_expected[]` tables verify the incoming shader's constants before any `bc250_*_prepacked[]` replacement is used, so a shader that does not match is passed through untouched. It also carries two supporting changes it depends on — correct NIR metadata invalidation in `ac_nir_fixup_smem_loads_null_prt()`, and separation of the FSR4 pipeline cache key so cached shaders cannot be served across `BC250_FSR4_DISABLE` settings. The kit measures 8.015 ms to 5.843 ms per FSR4.1.1 INT8 upscale (1506x848 to 2560x1440 Balanced, 40 CU at 1850 MHz): 2.172 ms, 27.1%, against a within-window standard deviation of about 0.01 ms.
+
+`0005` adds two candidates that are **off unless their environment variable is set**. `BC250_FSR4_IMAGEPREP=1` swaps FSR4's image-preparation shader for a rewritten SPIR-V module that interleaves the sixteen feature channels across quad phases; the arithmetic, addresses and packing are unchanged, only channel ownership moves. Selection is a whole-module `memcmp`, so any other shader passes through untouched, and the cooperative region is additionally guarded by even output dimensions. `BC250_FSR4_TEXTURE=1` groups eight output columns instead of four in the final texture shader's pointwise streaming schedule, for one shader identity only.
+
+Treat `0005`'s numbers with more caution than `0004`'s. The kit measures imageprep alone at 0.062 ms (1.07%), texture alone at 0.057 ms (0.97%) and both together at 0.069 ms (1.19%) — they overlap rather than sum. Each arm is two launches, and the six control runs across those campaigns span 0.061 ms, which is the size of the effect being claimed. The kit's own stated next step is to replicate this with more launches on a second board. That is why these were opt-in in `0005` and `0004` was not (`0007` later flips them on).
 
 Both are pinned to FSR4.1.1 INT8 by exact shader identity. A different FSR4 build, or a resolution outside the matched bucket, silently produces no uplift and no warning — the same mechanism that made the upstream author's 1080p results flat until they found FSR4 ships separate shaders per resolution bucket.
 
-`0008` is that bucket problem addressed, and is **opt-in** via `BC250_FSR4_RESOLUTION_VARIANTS=1`. It adds 24 further shader identities covering the 1080p and 4K+ buckets, each tagged with flag bit `0x40000000` so they are ignored entirely unless the switch is set.
+`0006` is that bucket problem addressed, and is **opt-in** via `BC250_FSR4_RESOLUTION_VARIANTS=1`. It adds 24 further shader identities covering the 1080p and 4K+ buckets, each tagged with flag bit `0x40000000` so they are ignored entirely unless the switch is set.
 
 It also carries a correctness fix rather than an optimization. The pinned INT8 8K shaders encode masked DWORD stores at byte `0x08000000`, an address inside their own 332 MB scratch allocation, where a store can overwrite a live input and race a neighbouring invocation at clipped edges. For eight exactly identified bytecodes — matched by size and FNV-1a hash, and additionally verified to hold an `OpConstant` of that value at the expected word before anything is written — the constant is rewritten so the store lands beyond any scratch buffer this provider supports. That guard can be enabled on its own with `BC250_FSR4_RESOLUTION_GUARD=1`.
 
-`0009` flips every FSR4 candidate from opt-in to on by default — `BC250_FSR4_IMAGEPREP`, `BC250_FSR4_TEXTURE`, `BC250_FSR4_RESOLUTION_VARIANTS` and `BC250_FSR4_RESOLUTION_GUARD` all default on, with the pipeline cache key moved to `v3` so pipelines cached by an older driver are not reused. Each remains individually overridable. `BC250_FSR4_DISABLE=1` disables the profile-specific rewrites and image-preparation replacement; the generic GFX1013 lowering and independent masked-store correctness guard remain active. It does not reproduce a V3 or stock-Mesa comparison. The original kit's image-preparation and texture measurements were about 1% each at n=2 per arm. Later [v4 qualification](https://github.com/daniel-h-0/bc250-fsr4-fork/blob/v4.0.0-rc6/docs/qualification.md) and [matched game measurements](https://github.com/daniel-h-0/bc250-fsr4-fork/blob/v4.0.0-rc6/docs/performance.md) record the combined implementation's tested scope; those results do not qualify a newly built package binary.
+`0007` flips every FSR4 candidate from opt-in to on by default — `BC250_FSR4_IMAGEPREP`, `BC250_FSR4_TEXTURE`, `BC250_FSR4_RESOLUTION_VARIANTS` and `BC250_FSR4_RESOLUTION_GUARD` all default on, with the pipeline cache key moved to `v3` so pipelines cached by an older driver are not reused. Each remains individually overridable. `BC250_FSR4_DISABLE=1` disables the profile-specific rewrites and image-preparation replacement; the generic GFX1013 lowering and independent masked-store correctness guard remain active. It does not reproduce a V3 or stock-Mesa comparison. The original kit's image-preparation and texture measurements were about 1% each at n=2 per arm. Later [v4 qualification](https://github.com/daniel-h-0/bc250-fsr4-fork/blob/v4.0.0-rc6/docs/qualification.md) and [matched game measurements](https://github.com/daniel-h-0/bc250-fsr4-fork/blob/v4.0.0-rc6/docs/performance.md) record the combined implementation's tested scope; those results do not qualify a newly built package binary.
 
 The production patch directories are the ordered build series. The stable,
 lib32 and Mesa-Git preparation scripts stage every patch from their respective
@@ -1040,16 +1073,7 @@ packaged RADV ELF for the compiled v4 path and verifies its architecture. This
 prevents publishing only V3 while uploading unused v4 patches beside it; it is
 a build-coverage check, not a replacement for GPU correctness or gameplay tests.
 
-Upstream notes the 4K+ bucket previously failed to show an uplift and is curious whether the multi-bucket logic changes that. That is unverified here, as are `0008`'s performance effects generally.
-
-For an individual Steam game that specifically needs the experimental mesh-shader path, use:
-
-```text
-RADV_GFX103=1 %command%
-```
-
-Without `RADV_GFX103`, GFX1013 keeps its normal GFX10.1 software level and the experimental mesh/task features are not exposed.  
-With the variable enabled, `0004` promotes the RADV software `gfx_level` to GFX10.3 for that process. Final Fantasy VII Rebirth is currently the main tested use case and its mesh-shader path works with this override. **Task shaders are still not working correctly**, so games that rely on task shaders may render incorrectly, hang or crash. Do not export `RADV_GFX103=1` globally; enable it only for games that need it.
+Upstream notes the 4K+ bucket previously failed to show an uplift and is curious whether the multi-bucket logic changes that. That is unverified here, as are `0006`'s performance effects generally.
 
 Stable Mesa is built with:
 
@@ -1060,7 +1084,7 @@ Stable Mesa is built with:
 ## Patched stable CachyOS lib32-mesa
 
 `lib32-mesa` comes directly from the current CachyOS `mesa/lib32-mesa/PKGBUILD` at the same pinned packaging commit.  
-It receives the same nine-patch production series and runtime gating as stable 64-bit Mesa. Source inclusion and a successful build do not by themselves extend the upstream v4 binary qualification to 32-bit workloads.
+It receives the same seven-patch production series and runtime gating as stable 64-bit Mesa. Source inclusion and a successful build do not by themselves extend the upstream v4 binary qualification to 32-bit workloads.
 
 The clean Arch build container explicitly enables `[multilib]` before dependency resolution.
 
@@ -1077,28 +1101,30 @@ mesa-git
 lib32-mesa-git
 ```
 
-The Git variant carries a separately rebased copy of the same nine-patch series:
+The Git variant carries a separately rebased copy of the same seven-patch series:
 
 ```text
 patches/mesa-git/0001-gfx1013-compute-queue-fix.patch
-patches/mesa-git/0002-gfx1013-mesh-task-shaders.patch
-patches/mesa-git/0003-gfx1013-taskmesh-queries.patch
-patches/mesa-git/0004-radv-gfx103.patch
-patches/mesa-git/0005-bc250-fsr4-v3.patch
-patches/mesa-git/0006-bc250-fsr4-combined-unroll.patch
-patches/mesa-git/0007-bc250-fsr4-imageprep-texture.patch
-patches/mesa-git/0008-bc250-fsr4-resolution-variants.patch
-patches/mesa-git/0009-bc250-fsr4-production-defaults.patch
+patches/mesa-git/0002-bc250-directmesh.patch
+patches/mesa-git/0003-bc250-fsr4-v3.patch
+patches/mesa-git/0004-bc250-fsr4-combined-unroll.patch
+patches/mesa-git/0005-bc250-fsr4-imageprep-texture.patch
+patches/mesa-git/0006-bc250-fsr4-resolution-variants.patch
+patches/mesa-git/0007-bc250-fsr4-production-defaults.patch
 ```
 
-`0001` and `0005` remain active regardless of environment variables.  
-The experimental GFX1013 mesh/task path from `0002`/`0003` is opt-in through `RADV_GFX103=1`; `0004` provides that runtime override and defaults to disabled. The same limitations as stable Mesa apply: mesh shaders are the currently tested use case, while task shaders are still not working correctly.
+The same runtime gating as stable Mesa applies: `0001` and the FSR4 patches `0003`-`0007` are on by default, and DirectMesh needs `RADV_DIRECTMESH=1`.
 
-**The mesa-git series carries a workaround Mesa main has deleted.** GFX1013 firmware 144 hangs on `DISPATCH_TASKMESH_INDIRECT_MULTI_ACE` with a zero indirect count. RADV had a driver-side workaround for that bug, which `0002` extends for GFX1013's additional zero-dimensional ACE hang. Mesa main removed it in [`5d95a8f141d`](https://gitlab.freedesktop.org/mesa/mesa/-/commit/5d95a8f141d) and now refuses task/mesh outright on affected firmware, on the grounds that nobody should still be running four-year-old firmware — but on the BC-250 that firmware is what there is, and the path works well enough that Final Fantasy VII Rebirth runs on it. So `0002` restores the deleted code verbatim from `5d95a8f141d^` and applies the GFX1013 refinement on top, and `radv_task_enabled()` judges GFX1013 on its own capability bit instead of on `has_taskmesh_indirect0_bug`, which this path sets deliberately to select the workaround. Every other device keeps upstream's newer, stricter behaviour.
+**`0002` is a real port, not a copy.** DirectMesh was written against Mesa 26.2.1, and Mesa main has moved underneath it in ways a clean `patch` run does not reveal — most of the incompatibilities surfaced as compile errors, not conflicts. Each one is resolved by keeping upstream's change and re-applying DirectMesh's intent on top, and the patch header lists them all. The ones worth knowing about:
 
-That is a maintenance cost taken on knowingly: it is roughly 58 lines of upstream code that no longer exists upstream, so it has to be re-checked whenever the surrounding RADV code moves. The stable `patches/mesa` series still carries the original form because the CachyOS Mesa commit it patches predates the removal.
+- **A workaround Mesa main deleted is carried again.** GFX1013 firmware hangs on `DISPATCH_TASKMESH_INDIRECT_MULTI_ACE` with a zero indirect count. RADV had a driver-side workaround, which DirectMesh builds on and extends for GFX1013's additional zero-dimensional ACE hang. Mesa main removed it in [`5d95a8f141d`](https://gitlab.freedesktop.org/mesa/mesa/-/commit/5d95a8f141d) and now refuses task/mesh on affected firmware — but on the BC-250 that firmware is what there is. `0002` restores the deleted code from `5d95a8f141d^` with DirectMesh's refinement, including the count-buffer allocation in the indirect-count entry point. The BC-250 never goes through main's refusal (it is GFX10.1, and DirectMesh exposes mesh through its own path), and every other device keeps upstream's behaviour. That is roughly 60 lines of code upstream no longer has, so it has to be re-checked whenever the surrounding RADV code moves. The stable series does not need this: 26.2.3 predates the removal.
+- **The compiler cache key grew by one word.** DirectMesh used all 28 spare bits of the key's second word on 26.2.1; main has since spent two of them, so its flags spill into a third word, padded explicitly so the byte-hashed key never contains uninitialised bits, and the key's size pin moves from 24 to 28 bytes.
+- **Renamed internals**: `RADV_CMD_FLAG_*` flush bits became `AC_BARRIER_*` (mapping taken from upstream's own rename commit), `radv_emit_cache_flush` gained an argument that only matters on GFX11+, NGG face culling moved from front/back to determinant-sign bits, and the per-family queue arrays were flattened.
+- **Three changes compiled fine but meant something different on main**, and were found by review rather than by the compiler: main's barrier rework stopped implying the "command processor waits for the shader engines" flag that DirectMesh's flushes relied on before the next draw reads its arguments, so it is now set explicitly on each; main's new rasterizer-discard branch in the Mesh lowering exports nothing, which hangs GFX10 hardware, so the chip's fully-culled workaround is emitted there as the other discard paths already do; and main moved the mesh-query emulation check, which would have silently compiled GFX1013 shaders without query counters.
+- **Three more were found in the final review and handled.** An experimental, opt-in merge option (`RADV_BC250_MESH_MERGE`, not part of the `RADV_DIRECTMESH` preset and never run on hardware by its author) reads a value through an internal intrinsic that main now treats as a push constant, so its option A is pinned off on main until it is ported. Main newly rewrites Mesh/Task shared-memory access into subgroup shuffles, which would change which DirectMesh route a shader takes; that rewrite is skipped for Mesh/Task while DirectMesh is on, keeping the routes the author validated. And a VRS safety backstop that main narrowed to pipelines with a fragment shader is kept unconditional for the no-op VRS.
+- **One upstream optimisation is deliberately not taken.** Main skips the Mesh finale barrier under rasterizer discard; DirectMesh's culling and compaction passes read shared memory written before that barrier, so it stays unconditional, as it was for every GPU before.
 
-There is deliberately no separate `series` file. The build script explicitly applies the five numbered patches in order through CachyOS' `mesa-userpatches` mechanism.
+There is deliberately no separate `series` file. The build script explicitly applies the seven numbered patches in order through CachyOS' `mesa-userpatches` mechanism.
 
 To switch explicitly to Git Mesa:
 

@@ -131,7 +131,7 @@ output.write_text(text)
                     text=True,
                 )
                 expected = sorted((ROOT / "patches" / family).glob("*.patch"))
-                self.assertGreaterEqual(len(expected), 9)
+                self.assertGreaterEqual(len(expected), 7)
                 if family == "mesa-git":
                     actual = sorted((output / "mesa-userpatches").glob("*.mymesapatch"))
                     self.assertEqual(

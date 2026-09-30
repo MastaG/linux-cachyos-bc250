@@ -82,9 +82,9 @@ for key, value in expected.items():
 PY
 
 # Apply the complete BC-250 Mesa series through CachyOS' native user-patch
-# mechanism. 0001 and 0005 apply unconditionally. 0002/0003 contain the
-# experimental mesh/task path, but their GFX1013 feature exposure remains
-# dormant unless 0004 sees RADV_GFX103=1 at runtime.
+# mechanism. 0001 and the FSR4 patches 0003-0007 are on by default; 0002
+# (DirectMesh mesh/task shaders) only takes effect on GFX1013 with
+# RADV_DIRECTMESH=1.
 patch_names=()
 for patch in "${MESA_GIT_PATCHES[@]}"; do
     name="$(basename "$patch")"
