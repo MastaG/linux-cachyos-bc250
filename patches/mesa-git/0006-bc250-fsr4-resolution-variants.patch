@@ -40,10 +40,10 @@ upgrade-from-previous/0003-resolution-over-composed.patch
  2 files changed, 96 insertions(+)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index dd13c09e927..54f8adc1ab3 100644
+index 40818ced40c..d7856b8933c 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -379,7 +379,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -380,7 +380,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
     unsigned bc250_imageprep_mode = debug_get_num_option("BC250_FSR4_IMAGEPREP", 0);
     _mesa_blake3_update(&ctx, bc250_imageprep_version, strlen(bc250_imageprep_version));
     _mesa_blake3_update(&ctx, &bc250_imageprep_mode, sizeof(bc250_imageprep_mode));
@@ -64,7 +64,7 @@ index dd13c09e927..54f8adc1ab3 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 2751ff42d36..3e98e1fc177 100644
+index 11eebb03341..d769202a5ef 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8523,6 +8523,30 @@ bc250_fsr4_profile(const void *bytes, size_t size)
