@@ -93,7 +93,7 @@ index e17da25945e..b29f1471df5 100644
        if (dst.regClass() == s1) {
           Operand op1(get_alu_src(ctx, instr->src[0]));
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index c22c4eb02fd..fd647f38d00 100644
+index ceb94410413..534768e1577 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -60,6 +60,8 @@ get_nir_options_for_stage(struct radv_compiler_info *compiler_info, mesa_shader_
