@@ -150,6 +150,10 @@ text = text[:match.start()] + insert + text[match.end():]
 pkgbuild.write_text(text, encoding='utf-8', newline='\n')
 PY
 
+# Pin every LLVM-linked package to the LLVM it is built with, so a newer LLVM
+# cannot be installed under it (see the script for the 2026-10-01 breakage).
+python3 "$ROOT_DIR/scripts/pin-llvm-depends.py" "$MESA_GIT_BUILD_DIR/PKGBUILD"
+
 applied_patches="$(IFS=,; printf '%s' "${patch_names[*]}")"
 cat > "$MESA_GIT_BUILD_DIR/bc250-mesa-git-build.env" <<EOF_META
 CACHYOS_MESA_COMMIT=${CACHYOS_MESA_COMMIT}

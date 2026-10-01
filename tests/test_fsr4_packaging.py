@@ -30,6 +30,17 @@ prepare() {
 build() {
   :
 }
+package_vulkan-radeon() {
+  depends=(
+    glibc
+    llvm-libs
+  )
+}
+package_vulkan-intel() {
+  depends=(
+    glibc
+  )
+}
 """
 GIT = """pkgrel=1
 build () {
@@ -38,6 +49,9 @@ build () {
       export CPPFLAGS="${_custom_opt_flags}"
       export CXXFLAGS="${_custom_opt_flags}"
     fi
+}
+package_mesa-git() {
+  depends=('libdrm' $_llvm 'spirv-tools')
 }
 """
 NATIVE = """pkgname=proton-cachyos-native
@@ -113,6 +127,26 @@ output.write_text(text)
             MESA_GIT_COMMIT="b" * 40,
             BC250_SKIP_MESA_PREFETCH="1",
         )
+
+    def test_llvm_linked_packages_are_pinned_to_the_build_llvm(self):
+        # 2026-10-01: a Mesa built against LLVM 22 was installed next to llvm-libs 23 and
+        # no driver could load. Every LLVM-linked package must carry the pin, and only those.
+        for script, variable in (
+            ("prepare-mesa-pkgbuild.sh", "MESA_BUILD_DIR"),
+            ("prepare-lib32-mesa-pkgbuild.sh", "LIB32_MESA_BUILD_DIR"),
+            ("prepare-mesa-git-pkgbuild.sh", "MESA_GIT_BUILD_DIR"),
+        ):
+            with self.subTest(script=script):
+                output = self.work / ("pin-" + script)
+                env = dict(self.env, **{variable: str(output)})
+                subprocess.run(["bash", str(ROOT / "scripts" / script)], env=env, check=True,
+                               capture_output=True, text=True)
+                text = (output / "PKGBUILD").read_text()
+                self.assertIn("_bc250_pin_llvm() {", text)
+                self.assertEqual(text.count("\n  _bc250_pin_llvm\n"), 1)
+                if "package_vulkan-intel()" in text:
+                    intel = text[text.index("package_vulkan-intel()"):]
+                    self.assertNotIn("_bc250_pin_llvm", intel.split("\n}\n", 1)[0])
 
     def test_every_production_patch_reaches_each_generated_package(self):
         for family, script, variable in (

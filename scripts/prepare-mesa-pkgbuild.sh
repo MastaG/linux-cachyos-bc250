@@ -120,6 +120,10 @@ text = text.replace('build() {\n', 'build() {\n' + cpu_tuning, 1)
 path.write_text(text, encoding='utf-8', newline='\n')
 PY
 
+# Pin every LLVM-linked package to the LLVM it is built with, so a newer LLVM
+# cannot be installed under it (see the script for the 2026-10-01 breakage).
+python3 "$ROOT_DIR/scripts/pin-llvm-depends.py" "$MESA_BUILD_DIR/PKGBUILD"
+
 # Fetch the release tarball ourselves; archive.mesa3d.org is unreliable and
 # makepkg's own retry budget is too small to ride out its outages.
 "${ROOT_DIR}/scripts/fetch-mesa-tarball.sh" "$MESA_BUILD_DIR"

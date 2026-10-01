@@ -1007,6 +1007,8 @@ patches/mesa/0006-bc250-fsr4-resolution-variants.patch
 patches/mesa/0007-bc250-fsr4-production-defaults.patch
 ```
 
+Every Mesa package that links LLVM (`mesa`, `opencl-mesa`, `vulkan-radeon`, `vulkan-swrast`, their `lib32-` versions, and `mesa-git`) is pinned to the LLVM it was built with: `libLLVM.so=<major>.<minor>-64`, or a `lib32-llvm-libs` range for 32-bit (`scripts/pin-llvm-depends.py`). Upstream only depends on plain `llvm-libs`, which is safe there because Arch and CachyOS rebuild Mesa together with LLVM; this repository builds Mesa separately, and on 2026-10-01 a `pacman -Syu` installed LLVM 23 under a Mesa built for LLVM 22, which left no working Vulkan or OpenGL driver. With the pin pacman refuses that update with a dependency error until a matching Mesa is published.
+
 `0001` is the normal BC-250 path and remains active at all times. It exposes the dedicated ACE compute queue and applies the GFX1013 async-compute workaround required by the matching kernel fixes.
 
 ### Mesh and task shaders: DirectMesh (`0002`)
