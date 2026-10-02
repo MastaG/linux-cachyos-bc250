@@ -203,6 +203,23 @@ path.write_text(text)
 EOF_PATCH
 fi
 
+# --- unzip source URL ------------------------------------------------------
+#
+# Debian dropped unzip_6.0-29.debian.tar.xz from its pool when 6.0-29+deb13u1
+# superseded it, so protonfixes' Makefile 404s on it and the whole build stops
+# (run 37038047554). umu-protonfixes upstream already moved to 29+deb13u1;
+# until the Proton tree picks that up, take the identical file from
+# snapshot.debian.org, which never deletes. Only while the pin is still 29.
+PF_MAKEFILE="$SRC/protonfixes/Makefile"
+if [[ -f "$PF_MAKEFILE" ]] && grep -qx 'UNZIP_DEBIAN_REVISION := 29' "$PF_MAKEFILE"; then
+    printf '==> fetching unzip 6.0-29 from snapshot.debian.org\n'
+    sed -i 's|^UNZIP_BASE_URL := https://deb.debian.org/debian/pool/main/u/unzip$|UNZIP_BASE_URL := https://snapshot.debian.org/archive/debian/20250311T215724Z/pool/main/u/unzip|' "$PF_MAKEFILE"
+    grep -q '^UNZIP_BASE_URL := https://snapshot.debian.org/' "$PF_MAKEFILE" || {
+        printf 'ERROR: %s pins unzip 6.0-29 but its UNZIP_BASE_URL line changed shape\n' "$PF_MAKEFILE" >&2
+        exit 1
+    }
+fi
+
 # --- build -----------------------------------------------------------------
 # Which SDK image the tree wants. `make get-steamrt-image` is the tree's own
 # answer and is used when make is available -- but it is not on a runner where

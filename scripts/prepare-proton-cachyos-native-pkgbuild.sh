@@ -168,6 +168,23 @@ sub("    cd proton-cachyos\n",
     "        patches/protonfixes/0003-bc250-fsr4/0001-pinned-upscaler-manifest.patch\n",
     "the `cd proton-cachyos` in prepare()")
 
+# Debian dropped unzip_6.0-29.debian.tar.xz from its pool when 6.0-29+deb13u1
+# superseded it, so the protonfixes Makefile's download 404s and the build
+# stops. umu-protonfixes upstream moved to 29+deb13u1; until CachyOS's tree
+# picks that up, fetch the exact same files from snapshot.debian.org, which
+# never deletes. Only while the pin is still 29: a bumped tree is left alone.
+# After the submodule update, which is what brings protonfixes/ in.
+sub("    for rustlib in gst-plugins-rs; do\n",
+    "    # BC-250: Debian removed unzip_6.0-29.debian.tar.xz from its pool; take the\n"
+    "    # identical file from snapshot.debian.org while protonfixes still pins it.\n"
+    "    if grep -qx 'UNZIP_DEBIAN_REVISION := 29' protonfixes/Makefile; then\n"
+    "        sed -i 's|^UNZIP_BASE_URL := https://deb.debian.org/debian/pool/main/u/unzip$|UNZIP_BASE_URL := https://snapshot.debian.org/archive/debian/20250311T215724Z/pool/main/u/unzip|' protonfixes/Makefile\n"
+    "        grep -q '^UNZIP_BASE_URL := https://snapshot.debian.org/' protonfixes/Makefile || return 1\n"
+    "    fi\n"
+    "\n"
+    "    for rustlib in gst-plugins-rs; do\n",
+    "the rustlib loop at the end of prepare() (unzip URL)")
+
 # Apply a private local build's own patches once the tree is whole.
 sub("    for rustlib in gst-plugins-rs; do\n",
     "    # Local private builds only (scripts/build-proton-tarball.sh). Never set in\n"
