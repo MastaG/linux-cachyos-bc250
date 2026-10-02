@@ -12,6 +12,8 @@ export LC_ALL=C
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPONENT="${1:?component is required}"
 NCT6687D_COMMIT="${NCT6687D_COMMIT:-}"
+BC250_VRM_COMMIT="${BC250_VRM_COMMIT:-}"
+BC250_MEMORY_COMMIT="${BC250_MEMORY_COMMIT:-}"
 CACHYOS_MESA_COMMIT="${CACHYOS_MESA_COMMIT:-}"
 MESA_GIT_COMMIT="${MESA_GIT_COMMIT:-}"
 PROTONGE_TAG="${PROTONGE_TAG:-}"
@@ -83,6 +85,13 @@ case "$COMPONENT" in
         curl -fsSL --retry 5 --retry-all-errors -o "$TMP/config" "$base/config"
         curl -fsSL --retry 5 --retry-all-errors -o "$TMP/nct6687.c" \
             "https://raw.githubusercontent.com/Fred78290/nct6687d/${NCT6687D_COMMIT}/nct6687.c"
+        # The BC-250 VRM and GDDR6 hwmon drivers: hashed by content, like
+        # nct6687.c, so a new upstream commit rebuilds the kernels only when a
+        # driver source actually changed.
+        # shellcheck disable=SC1091
+        source "$ROOT_DIR/scripts/bc250-sensor-drivers.sh"
+        bc250_sensor_drivers_resolve
+        bc250_sensor_drivers_fetch "$TMP"
         printf '%s\n' "$CACHYOS_SOURCE_VARIANT" > "$TMP/source-variant"
         printf '%s\n' "$EXPECTED_PKGBASE" > "$TMP/pkgbase"
         printf '%s\n' "$PATCH_SET" > "$TMP/patch-set"
@@ -94,6 +103,8 @@ case "$COMPONENT" in
             hash_files "$ROOT_DIR/scripts/prepare-pkgbuild.sh" \
                 "$ROOT_DIR/scripts/build-package.sh" \
                 "$ROOT_DIR/scripts/resolve-nct6687d.sh" \
+                "$ROOT_DIR/scripts/resolve-bc250-sensor-drivers.sh" \
+                "$ROOT_DIR/scripts/bc250-sensor-drivers.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

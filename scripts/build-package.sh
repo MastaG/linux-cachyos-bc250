@@ -51,6 +51,18 @@ if ! grep -Eq '(^|/)nct6687\.ko(\.(zst|xz|gz))?$' <<<"$module_listing"; then
     printf 'ERROR: nct6687 kernel module is missing from generated packages\n' >&2
     exit 1
 fi
+for module in bc250_vrm bc250_memory; do
+    if ! grep -Eq "(^|/)${module}\\.ko(\\.(zst|xz|gz))?\$" <<<"$module_listing"; then
+        printf 'ERROR: %s kernel module is missing from generated packages\n' "$module" >&2
+        exit 1
+    fi
+done
+# The two BC-250 sensor drivers are opt-in; the package must stop udev from
+# loading them by their DMI alias (prepare-pkgbuild.sh installs the file).
+if ! grep -Eq "(^|/)usr/lib/modprobe\\.d/${EXPECTED_PKGBASE}-sensors\\.conf\$" <<<"$module_listing"; then
+    printf 'ERROR: %s-sensors.conf (bc250 sensor blacklist) is missing from generated packages\n' "$EXPECTED_PKGBASE" >&2
+    exit 1
+fi
 if grep -Eq '(^|/)nct6683\.ko(\.(zst|xz|gz))?$' <<<"$module_listing"; then
     printf 'ERROR: conflicting nct6683 kernel module is present in generated packages\n' >&2
     exit 1
@@ -101,6 +113,12 @@ grep -qx 'CONFIG_SENSORS_NCT6687=m' "$final_config" || {
     printf 'ERROR: final config does not build CONFIG_SENSORS_NCT6687=m\n' >&2
     exit 1
 }
+for option in SENSORS_BC250_VRM SENSORS_BC250_MEMORY; do
+    grep -qx "CONFIG_${option}=m" "$final_config" || {
+        printf 'ERROR: final config does not build CONFIG_%s=m\n' "$option" >&2
+        exit 1
+    }
+done
 grep -qx '# CONFIG_SENSORS_NCT6683 is not set' "$final_config" || {
     printf 'ERROR: final config did not disable CONFIG_SENSORS_NCT6683\n' >&2
     exit 1
@@ -111,6 +129,9 @@ cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/kernel-${KERNEL_ID}-PKGBUILD"
 cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/kernel-${KERNEL_ID}.SRCINFO"
 cp -- "$final_config" "$OUT_DIR/kernel-${KERNEL_ID}-config"
 cp -- "$BUILD_DIR/nct6687.c" "$OUT_DIR/nct6687.c"
+for file in bc250_vrm.c bc250_memory.c bc250_smu.c bc250_smu.h bc250_smu_patch.c; do
+    cp -- "$BUILD_DIR/$file" "$OUT_DIR/$file"
+done
 
 prune_stale_patches "$OUT_DIR" "$ROOT_DIR/patches/$PATCH_SET" "${PATCH_SET}-"
 for patch in "$ROOT_DIR/patches/$PATCH_SET"/*.patch; do
@@ -132,6 +153,10 @@ CPU_TUNE=${CPU_TUNE}
 KCFLAGS=-mtune=${CPU_TUNE}
 NCT6687D_COMMIT=${NCT6687D_COMMIT}
 NCT6687D_SOURCE_URL=${NCT6687D_SOURCE_URL}
+BC250_VRM_COMMIT=${BC250_VRM_COMMIT}
+BC250_VRM_SOURCE_URL=${BC250_VRM_SOURCE_URL}
+BC250_MEMORY_COMMIT=${BC250_MEMORY_COMMIT}
+BC250_MEMORY_SOURCE_URL=${BC250_MEMORY_SOURCE_URL}
 EOF_KERNEL
 
 printf '==> Built %s kernel family: %s %s-%s\n' "$KERNEL_ID" "$pkgbase" "$pkgver" "$pkgrel"

@@ -6,6 +6,8 @@ CACHYOS_SOURCE_VARIANT="${CACHYOS_SOURCE_VARIANT:-linux-cachyos}"
 BC250_PKGREL="${BC250_PKGREL:-1}"
 BUILD_DIR="${BUILD_DIR:-${ROOT_DIR}/build/${CACHYOS_SOURCE_VARIANT}}"
 NCT6687D_COMMIT="${NCT6687D_COMMIT:-}"
+BC250_VRM_COMMIT="${BC250_VRM_COMMIT:-}"
+BC250_MEMORY_COMMIT="${BC250_MEMORY_COMMIT:-}"
 REPO_NAME="bc250-cachyos"
 RELEASE_TAG="repo"
 OUT_CHANNEL="repo"
@@ -88,6 +90,12 @@ fi
     exit 1
 }
 
+# The BC-250 VRM and GDDR6 hwmon drivers, pinned the same way as nct6687.
+# shellcheck disable=SC1091
+source "$ROOT_DIR/scripts/bc250-sensor-drivers.sh"
+bc250_sensor_drivers_resolve
+mapfile -t BC250_SENSOR_FILES < <(bc250_sensor_driver_files)
+
 mapfile -t KERNEL_PATCHES < <(find "$PATCH_DIR" -maxdepth 1 -type f -name '*.patch' -print | sort)
 (( ${#KERNEL_PATCHES[@]} > 0 )) || {
     printf 'ERROR: no kernel patches found in %s\n' "$PATCH_DIR" >&2
@@ -112,6 +120,9 @@ curl -fL --retry 5 --retry-all-errors -o "$BUILD_DIR/config"   "${UPSTREAM_BASE}
 printf '==> Downloading nct6687d source at %s\n' "$NCT6687D_COMMIT"
 curl -fL --retry 5 --retry-all-errors -o "$BUILD_DIR/nct6687.c" "$NCT6687D_SOURCE_URL"
 
+printf '==> Downloading bc250 sensor drivers (vrm %s, memory %s)\n' "$BC250_VRM_COMMIT" "$BC250_MEMORY_COMMIT"
+bc250_sensor_drivers_fetch "$BUILD_DIR"
+
 extra_args=()
 for patch in "${KERNEL_PATCHES[@]}"; do
     name="$(basename "$patch")"
@@ -119,6 +130,9 @@ for patch in "${KERNEL_PATCHES[@]}"; do
     extra_args+=("$name" "$(b2sum "$patch" | awk '{print $1}')")
 done
 extra_args+=("nct6687.c" "$(b2sum "$BUILD_DIR/nct6687.c" | awk '{print $1}')")
+for file in "${BC250_SENSOR_FILES[@]}"; do
+    extra_args+=("$file" "$(b2sum "$BUILD_DIR/$file" | awk '{print $1}')")
+done
 
 python3 - "$BUILD_DIR/PKGBUILD" "$CUSTOM_SUFFIX" "$BC250_PKGREL" "${extra_args[@]}" <<'PY'
 from pathlib import Path
@@ -174,6 +188,11 @@ prepare_replacement = '''    done
     echo "Installing pinned nct6687 hwmon source..."
     install -Dm644 ../nct6687.c drivers/hwmon/nct6687.c
 
+    echo "Installing pinned BC-250 VRM and GDDR6 hwmon sources..."
+    for _bc250_src in bc250_vrm.c bc250_memory.c bc250_smu.c bc250_smu.h bc250_smu_patch.c; do
+        install -Dm644 "../$_bc250_src" "drivers/hwmon/$_bc250_src"
+    done
+
     echo "Setting config..."
 '''
 if text.count(prepare_anchor) != 1:
@@ -186,10 +205,32 @@ config_anchor = '    cp ../config .config\n'
 config_replacement = '''    cp ../config .config
     echo "Selecting the extended nct6687 hwmon module..."
     scripts/config -d SENSORS_NCT6683 -m SENSORS_NCT6687
+    echo "Building the BC-250 VRM and GDDR6 hwmon modules..."
+    scripts/config -m SENSORS_BC250_VRM -m SENSORS_BC250_MEMORY
 '''
 if text.count(config_anchor) != 1:
     raise SystemExit('ERROR: expected config copy anchor exactly once')
 text = text.replace(config_anchor, config_replacement, 1)
+
+# bc250_vrm and bc250_memory both declare a DMI match on "AMD BC-250", so udev
+# would load them on every board at boot -- and bc250_memory patches SMU
+# firmware memory when it loads. Both are opt-in: "blacklist" only stops alias
+# (automatic) loading, while /etc/modules-load.d and "modprobe <name>" still
+# work. Named per pkgbase so the stable, rc and bore kernels co-install.
+package_anchor = '    echo "$pkgbase" | install -Dm644 /dev/stdin "$modulesdir/pkgbase"\n'
+package_replacement = package_anchor + """
+    echo "Making the BC-250 VRM and GDDR6 hwmon modules opt-in..."
+    install -dm755 "${pkgdir}/usr/lib/modprobe.d"
+    printf '%s\\n' \\
+        '# BC-250 sensor drivers are opt-in: add bc250_vrm and/or bc250_memory to' \\
+        '# /etc/modules-load.d/ to load them at boot. bc250_vrm needs the VRM SMBus' \\
+        '# hardware modification; bc250_memory patches SMU firmware memory on load.' \\
+        'blacklist bc250_vrm' \\
+        'blacklist bc250_memory' > "${pkgdir}/usr/lib/modprobe.d/${pkgbase}-sensors.conf"
+"""
+if text.count(package_anchor) != 1:
+    raise SystemExit('ERROR: expected the _package() pkgbase anchor exactly once')
+text = text.replace(package_anchor, package_replacement, 1)
 
 path.write_text(text, encoding="utf-8", newline="\n")
 PY
@@ -208,6 +249,10 @@ CPU_TUNE=${CPU_TUNE}
 BC250_PKGREL=${BC250_PKGREL}
 NCT6687D_COMMIT=${NCT6687D_COMMIT}
 NCT6687D_SOURCE_URL=${NCT6687D_SOURCE_URL}
+BC250_VRM_COMMIT=${BC250_VRM_COMMIT}
+BC250_VRM_SOURCE_URL=${BC250_VRM_SOURCE_URL}
+BC250_MEMORY_COMMIT=${BC250_MEMORY_COMMIT}
+BC250_MEMORY_SOURCE_URL=${BC250_MEMORY_SOURCE_URL}
 EOF_META
 
 printf '==> Prepared %s\n' "$BUILD_DIR"
@@ -218,3 +263,4 @@ printf '    patch set:     %s\n' "$PATCH_SET"
 printf '    ISA baseline:  x86-64-v3 (%s)\n' "$PROCESSOR_OPT"
 printf '    CPU tuning:    %s (-mtune=%s)\n' "$CPU_TUNE" "$CPU_TUNE"
 printf '    nct6687d:       %s\n' "$NCT6687D_COMMIT"
+printf '    bc250 sensors:  vrm %s, memory %s\n' "$BC250_VRM_COMMIT" "$BC250_MEMORY_COMMIT"

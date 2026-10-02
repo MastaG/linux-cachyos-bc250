@@ -1,0 +1,72 @@
+From: MastaG <badouri.g@gmail.com>
+Subject: [PATCH] hwmon: add BC-250 VRM and GDDR6 temperature drivers
+
+Kconfig and Makefile entries for two out-of-tree BC-250 hwmon drivers by
+Liam McLoughlin (github.com/Hexxeh/bc250-vrm-dkms and bc250-memory-dkms).
+The sources are fetched at a pinned commit and installed into
+drivers/hwmon by the package build, the same way nct6687.c is.
+
+- bc250_vrm: PMBus telemetry from the board's VRM controller (CPU and GPU
+  rail voltage, current, temperature and power) over the AMD SMBus
+  controller. Needs a small hardware modification that wires the VRM's
+  SMBus lines; without it the readings fail and nothing else happens.
+- bc250_memory: GDDR6 temperatures (per chip, hotspot, average) through the
+  SMU. On first load it writes a small payload into SMU firmware memory and
+  redirects one Queue 3 message handler (auto_patch=1, the default), which
+  only works with BIOS SMU debug access enabled; with it locked the driver
+  refuses to load.
+
+Both declare a DMI match on "AMD BC-250", so udev would load them on every
+board. The kernel package ships a modprobe blacklist for both: they load
+only when the user asks, e.g. via /etc/modules-load.d.
+---
+diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
+--- a/drivers/hwmon/Kconfig
++++ b/drivers/hwmon/Kconfig
+@@ -1791,6 +1791,34 @@
+ 	  This driver can also be built as a module. If so, the module
+ 	  will be called nct6687.
+ 
++config SENSORS_BC250_VRM
++	tristate "AMD BC-250 VRM telemetry"
++	depends on I2C && DMI && X86
++	help
++	  PMBus voltage, current, temperature and power readings for the CPU
++	  and GPU rails of the AMD BC-250 board's VRM controller, read over the
++	  AMD SMBus controller. Requires a hardware modification that connects
++	  the VRM's SMBus lines.
++
++	  This driver is maintained outside the upstream kernel and is
++	  integrated from https://github.com/Hexxeh/bc250-vrm-dkms.
++
++	  If built as a module, it will be called bc250_vrm.
++
++config SENSORS_BC250_MEMORY
++	tristate "AMD BC-250 GDDR6 temperatures"
++	depends on PCI && DMI && X86
++	help
++	  Per-chip, hotspot and average GDDR6 temperatures on the AMD BC-250,
++	  read through the SMU. Loading it patches SMU firmware memory to add
++	  the readout (module parameter auto_patch), which requires BIOS SMU
++	  debug access.
++
++	  This driver is maintained outside the upstream kernel and is
++	  integrated from https://github.com/Hexxeh/bc250-memory-dkms.
++
++	  If built as a module, it will be called bc250_memory.
++
+ config SENSORS_NCT6694
+ 	tristate "Nuvoton NCT6694 Hardware Monitor support"
+ 	depends on MFD_NCT6694
+diff --git a/drivers/hwmon/Makefile b/drivers/hwmon/Makefile
+--- a/drivers/hwmon/Makefile
++++ b/drivers/hwmon/Makefile
+@@ -183,6 +183,8 @@
+ obj-$(CONFIG_SENSORS_MR75203)	+= mr75203.o
+ obj-$(CONFIG_SENSORS_NCT6683)	+= nct6683.o
+ obj-$(CONFIG_SENSORS_NCT6687)	+= nct6687.o
++obj-$(CONFIG_SENSORS_BC250_VRM)	+= bc250_vrm.o
++obj-$(CONFIG_SENSORS_BC250_MEMORY)	+= bc250_memory.o
+ obj-$(CONFIG_SENSORS_NCT6694)	+= nct6694-hwmon.o
+ obj-$(CONFIG_SENSORS_NCT6775_CORE) += nct6775-core.o
+ nct6775-objs			:= nct6775-platform.o

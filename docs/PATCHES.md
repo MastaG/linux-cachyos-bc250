@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these fifteen BC-250 patches, fifteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same fifteen patches plus its own three series-specific carries, eighteen in total:
+The stable and BORE kernels carry these sixteen BC-250 patches, sixteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same sixteen patches plus its own three series-specific carries, nineteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -51,9 +51,10 @@ The stable and BORE kernels carry these fifteen BC-250 patches, fifteen patches 
 0013-ch7218-dsc-restore.patch
 0014-pcon-force-dsc.patch
 0015-bc250-psp-ccp.patch
+0016-bc250-vrm-memory-hwmon.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same fifteen patches (content-identical, renumbered around its own series-specific carries) plus the three RC-only entries below:
+`patches/linux-cachyos-rc` carries the same sixteen patches (content-identical, renumbered around its own series-specific carries) plus the three RC-only entries below:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -74,6 +75,7 @@ The stable and BORE kernels carry these fifteen BC-250 patches, fifteen patches 
 0016-pcon-force-dsc.patch
 0017-pcon-vrr-hf-vsdb.patch
 0018-bc250-psp-ccp.patch
+0019-bc250-vrm-memory-hwmon.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -159,6 +161,7 @@ This patch set contains:
 - a defensive AMDGPU TTM NULL-page guard so partially populated BO cleanup cannot dereference a missing page;
 - a widened Cyan Skillfish SMU SCLK range (350–2230 MHz, up from the stock 1000–2000 MHz) so userspace SMU-based governors such as [filippor/cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) can drive the full clock range;
 - integration of the external `nct6687` hwmon/PWM driver;
+- integration of two external, **opt-in** BC-250 hwmon drivers by Hexxeh (`bc250-vrm-memory-hwmon.patch` adds their Kconfig/Makefile entries; the sources are fetched at a pinned commit like `nct6687.c`): `bc250_vrm` (VRM rail voltage/current/temperature/power over SMBus, needs a hardware modification) and `bc250_memory` (per-chip GDDR6 temperatures through the SMU, which it patches on load and which needs BIOS SMU debug access). Both carry a DMI alias, so the kernel package blacklists them from automatic loading; see the README for enabling them;
 - an **opt-in** 40 CU unlock for the harvested shader engines (`amdgpu.bc250_cc_write_mode=3`), described below;
 - HDMI 2.1 PCON negotiation and the two on-die DCN201 DSC engines, **on by default** (`amdgpu.bc250_hdmi21=0` switches them off) — see [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below;
 
