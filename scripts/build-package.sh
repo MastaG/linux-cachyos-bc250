@@ -57,10 +57,23 @@ for module in bc250_vrm bc250_memory; do
         exit 1
     fi
 done
-# The two BC-250 sensor drivers are opt-in; the package must stop udev from
-# loading them by their DMI alias (prepare-pkgbuild.sh installs the file).
-if ! grep -Eq "(^|/)usr/lib/modprobe\\.d/${EXPECTED_PKGBASE}-sensors\\.conf\$" <<<"$module_listing"; then
-    printf 'ERROR: %s-sensors.conf (bc250 sensor blacklist) is missing from generated packages\n' "$EXPECTED_PKGBASE" >&2
+# bc250_memory is opt-in: the package must stop udev from loading it by its
+# DMI alias, while bc250_vrm (which binds only to a wired VRM) must load by
+# default. prepare-pkgbuild.sh installs the file.
+sensors_conf="usr/lib/modprobe.d/${EXPECTED_PKGBASE}-sensors.conf"
+sensors_rules=""
+for package in "${packages[@]}"; do
+    if bsdtar -tf "$package" "$sensors_conf" >/dev/null 2>&1; then
+        sensors_rules="$(bsdtar -xOf "$package" "$sensors_conf" | grep -v '^#')"
+        break
+    fi
+done
+grep -qx 'blacklist bc250_memory' <<<"$sensors_rules" || {
+    printf 'ERROR: %s does not blacklist bc250_memory\n' "$sensors_conf" >&2
+    exit 1
+}
+if grep -q 'bc250_vrm' <<<"$sensors_rules"; then
+    printf 'ERROR: %s must not blacklist bc250_vrm\n' "$sensors_conf" >&2
     exit 1
 fi
 if grep -Eq '(^|/)nct6683\.ko(\.(zst|xz|gz))?$' <<<"$module_listing"; then

@@ -17,7 +17,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 
 | Package | What it is |
 |---|---|
-| `linux-cachyos-bc250` | Stable BC-250 kernel (`-rc` and `-bore` variants also built), with the `nct6687` fan and temperature driver built in, plus opt-in VRM and GDDR6 temperature drivers |
+| `linux-cachyos-bc250` | Stable BC-250 kernel (`-rc` and `-bore` variants also built), with the `nct6687` fan and temperature driver built in, plus VRM and (opt-in) GDDR6 temperature drivers |
 | `mesa` / `lib32-mesa` | Patched Mesa: GFX1013 async compute on by default, mesh/task shaders (opt-in, `RADV_DIRECTMESH=1`), FSR4 support |
 | `mesa-git` / `lib32-mesa-git` | Same patches on Mesa main, optional |
 | `proton-cachyos-native-bc250` | CachyOS Proton with FSR4, built for Zen 2 |
@@ -79,22 +79,22 @@ printf '%s\n' 'nct6687' | sudo tee /etc/modules-load.d/nct6687.conf >/dev/null
 
 All three kernels contain the external `nct6687` driver as an in-tree-built module.
 
-#### Optional: VRM and GDDR6 temperature drivers
+#### VRM and GDDR6 temperature drivers
 
-All three kernels also include two BC-250 sensor drivers by Hexxeh. They are **opt-in**: the kernel package blacklists them from loading automatically, so nothing happens until you add them yourself.
+All three kernels also include two BC-250 sensor drivers by Hexxeh. `bc250_vrm` loads automatically and only shows up in `sensors` on a board with the VRM wiring modification; without it the module binds to nothing and stays out of the way. `bc250_memory` is **opt-in**: the kernel package blacklists it from loading automatically, so nothing happens until you add it yourself.
 
 | Module | What it reads | Requirement |
 |---|---|---|
 | `bc250_vrm` | CPU and GPU rail voltage, current, temperature and power, plus the 12 V input, from the VRM controller | A small hardware modification that wires the VRM's SMBus lines ([guide](https://github.com/onlinermm/BC250-Telemetry/blob/main/hardware.md)). Without it the readings simply fail. |
 | `bc250_memory` | Temperature of each GDDR6 chip, plus hotspot and average | A BIOS with SMU debug access. On load the driver writes a small patch into SMU firmware memory to add the readout (`auto_patch=1`); with debug access locked it refuses to load. |
 
-To load either or both at boot:
+To load `bc250_memory` at boot:
 
 ```bash
-printf '%s\n' bc250_vrm bc250_memory | sudo tee /etc/modules-load.d/bc250-sensors.conf >/dev/null
+printf '%s\n' bc250_memory | sudo tee /etc/modules-load.d/bc250-memory.conf >/dev/null
 ```
 
-Then reboot (or `sudo modprobe bc250_vrm` / `sudo modprobe bc250_memory`) and check `sensors`. Two cautions for `bc250_memory`: it changes SMU firmware memory until the next reboot, and it talks to the same SMU mailbox as `bc250-smu-oc` and other SMU tools, which have no way to coordinate with a kernel driver -- avoid running an SMU tool (for example an overclock detection run) while something is polling the memory temperatures.
+Then reboot (or `sudo modprobe bc250_memory`) and check `sensors`. Two cautions for `bc250_memory`: it changes SMU firmware memory until the next reboot, and it talks to the same SMU mailbox as `bc250-smu-oc` and other SMU tools, which have no way to coordinate with a kernel driver -- avoid running an SMU tool (for example an overclock detection run) while something is polling the memory temperatures.
 
 ### 3. Install a kernel
 
@@ -1106,7 +1106,7 @@ CONFIG_SENSORS_NCT6687=m
 To pin a known driver revision, set repository variable `NCT6687D_REF` to a full 40-character commit hash.  
 When unset, the resolver follows the configured upstream branch.
 
-The BC-250 VRM and GDDR6 drivers work the same way: `scripts/resolve-bc250-sensor-drivers.sh` resolves `Hexxeh/bc250-vrm-dkms` and `Hexxeh/bc250-memory-dkms` (repository variables `BC250_VRM_REF` / `BC250_MEMORY_REF` pin them), the kernel fingerprints hash the downloaded sources, so a driver change rebuilds the kernels, and the patch `bc250-vrm-memory-hwmon.patch` adds their Kconfig entries. They build as `bc250_vrm.ko` and `bc250_memory.ko` (`CONFIG_SENSORS_BC250_VRM=m`, `CONFIG_SENSORS_BC250_MEMORY=m`), and each kernel package ships `/usr/lib/modprobe.d/<pkgbase>-sensors.conf` blacklisting both, because both carry a DMI alias that udev would otherwise load on every BC-250.
+The BC-250 VRM and GDDR6 drivers work the same way: `scripts/resolve-bc250-sensor-drivers.sh` resolves `Hexxeh/bc250-vrm-dkms` and `Hexxeh/bc250-memory-dkms` (repository variables `BC250_VRM_REF` / `BC250_MEMORY_REF` pin them), the kernel fingerprints hash the downloaded sources, so a driver change rebuilds the kernels, and the patch `bc250-vrm-memory-hwmon.patch` adds their Kconfig entries. They build as `bc250_vrm.ko` and `bc250_memory.ko` (`CONFIG_SENSORS_BC250_VRM=m`, `CONFIG_SENSORS_BC250_MEMORY=m`), and each kernel package ships `/usr/lib/modprobe.d/<pkgbase>-sensors.conf` blacklisting `bc250_memory`, because both drivers carry a DMI alias that udev loads on every BC-250. `bc250_vrm` is deliberately left loadable: since upstream `2d503bc` it binds only when a PMBus VRM answers at `0x60`. The package build fails if the file is missing, does not blacklist `bc250_memory`, or blacklists `bc250_vrm`.
 
 ---
 

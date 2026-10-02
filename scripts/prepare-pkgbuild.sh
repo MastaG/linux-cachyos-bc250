@@ -213,19 +213,22 @@ if text.count(config_anchor) != 1:
 text = text.replace(config_anchor, config_replacement, 1)
 
 # bc250_vrm and bc250_memory both declare a DMI match on "AMD BC-250", so udev
-# would load them on every board at boot -- and bc250_memory patches SMU
-# firmware memory when it loads. Both are opt-in: "blacklist" only stops alias
-# (automatic) loading, while /etc/modules-load.d and "modprobe <name>" still
-# work. Named per pkgbase so the stable, rc and bore kernels co-install.
+# loads them on every board at boot unless told otherwise.
+# - bc250_vrm loads by default: it binds only when a PMBus VRM answers at 0x60
+#   (upstream 2d503bc), so a board without the SMBus wiring gets no hwmon
+#   device and nothing else happens.
+# - bc250_memory stays opt-in: it patches SMU firmware memory when it loads.
+#   "blacklist" only stops alias (automatic) loading; /etc/modules-load.d and
+#   "modprobe bc250_memory" still work.
+# Named per pkgbase so the stable, rc and bore kernels co-install.
 package_anchor = '    echo "$pkgbase" | install -Dm644 /dev/stdin "$modulesdir/pkgbase"\n'
 package_replacement = package_anchor + """
-    echo "Making the BC-250 VRM and GDDR6 hwmon modules opt-in..."
+    echo "Making the BC-250 GDDR6 hwmon module opt-in..."
     install -dm755 "${pkgdir}/usr/lib/modprobe.d"
     printf '%s\\n' \\
-        '# BC-250 sensor drivers are opt-in: add bc250_vrm and/or bc250_memory to' \\
-        '# /etc/modules-load.d/ to load them at boot. bc250_vrm needs the VRM SMBus' \\
-        '# hardware modification; bc250_memory patches SMU firmware memory on load.' \\
-        'blacklist bc250_vrm' \\
+        '# bc250_memory is opt-in: it patches SMU firmware memory when it loads and' \\
+        '# needs BIOS SMU debug access. Add it to /etc/modules-load.d/ to load it at' \\
+        '# boot. (bc250_vrm loads automatically and binds only if the VRM is wired.)' \\
         'blacklist bc250_memory' > "${pkgdir}/usr/lib/modprobe.d/${pkgbase}-sensors.conf"
 """
 if text.count(package_anchor) != 1:

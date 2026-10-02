@@ -16,9 +16,11 @@ drivers/hwmon by the package build, the same way nct6687.c is.
   only works with BIOS SMU debug access enabled; with it locked the driver
   refuses to load.
 
-Both declare a DMI match on "AMD BC-250", so udev would load them on every
-board. The kernel package ships a modprobe blacklist for both: they load
-only when the user asks, e.g. via /etc/modules-load.d.
+Both declare a DMI match on "AMD BC-250", so udev loads them on every
+board. bc250_vrm binds only when a PMBus device answers at 0x60, so it is
+left to load; the kernel package ships a modprobe blacklist for
+bc250_memory, which loads only when the user asks, e.g. via
+/etc/modules-load.d.
 ---
 diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
 --- a/drivers/hwmon/Kconfig
