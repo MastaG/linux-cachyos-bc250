@@ -5,7 +5,7 @@
 #
 # Usage:
 #   source scripts/bc250-sensor-drivers.sh
-#   bc250_sensor_drivers_resolve            # fills BC250_VRM_COMMIT/BC250_MEMORY_COMMIT if unset
+#   bc250_sensor_drivers_resolve            # fills BC250_{VRM,MEMORY}_{COMMIT,TAG} if unset
 #   bc250_sensor_drivers_fetch <dest-dir>   # downloads every source file into <dest-dir>
 
 BC250_SENSOR_VRM_FILES=(bc250_vrm.c)
@@ -18,6 +18,8 @@ bc250_sensor_drivers_resolve() {
             case "$line" in
                 BC250_VRM_COMMIT=*) [[ -n "${BC250_VRM_COMMIT:-}" ]] || BC250_VRM_COMMIT="${line#*=}" ;;
                 BC250_MEMORY_COMMIT=*) [[ -n "${BC250_MEMORY_COMMIT:-}" ]] || BC250_MEMORY_COMMIT="${line#*=}" ;;
+                BC250_VRM_TAG=*) [[ -n "${BC250_VRM_TAG:-}" ]] || BC250_VRM_TAG="${line#*=}" ;;
+                BC250_MEMORY_TAG=*) [[ -n "${BC250_MEMORY_TAG:-}" ]] || BC250_MEMORY_TAG="${line#*=}" ;;
             esac
         done < <("$root/scripts/resolve-bc250-sensor-drivers.sh")
     fi
@@ -29,6 +31,9 @@ bc250_sensor_drivers_resolve() {
         printf 'ERROR: invalid BC250_MEMORY_COMMIT: %s\n' "$BC250_MEMORY_COMMIT" >&2
         return 1
     }
+    # The tag is informational (release notes); the commit is what is built.
+    BC250_VRM_TAG="${BC250_VRM_TAG:-untagged}"
+    BC250_MEMORY_TAG="${BC250_MEMORY_TAG:-untagged}"
     BC250_VRM_SOURCE_URL="https://raw.githubusercontent.com/Hexxeh/bc250-vrm-dkms/${BC250_VRM_COMMIT}"
     BC250_MEMORY_SOURCE_URL="https://raw.githubusercontent.com/Hexxeh/bc250-memory-dkms/${BC250_MEMORY_COMMIT}"
 }

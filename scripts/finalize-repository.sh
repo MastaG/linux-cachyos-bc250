@@ -98,6 +98,8 @@ cpu_tune="$(value "$stable_info" CPU_TUNE)"
 nct_commit="$(value "$stable_info" NCT6687D_COMMIT)"
 bc250_vrm_commit="$(value "$stable_info" BC250_VRM_COMMIT)"
 bc250_memory_commit="$(value "$stable_info" BC250_MEMORY_COMMIT)"
+bc250_vrm_tag="$(value "$stable_info" BC250_VRM_TAG)"
+bc250_memory_tag="$(value "$stable_info" BC250_MEMORY_TAG)"
 
 mesa_pkgver="$(value "$mesa_info" MESA_PKGVER)"
 mesa_pkgrel="$(value "$mesa_info" MESA_PKGREL)"
@@ -422,7 +424,7 @@ All three kernels use:
 - **New: the BC-250 secure processor (PCI \`1022:143e\`) is bound by the \`ccp\` driver** -- a carry of Mattia Tadini's 3-patch series (LKML, 2026-09-19, unmerged): two generic PSP init fixes plus the board's register layout. Platform access only (no SEV, no TEE, no crypto engine); the device stops being \`(no driver)\` and its firmware version is readable from sysfs. Nothing user-facing depends on it.
 - \`nct6687.ko\` from Fred78290/nct6687d commit \`${nct_commit}\`
 - upstream \`nct6683\` disabled to avoid claiming the same Super-I/O IDs
-- **New: BC-250 VRM and GDDR6 temperature drivers** -- \`bc250_vrm.ko\` (Hexxeh/bc250-vrm-dkms \`${bc250_vrm_commit:-unknown}\`) and \`bc250_memory.ko\` (Hexxeh/bc250-memory-dkms \`${bc250_memory_commit:-unknown}\`), built into all three kernels. \`bc250_vrm\` loads automatically and reads CPU/GPU rail voltage, current, temperature and power from the VRM controller; it needs a small hardware modification that wires its SMBus lines, and without it binds to nothing. \`bc250_memory\` is opt-in (blacklisted from automatic loading; add it to \`/etc/modules-load.d/\`). \`bc250_memory\` reads per-chip GDDR6 temperatures through the SMU; on load it patches SMU firmware memory (\`auto_patch=1\`) and needs a BIOS with SMU debug access, otherwise it refuses to load. Details in the README.
+- **New: BC-250 VRM and GDDR6 temperature drivers** -- \`bc250_vrm.ko\` (Hexxeh/bc250-vrm-dkms \`${bc250_vrm_tag:-untagged}\`, \`${bc250_vrm_commit:-unknown}\`) and \`bc250_memory.ko\` (Hexxeh/bc250-memory-dkms \`${bc250_memory_tag:-untagged}\`, \`${bc250_memory_commit:-unknown}\`), built into all three kernels. \`bc250_vrm\` loads automatically and reads CPU/GPU rail voltage, current, temperature and power from the VRM controller; it needs a small hardware modification that wires its SMBus lines, and without it binds to nothing. \`bc250_memory\` is opt-in (blacklisted from automatic loading; add it to \`/etc/modules-load.d/\`). \`bc250_memory\` reads per-chip GDDR6 temperatures through the SMU; on load it patches SMU firmware memory (\`auto_patch=1\`) and needs a BIOS with SMU debug access, otherwise it refuses to load. Details in the README.
 
 ## Patched stable CachyOS Mesa
 

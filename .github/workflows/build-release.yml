@@ -114,6 +114,8 @@ jobs:
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
           BC250_VRM_COMMIT: ${{ steps.bc250_sensors.outputs.BC250_VRM_COMMIT }}
           BC250_MEMORY_COMMIT: ${{ steps.bc250_sensors.outputs.BC250_MEMORY_COMMIT }}
+          BC250_VRM_TAG: ${{ steps.bc250_sensors.outputs.BC250_VRM_TAG }}
+          BC250_MEMORY_TAG: ${{ steps.bc250_sensors.outputs.BC250_MEMORY_TAG }}
           CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
           MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
           PROTONGE_TAG: ${{ steps.protonge.outputs.tag }}
@@ -477,6 +479,8 @@ jobs:
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
           BC250_VRM_COMMIT: ${{ steps.bc250_sensors.outputs.BC250_VRM_COMMIT }}
           BC250_MEMORY_COMMIT: ${{ steps.bc250_sensors.outputs.BC250_MEMORY_COMMIT }}
+          BC250_VRM_TAG: ${{ steps.bc250_sensors.outputs.BC250_VRM_TAG }}
+          BC250_MEMORY_TAG: ${{ steps.bc250_sensors.outputs.BC250_MEMORY_TAG }}
           CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
           MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
           BUILD_KERNEL_STABLE: ${{ steps.build.outputs.kernel_stable }}
@@ -553,6 +557,8 @@ jobs:
             -e NCT6687D_COMMIT \
             -e BC250_VRM_COMMIT \
             -e BC250_MEMORY_COMMIT \
+            -e BC250_VRM_TAG \
+            -e BC250_MEMORY_TAG \
             -e CACHYOS_MESA_COMMIT \
             -e MESA_GIT_COMMIT \
             -e PROTONGE_TAG \
