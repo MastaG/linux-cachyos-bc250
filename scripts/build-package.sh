@@ -57,23 +57,29 @@ for module in bc250_vrm bc250_memory; do
         exit 1
     fi
 done
-# bc250_memory is opt-in: the package must stop udev from loading it by its
-# DMI alias, while bc250_vrm (which binds only to a wired VRM) must load by
-# default. prepare-pkgbuild.sh installs the file.
-sensors_conf="usr/lib/modprobe.d/${EXPECTED_PKGBASE}-sensors.conf"
-sensors_rules=""
-for package in "${packages[@]}"; do
-    if bsdtar -tf "$package" "$sensors_conf" >/dev/null 2>&1; then
-        sensors_rules="$(bsdtar -xOf "$package" "$sensors_conf" | grep -v '^#')"
+# bc250_vrm loads automatically (DMI alias kept; it binds only to a wired VRM);
+# bc250_memory is opt-in, so prepare() strips its DMI alias. Check the built
+# modules themselves: a modprobe.d blacklist is not the mechanism (it would
+# also stop /etc/modules-load.d from loading the module).
+module_aliases() {
+    local module="$1" package path tmp aliases=""
+    tmp="$(mktemp -d)"
+    for package in "${packages[@]}"; do
+        path="$(bsdtar -tf "$package" | grep -E "/${module}\\.ko(\\.(zst|xz|gz))?\$" | head -n 1)"
+        [[ -n "$path" ]] || continue
+        bsdtar --no-xattrs -xf "$package" -C "$tmp" "$path"
+        aliases="$(modinfo -F alias "$tmp/$path")"
         break
-    fi
-done
-grep -qx 'blacklist bc250_memory' <<<"$sensors_rules" || {
-    printf 'ERROR: %s does not blacklist bc250_memory\n' "$sensors_conf" >&2
+    done
+    rm -rf -- "$tmp"
+    printf '%s\n' "$aliases"
+}
+grep -q '^dmi' <<<"$(module_aliases bc250_vrm)" || {
+    printf 'ERROR: bc250_vrm lost its DMI alias; it would no longer load automatically\n' >&2
     exit 1
 }
-if grep -q 'bc250_vrm' <<<"$sensors_rules"; then
-    printf 'ERROR: %s must not blacklist bc250_vrm\n' "$sensors_conf" >&2
+if grep -q '^dmi' <<<"$(module_aliases bc250_memory)"; then
+    printf 'ERROR: bc250_memory still carries a DMI alias; udev would load it on every board\n' >&2
     exit 1
 fi
 if grep -Eq '(^|/)nct6683\.ko(\.(zst|xz|gz))?$' <<<"$module_listing"; then

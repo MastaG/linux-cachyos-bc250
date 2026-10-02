@@ -8,7 +8,7 @@
 #
 # Downgrades then come from the repository (it keeps older builds) instead of
 # the local cache. To keep the last version instead, copy this file to
-# /etc/pacman.d/hooks/bc250-paccache-cleanup.hook and change -rk0 to -rk1;
+# /etc/pacman.d/hooks/bc250-paccache-cleanup.hook and change -rqk0 to -rqk1 in Exec;
 # a hook in /etc/pacman.d/hooks overrides this one. To stop cleaning, remove
 # the bc250-paccache-cleanup package.
 

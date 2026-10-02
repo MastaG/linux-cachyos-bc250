@@ -10,7 +10,7 @@
 # and update independently through their own versions as always.
 pkgname=linux-cachyos-bc250-meta
 pkgver=1
-pkgrel=4
+pkgrel=5
 pkgdesc="Metapackage for the recommended BC-250 CachyOS software set (kernel + headers + BC-250 extras)"
 arch=('any')
 url="https://github.com/MastaG/linux-cachyos-bc250"
@@ -19,10 +19,8 @@ depends=(
     'linux-cachyos-bc250'
     'linux-cachyos-bc250-headers'
     'bc250-dual-audio'
-    # Installed, but does nothing until enabled -- it needs a CEC-capable
-    # link, since most DP-to-HDMI adapters do not tunnel CEC, and
-    # `systemctl enable --now bc250-cec.service`, same as bc250-dual-audio
-    # needing a manual restart.
+    # Enabled by its own install script. Without a CEC-capable link -- most
+    # DP-to-HDMI adapters do not tunnel CEC -- it just waits for an adapter.
     'bc250-cec'
     # All three FSR4 Proton packages. They are alternatives rather than
     # complements -- same pinned payload, different Proton underneath -- so this

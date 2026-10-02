@@ -20,5 +20,5 @@ It is the only package built this way. The other two are Steam Linux Runtime
 builds, which is the environment anti-cheat trusts, and making it convenient to
 carry private patches into one of those is not something this repository does.
 
-Both directories are ignored by git (see `.gitignore`), so private patches stay
-private. Only this README is tracked.
+Everything here except this README is ignored by git (see `.gitignore`), so
+private patches stay private.

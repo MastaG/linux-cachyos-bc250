@@ -3,7 +3,7 @@ Subject: [PATCH] hwmon: add BC-250 VRM and GDDR6 temperature drivers
 
 Kconfig and Makefile entries for two out-of-tree BC-250 hwmon drivers by
 Liam McLoughlin (github.com/Hexxeh/bc250-vrm-dkms and bc250-memory-dkms).
-The sources are fetched at a pinned commit and installed into
+The sources are fetched at their latest release tag and installed into
 drivers/hwmon by the package build, the same way nct6687.c is.
 
 - bc250_vrm: PMBus telemetry from the board's VRM controller (CPU and GPU
@@ -18,9 +18,9 @@ drivers/hwmon by the package build, the same way nct6687.c is.
 
 Both declare a DMI match on "AMD BC-250", so udev loads them on every
 board. bc250_vrm binds only when a PMBus device answers at 0x60, so it is
-left to load; the kernel package ships a modprobe blacklist for
-bc250_memory, which loads only when the user asks, e.g. via
-/etc/modules-load.d.
+left to load. The package build strips bc250_memory's DMI module alias, so
+it loads only when the user asks, e.g. via /etc/modules-load.d (a modprobe
+blacklist would block that path too: systemd-modules-load honors it).
 ---
 diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
 --- a/drivers/hwmon/Kconfig

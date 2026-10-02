@@ -520,7 +520,7 @@ it was not needed is worse than not firing.
 
 ### Settings
 
-All four can be changed at boot on the kernel command line, or written live under
+All five can be changed at boot on the kernel command line, or written live under
 `/sys/module/amdgpu/parameters/`.
 
 | Parameter | Default | What it does |
@@ -655,7 +655,7 @@ sudo pacman -S protonge-latest-bc250
 All three can be installed at once — `linux-cachyos-bc250-meta` pulls in all of
 them — and all sit alongside the distro's own Proton packages. Restart Steam,
 then pick **proton-cachyos-… (native, BC-250 FSR4)**, **proton-cachyos-…
-(BC-250 FSR4)** or **GE-Proton 11-6 (BC-250 FSR4)** under a game's Properties →
+(BC-250 FSR4)** or **GE-Proton <version> (BC-250 FSR4)** under a game's Properties →
 Compatibility.
 
 **Anti-cheat, and why it needs saying.** These packages inject DLLs into the
@@ -678,9 +678,9 @@ AntiLag+, XeLL or LatencyFlex in games that would otherwise need NVIDIA Reflex.
 OptiScaler picks whichever of those the hardware supports; on the BC-250 that
 means the Reflex-shaped latency path works without an NVIDIA GPU. Unlike the
 pinned OptiScaler build, fakenvapi is **tracked live**: a new upstream release
-changes both packages' fingerprints and they rebuild with it.
+changes all three packages' fingerprints and they rebuild with it.
 
-Both need the `vulkan-radeon` package from this repository: the provider calls
+All three need the `vulkan-radeon` package from this repository: the provider calls
 into FSR4 support that lives in our patched RADV, not in stock Mesa. They also
 work under Heroic and Lutris, which run them through umu. (Flatpak Steam cannot
 see them — its sandbox has its own `/usr`.)
@@ -802,7 +802,7 @@ change sticks:
 ### Which FidelityFX bridge you get, and the alternatives
 
 One file in the payload — the FidelityFX bridge, `amd_fidelityfx_upscaler_dx12.dll`
-— exists in three pinned builds. Each package ships all three and swaps only that
+— exists in five pinned builds. Each package ships all five and swaps only that
 file; `PROTON_USE_OPTISCALER` picks one per game:
 
 ```text
@@ -817,7 +817,7 @@ PROTON_USE_OPTISCALER=fsr411rc10 %command% # the older RC10 build
 RC9 and RC10 are kept selectable so their performance can be compared against
 the default rather than being deleted when superseded. That is the standing
 policy: a new release becomes the default, older ones stay reachable. All three
-Proton packages ship the same set.
+Proton packages ship the same five builds.
 
 | | default (`fsr411f`) | `signed` | `fsr411b` |
 |---|---|---|---|
@@ -873,7 +873,7 @@ and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md)
 - **Native HDMI/DisplayPort** — the normal ACP sink, untouched and EDID/ELD-driven;
 - **Dolby Digital 5.1 (AC3 Encoder)** — a permanent virtual sink. Selecting it moves normal playback over, waits for native HDMI to suspend, then opens a hidden `plug:bc250_a52 -> hw:Generic,3` backend; selecting native HDMI again tears that backend down first. A runtime hardware lock between the AC3 arbiter and a patched ALSA monitor keeps a DP/HDMI hotplug from racing the AC3 backend into `EBUSY`.
 
-Not installed by default — install it explicitly:
+Installed by `linux-cachyos-bc250-meta`; otherwise install it explicitly:
 
 ```bash
 sudo pacman -S bc250-dual-audio
@@ -957,7 +957,7 @@ pacman never cleans its package cache on its own: every package it downloads sta
 sudo pacman -S bc250-paccache-cleanup
 ```
 
-With it installed there are no older package versions left on your disk to downgrade to. This repository keeps the previous builds of every package, so a downgrade comes from there instead; see [Downgrading a package](#downgrading-a-package). To keep the last version in the cache instead, copy `/usr/share/libalpm/hooks/bc250-paccache-cleanup.hook` to `/etc/pacman.d/hooks/` and change `-rk0` to `-rk1` (a hook there overrides the packaged one). To stop the cleanup, remove the package.
+With it installed there are no older package versions left on your disk to downgrade to. This repository keeps the previous builds of every package, so a downgrade comes from there instead; see [Downgrading a package](#downgrading-a-package). To keep the last version in the cache instead, copy `/usr/share/libalpm/hooks/bc250-paccache-cleanup.hook` to `/etc/pacman.d/hooks/` and change `-rqk0` to `-rqk1` in its `Exec` line (a hook there overrides the packaged one). To stop the cleanup, remove the package.
 
 ## Downgrading a package
 
@@ -1001,7 +1001,7 @@ cd aic8800d80-dkms && makepkg -si     # pacman -U replaces ours in one step
 ```
 
 DKMS rebuilds the modules for every installed kernel that has its headers
-package (`linux-cachyos-bc250-headers`, `linux-cachyos-rc-bc250-headers`).
+package (`linux-cachyos-bc250-headers`, `linux-cachyos-rc-bc250-headers`, `linux-cachyos-bore-bc250-headers`).
 
 ---
 
@@ -1041,7 +1041,7 @@ Each of these is genuinely optional; the defaults are fine.
   negotiation off. Only does anything with an active DP→HDMI 2.1 FRL adapter.
 - **[AMDGPU scheduler tuning](#optional-amdgpu-scheduler-tuning)** — `sched_policy=2`
   helps some systems and hurts others. Workload-dependent; measure it.
-- **[GPU telemetry cache](docs/PATCHES.md#bc-250-apu-telemetry)** — tunables for
+- **[GPU telemetry cache](docs/PATCHES.md#gpu-telemetry-cache-tunables)** — tunables for
   how often SMU metrics are polled.
 - **[ROCm / KFD](docs/ROCM.md)** — experimental compute support.
 
@@ -1080,7 +1080,7 @@ sudo sed -i 's| amdgpu.sched_policy=2||' /etc/default/limine
 sudo limine-mkinitcpio
 ```
 
-The optional ROCm/KFD runlist-TLB workaround documented below requires hardware scheduling and therefore does **not** operate with `sched_policy=2`.
+The optional ROCm/KFD runlist-TLB workaround documented in [docs/ROCM.md](docs/ROCM.md) requires hardware scheduling and therefore does **not** operate with `sched_policy=2`.
 
 ---
 
@@ -1090,7 +1090,7 @@ The 8-core telemetry decoding in this repository's kernel patches is unofficial 
 
 For [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) users on this kernel:
 
-- Use `set-method = "kernel"`. The widened Cyan Skillfish SMU SCLK range above exists specifically to make this option viable end to end. Setting frequency through the kernel interface avoids the extra SMU mailbox round-trips that `set-method = "smu"` requires, and excessive SMU traffic is a real crash risk on this board.
+- Use `set-method = "kernel"`. The widened Cyan Skillfish SCLK range from `cyan-skillfish-sclk-range.patch` exists specifically to make this option viable end to end. Setting frequency through the kernel interface avoids the extra SMU mailbox round-trips that `set-method = "smu"` requires, and excessive SMU traffic is a real crash risk on this board.
 - Leave `fix-metrics = false` and `fix-freq = false`. Both bind-mount a corrected value over a sysfs file to work around inaccurate stock telemetry, but this repository's kernel patches already fix that telemetry at the source: `gpu_metrics`'s `average_gfx_activity` and `gpu_busy_percent` are populated by the same corrected kernel function, and `freq1_input` is read straight from the same already-cached SMU metrics table, not a separate mailbox round-trip. Enabling either on this kernel only adds an extra bind mount (and, for `fix-freq`, a second independent SMU connection) to duplicate a number the kernel already reports correctly.
 - A GPU governor makes the display more likely to go black on a mode change, but the kernels now recover from that by themselves — see [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change). The governor is not the cause; what it does is make session handovers much slower (measured at 4.4 s against 0.09 s for the same switch), and a slow handover is what makes the HDMI converter drop out. If your build of cyan-skillfish-governor supports `temp-read = "sysfs"`, use it: a governor holding a DRM connection open just to read the GPU temperature is what makes the handover slow.
 
@@ -1160,7 +1160,7 @@ CONFIG_SENSORS_NCT6687=m
 To pin a known driver revision, set repository variable `NCT6687D_REF` to a full 40-character commit hash.  
 When unset, the resolver follows the configured upstream branch.
 
-The BC-250 VRM and GDDR6 drivers work much the same way, except that they follow **release tags**: `scripts/resolve-bc250-sensor-drivers.sh` builds the highest `vX.Y.Z` tag of `Hexxeh/bc250-vrm-dkms` and `Hexxeh/bc250-memory-dkms` (pre-release tags are ignored), so untagged commits on their `main` branches are never built and the kernels move on only when the author tags a higher version. Repository variables `BC250_VRM_REF` / `BC250_MEMORY_REF` override that with a branch, tag or commit. The kernel fingerprints hash the downloaded sources, so a new tag rebuilds the kernels only if a driver source actually changed; the tag and commit are recorded in the build info and release notes, and the patch `bc250-vrm-memory-hwmon.patch` adds their Kconfig entries. They build as `bc250_vrm.ko` and `bc250_memory.ko` (`CONFIG_SENSORS_BC250_VRM=m`, `CONFIG_SENSORS_BC250_MEMORY=m`), and each kernel package ships `/usr/lib/modprobe.d/<pkgbase>-sensors.conf` blacklisting `bc250_memory`, because both drivers carry a DMI alias that udev loads on every BC-250. `bc250_vrm` is deliberately left loadable: since upstream `2d503bc` it binds only when a PMBus VRM answers at `0x60`. The package build fails if the file is missing, does not blacklist `bc250_memory`, or blacklists `bc250_vrm`.
+The BC-250 VRM and GDDR6 drivers work much the same way, except that they follow **release tags**: `scripts/resolve-bc250-sensor-drivers.sh` builds the highest `vX.Y.Z` tag of `Hexxeh/bc250-vrm-dkms` and `Hexxeh/bc250-memory-dkms` (pre-release tags are ignored), so untagged commits on their `main` branches are never built and the kernels move on only when the author tags a higher version. Repository variables `BC250_VRM_REF` / `BC250_MEMORY_REF` override that with a branch, tag or commit. The kernel fingerprints hash the downloaded sources, so a new tag rebuilds the kernels only if a driver source actually changed; the tag and commit are recorded in the build info and release notes, and the patch `bc250-vrm-memory-hwmon.patch` adds their Kconfig entries. They build as `bc250_vrm.ko` and `bc250_memory.ko` (`CONFIG_SENSORS_BC250_VRM=m`, `CONFIG_SENSORS_BC250_MEMORY=m`), and both upstream drivers carry a DMI alias that udev loads on every BC-250. `bc250_vrm` keeps it: since upstream `2d503bc` it binds only when a PMBus VRM answers at `0x60`. For `bc250_memory` the kernel build removes its `MODULE_DEVICE_TABLE(dmi, …)` line, so it never loads by itself but `/etc/modules-load.d/` and `modprobe` still work (a modprobe.d blacklist would not do: systemd-modules-load honours blacklists too). The package build checks the built modules: `bc250_vrm` must keep its DMI alias and `bc250_memory` must have none.
 
 ---
 
@@ -1168,7 +1168,7 @@ The BC-250 VRM and GDDR6 drivers work much the same way, except that they follow
 
 | Document | What's in it |
 |---|---|
-| [docs/PATCHES.md](docs/PATCHES.md) | Every kernel and Mesa patch, the HDMI 2.1 backport, 4K120 over DSC, the 40 CU unlock, APU telemetry layouts |
+| [docs/PATCHES.md](docs/PATCHES.md) | Every kernel and Mesa patch, 4K120 over DSC, the 40 CU unlock, APU telemetry layouts |
 | [docs/FSR4-PROTON.md](docs/FSR4-PROTON.md) | How the FSR4 Proton packages are pinned and built |
 | [docs/ROCM.md](docs/ROCM.md) | Experimental ROCm / KFD support |
 | [docs/BUILDING.md](docs/BUILDING.md) | CI, ccache, the self-hosted runner, published assets, local builds, signing |

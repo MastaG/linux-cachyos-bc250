@@ -42,7 +42,8 @@ The cache lives in the persistent container-engine named volume:
 bc250-ccache:/ccache
 ```
 
-and is currently capped at 30 GiB.  
+and is sized automatically: 60% of the free space on the volume's filesystem (counting what the cache already occupies), clamped to 20–150 GiB.  
+`vars.CCACHE_MAXSIZE` on the repository overrides that, and so does a size written to `<volume>/.bc250-maxsize` (for example `echo 60G > .../.bc250-maxsize`).  
 Because the volume survives the temporary `archlinux:base-devel` container, clean `makepkg --cleanbuild` runs can still reuse compiler output.  
 The workflow prints `ccache -s` statistics at the end of every build.
 
@@ -63,7 +64,7 @@ The build itself runs in a disposable `archlinux:base-devel` container while `bc
 
 ## Automatic updates
 
-Six components have independent source fingerprints:
+Every component has its own source fingerprint (`scripts/source-fingerprint.sh`):
 
 ```text
 kernel-stable
@@ -72,12 +73,19 @@ kernel-bore
 mesa
 lib32-mesa
 mesa-git
+bc250-dual-audio
+bc250-cec
+bc250-paccache-cleanup
+linux-cachyos-bc250-meta
+protonge-latest-bc250
+proton-cachyos-native-bc250
+proton-cachyos-slr-bc250      (optional: see below)
 ```
 
 A change to one kernel does **not** force the other kernels or any Mesa component to rebuild.  
 Likewise, a new Mesa `main` commit normally rebuilds only `mesa-git`/`lib32-mesa-git`.
 
-For partial publications, the workflow downloads the previous fixed `repo` release and stages it in `out/repo`.  
+For partial publications, `scripts/seed-from-release.sh` downloads the previous fixed `repo` release into `out/repo` — every asset except the archived older builds (see [Older builds](#older-builds)).  
 Each builder reads `.PKGINFO` from existing package archives and removes only packages whose `pkgbase` matches the component being rebuilt.  
 This means package ownership does not depend on filename guessing and remains correct when a CachyOS PKGBUILD adds or removes split package names.
 
@@ -97,7 +105,8 @@ lib32-mesa
 mesa-git
 ```
 
-After the changed components are added, `scripts/finalize-repository.sh` validates that all six families are present and rebuilds the complete pacman database.
+After the changed components are added, `scripts/finalize-repository.sh` validates that every required component's `*-info.env` is present and rebuilds the complete pacman database.  
+`proton-cachyos-slr-bc250` is the one optional component: a component that has never published has nothing to carry forward, so its first failed build must not block publishing everything else.
 
 The first run after migrating from the former single-kernel workflow intentionally rebuilds all three kernel families because the old release has no fingerprints for the new RC and BORE packages.  
 Existing unchanged Mesa packages can be preserved.
@@ -117,17 +126,32 @@ A complete fixed release contains at least:
 - `kernel-rc-PKGBUILD`, `kernel-rc.SRCINFO`, `kernel-rc-config`;
 - `kernel-bore-PKGBUILD`, `kernel-bore.SRCINFO`, `kernel-bore-config`;
 - both rebased kernel patch sets;
-- the exact fetched `nct6687.c`;
+- the exact fetched `nct6687.c` and the BC-250 sensor driver sources (`bc250_vrm`, `bc250_memory`, from their release tags);
 - Mesa PKGBUILDs, SRCINFO files and patch assets;
 - `kernel-stable-info.env`, `kernel-rc-info.env`, `kernel-bore-info.env`;
 - `mesa-info.env`, `lib32-mesa-info.env`, `mesa-git-info.env`;
 - `bc250-dual-audio` + its PKGBUILD, `.SRCINFO` and `bc250-dual-audio-info.env`;
+- `bc250-cec` + its PKGBUILD, `.SRCINFO` and `bc250-cec-info.env`;
+- `bc250-paccache-cleanup` + its PKGBUILD, `.SRCINFO` and `bc250-paccache-cleanup-info.env`;
 - `linux-cachyos-bc250-meta` + its PKGBUILD, `.SRCINFO` and `linux-cachyos-bc250-meta-info.env`;
 - `protonge-latest-bc250` + its PKGBUILD, `.SRCINFO` and `protonge-latest-bc250-info.env`;
 - `proton-cachyos-native-bc250` + its PKGBUILD, `.SRCINFO` and `proton-cachyos-native-bc250-info.env`;
+- `proton-cachyos-slr-bc250` + its metadata, once it has published;
+- `archive-index.txt` and the older builds it lists (see below);
 - aggregate `build-info.env`, release notes and `SHA256SUMS`.
 
-Publication validates the complete staged repository before deleting/replacing the fixed `repo` release.
+Publication validates the complete staged repository, then `scripts/publish-repo-delta.sh` uploads only what changed and deletes assets that are no longer current — the release is updated in place, never deleted and recreated.
+
+## Older builds
+
+The database only ever lists the current build of each package, but the release also keeps the **three previous builds of every package base** so users can downgrade with `pacman -U <url>` (the README's "Downgrading a package" section shows how).
+
+`scripts/package-archive.py` keeps the bookkeeping in `archive-index.txt`, itself a release asset:
+
+- when a build replaces a package, the old files are recorded as `archived` instead of deleted;
+- after each run only the three newest archived versions per package base stay; older ones become `pruned`, and `publish-repo-delta.sh` deletes them from the release (a failed delete is retried for a week);
+- a retired package's archived builds are pruned straight away;
+- `seed-from-release.sh` never downloads archived files, so they are not re-added to the database, re-uploaded, or carried in the workflow artifact.
 
 ## Local kernel builds
 
@@ -153,7 +177,7 @@ For reproducible full repository builds, CI remains the recommended path because
 
 ## Local Proton builds for private distribution
 
-`scripts/build-proton-tarball.sh` builds either Proton package the way CI builds
+`scripts/build-proton-tarball.sh` builds `proton-cachyos-native-bc250` the way CI builds
 it — the same package scripts, in the same `archlinux:base-devel` container —
 but hands back a tarball instead of a pacman package:
 
@@ -161,7 +185,7 @@ but hands back a tarball instead of a pacman package:
 ./scripts/build-proton-tarball.sh --suffix test1
 ```
 
-Only `proton-cachyos-native-bc250` builds this way. The other two Proton
+Only the native package builds this way. The other two Proton
 packages are Steam Linux Runtime builds — the environment anti-cheat trusts —
 and this repository is not going to make it convenient to carry private patches
 into one of those.
@@ -237,7 +261,7 @@ The directory is git-ignored, so private patches stay private.
 
 A tarball is only the compatibility tool. The packaged
 `/usr/lib/modules-load.d` entry that loads `ntsync` at boot is not part of it,
-so on a machine with neither Proton package installed from the repository:
+so on a machine with none of the Proton packages installed from the repository:
 
 ```bash
 echo ntsync | sudo tee /etc/modules-load.d/ntsync.conf

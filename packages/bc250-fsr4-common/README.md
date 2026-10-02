@@ -1,11 +1,12 @@
 # BC-250 FSR4 Proton support — shared pieces
 
-Assets shared by the two FSR4-capable Proton packages:
+Assets shared by the three FSR4-capable Proton packages:
 
 - `proton-cachyos-native-bc250` — patched build of CachyOS's Proton, zen2-tuned
+- `proton-cachyos-slr-bc250` — CachyOS's Steam Linux Runtime Proton build, repacked
 - `protonge-latest-bc250` — GE-Proton packaged system-wide
 
-Both install as Steam compatibility tools under
+All three install as Steam compatibility tools under
 `/usr/share/steam/compatibilitytools.d/`, alongside the distro's own Proton
 packages. Package installation writes no user prefix. Proton manages prefixes
 and saves normally at launch; removing the package preserves those user files.
@@ -39,7 +40,7 @@ network. Absent the variable, stock behaviour is unchanged.
 GE-Proton ships umu-protonfixes as released; proton-cachyos applies eight
 patches of its own to that same file first. A patch rebased onto one does not
 apply to the other — three of sixteen hunks fail — so each package uses the copy
-matching its base, and `stage_fsr4_payload_sources` takes the base as an
+matching its base (both proton-cachyos packages share one), and `stage_fsr4_payload_sources` takes the base as an
 argument rather than guessing.
 
 ### `patches/ge-proton/`
@@ -147,12 +148,12 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
-### The bridge variants: `fsr411f` (default), `signed`, `fsr411b`
+### The bridge variants: `fsr411f` (default), `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
 
 OptiScaler loads two separate things: `amdxcffx64.dll`, the FSR4 provider our
 patched RADV drives, and `amd_fidelityfx_upscaler_dx12.dll`, the FidelityFX
 bridge. OptiScaler bundles a 4.1.1 bridge that would shadow the equally
-versioned provider. The payload is built three times, identical except for
+versioned provider. The payload is built five times, identical except for
 that one file, and `PROTON_USE_OPTISCALER` picks one:
 
 - **default / `fsr411f`** — the BC-250 FSR4 fork's build (RC11, `4.1.1r11`),
@@ -163,8 +164,11 @@ that one file, and `PROTON_USE_OPTISCALER` picks one:
   alias is how the builder keeps it reachable.
 - **`fsr411b`** — an unsigned third-party 4.1.1b rebuild claiming to fix RDNA2
   ghosting.
+- **`fsr411rc9`, `fsr411rc10`** — the fork's earlier RC9 and RC10 builds, kept
+  selectable so a new default can be compared against them. Standing policy: a
+  new release becomes the default, older ones stay reachable.
 
-Neither unsigned build is a provider bump: each carries its own embedded model
+None of the unsigned builds is a provider bump: each carries its own embedded model
 — 4.1.1b has 768 model passes against 4.0.2's 216, plus `FSR4_Int8` provider
 classes — so selecting one most likely hands upscaling to that model rather
 than to the provider path the RADV work targets. That is the thing worth
@@ -180,8 +184,7 @@ mechanism necessary at all:
   requires a build.
 - A variant is a whole second archive rather than a patch, because protonfixes
   installs an OptiScaler entry all-or-nothing against one set of hashes. It
-  costs about 78 MB in each package. The default archive is bit-for-bit what it
-  was before.
+  costs about 78 MB per variant in each package.
 
 Each unsigned variant ships `Licenses/THIRD-PARTY-UPSCALER.txt` into the prefix
 naming the origin URL and SHA256, so an unsigned DLL is never sitting there

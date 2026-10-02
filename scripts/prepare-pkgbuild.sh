@@ -194,6 +194,15 @@ prepare_replacement = '''    done
     for _bc250_src in bc250_vrm.c bc250_memory.c bc250_smu.c bc250_smu.h bc250_smu_patch.c; do
         install -Dm644 "../$_bc250_src" "drivers/hwmon/$_bc250_src"
     done
+    # bc250_memory is opt-in (it patches the SMU on load): drop its DMI alias so
+    # udev never loads it automatically, while /etc/modules-load.d and modprobe
+    # still can. A modprobe.d blacklist cannot do this -- systemd-modules-load
+    # honours blacklists too. The driver still checks the DMI board itself.
+    grep -qx 'MODULE_DEVICE_TABLE(dmi, bc250_dmi_table);' drivers/hwmon/bc250_memory.c || {
+        echo "ERROR: bc250_memory.c no longer has the expected DMI MODULE_DEVICE_TABLE line" >&2
+        return 1
+    }
+    sed -i '/^MODULE_DEVICE_TABLE(dmi, bc250_dmi_table);$/d' drivers/hwmon/bc250_memory.c
 
     echo "Setting config..."
 '''
@@ -214,28 +223,6 @@ if text.count(config_anchor) != 1:
     raise SystemExit('ERROR: expected config copy anchor exactly once')
 text = text.replace(config_anchor, config_replacement, 1)
 
-# bc250_vrm and bc250_memory both declare a DMI match on "AMD BC-250", so udev
-# loads them on every board at boot unless told otherwise.
-# - bc250_vrm loads by default: it binds only when a PMBus VRM answers at 0x60
-#   (upstream 2d503bc), so a board without the SMBus wiring gets no hwmon
-#   device and nothing else happens.
-# - bc250_memory stays opt-in: it patches SMU firmware memory when it loads.
-#   "blacklist" only stops alias (automatic) loading; /etc/modules-load.d and
-#   "modprobe bc250_memory" still work.
-# Named per pkgbase so the stable, rc and bore kernels co-install.
-package_anchor = '    echo "$pkgbase" | install -Dm644 /dev/stdin "$modulesdir/pkgbase"\n'
-package_replacement = package_anchor + """
-    echo "Making the BC-250 GDDR6 hwmon module opt-in..."
-    install -dm755 "${pkgdir}/usr/lib/modprobe.d"
-    printf '%s\\n' \\
-        '# bc250_memory is opt-in: it patches SMU firmware memory when it loads and' \\
-        '# needs BIOS SMU debug access. Add it to /etc/modules-load.d/ to load it at' \\
-        '# boot. (bc250_vrm loads automatically and binds only if the VRM is wired.)' \\
-        'blacklist bc250_memory' > "${pkgdir}/usr/lib/modprobe.d/${pkgbase}-sensors.conf"
-"""
-if text.count(package_anchor) != 1:
-    raise SystemExit('ERROR: expected the _package() pkgbase anchor exactly once')
-text = text.replace(package_anchor, package_replacement, 1)
 
 path.write_text(text, encoding="utf-8", newline="\n")
 PY

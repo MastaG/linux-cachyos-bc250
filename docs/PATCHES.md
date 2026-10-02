@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these sixteen BC-250 patches, sixteen patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same sixteen patches plus its own three series-specific carries, nineteen in total:
+The stable and BORE kernels carry these sixteen BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same sixteen patches plus its own three series-specific carries, nineteen in total:
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -80,7 +80,7 @@ The stable and BORE kernels carry these sixteen BC-250 patches, sixteen patches 
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
 
-The display going dark on a mode change is a **known, unfixed** issue — see [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below. A fix was shipped briefly and withdrawn; the patch is in `disabled/`.
+The display going dark on a mode change is fixed by `cs-relink-after-long-blank.patch` — see [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below. An earlier attempt was shipped briefly and withdrawn; it is in `disabled/`.
 
 #### Patches that must be regenerated together
 
@@ -115,7 +115,7 @@ RC, and upstream's own `dkms-clang.patch` with `offset -5` on both.
 
 #### Disabled patches
 
-`patches/linux-cachyos/disabled/` and `patches/linux-cachyos-rc/disabled/` hold five `cs-*` patches that are **not applied**. The build only globs `*.patch` at the top level of a patch set, so a patch in `disabled/` ships to nobody; they are kept in-tree because the analysis behind them is sound and they will be needed again.
+`patches/linux-cachyos/disabled/` and `patches/linux-cachyos-rc/disabled/` hold six `cs-*` patches that are **not applied**. The build only globs `*.patch` at the top level of a patch set, so a patch in `disabled/` ships to nobody; they are kept in-tree because the analysis behind them is sound and they will be needed again.
 
 ```text
 cs-defer-od-during-frl-link-training.patch
@@ -123,9 +123,10 @@ cs-defer-od-during-pcon-frl-training.patch
 cs-defer-od-during-dp-link-training.patch
 cs-release-gfx-override-during-link-bringup.patch
 cs-map-unforce-gfxfreq.patch
+cs-release-gfx-override-at-modeset.patch
 ```
 
-**Six** patches now sit here, including `cs-release-gfx-override-at-modeset.patch`, which was shipped and then withdrawn — see the status box in [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below for why. Two of the older five were also shown to be *ineffective*: their release path went through `RequestGfxclk` (0xE), which has no counterpart and does not actually un-force the clock. They are all kept because the analysis behind them is sound and will be needed again.
+One of them, `cs-release-gfx-override-at-modeset.patch`, was shipped and then withdrawn — see the status box in [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below for why. Two of the older five were also shown to be *ineffective*: their release path went through `RequestGfxclk` (0xE), which has no counterpart and does not actually un-force the clock. They are all kept because the analysis behind them is sound and will be needed again.
 
 There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
@@ -149,7 +150,7 @@ This patch set contains:
 > The telemetry/activity and tunable activity/metrics cache logic is consolidated in `bc250-8core-telemetry-gpu-activity.patch`.  
 > Both cache windows default to 25 ms and can still be changed at runtime or disabled with `0`.
 
-- automatic 6-core / 8-core Cyan Skillfish SMU metrics layout detection — **8-core boards must run the patched SMU firmware; see the warning at the top of this document**;
+- automatic 6-core / 8-core Cyan Skillfish SMU metrics layout detection — **8-core boards must run the patched SMU firmware; see the warning in [BC-250 APU telemetry](#bc-250-apu-telemetry)**;
 - GPU activity reporting through GPU Metrics and `GPU_LOAD` derived from the GFX ring's emitted-fence count (Cyan Skillfish's `GRBM_STATUS` register reads back all-ones regardless of GPU state, which previously pegged `gpu_busy_percent` at 100% even at idle), with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it) and a real sleep (not a busy-wait) between ring samples;
 - GFX clock read directly from the SMU metrics table (no separate SMU mailbox round trip — see below);
 - a tunable cache (`amdgpu.cs_metrics_cache_ms`, default 25 ms, `0` disables it) for the bulk SMU metrics table refresh backing temperature, power, voltage, socclk/vclk/dclk/uclk, GFX clock and throttler-status reads. Upstream's own internal debounce for that transfer is only 1 ms, so every distinct hwmon attribute a monitoring tool polls in one cycle could otherwise trigger its own SMU mailbox round trip;
@@ -161,7 +162,7 @@ This patch set contains:
 - a defensive AMDGPU TTM NULL-page guard so partially populated BO cleanup cannot dereference a missing page;
 - a widened Cyan Skillfish SMU SCLK range (350–2230 MHz, up from the stock 1000–2000 MHz) so userspace SMU-based governors such as [filippor/cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) can drive the full clock range;
 - integration of the external `nct6687` hwmon/PWM driver;
-- integration of two external BC-250 hwmon drivers by Hexxeh (`bc250-vrm-memory-hwmon.patch` adds their Kconfig/Makefile entries; the sources are fetched at a pinned commit like `nct6687.c`): `bc250_vrm` (VRM rail voltage/current/temperature/power over SMBus, needs a hardware modification) and `bc250_memory` (per-chip GDDR6 temperatures through the SMU, which it patches on load and which needs BIOS SMU debug access). Both carry a DMI alias, so udev loads them on every BC-250: `bc250_vrm` is left to load, since it binds only when a wired VRM answers, while the kernel package blacklists `bc250_memory` from automatic loading; see the README for enabling it;
+- integration of two external BC-250 hwmon drivers by Hexxeh (`bc250-vrm-memory-hwmon.patch` adds their Kconfig/Makefile entries; the sources are fetched at the commit of each upstream repository's highest `vX.Y.Z` release tag, by `scripts/resolve-bc250-sensor-drivers.sh`): `bc250_vrm` (VRM rail voltage/current/temperature/power over SMBus, needs a hardware modification) and `bc250_memory` (per-chip GDDR6 temperatures through the SMU, which it patches on load and which needs BIOS SMU debug access). Both carry a DMI alias that udev would load on every BC-250: `bc250_vrm` keeps it, since it binds only when a wired VRM answers, while the build removes `bc250_memory`'s, so it loads only via `/etc/modules-load.d/` or `modprobe`; see the README for enabling it;
 - an **opt-in** 40 CU unlock for the harvested shader engines (`amdgpu.bc250_cc_write_mode=3`), described below;
 - HDMI 2.1 PCON negotiation and the two on-die DCN201 DSC engines, **on by default** (`amdgpu.bc250_hdmi21=0` switches them off) — see [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below;
 
@@ -189,12 +190,10 @@ higher-bandwidth path than anything this patch touched.
 ## 4K120 4:4:4 through an HDMI 2.1 PCON
 
 Two patches, `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` — `0009`
-and `0010` in the stable/BORE set, `0011` and `0012` in the RC set (the RC set
-carries two extra series-specific patches ahead of these; see [patches that
-exist in one set only](#patches-that-exist-in-one-set-only)). Called `0012`
-and `0013` below for brevity, meaning "the hdmi21-pcon patch" and "the
-enable-dsc patch" respectively, whatever number they actually have in the set
-you are looking at. Together they make 3840x2160@120Hz at full 4:4:4
+and `0010` in the stable/BORE set, `0010` and `0011` in the RC set (the RC set
+carries one extra series-specific patch, `gud-bound-tv-mode-count`, ahead of
+these; see [patches that exist in one set only](#patches-that-exist-in-one-set-only)).
+Called "the PCON patch" and "the DSC patch" below. Together they make 3840x2160@120Hz at full 4:4:4
 chroma reachable on a BC-250 through a DisplayPort 1.4 → HDMI 2.1 FRL protocol
 converter. **Both are on by default**, behind one parameter that exists as an
 off switch:
@@ -211,12 +210,12 @@ These were briefly shipped off-by-default while a display blackout on a mode
 change was suspected to be a DSC problem. It was then reproduced on hardware
 with `amdgpu.bc250_hdmi21=0`, on an uncompressed 4-lane HBR2 link, with none of
 our display workarounds applied — so DSC was not the cause and the default went
-back on. The blackout is a separate, still-unfixed issue -- see the status box in [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below.
+back on. The blackout is a separate issue, since fixed by `cs-relink-after-long-blank.patch` -- see the status box in [Losing the picture on a mode change](#solved-black-screen-from-kernel-takeover-until-a-hotplug) below.
 
-`0012` defines the parameter in `amdgpu_drv.c` (default 0), `amdgpu_dm.c`
+The PCON patch defines the parameter in `amdgpu_drv.c` (default 1), `amdgpu_dm.c`
 copies it into `dc_init_data.flags`, and it arrives in the resource pool as
 `dc->config.bc250_hdmi21` — the same route DC already uses for its other
-OS-side switches. With it at `0`, the default, every touched path is identical
+OS-side switches. With it at `0`, the off switch, every touched path is identical
 to an unpatched kernel: the stock `res_cap_dnc201` (num_dsc = 0) is selected, the DSC
 create and destroy loops run zero times, `.add_dsc_to_stream_resource` stays
 NULL, `dcn201_ip.num_dsc` is assigned the zero it already held, and
@@ -249,9 +248,9 @@ capture runs at 224/16 = 14 bpp) and RGB fits.
 That table is the DisplayPort link's own limit, which is what applies when the
 adapter presents as a plain DP sink. A DP→HDMI converter that reports itself as
 an HDMI downstream port is held to a second, tighter check — its TMDS clock cap
-— and that is what `0012` is about.
+— and that is what the PCON patch is about.
 
-`0012`, when enabled, sets `dc->caps.dp_hdmi21_pcon_support = true`. DCN201 is the only
+The PCON patch, when enabled, sets `dc->caps.dp_hdmi21_pcon_support = true`. DCN201 is the only
 DCN2-class resource pool in the tree that leaves it false. What the flag gates
 is more specific than "FRL on or off": it decides **which ceiling the driver
 validates modes against**. With it set, `link_dp_capability.c` reads the
@@ -268,10 +267,10 @@ halves the clock for 4:2:0, takes two thirds for 4:2:2 and scales by 10/8 for
 refused, 4K60 4:2:2 10-bit is 495 MHz and passes. A "4K120 HDR" desktop on the
 old kernel is therefore 8-bit on the wire with HDR10 metadata attached — which
 looks correct, since the metadata does not depend on wire depth — and 4K60 HDR
-is most likely riding 4:2:2 to get its 10 bits. `0012` removes that ceiling for
-the adapter; `0013` then supplies the bandwidth to use the headroom at 4:4:4.
+is most likely riding 4:2:2 to get its 10 bits. The PCON patch removes that ceiling for
+the adapter; the DSC patch then supplies the bandwidth to use the headroom at 4:4:4.
 
-`0013`, when enabled, turns on the DSC hardware. Cyan Skillfish carries two DSC
+The DSC patch, when enabled, turns on the DSC hardware. Cyan Skillfish carries two DSC
 engines on-die, but the DCN201 pool ships with `num_dsc = 0`, creates no DSC
 objects and leaves `.add_dsc_to_stream_resource` NULL, so DC can never select
 DSC. The patch does four things, and all four are required:
@@ -321,8 +320,9 @@ mode is a dark screen rather than an oops.
 - An **active** DP 1.4 → HDMI 2.1 FRL protocol converter. A passive DP++ adapter
   cannot do FRL and is unaffected by these patches.
 - A sink that reports DSC and FEC support — any HDMI 2.1 TV, in practice.
-- `amdgpu.bc250_hdmi21=1` on the kernel command line. Without it these patches
-  are inert and the board behaves like an unpatched kernel.
+- Nothing on the kernel command line: `amdgpu.bc250_hdmi21` defaults to `1`.
+  Setting it to `0` makes these patches inert and the board behaves like an
+  unpatched kernel.
 - Beyond that, nothing: DC uses DSC when a mode needs it, and only then, so with
   a stream that fits uncompressed DSC stays off even with the switch on.
 
@@ -412,7 +412,7 @@ which is why the patch adds none.
    because a no-op quirk should be a no-op.)
 
 The DSC-support restore that used to be step 4 here is now its own patch,
-[`ch7218-dsc-restore.patch`](#the-dsc-bit-also-vanishes-on-healthy-units), and
+[`ch7218-dsc-restore.patch`](#the-dsc-bit-also-vanishes-on-healthy-units-after-a-re-detect), and
 is **not** behind this parameter.
 
 #### What was deliberately left out
@@ -661,8 +661,8 @@ Two extra factors, established the same way:
   DC's own `hdmi_frl_perform_link_training_with_retries()` /
   `hdmi_frl_poll_start()` bracket the whole operation.
 
-**The fix** is four patches (`0011`–`0014` in the stable/BORE set, `0013`–`0016`
-in the RC set — see [Kernel patch set](#kernel-patch-set) above). Three of them
+**The original fix** was four patches, now unapplied in `patches/<set>/disabled/`
+(see [Disabled patches](#disabled-patches) above). Three of them
 *defer* GPU clock/voltage commits while a link is being brought up; the fourth
 *releases* an override that is already held, which is what a runtime mode
 change actually needs.
@@ -814,7 +814,8 @@ compositor-to-desktop handoff re-triggers PCON training the way it can for
 native FRL, so if a *runtime* (not boot) desync is ever reported specifically
 on an active-PCON setup, that gap is the place to look first.
 
-A module parameter aids debugging without needing a debugger: enable
+The disabled `cs-defer-*` patches added a debug parameter for this; current
+kernels do not have it. With those patches applied: enable
 `amdgpu.cs_od_defer_debug=1` (or `echo 1 | sudo tee /sys/module/amdgpu/parameters/cs_od_defer_debug`
 at runtime) and dmesg logs when link training starts/ends and whenever an OD
 commit is actually deferred because of it.
@@ -1123,7 +1124,7 @@ The same runtime gating as stable Mesa applies: `0001` and the FSR4 patches `000
 
 **`0002` is a real port, not a copy.** DirectMesh was written against Mesa 26.2.1, and Mesa main has moved underneath it in ways a clean `patch` run does not reveal — most of the incompatibilities surfaced as compile errors, not conflicts. Each one is resolved by keeping upstream's change and re-applying DirectMesh's intent on top, and the patch header lists them all. The ones worth knowing about:
 
-- **A workaround Mesa main deleted is carried again.** GFX1013 firmware hangs on `DISPATCH_TASKMESH_INDIRECT_MULTI_ACE` with a zero indirect count. RADV had a driver-side workaround, which DirectMesh builds on and extends for GFX1013's additional zero-dimensional ACE hang. Mesa main removed it in [`5d95a8f141d`](https://gitlab.freedesktop.org/mesa/mesa/-/commit/5d95a8f141d) and now refuses task/mesh on affected firmware — but on the BC-250 that firmware is what there is. `0002` restores the deleted code from `5d95a8f141d^` with DirectMesh's refinement, including the count-buffer allocation in the indirect-count entry point. The BC-250 never goes through main's refusal (it is GFX10.1, and DirectMesh exposes mesh through its own path), and every other device keeps upstream's behaviour. That is roughly 60 lines of code upstream no longer has, so it has to be re-checked whenever the surrounding RADV code moves. The stable series does not need this: 26.2.3 predates the removal.
+- **A workaround Mesa main deleted is carried again.** GFX1013 firmware hangs on `DISPATCH_TASKMESH_INDIRECT_MULTI_ACE` with a zero indirect count. RADV had a driver-side workaround, which DirectMesh builds on and extends for GFX1013's additional zero-dimensional ACE hang. Mesa main removed it in [`5d95a8f141d`](https://gitlab.freedesktop.org/mesa/mesa/-/commit/5d95a8f141d) and now refuses task/mesh on affected firmware — but on the BC-250 that firmware is what there is. `0002` restores the deleted code from `5d95a8f141d^` with DirectMesh's refinement, including the count-buffer allocation in the indirect-count entry point. The BC-250 never goes through main's refusal (it is GFX10.1, and DirectMesh exposes mesh through its own path), and every other device keeps upstream's behaviour. That is roughly 60 lines of code upstream no longer has, so it has to be re-checked whenever the surrounding RADV code moves. The stable series does not need this: 26.2.4 predates the removal.
 - **The compiler cache key grew by one word.** DirectMesh used all 28 spare bits of the key's second word on 26.2.1; main has since spent two of them, so its flags spill into a third word, padded explicitly so the byte-hashed key never contains uninitialised bits, and the key's size pin moves from 24 to 28 bytes.
 - **Renamed internals**: `RADV_CMD_FLAG_*` flush bits became `AC_BARRIER_*` (mapping taken from upstream's own rename commit), `radv_emit_cache_flush` gained an argument that only matters on GFX11+, NGG face culling moved from front/back to determinant-sign bits, and the per-family queue arrays were flattened.
 - **Three changes compiled fine but meant something different on main**, and were found by review rather than by the compiler: main's barrier rework stopped implying the "command processor waits for the shader engines" flag that DirectMesh's flushes relied on before the next draw reads its arguments, so it is now set explicitly on each; main's new rasterizer-discard branch in the Mesh lowering exports nothing, which hangs GFX10 hardware, so the chip's fully-culled workaround is emitted there as the other discard paths already do; and main moved the mesh-query emulation check, which would have silently compiled GFX1013 shaders without query counters.

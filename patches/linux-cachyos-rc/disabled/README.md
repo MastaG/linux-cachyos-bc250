@@ -8,12 +8,14 @@ a kernel or a release asset.
 They are kept in-tree because the analysis behind them is sound and they will be
 needed again — not because they are broken.
 
-## Why these five are disabled
+## Why these six are disabled
 
-All five work around display faults that occur while an HDMI FRL link is being
-brought up. Those faults only happen with DSC enabled, and DSC is now **off by
-default** (`amdgpu.bc250_hdmi21`, opt-in with `=1`), so a default install cannot
-hit them. Shipping workarounds for a path nobody is on adds risk for no benefit.
+All six work around display faults around HDMI FRL link bring-up. Those faults
+were first suspected to need DSC, but the blackout later reproduced with
+`amdgpu.bc250_hdmi21=0` (DSC is on by default; that is the off switch), and the
+approach was superseded by the active `cs-relink-after-long-blank.patch`.
+`cs-release-gfx-override-at-modeset.patch` was shipped and then withdrawn: it
+broke boot with no GPU governor running.
 
 There is also a correctness reason not to ship two of them as-is:
 
@@ -30,9 +32,10 @@ There is also a correctness reason not to ship two of them as-is:
 The boot-time black screen these patches were written for *was* genuinely fixed
 by the three `cs-defer-*` patches; that result stands.
 
-A second, independent failure mode is also still open: after a long stream-off,
-the PCON drops its HDMI side and DC never re-detects the link, so the bring-up
-reports success while the sink stays dark. Nothing here addresses that.
+A second, independent failure mode -- after a long stream-off the PCON drops its
+HDMI side and DC never re-detects the link, so the bring-up reports success
+while the sink stays dark -- is fixed by the active
+`cs-relink-after-long-blank.patch`.
 
 See `docs/PATCHES.md` for the full write-up, including which earlier conclusions
 proved overstated.
@@ -40,6 +43,6 @@ proved overstated.
 ## Re-enabling
 
 Move the files back up one directory and renumber them to follow the last active
-patch. Check `docs/PATCHES.md` (the fenced patch lists and the "ten patches"
+patch. Check `docs/PATCHES.md` (the fenced patch lists and the patch
 counts) and `tests/test_fsr4_packaging.py::KernelPatchSetTests` — both assert the
 shipped set, and both will fail until updated.
