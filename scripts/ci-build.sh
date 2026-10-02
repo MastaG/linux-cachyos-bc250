@@ -292,6 +292,7 @@ runuser -u builder -- env \
                 mesa-git)                    /workspace/scripts/build-mesa-git-package.sh ;;
                 bc250-dual-audio)            /workspace/scripts/build-bc250-dual-audio-package.sh ;;
                 bc250-cec)                   /workspace/scripts/build-bc250-cec-package.sh ;;
+                bc250-paccache-cleanup)      /workspace/scripts/build-bc250-paccache-cleanup-package.sh ;;
                 linux-cachyos-bc250-meta)    /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh ;;
                 protonge-latest-bc250)       /workspace/scripts/build-protonge-latest-bc250-package.sh ;;
                 proton-cachyos-native-bc250) /workspace/scripts/build-proton-cachyos-native-bc250-package.sh ;;

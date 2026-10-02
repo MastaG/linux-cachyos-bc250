@@ -25,6 +25,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
 | `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; replugs the HDMI link when the display powers on |
+| `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 ---
@@ -945,6 +946,36 @@ Runs as root — the debugfs write it needs (`/sys/kernel/debug/dri/*/DP-1/trigg
 `BC250_CEC_ON_POWER_ON_COMMAND`/`BC250_CEC_ON_POWER_OFF_COMMAND` always come from this file, never from anything received over CEC — the CEC bus only ever supplies the trigger (a boolean "the display just turned on/off"), never the payload, so nothing on the bus can influence what runs, only whether it does. The script itself still runs as root, same as the rest of this service.
 
 ---
+
+## Optional pacman cache cleanup
+
+pacman never cleans its package cache on its own: every package it downloads stays in `/var/cache/pacman/pkg`. On a BC-250 with a small disk, a few days of updates (kernels with headers, Mesa, the Proton packages) can fill several gigabytes.
+
+`bc250-paccache-cleanup` adds a pacman hook that empties that cache after every install, upgrade or removal (`paccache -rk0` and `paccache -ruk0`). It is **not** installed by `linux-cachyos-bc250-meta`; install it only if you want it:
+
+```bash
+sudo pacman -S bc250-paccache-cleanup
+```
+
+With it installed there are no older package versions left on your disk to downgrade to. This repository keeps the previous builds of every package, so a downgrade comes from there instead; see [Downgrading a package](#downgrading-a-package). To keep the last version in the cache instead, copy `/usr/share/libalpm/hooks/bc250-paccache-cleanup.hook` to `/etc/pacman.d/hooks/` and change `-rk0` to `-rk1` (a hook there overrides the packaged one). To stop the cleanup, remove the package.
+
+## Downgrading a package
+
+The repository keeps the **three previous builds** of every package next to the current one. `pacman -Syu` only ever sees the current build; the older ones are there so you can go back if an update breaks something, without needing them in your local package cache.
+
+See which older builds are available:
+
+```bash
+curl -sL https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo/archive-index.txt | grep -v pruned
+```
+
+Each line lists the file, its package base, version and when it was replaced. Install an older build straight from the release, for example:
+
+```bash
+sudo pacman -U https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo/<file>
+```
+
+Install every file of the same version together: a kernel with its `-headers` package, Mesa with the split packages you have installed (`vulkan-radeon`, `lib32-mesa`, ...). The next `pacman -Syu` brings you back to the current build; to stay on the older one until you are ready, add the package names to `IgnorePkg` in `/etc/pacman.conf`.
 
 ## aic8800d80-dkms — removed, use the AUR package
 

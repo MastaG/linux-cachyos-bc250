@@ -1,20 +1,35 @@
 #!/usr/bin/env bash
 # Shared helpers for package builders that stage packages into out/repo.
 
+# Remove a package base's files from out/repo before a fresh build is staged.
+#
+# By default the files are recorded in out/repo/archive-index.txt first: they
+# stay on the release as downloadable older builds (scripts/package-archive.py
+# keeps the newest three per package base) but leave out/repo, so neither the
+# database nor the workflow artifact carries them. Pass "delete" as the third
+# argument to drop them for good (a retired package).
 remove_pkgbase_from_repo() {
     local out_dir="$1"
     local wanted_pkgbase="$2"
-    local package existing_pkgbase
+    local mode="${3:-archive}"
+    local package existing_pkgbase pkginfo version root
 
+    root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
     shopt -s nullglob
     for package in "$out_dir"/*.pkg.tar.zst; do
-        existing_pkgbase="$(
-            bsdtar -xOf "$package" .PKGINFO 2>/dev/null |
-                awk -F ' = ' '$1 == "pkgbase" { print $2; exit }'
-        )"
+        pkginfo="$(bsdtar -xOf "$package" .PKGINFO 2>/dev/null)"
+        existing_pkgbase="$(awk -F ' = ' '$1 == "pkgbase" { print $2; exit }' <<<"$pkginfo")"
         if [[ "$existing_pkgbase" == "$wanted_pkgbase" ]]; then
-            printf '==> Removing previous %s package: %s\n' \
-                "$wanted_pkgbase" "$(basename -- "$package")"
+            if [[ "$mode" == archive ]]; then
+                version="$(awk -F ' = ' '$1 == "pkgver" { print $2; exit }' <<<"$pkginfo")"
+                python3 "$root/scripts/package-archive.py" add "$out_dir" \
+                    "$(basename -- "$package")" "$wanted_pkgbase" "$version"
+                printf '==> Archiving previous %s package: %s\n' \
+                    "$wanted_pkgbase" "$(basename -- "$package")"
+            else
+                printf '==> Removing previous %s package: %s\n' \
+                    "$wanted_pkgbase" "$(basename -- "$package")"
+            fi
             rm -f -- "$package"
         fi
     done

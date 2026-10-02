@@ -1,0 +1,21 @@
+# Maintainer: MastaG
+#
+# Opt-in: deliberately NOT a dependency of linux-cachyos-bc250-meta, so users
+# decide for themselves whether their package cache is emptied. One pacman
+# hook, no upstream source -- same shape as bc250-cec: source= is the file
+# sitting next to this PKGBUILD.
+pkgname=bc250-paccache-cleanup
+pkgver=1
+pkgrel=1
+pkgdesc="Empty the pacman package cache after every transaction (paccache -rk0 / -ruk0) on space-constrained BC-250 boards"
+arch=('any')
+url="https://github.com/MastaG/linux-cachyos-bc250"
+license=('GPL-2.0-only')
+depends=('pacman-contrib' 'sh')
+source=('bc250-paccache-cleanup.hook')
+sha256sums=('SKIP')
+
+package() {
+    install -Dm644 "$srcdir/bc250-paccache-cleanup.hook" \
+        "$pkgdir/usr/share/libalpm/hooks/bc250-paccache-cleanup.hook"
+}

@@ -26,6 +26,9 @@ shopt -s nullglob
 # Packages this repository has stopped shipping must not be re-published from
 # the seeded copy of the previous release -- see scripts/retired-packages.sh.
 retire_packages "$OUT_DIR"
+# Keep the previous builds of each package base on the release (outside the
+# database) and mark older ones for deletion -- see scripts/package-archive.py.
+python3 "${ROOT_DIR}/scripts/package-archive.py" maintain "$OUT_DIR" 3
 packages=(./*.pkg.tar.zst)
 (( ${#packages[@]} > 0 )) || {
     printf 'ERROR: no packages staged in %s\n' "$OUT_DIR" >&2

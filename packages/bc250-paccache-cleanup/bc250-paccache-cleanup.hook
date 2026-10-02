@@ -1,0 +1,26 @@
+# Empties the pacman package cache after every transaction (bc250-paccache-cleanup).
+#
+# pacman never cleans /var/cache/pacman/pkg itself, and on a BC-250 with a small
+# disk a few days of updates (kernels with headers, Mesa, the Proton packages)
+# add up to many gigabytes. This keeps no package files at all:
+#   paccache -rk0   removes every cached version of installed packages
+#   paccache -ruk0  removes cached files of packages that are no longer installed
+#
+# Downgrades then come from the repository (it keeps older builds) instead of
+# the local cache. To keep the last version instead, copy this file to
+# /etc/pacman.d/hooks/bc250-paccache-cleanup.hook and change -rk0 to -rk1;
+# a hook in /etc/pacman.d/hooks overrides this one. To stop cleaning, remove
+# the bc250-paccache-cleanup package.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Emptying the pacman package cache (bc250-paccache-cleanup)...
+When = PostTransaction
+Exec = /usr/bin/sh -c '/usr/bin/paccache -rqk0; /usr/bin/paccache -rquk0'
+Depends = pacman-contrib

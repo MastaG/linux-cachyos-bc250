@@ -4,6 +4,7 @@ import importlib.util
 import io
 import os
 import re
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -1223,6 +1224,97 @@ class Bc250CecPackageTests(unittest.TestCase):
         self.assertIn("'bc250-cec'", pkgbuild)
 
 
+class PaccacheCleanupPackageTests(unittest.TestCase):
+    """bc250-paccache-cleanup: an opt-in pacman hook emptying the package cache."""
+
+    PKG = ROOT / "packages/bc250-paccache-cleanup"
+
+    def test_the_hook_empties_the_cache_after_every_transaction(self):
+        hook = (self.PKG / "bc250-paccache-cleanup.hook").read_text()
+        for line in ("Operation = Install", "Operation = Upgrade", "Operation = Remove",
+                     "When = PostTransaction", "Depends = pacman-contrib"):
+            with self.subTest(line=line):
+                self.assertIn(line, hook)
+        exec_line = next(l for l in hook.splitlines() if l.startswith("Exec = "))
+        self.assertIn("paccache -rqk0", exec_line)
+        self.assertIn("paccache -rquk0", exec_line)
+
+    def test_the_package_installs_the_hook_where_pacman_reads_it(self):
+        pkgbuild = (self.PKG / "PKGBUILD").read_text()
+        self.assertIn("/usr/share/libalpm/hooks/bc250-paccache-cleanup.hook", pkgbuild)
+        self.assertIn("'pacman-contrib'", pkgbuild)
+
+    def test_it_is_opt_in_not_pulled_in_by_the_metapackage(self):
+        # The user decides whether the cache is emptied.
+        pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()
+        self.assertNotIn("bc250-paccache-cleanup", pkgbuild)
+
+    def test_the_component_is_wired_into_ci(self):
+        for path, needle in (
+            ("scripts/ci-build.sh", "build-bc250-paccache-cleanup-package.sh"),
+            ("scripts/source-fingerprint.sh", "bc250-paccache-cleanup)"),
+            ("scripts/finalize-repository.sh", "bc250-paccache-cleanup-info.env"),
+            (".github/workflows/build-release.yml", "BUILD_BC250_PACCACHE_CLEANUP"),
+            (".github/workflows/build-release.yml",
+             '"bc250-paccache-cleanup:$BUILD_BC250_PACCACHE_CLEANUP"'),
+        ):
+            with self.subTest(path=path):
+                self.assertIn(needle, (ROOT / path).read_text())
+
+
+class PackageArchiveTests(unittest.TestCase):
+    """Older builds stay on the release for downgrades, outside the database."""
+
+    def run_publish(self, work, index, state):
+        out = work / "out"; out.mkdir()
+        bindir = work / "bin"; bindir.mkdir()
+        (bindir / "gh").write_text('#!/bin/bash\necho "gh $*" >> "$GHLOG"\n')
+        (bindir / "gh").chmod(0o755)
+        for name in ("mesa-new.pkg.tar.zst", "current-but-pruned.pkg.tar.zst", "bc250-cachyos.db"):
+            (out / name).write_text("x")
+        (out / "archive-index.txt").write_text(index)
+        (work / "state").write_text(state)
+        env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", GHLOG=str(work / "gh.log"),
+                   GH_TOKEN="x", OUT_DIR=str(out), PUBLISH_STATE=str(work / "state"))
+        subprocess.run(["bash", str(ROOT / "scripts/publish-repo-delta.sh"), "test"],
+                       env=env, check=True, capture_output=True, text=True)
+        return [l.split()[4] for l in (work / "gh.log").read_text().splitlines() if "delete-asset" in l]
+
+    def test_publish_keeps_archived_builds_and_deletes_pruned_ones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            deleted = self.run_publish(
+                Path(tmp),
+                "# header\n"
+                "mesa-old.pkg.tar.zst\tmesa\t1\t2026-10-02T00:00:00Z\tarchived\n"
+                "mesa-older.pkg.tar.zst\tmesa\t0\t2026-10-02T00:00:00Z\tpruned\n"
+                "current-but-pruned.pkg.tar.zst\tx\t1\t2026-10-02T00:00:00Z\tpruned\n",
+                "aaa  mesa-old.pkg.tar.zst\nbbb  stale-gone.pkg.tar.zst\n")
+        self.assertIn("stale-gone.pkg.tar.zst", deleted)        # ordinary stale asset
+        self.assertIn("mesa-older.pkg.tar.zst", deleted)        # pruned old build
+        self.assertNotIn("mesa-old.pkg.tar.zst", deleted)       # archived: kept for downgrades
+        self.assertNotIn("current-but-pruned.pkg.tar.zst", deleted)  # never a current file
+
+    @unittest.skipUnless(shutil.which("vercmp"), "needs pacman's vercmp")
+    def test_retention_keeps_the_three_newest_builds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            tool = ["python3", str(ROOT / "scripts/package-archive.py")]
+            for n in (9, 10, 11, 12):
+                subprocess.run(tool + ["add", str(out), f"k-1.{n}.pkg.tar.zst", "kern", f"7.2.8-1.{n}"], check=True)
+            subprocess.run(tool + ["maintain", str(out), "3"], check=True, capture_output=True)
+            rows = [l.split("\t") for l in (out / "archive-index.txt").read_text().splitlines()
+                    if not l.startswith("#")]
+            kept = sorted(r[2] for r in rows if r[4] == "archived")
+            pruned = [r[2] for r in rows if r[4] == "pruned"]
+        self.assertEqual(kept, ["7.2.8-1.10", "7.2.8-1.11", "7.2.8-1.12"])
+        self.assertEqual(pruned, ["7.2.8-1.9"])
+
+    def test_seeding_skips_archived_builds(self):
+        text = (ROOT / ".github/workflows/build-release.yml").read_text()
+        self.assertIn("./scripts/seed-from-release.sh out/repo", text)
+        self.assertNotIn("gh release download repo --dir out/repo", text)
+
+
 class RetiredPackageTests(unittest.TestCase):
     """A package this repository stops shipping must also leave the published database.
 
@@ -1290,7 +1382,9 @@ class RetiredPackageTests(unittest.TestCase):
         text = self.RETIRED.read_text()
         fn = text[text.index("retire_packages() {"):]
         fn = fn[:fn.index("\n}\n")]
-        self.assertRegex(fn, r'(?m)^\s*remove_pkgbase_from_repo "\$out_dir" "\$pkgbase"$')
+        # "delete": a retired package must leave the release, not be archived as
+        # an older build (scripts/package-archive.py).
+        self.assertRegex(fn, r'(?m)^\s*remove_pkgbase_from_repo "\$out_dir" "\$pkgbase" delete$')
         self.assertRegex(fn, r'(?m)^\s*rm -f -- "\$out_dir/\$sidecar"$')
         for sidecar in ('"$pkgbase-info.env"', '"$pkgbase-PKGBUILD"', '"$pkgbase.SRCINFO"'):
             self.assertIn(sidecar, fn)

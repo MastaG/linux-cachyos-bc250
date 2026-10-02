@@ -52,7 +52,9 @@ retire_packages() {
             return 1
         fi
         printf '==> Retiring %s\n' "$pkgbase"
-        remove_pkgbase_from_repo "$out_dir" "$pkgbase"
+        remove_pkgbase_from_repo "$out_dir" "$pkgbase" delete
+        # Older builds kept on the release go too.
+        python3 "$root/scripts/package-archive.py" retire "$out_dir" "$pkgbase"
         for sidecar in "$pkgbase-info.env" "$pkgbase-PKGBUILD" "$pkgbase.SRCINFO"; do
             if [[ -e "$out_dir/$sidecar" ]]; then
                 printf '==> Removing retired asset: %s\n' "$sidecar"

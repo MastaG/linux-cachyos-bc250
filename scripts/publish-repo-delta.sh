@@ -67,6 +67,14 @@ done < <(find "$OUT_DIR" -maxdepth 1 -type f -print0 | sort -z) > "$current"
 
 sha_of() { awk -v n="$2" '$2 == n { print $1; exit }' "$1"; }
 
+# Older builds kept on the release (scripts/package-archive.py). An archived
+# file has left out/repo but must stay on the release; a pruned one must go.
+ARCHIVE_INDEX="$OUT_DIR/archive-index.txt"
+archive_status() {
+    [[ -f "$ARCHIVE_INDEX" ]] || return 0
+    awk -F '\t' -v n="$1" '$1 == n { print $5; exit }' "$ARCHIVE_INDEX"
+}
+
 uploads=() db_uploads=() deletions=()
 while read -r sha name; do
     if [[ "$(sha_of "$STATE" "$name")" != "$sha" ]]; then
@@ -75,16 +83,34 @@ while read -r sha name; do
 done < "$current"
 
 while read -r _ name; do
-    [[ -n "$(sha_of "$current" "$name")" ]] || deletions+=("$name")
+    [[ -n "$(sha_of "$current" "$name")" ]] && continue
+    # Archived: replaced in out/repo by a newer build, but kept on the release.
+    [[ "$(archive_status "$name")" == archived ]] && continue
+    deletions+=("$name")
 done < "$STATE"
 
-if (( ${#uploads[@]} + ${#db_uploads[@]} + ${#deletions[@]} == 0 )); then
+# Older builds pushed out of the retention window. Never a current file: the
+# archive drops any entry whose name is current again before it can be pruned,
+# and this checks once more. Deleted names are remembered for the rest of the run.
+PRUNED_STATE="${STATE}.pruned"
+[[ -f "$PRUNED_STATE" ]] || : > "$PRUNED_STATE"
+prunes=()
+if [[ -f "$ARCHIVE_INDEX" ]]; then
+    while IFS=$'\t' read -r name _ _ _ status; do
+        [[ "$status" == pruned ]] || continue
+        [[ -e "$OUT_DIR/$name" ]] && continue
+        grep -qxF -- "$name" "$PRUNED_STATE" && continue
+        prunes+=("$name")
+    done < <(grep -v '^#' "$ARCHIVE_INDEX")
+fi
+
+if (( ${#uploads[@]} + ${#db_uploads[@]} + ${#deletions[@]} + ${#prunes[@]} == 0 )); then
     printf '==> [%s] nothing changed; release left alone\n' "$LABEL"
     exit 0
 fi
 
-printf '==> [%s] publishing %d changed, %d database, %d removed\n' \
-    "$LABEL" "${#uploads[@]}" "${#db_uploads[@]}" "${#deletions[@]}"
+printf '==> [%s] publishing %d changed, %d database, %d removed, %d old builds pruned\n' \
+    "$LABEL" "${#uploads[@]}" "${#db_uploads[@]}" "${#deletions[@]}" "${#prunes[@]}"
 
 # Confirm the release is there before uploading into it, with retries and the
 # real error kept -- a single transient read used to be enough to skip the whole
@@ -134,6 +160,17 @@ for name in "${deletions[@]:-}"; do
     [[ -n "$name" ]] || continue
     gh release delete-asset repo "$name" --yes >/dev/null 2>&1 ||
         printf 'WARN: [%s] could not remove stale asset %s\n' "$LABEL" "$name" >&2
+done
+
+for name in "${prunes[@]:-}"; do
+    [[ -n "$name" ]] || continue
+    if err="$(gh release delete-asset repo "$name" --yes 2>&1 >/dev/null)" ||
+       grep -qi 'not found' <<<"$err"; then
+        printf '%s\n' "$name" >> "$PRUNED_STATE"
+    else
+        printf 'WARN: [%s] could not prune old build %s (retried next publish): %s\n' \
+            "$LABEL" "$name" "${err%%$'\n'*}" >&2
+    fi
 done
 
 cp -- "$current" "$STATE"

@@ -38,6 +38,7 @@ case "$COMPONENT" in
     mesa|lib32-mesa|mesa-git) ;;
     bc250-dual-audio) ;;
     bc250-cec) ;;
+    bc250-paccache-cleanup) ;;
     linux-cachyos-bc250-meta) ;;
     protonge-latest-bc250) ;;
     proton-cachyos-native-bc250) ;;
@@ -139,6 +140,21 @@ case "$COMPONENT" in
                 "$pkg_dir/bc250-cec.service" "$pkg_dir/bc250-cec.install" \
                 "$pkg_dir/bc250-cec.conf"
             hash_files "$ROOT_DIR/scripts/build-bc250-cec-package.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    bc250-paccache-cleanup)
+        # One pacman hook and its PKGBUILD, both our own and sitting in the
+        # package directory; hash them and the build script.
+        pkg_dir="$ROOT_DIR/packages/bc250-paccache-cleanup"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        {
+            hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-paccache-cleanup.hook"
+            hash_files "$ROOT_DIR/scripts/build-bc250-paccache-cleanup-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;
