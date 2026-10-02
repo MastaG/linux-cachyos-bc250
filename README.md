@@ -81,20 +81,46 @@ All three kernels contain the external `nct6687` driver as an in-tree-built modu
 
 #### VRM and GDDR6 temperature drivers
 
-All three kernels also include two BC-250 sensor drivers by Hexxeh. `bc250_vrm` loads automatically and only shows up in `sensors` on a board with the VRM wiring modification; without it the module binds to nothing and stays out of the way. `bc250_memory` is **opt-in**: the kernel package blacklists it from loading automatically, so nothing happens until you add it yourself.
+All three kernels also include two BC-250 sensor drivers by Hexxeh. Neither needs a separate package or DKMS.
 
-| Module | What it reads | Requirement |
-|---|---|---|
-| `bc250_vrm` | CPU and GPU rail voltage, current, temperature and power, plus the 12 V input, from the VRM controller | A small hardware modification that wires the VRM's SMBus lines ([guide](https://github.com/onlinermm/BC250-Telemetry/blob/main/hardware.md)). Without it the readings simply fail. |
-| `bc250_memory` | Temperature of each GDDR6 chip, plus hotspot and average | A BIOS with SMU debug access. On load the driver writes a small patch into SMU firmware memory to add the readout (`auto_patch=1`); with debug access locked it refuses to load. |
+##### VRM telemetry (`bc250_vrm`): on by default, needs a hardware mod
 
-To load `bc250_memory` at boot:
+Reads the CPU and GPU rail voltage, current, temperature and power, plus the 12 V input, from the board's VRM controller.
+
+- **It only works after a small hardware modification** that wires the VRM controller's SMBus lines. See the driver's upstream repository, [Hexxeh/bc250-vrm-dkms](https://github.com/Hexxeh/bc250-vrm-dkms), and its [wiring guide](https://github.com/onlinermm/BC250-Telemetry/blob/main/hardware.md).
+- **Nothing to enable.** The module loads automatically on every BC-250. Without the wiring it finds no VRM and stays out of the way: no extra entry in `sensors`, no errors.
+- **To check it after doing the mod:** `sensors bc250_vrm-*` should list `CPU VRM Temp`, `GPU VRM Temp` and the rest.
+
+##### GDDR6 memory temperatures (`bc250_memory`): off by default
+
+Reads the temperature of each of the eight GDDR6 chips, plus a hotspot and an average. Upstream repository: [Hexxeh/bc250-memory-dkms](https://github.com/Hexxeh/bc250-memory-dkms).
+
+**This one is disabled by default**, because it works by patching the SMU, the chip that manages the board's power and clocks. When it loads, it writes a small piece of code into the SMU's memory to add the temperature readout. The patch lasts until the next reboot. Requirements:
+
+- **BIOS P3.00.** The patch was made for that BIOS's SMU firmware only, and the driver does not check this itself. Check yours with `cat /sys/class/dmi/id/bios_version`, and do not enable it on any other version.
+- **SMU debug access unlocked**, either by a BIOS that does this or with [bc250-smu-unlock](https://github.com/rw-r-r-0644/bc250-smu-unlock). Without it the driver refuses to load and changes nothing.
+
+To enable it at boot:
 
 ```bash
 printf '%s\n' bc250_memory | sudo tee /etc/modules-load.d/bc250-memory.conf >/dev/null
 ```
 
-Then reboot (or `sudo modprobe bc250_memory`) and check `sensors`. Two cautions for `bc250_memory`: it changes SMU firmware memory until the next reboot, and it talks to the same SMU mailbox as `bc250-smu-oc` and other SMU tools, which have no way to coordinate with a kernel driver -- avoid running an SMU tool (for example an overclock detection run) while something is polling the memory temperatures.
+Reboot, or load it right away with `sudo modprobe bc250_memory`, then check:
+
+```bash
+sensors bc250_memory-*
+```
+
+You should see `VRAM Hotspot`, `VRAM Average` and `VRAM Chip 0` to `VRAM Chip 7`. If `modprobe` fails, `sudo dmesg | grep bc250_memory` says why (usually SMU debug access is locked).
+
+To disable it again, remove the file and reboot:
+
+```bash
+sudo rm /etc/modules-load.d/bc250-memory.conf
+```
+
+One more caution: `bc250_memory` talks to the SMU through the same mailbox as `bc250-smu-oc` and other SMU tools, and they cannot coordinate with each other. Avoid running an SMU tool, such as an overclock detection run, while something like MangoHud or CoolerControl is polling the memory temperatures.
 
 ### 3. Install a kernel
 
