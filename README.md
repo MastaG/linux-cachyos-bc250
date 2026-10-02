@@ -95,10 +95,7 @@ Reads the CPU and GPU rail voltage, current, temperature and power, plus the 12 
 
 Reads the temperature of each of the eight GDDR6 chips, plus a hotspot and an average. Upstream repository: [Hexxeh/bc250-memory-dkms](https://github.com/Hexxeh/bc250-memory-dkms).
 
-**This one is disabled by default**, because it works by patching the SMU, the chip that manages the board's power and clocks. When it loads, it writes a small piece of code into the SMU's memory to add the temperature readout. The patch lasts until the next reboot. Requirements:
-
-- **BIOS P3.00.** The patch was made for that BIOS's SMU firmware only, and the driver does not check this itself. Check yours with `cat /sys/class/dmi/id/bios_version`, and do not enable it on any other version.
-- **SMU debug access unlocked**, either by a BIOS that does this or with [bc250-smu-unlock](https://github.com/rw-r-r-0644/bc250-smu-unlock). Without it the driver refuses to load and changes nothing.
+**This one is disabled by default until it has had more widespread testing.** It works by adding a small temperature readout to the SMU, the chip that manages the board's power and clocks, each time it loads; nothing is changed permanently. It needs **SMU debug access unlocked**, either by a BIOS that does this or with [bc250-smu-unlock](https://github.com/rw-r-r-0644/bc250-smu-unlock); without it the driver refuses to load and changes nothing.
 
 To enable it at boot:
 
