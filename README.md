@@ -24,7 +24,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `proton-cachyos-slr-bc250` | The same, on the Steam Linux Runtime: the one for anti-cheat games |
 | `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
-| `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; replugs the HDMI link when the display powers on |
+| `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; retrains the link when the display powers on or switches to the board |
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
@@ -894,13 +894,13 @@ Packaging note: its ALSA-monitor override installs to `/usr/local/share/wireplum
 
 ## Optional BC-250 CEC
 
-**This is a workaround, not a fix.** There is a still-unfixed underlying bug where the DP/HDMI link can drop the picture after the board has sat idle for a while combined with the display being power-cycled multiple times — a narrower and harder-to-hit trigger than a single power-on, in the same family as the symptom in [Losing the picture on a mode change](#losing-the-picture-on-a-mode-change). Nobody has root-caused *why* the link drops in this case; `bc250-cec` only detects that it likely has and reacts, the same way the kernel's own long-blank relink heuristic does for its own trigger condition (blank duration as a proxy for "the display was off," which this bug does not reliably trip).
+**This is a workaround for the adapter, not the board.** With a CH7218-based DP-to-HDMI adapter, turning the TV off for a while (or switching an AVR away and back) can leave you with "no signal" even though the board is still sending a perfectly good picture. Reproduced live on 2026-10-03: the board's link stayed trained and streaming the whole time, but the adapter never restarted its HDMI output when the TV/AVR came back, and never told the board. Switching an AVR's input to the board produces no hotplug at all, only CEC traffic, so the kernel cannot see it. A link retrain brings the picture back every time; waking the adapter's input alone does not.
 
-`bc250-cec` identifies this board to the HDMI CEC bus as `SteamOS`, and replugs the HDMI link — the same re-detect a physical cable pull triggers, via the kernel's `trigger_hotplug` debugfs entry — when the display reports powering on over CEC, or when another device (a TV or AVR) switches its active input to this board while the display never actually went to standby.
+`bc250-cec` identifies this board to the HDMI CEC bus as `SteamOS`, and **retrains the DisplayPort link** when the display reports powering on over CEC, or when another device (a TV or AVR) switches its active input to this board. A retrain is invisible to everything above the link — no disconnect, no compositor reconfiguration — and takes a fraction of a second. The older full replug (the re-detect a physical cable pull triggers, via `trigger_hotplug`) is still available with `BC250_CEC_RELINK_METHOD=hotplug`.
 
 Deliberately narrow: by default it only detects and reacts. It never sends a power command to the display — no waking it, no putting it to sleep — and by default never sends a command that could change the input either. One opt-in exception exists, off by default: see `BC250_CEC_SWITCH_INPUT_ON_POWER_ON` below. It only helps at all on a display chain that actually tunnels CEC — see below.
 
-Separately, it also works around a Steam/gamescope UI quirk: after the replug, Steam can be left showing a black screen instead of its usual screensaver until something is pressed. A second after the replug, the service injects one synthetic keypress (`F15` by default — not present on physical keyboards, and essentially never bound to anything in a game) through a throwaway virtual keyboard — not a CEC command, just a workaround for the UI's own redraw.
+Separately, it can work around a Steam/gamescope UI quirk: after a full replug, Steam can be left showing a black screen instead of its usual screensaver until something is pressed. A retrain does not cause that, so this is **off by default**; with `BC250_CEC_RELINK_METHOD=hotplug`, turn on the two `WAKE_KEY_ON_*` settings and a second after the replug the service injects one synthetic keypress (`F15` by default — not present on physical keyboards, and essentially never bound to anything in a game) through a throwaway virtual keyboard — not a CEC command, just a workaround for the UI's own redraw.
 
 **Needs a CEC-capable link.** Most cheap active DP-to-HDMI adapters do not tunnel CEC at all; ones built on a Chrontel CH7218 have been confirmed to. Check before installing:
 
@@ -923,23 +923,24 @@ Watch it react to the display turning on:
 sudo journalctl -u bc250-cec -f
 ```
 
-Runs as root — the debugfs write it needs (`/sys/kernel/debug/dri/*/DP-1/trigger_hotplug`) requires it outright, regardless of how the CEC side is set up.
+Runs as root — the debugfs write it needs (`/sys/kernel/debug/dri/*/DP-1/link_settings`, or `trigger_hotplug` for a replug) requires it outright, regardless of how the CEC side is set up.
 
 **Configuration**: `/etc/bc250-cec.conf`, commented out by default — uncomment a line to override that default, then `sudo systemctl restart bc250-cec.service`. It is read by systemd itself (`EnvironmentFile=`), not sourced as a shell script, so it cannot run arbitrary commands even if edited carelessly.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `BC250_CEC_DISPLAY_NAME` | `SteamOS` | The name this board reports to the CEC bus |
-| `BC250_CEC_HOTPLUG_ON_POWER_ON` | `1` | Replug on the display reporting power-on |
-| `BC250_CEC_HOTPLUG_ON_ACTIVE_SOURCE` | `1` | Replug on another device switching its active input to this board |
-| `BC250_CEC_WAKE_KEY_ON_POWER_ON` | `1` | Inject the wake keypress after a power-on replug |
-| `BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE` | `1` | Inject the wake keypress after an active-source replug |
+| `BC250_CEC_HOTPLUG_ON_POWER_ON` | `1` | Relink on the display reporting power-on (the name predates the retrain) |
+| `BC250_CEC_HOTPLUG_ON_ACTIVE_SOURCE` | `1` | Relink on another device switching its active input to this board |
+| `BC250_CEC_RELINK_METHOD` | `retrain` | `retrain` the DisplayPort link, or `hotplug` for the old full replug |
+| `BC250_CEC_WAKE_KEY_ON_POWER_ON` | `0` | Inject the wake keypress after a power-on relink |
+| `BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE` | `0` | Inject the wake keypress after an active-source relink |
 | `BC250_CEC_WAKE_KEY` | `KEY_F15` | The `evdev` `KEY_*` name to inject; empty disables it entirely |
-| `BC250_CEC_WAKE_DELAY_S` | `1` | Seconds after a replug before injecting the keypress |
+| `BC250_CEC_WAKE_DELAY_S` | `1` | Seconds after a relink before injecting the keypress |
 | `BC250_CEC_POLL_INTERVAL_S` | `5` | How often to poll the display's power status |
-| `BC250_CEC_TRIGGER_COOLDOWN_S` | `30` | Minimum seconds between replugs, shared across both trigger sources |
+| `BC250_CEC_TRIGGER_COOLDOWN_S` | `30` | Minimum seconds between relinks: per trigger source for a retrain (so an AVR input switch right after power-on still relinks), shared across both for a replug |
 | `BC250_CEC_SWITCH_INPUT_ON_POWER_ON` | `0` | Broadcast `<Active Source>` and `<System Audio Mode Request>` after a power-on, so the TV switches its input and the AVR its audio to this board on their own — the one setting that can change what's on screen or playing, off by default |
-| `BC250_CEC_SWITCH_INPUT_DELAY_S` | `3` | Seconds after a power-on replug to wait before switching the input |
+| `BC250_CEC_SWITCH_INPUT_DELAY_S` | `3` | Seconds after a power-on relink to wait before switching the input |
 | `BC250_CEC_ON_POWER_ON_COMMAND` | (none) | Full path to a script to run (as root, in the background) on a genuine display power-on |
 | `BC250_CEC_ON_POWER_OFF_COMMAND` | (none) | Same, on a genuine display power-off |
 

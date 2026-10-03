@@ -1,20 +1,36 @@
 #!/usr/bin/env bash
 # BC-250 CEC daemon: announces this board to the HDMI CEC bus as "SteamOS"
-# and triggers a DRM hotplug replug when the display reports powering on,
-# or when another CEC device points the active source at us.
+# and relinks the DisplayPort link (a link retrain by default, or a full
+# DRM hotplug replug) when the display reports powering on, or when another
+# CEC device points the active source at us.
 #
-# Why: the HDMI 2.1 link through a DP-to-HDMI converter (or a native HDMI
-# 2.1 PCON) sometimes needs a re-detect -- the same unplug/replug cycle a
-# physical cable pull would trigger -- to bring the picture back after the
-# display has been off, beyond what the kernel's own long-blank relink
-# heuristic catches on its own (it fires on blank duration, not on the
-# display's actual power state). CEC gives a real, event-driven signal
-# instead, from two independent sources:
+# Why: a CH7218 DP-to-HDMI converter does not restart its HDMI output when
+# the display or AVR behind it comes back, and does not tell the board
+# either. Reproduced live twice on 2026-10-03: the board kept streaming 4K60
+# over a healthy, trained link the whole time; switching the AVR's input to
+# the board produced no hotplug at all, only CEC traffic; and the board's
+# own re-detect at TV power-on came minutes before the AVR was routing this
+# input, so it did not help. Waking the converter's DP input (DPCD 0x600
+# D3 -> D0) alone did nothing; a full link retrain brought the picture back
+# every time. CEC is the only signal that the path to the display is live
+# again, from two independent sources:
 #   1. the display's own power state (off -> on), polled periodically;
 #   2. another device (TV/AVR) naming our physical address as the new
 #      active source -- e.g. switching TV input back to SteamOS while the
 #      display never actually powered off. The power-state poll alone
 #      cannot see this, since the display was "on" throughout.
+#
+# Retrain is the default because it is all the converter needs and nothing
+# above the link notices it: no disconnect, no EDID re-read, no compositor
+# reconfiguration. It goes through the connector's debugfs link_settings
+# file: writing an invalid setting ("0 0") clears any forced link settings
+# and retrains at the ones the driver decides itself (amdgpu logs "Invalid
+# Input value No HW will be programmed" and then retrains anyway -- the
+# message is misleading). A valid "<lanes> <rate>" would also retrain but
+# pin those settings until reboot. With the stream blanked (DPMS off) the
+# write retrains nothing, which is fine: unblanking trains the link anyway.
+# RELINK_METHOD=hotplug restores the old full replug via trigger_hotplug,
+# and is also what runs if link_settings is missing.
 #
 # Never sends <Standby> or <Image View On> -- detection only, per the
 # feature request this shipped for. Verified on a real CEC bus trace that
@@ -31,7 +47,7 @@
 # always comes from the config file, never from anything received over
 # CEC, so nothing on the bus can influence what gets executed.
 #
-# The debugfs trigger_hotplug write needs root; the CEC calls do not
+# The debugfs link_settings/trigger_hotplug writes need root; the CEC calls do not
 # (/dev/cecN is group `video`), but the whole service runs as root anyway
 # to keep this one small rather than split across a privilege boundary for
 # a single write.
@@ -54,8 +70,16 @@ readonly AUDIO_SYSTEM_LOGICAL_ADDRESS=5
 # the other, or the keypress can be disabled while keeping the replug.
 readonly HOTPLUG_ON_POWER_ON="${BC250_CEC_HOTPLUG_ON_POWER_ON:-1}"
 readonly HOTPLUG_ON_ACTIVE_SOURCE="${BC250_CEC_HOTPLUG_ON_ACTIVE_SOURCE:-1}"
-readonly WAKE_KEY_ON_POWER_ON="${BC250_CEC_WAKE_KEY_ON_POWER_ON:-1}"
-readonly WAKE_KEY_ON_ACTIVE_SOURCE="${BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE:-1}"
+# How the two settings above relink: "retrain" (default) or "hotplug" (the
+# full replug this daemon used before 2026-10-04). The HOTPLUG_ON_* names
+# predate the retrain and are kept so existing configs keep working.
+readonly RELINK_METHOD="${BC250_CEC_RELINK_METHOD:-retrain}"
+# The wake keypress below is off by default since the retrain became the
+# default relink: it worked around Steam's black screen after a full
+# replug, and a retrain never disconnects anything Steam could react to.
+# Set both to 1 again alongside RELINK_METHOD=hotplug.
+readonly WAKE_KEY_ON_POWER_ON="${BC250_CEC_WAKE_KEY_ON_POWER_ON:-0}"
+readonly WAKE_KEY_ON_ACTIVE_SOURCE="${BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE:-0}"
 # Steam/gamescope can be left showing a black screen instead of its usual
 # screensaver after a hotplug replug -- confirmed on hardware 2026-09-28,
 # fixed by one synthetic keypress. F15 is the user's explicit choice of
@@ -111,15 +135,38 @@ discover_cec() {
     printf '%s\n%s\n' "$dev" "$connector"
 }
 
-# This connector's trigger_hotplug debugfs file. The PCI address segment of
-# the path is not hardcoded -- a glob costs nothing and does not assume the
-# GPU stays at the same PCI address.
-find_trigger_hotplug() {
-    local connector="$1" path
-    for path in /sys/kernel/debug/dri/*/"$connector"/trigger_hotplug; do
+# This connector's debugfs file for the configured relink method:
+# link_settings for a retrain, trigger_hotplug for a replug. A retrain falls
+# back to the replug when link_settings is missing. The PCI address segment
+# of the path is not hardcoded -- a glob costs nothing and does not assume
+# the GPU stays at the same PCI address.
+find_debugfs_file() {
+    local connector="$1" name="$2" path
+    for path in /sys/kernel/debug/dri/*/"$connector"/"$name"; do
         [[ -e "$path" ]] && { printf '%s\n' "$path"; return 0; }
     done
     return 1
+}
+
+find_relink_path() {
+    local connector="$1"
+    if [[ "$RELINK_METHOD" == retrain ]]; then
+        find_debugfs_file "$connector" link_settings && return 0
+    fi
+    find_debugfs_file "$connector" trigger_hotplug
+}
+
+# Retrain or replug, depending on which file find_relink_path() returned.
+relink() {
+    local trigger_path="$1" connector="$2"
+    case "$trigger_path" in
+        */link_settings)
+            log "retraining the link on $connector"
+            echo '0 0' > "$trigger_path" || log "failed to write $trigger_path" ;;
+        *)
+            log "triggering hotplug replug on $connector"
+            echo 1 > "$trigger_path" || log "failed to write $trigger_path" ;;
+    esac
 }
 
 # Re-assert our logical address claim. A real display power cycle can reset
@@ -223,7 +270,7 @@ switch_input_to_us() {
         || log "failed to send system-audio-mode-request"
 }
 
-# Fire the debugfs replug, the wake keypress, the active-source switch,
+# Fire the relink (retrain or replug), the wake keypress, the active-source switch,
 # and/or (power-on only) the custom power-on command, for one trigger
 # source ("power_on" or "active_source") -- each independently
 # switchable. Shares one cooldown across both sources via
@@ -238,7 +285,7 @@ switch_input_to_us() {
 # suppressed.
 fire_trigger() {
     local trigger_path="$1" connector="$2" cec_dev="$3" own_addr="$4" source="$5" reason="$6"
-    local do_hotplug do_wake do_switch_input do_custom_command now last
+    local do_hotplug do_wake do_switch_input do_custom_command now last state_file
 
     case "$source" in
         power_on) do_hotplug="$HOTPLUG_ON_POWER_ON"; do_wake="$WAKE_KEY_ON_POWER_ON"
@@ -249,20 +296,32 @@ fire_trigger() {
                   do_custom_command=0 ;;
     esac
 
+    # A retrain is cheap and does not disturb CEC, so each source gets its
+    # own cooldown: a power-on followed within seconds by an AVR input switch
+    # to us must still relink on the switch -- the power-on relink can come
+    # before the AVR routes this input, which is exactly the failure seen on
+    # 2026-10-03. A full replug keeps the old shared cooldown, which exists
+    # because a replug disrupts CEC for a few seconds and could otherwise
+    # read back as a second trigger.
+    if [[ "$trigger_path" == */link_settings ]]; then
+        state_file="$TRIGGER_STATE_FILE.$source"
+    else
+        state_file="$TRIGGER_STATE_FILE"
+    fi
+
     if [[ "$do_hotplug" != 1 && "$do_wake" != 1 && "$do_switch_input" != 1 && "$do_custom_command" != 1 ]]; then
         log "$reason, but everything is disabled for this trigger; skipping"
         return 0
     fi
 
     now="$(date +%s)"
-    last="$(cat "$TRIGGER_STATE_FILE" 2>/dev/null || printf '0')"
+    last="$(cat "$state_file" 2>/dev/null || printf '0')"
     if (( now - last >= TRIGGER_COOLDOWN_S )); then
         log "$reason"
         if [[ "$do_hotplug" == 1 ]]; then
-            log "triggering hotplug replug on $connector"
-            echo 1 > "$trigger_path" || log "failed to write $trigger_path"
+            relink "$trigger_path" "$connector"
         fi
-        printf '%s\n' "$now" > "$TRIGGER_STATE_FILE"
+        printf '%s\n' "$now" > "$state_file"
         if [[ "$do_wake" == 1 ]]; then
             sleep "$WAKE_DELAY_S"
             inject_wake_key
@@ -398,9 +457,9 @@ main() {
         if cec_info="$(discover_cec)"; then
             cec_dev="$(sed -n 1p <<<"$cec_info")"
             connector="$(sed -n 2p <<<"$cec_info")"
-            trigger_path="$(find_trigger_hotplug "$connector")" && break
+            trigger_path="$(find_relink_path "$connector")" && break
             if [[ "$waiting" != hotplug ]]; then
-                log "found $cec_dev on connector $connector, but no trigger_hotplug debugfs entry yet; waiting"
+                log "found $cec_dev on connector $connector, but no link_settings/trigger_hotplug debugfs entry yet; waiting"
                 waiting=hotplug
             fi
         elif [[ "$waiting" != adapter ]]; then
@@ -409,7 +468,7 @@ main() {
         fi
         sleep "$POLL_INTERVAL_S"
     done
-    log "found $cec_dev on connector $connector"
+    log "found $cec_dev on connector $connector; relinking via $(basename "$trigger_path")"
 
     cec-ctl -d "$cec_dev" --playback --osd-name "$OSD_NAME" >/dev/null || {
         log "failed to claim a CEC logical address on $cec_dev; exiting for a restart"

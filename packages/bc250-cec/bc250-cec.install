@@ -1,6 +1,6 @@
 post_install() {
     echo "==> BC-250 CEC installed: identifies as 'SteamOS' on the HDMI CEC bus,"
-    echo "==>   replugs the HDMI link when the display reports powering on, and"
+    echo "==>   retrains the display link when the display reports powering on, and"
     echo "==>   watches for another device switching the active input to it."
     echo "==> Enabled by default. No CEC-capable adapter yet? It waits quietly until"
     echo "==>   one appears (most DP-to-HDMI adapters do not pass CEC) -- check with:"

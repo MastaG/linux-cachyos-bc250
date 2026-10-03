@@ -1066,6 +1066,19 @@ class Bc250CecPackageTests(unittest.TestCase):
         self.assertIn("'python'", text)
         self.assertIn("'python-evdev'", text)
 
+    def test_relinks_with_an_unpinned_retrain_by_default(self):
+        # A CH7218 only restarts its HDMI output on a DP link retrain
+        # (reproduced 2026-10-03). The retrain goes through link_settings
+        # with an invalid "0 0": that clears forced settings and retrains at
+        # the driver's own choice. A valid "<lanes> <rate>" would pin those
+        # settings until reboot, so it must never be what gets written.
+        text = self.DAEMON.read_text()
+        self.assertIn('RELINK_METHOD="${BC250_CEC_RELINK_METHOD:-retrain}"', text)
+        self.assertIn("echo '0 0' > \"$trigger_path\"", text)
+        self.assertNotRegex(text, r"echo '[124] 0x[0-9a-f]+' >")
+        # The old replug stays reachable, and is the fallback.
+        self.assertIn('find_debugfs_file "$connector" trigger_hotplug', text)
+
     def test_injects_a_wake_keypress_after_the_replug_not_a_cec_command(self):
         # Steam/gamescope can be left on a black screen instead of its
         # screensaver after a hotplug replug -- this is a uinput keypress,
@@ -1125,8 +1138,9 @@ class Bc250CecPackageTests(unittest.TestCase):
         text = self.DAEMON.read_text()
         self.assertIn('HOTPLUG_ON_POWER_ON="${BC250_CEC_HOTPLUG_ON_POWER_ON:-1}"', text)
         self.assertIn('HOTPLUG_ON_ACTIVE_SOURCE="${BC250_CEC_HOTPLUG_ON_ACTIVE_SOURCE:-1}"', text)
-        self.assertIn('WAKE_KEY_ON_POWER_ON="${BC250_CEC_WAKE_KEY_ON_POWER_ON:-1}"', text)
-        self.assertIn('WAKE_KEY_ON_ACTIVE_SOURCE="${BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE:-1}"', text)
+        # Off by default since the retrain replaced the replug (2026-10-04).
+        self.assertIn('WAKE_KEY_ON_POWER_ON="${BC250_CEC_WAKE_KEY_ON_POWER_ON:-0}"', text)
+        self.assertIn('WAKE_KEY_ON_ACTIVE_SOURCE="${BC250_CEC_WAKE_KEY_ON_ACTIVE_SOURCE:-0}"', text)
         self.assertIn('fire_trigger "$trigger_path" "$connector" "$cec_dev" "$own_addr" power_on', text)
         self.assertIn('fire_trigger "$trigger_path" "$connector" "$cec_dev" "$own_addr" active_source', text)
 

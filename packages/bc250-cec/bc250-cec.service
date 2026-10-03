@@ -1,5 +1,5 @@
 [Unit]
-Description=BC-250 CEC: announce as SteamOS and replug the HDMI link on display power-on
+Description=BC-250 CEC: announce as SteamOS and relink the display on power-on or input switch
 Documentation=https://github.com/MastaG/linux-cachyos-bc250
 # The CEC adapter this depends on only exists once amdgpu has brought up a
 # CEC-tunneling-capable display and udev has created /dev/cecN; graphical.target

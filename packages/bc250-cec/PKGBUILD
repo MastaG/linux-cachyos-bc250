@@ -7,8 +7,8 @@
 # next to this PKGBUILD.
 pkgname=bc250-cec
 pkgver=1
-pkgrel=15
-pkgdesc="BC-250 HDMI CEC: identify as SteamOS on the CEC bus and replug the HDMI link when the display powers on"
+pkgrel=16
+pkgdesc="BC-250 HDMI CEC: identify as SteamOS on the CEC bus and retrain the display link when the display powers on or switches to it"
 arch=('any')
 url="https://github.com/MastaG/linux-cachyos-bc250"
 license=('GPL-2.0-only')
