@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMON = ROOT / "packages/bc250-fsr4-common"
 BASES = {
     "ge-proton": "4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645",
-    "proton-cachyos": "3380cea841b3a52de9fdfe151631e1c24b7ec9707d7d77fb0eea68d42aa6140c",
+    "proton-cachyos": "0092ff11bb041e9dd82ab76ca8a315400f413e2f59395525b8fd260c3b1fcdf1",
 }
 
 
