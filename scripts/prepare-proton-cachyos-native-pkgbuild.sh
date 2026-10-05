@@ -110,6 +110,7 @@ python3 - \
     "${FSR4_PAYLOAD_SHA256[SHA_PAYLOAD_BUILDER]}" "${FSR4_PAYLOAD_SHA256[SHA_PRESET]}" \
     "${FSR4_PAYLOAD_SHA256[SHA_SHIM]}" "$OPTISCALER_PROXY" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 (path, pkgrel, march, mtune, upstream_n, opti_asset, opti_url, opti_sha,
@@ -143,7 +144,13 @@ sub("pkgname=proton-cachyos-native\n",
 sub("provides=('proton-cachyos' 'proton')\n", "provides=()\n", "the provides array")
 sub("replaces=('proton-cachyos')\n", "replaces=()\n", "the replaces array")
 
-sub("\npkgrel=3\n", f"\npkgrel=3.{pkgrel}\n", "pkgrel=3")
+# Upstream's own pkgrel stays in front, so an upstream rebuild still sorts
+# newer; ours is appended. Any value, not a pinned one: CachyOS resets it to 1
+# on every Proton release (20261005 did), which a fixed "pkgrel=3" match broke.
+upstream_rel = re.findall(r"(?m)^pkgrel=([0-9]+)$", text)
+if len(upstream_rel) != 1:
+    raise SystemExit("ERROR: expected exactly one numeric pkgrel= line in proton-cachyos-native PKGBUILD")
+sub(f"\npkgrel={upstream_rel[0]}\n", f"\npkgrel={upstream_rel[0]}.{pkgrel}\n", "the pkgrel line")
 
 # Upstream targets a portable baseline. The BC-250 is a fixed Zen 2 part and
 # this matches what the kernel and Mesa packages here are built with.
