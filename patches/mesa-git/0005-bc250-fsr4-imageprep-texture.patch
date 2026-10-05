@@ -27,7 +27,7 @@ more launches on another board. Kept opt-in for that reason.
 Origin: bc250-fsr4-20260906 research kit, source/composed-over-2.84.patch
 ---
  src/amd/vulkan/radv_physical_device.c |    8 +
- src/amd/vulkan/radv_shader.c          | 4173 ++++++++++++++++++++++++++++++-
+ src/amd/vulkan/radv_shader.c          | 4173 ++++++++++++++++++++++++-
  2 files changed, 4176 insertions(+), 5 deletions(-)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
@@ -50,7 +50,7 @@ index a4aa9d3e22d..40818ced40c 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 7922bc33da1..11eebb03341 100644
+index 3a3238ef5d3..3450556b224 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8497,7 +8497,7 @@ bc250_fsr4_dynamic_columns(nir_shader *nir, unsigned profile)
