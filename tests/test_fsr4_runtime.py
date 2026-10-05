@@ -47,6 +47,7 @@ builder = load_script("builder", ROOT / "scripts/build-fsr4-payload.py")
 STUB_INI = (
     b"[FSR]\nFsr4ForceModel=auto\n"
     b"[Spoofing]\nDxgi=auto\nVulkanExtensionSpoofing=auto\n"
+    b"[Libraries]\nFfxDx12Path=auto\nFfxDx12SRPath=auto\n"
 )
 
 
@@ -411,6 +412,26 @@ class RuntimeTests(unittest.TestCase):
         for key, value in self.config["preset"].items():
             if key not in ("FSR.Fsr4ForceModel", "Spoofing.Dxgi"):
                 self.assertEqual(applied[key], value)
+
+    def test_a_variants_own_settings_apply_only_when_it_is_selected(self):
+        # HelixSR needs both FidelityFX library paths pointed at itself, which
+        # must not leak into the FSR4 variants that share the same preset.
+        paths = {"Libraries.FfxDx12Path": "C:\\x\\amd_fidelityfx_dx12.dll",
+                 "Libraries.FfxDx12SRPath": "C:\\x\\amd_fidelityfx_upscaler_dx12.dll"}
+        self.config["optiscaler_aliases"]["helixsr"] = "test-opti-helixsr"
+        self.config["optiscaler_variant_preset"] = {"test-opti-helixsr": paths}
+        default = self.applied_preset({"SteamAppId": "999999998"})
+        for key in paths:
+            self.assertNotIn(key, default)
+        chosen = self.applied_preset(
+            {"SteamAppId": "999999998", "PROTON_USE_OPTISCALER": "helixsr"})
+        for key, value in paths.items():
+            self.assertEqual(chosen[key], value)
+        # A launch option still has the last word.
+        overridden = self.applied_preset({
+            "SteamAppId": "999999998", "PROTON_USE_OPTISCALER": "helixsr",
+            "BC250_OPTISCALER_EXTRA": "Libraries.FfxDx12Path=auto"})
+        self.assertEqual(overridden["Libraries.FfxDx12Path"], "auto")
 
     def test_a_malformed_override_names_the_entry_rather_than_being_ignored(self):
         for bad in ("Fsr4ForceModel=3", "FSR.Fsr4ForceModel", "nonsense"):
@@ -1015,7 +1036,27 @@ class PresetTests(unittest.TestCase):
     SIGNED_BRIDGE = b"signed-amd-bridge" * 512
     FORK_BRIDGE = b"bc250-fork-bridge" * 512
 
-    def build_payload(self, default_name):
+    HELIXSR_DLL = b"helixsr-model-e" * 512
+    HELIXSR_INI = (
+        "; helixsr.ini\n[Sharpening]\nMode = off\n\n[ModelE]\nEnabled = true\n"
+        "Network = auto\n\n[Log]\n; helixsr.log next to the DLL\nEnabled = true\n"
+    )
+
+    def helixsr_zip(self, work):
+        # Laid out like HelixSR's v1.0.0 release: one versioned top-level folder.
+        path = work / "HelixSR-1.0.0.zip"
+        with zipfile.ZipFile(path, "w") as archive_zip:
+            for name, data in {
+                "HelixSR-1.0.0/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
+                "HelixSR-1.0.0/helixsr.ini": self.HELIXSR_INI.encode(),
+                "HelixSR-1.0.0/LICENSE": b"apache",
+                "HelixSR-1.0.0/THIRD_PARTY_NOTICES.md": b"nvidia property",
+                "HelixSR-1.0.0/README.md": b"readme",
+            }.items():
+                archive_zip.writestr(name, data)
+        return path
+
+    def build_payload(self, default_name, helixsr=False):
         with tempfile.TemporaryDirectory(prefix="payload-default-") as temporary:
             work = Path(temporary)
             archive, fork, fakenvapi, signed, provider, licenses, preset = \
@@ -1035,17 +1076,26 @@ class PresetTests(unittest.TestCase):
             ]
             if default_name:
                 command += ["--ffx-sdk-default", default_name]
+            if helixsr:
+                command += ["--helixsr", str(self.helixsr_zip(work)),
+                            "https://example/helixsr"]
             result = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             config = json.loads((output / "cfg.json").read_text())
             manifest = json.loads((output / "upscaler-manifest.json").read_text())
             bridges = {}
+            self.trees = {}
             for entry in manifest["optiscaler"]:
                 artifact = output / "artifacts" / Path(entry["download_url"]).name
                 with tarfile.open(artifact) as tar:
                     data = tar.extractfile(
                         "OptiScaler/amd_fidelityfx_upscaler_dx12.dll").read()
+                    self.trees[entry["version"]] = {
+                        m.name: tar.extractfile(m).read()
+                        for m in tar.getmembers() if m.isfile()
+                    }
                 bridges[entry["version"]] = data
+                self.entries = {e["version"]: e for e in manifest["optiscaler"]}
             return config, bridges
 
     def test_the_shipped_default_bridge_is_the_one_that_was_asked_for(self):
@@ -1065,6 +1115,37 @@ class PresetTests(unittest.TestCase):
         config, bridges = self.build_payload("")
         self.assertEqual(bridges[config["optiscaler_version"]], self.SIGNED_BRIDGE)
         self.assertNotIn("signed", config["optiscaler_aliases"])
+
+    def test_helixsr_is_an_opt_in_variant_with_its_log_switched_off(self):
+        config, bridges = self.build_payload("fsr411f", helixsr=True)
+        version = config["optiscaler_aliases"]["helixsr"]
+        # Never the default.
+        self.assertNotEqual(version, config["optiscaler_version"])
+        self.assertEqual(bridges[config["optiscaler_version"]], self.FORK_BRIDGE)
+        tree = self.trees[version]
+        # The one DLL under both FidelityFX names.
+        self.assertEqual(tree["OptiScaler/amd_fidelityfx_upscaler_dx12.dll"], self.HELIXSR_DLL)
+        self.assertEqual(tree["OptiScaler/amd_fidelityfx_dx12.dll"], self.HELIXSR_DLL)
+        # Only [Log] is switched off; [ModelE] keeps its own Enabled = true.
+        ini = tree["OptiScaler/helixsr.ini"].decode()
+        log = ini[ini.index("[Log]"):]
+        model = ini[ini.index("[ModelE]"):ini.index("[Log]")]
+        self.assertIn("Enabled = false", log)
+        self.assertNotIn("Enabled = true", log)
+        self.assertIn("Enabled = true", model)
+        # Licence texts only -- not the DLL or README -- under its own folder.
+        notices = sorted(n for n in tree if n.startswith(f"Licenses/{version}/"))
+        self.assertEqual(notices, [f"Licenses/{version}/LICENSE",
+                                   f"Licenses/{version}/THIRD_PARTY_NOTICES.md"])
+        self.assertIn("NVIDIA", tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
+        # Pinned like every other variant file.
+        hashes = self.entries[version]["sha256_hash"]
+        self.assertIn("OptiScaler/amd_fidelityfx_dx12.dll", hashes)
+        # Its library paths are recorded for the launcher, for it alone.
+        self.assertEqual(set(config["optiscaler_variant_preset"]), {version})
+        self.assertEqual(
+            set(config["optiscaler_variant_preset"][version]),
+            {"Libraries.FfxDx12Path", "Libraries.FfxDx12SRPath"})
 
     def test_a_default_naming_no_variant_fails_the_build(self):
         with self.assertRaises(AssertionError):

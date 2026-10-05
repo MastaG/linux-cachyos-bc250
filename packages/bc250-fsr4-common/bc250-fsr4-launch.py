@@ -367,6 +367,10 @@ def environment(config, inherited, *, game):
         load_native(env, proxy)
 
     preset = seed_once(config["preset"], config, inherited)
+    # A variant's own entries (HelixSR's library paths), only when that pinned
+    # version is the one being launched. Debug and BC250_OPTISCALER_EXTRA still
+    # go on top.
+    preset.update(config.get("optiscaler_variant_preset", {}).get(env["PROTON_USE_OPTISCALER"], {}))
     if inherited.get("BC250_FSR4_DEBUG") == "1":
         preset.update({"Log.LogToFile": "true", "FSR.Fsr4EnableWatermark": "true"})
         env["PROTON_LOG"] = "1"

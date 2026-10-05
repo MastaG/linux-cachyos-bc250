@@ -167,6 +167,22 @@ that one file, and `PROTON_USE_OPTISCALER` picks one:
 - **`fsr411rc9`, `fsr411rc10`** — the fork's earlier RC9 and RC10 builds, kept
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
+- **`helixsr`** — not a FidelityFX build at all:
+  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.0.0, one FSR 3.1 DLL that
+  runs NVIDIA's DLSS Model E network as D3D12 compute. Built with `--helixsr`
+  rather than `--ffx-sdk-alt`, because it differs in three ways. The same DLL
+  goes in as both `amd_fidelityfx_dx12.dll` and
+  `amd_fidelityfx_upscaler_dx12.dll`. Its `helixsr.ini` ships beside it with
+  only `[Log] Enabled` switched off (section-aware: `[ModelE]` has an `Enabled`
+  of its own). And the variant carries two OptiScaler settings of its own,
+  `Libraries.FfxDx12Path` and `FfxDx12SRPath` pointing at those two files, as
+  HelixSR's README asks. The builder validates them against the pinned
+  `OptiScaler.ini` like the preset, and the launcher applies them only when
+  `helixsr` is the selected version (`optiscaler_variant_preset` in the config),
+  before debug and `BC250_OPTISCALER_EXTRA`. Never the default. Its
+  `LICENSE` and `THIRD_PARTY_NOTICES.md` go to `Licenses/<version>/`; the
+  latter says the DLSS weights and kernels remain NVIDIA's property and are
+  not covered by HelixSR's licence.
 
 None of the unsigned builds is a provider bump: each carries its own embedded model
 — 4.1.1b has 768 model passes against 4.0.2's 216, plus `FSR4_Int8` provider

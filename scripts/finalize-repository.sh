@@ -562,6 +562,12 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   [4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b)
   rebuild aimed at RDNA2 ghosting. Neither the default nor 4.1.1b is a provider
   bump: each carries its own embedded model, and both are unsigned.
+- **New: HelixSR** ([1.0.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v1.0.0)
+  by lonewolf0622), opt-in per game with \`PROTON_USE_OPTISCALER=helixsr %command%\`:
+  an FSR 3.1 upscaler that runs NVIDIA's DLSS network (Model E) as D3D12 compute,
+  so DLSS-quality reconstruction without an NVIDIA GPU. Direct3D 12 games only.
+  It replaces FSR4 for that game; its log is switched off. Per its author, the
+  DLSS weights and kernels inside it remain NVIDIA's property.
 
 \`\`\`bash
 sudo pacman -S protonge-latest-bc250

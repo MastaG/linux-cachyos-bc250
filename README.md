@@ -861,6 +861,34 @@ Two things to know about the alternatives:
 
 Please report whether any of them helps or hurts.
 
+### HelixSR: DLSS's network instead of FSR4 (opt-in)
+
+All three Proton packages also ship [HelixSR](https://github.com/lonewolf0622/HelixSR)
+1.0.0 by lonewolf0622, the DirectMesh author. It answers OptiScaler as an FSR 3.1
+upscaler but runs NVIDIA's DLSS neural network (Model E) as ordinary DirectX 12
+compute shaders, so it needs no NVIDIA GPU or driver. It is developed and tested
+on the BC-250. Opt in per game:
+
+```text
+PROTON_USE_OPTISCALER=helixsr %command%
+```
+
+This replaces the FSR4 upscaler for that game with HelixSR; without the
+variable nothing changes. It is Direct3D 12 only (Vulkan games are not
+supported; D3D11 games through OptiScaler are untested). Pick DLSS, XeSS or FSR
+in the game as usual, OptiScaler hands it to HelixSR. Its own log
+(`helixsr.log`) is switched off in the shipped `helixsr.ini`; every other
+setting is the author's default (no sharpening, like DLSS). Its author measures
+1.4 ms per frame for 1080p Quality and 4.4 ms for 4K Performance on a BC-250 at
+2000 MHz. (HelixSR's `HELIXSR_PROFILE=1` writes its timings to `helixsr.log`,
+which the shipped settings keep switched off.)
+
+Provenance, stated plainly: HelixSR's own code is Apache-2.0, but the DLSS
+network weights and kernels inside it are, per its author, NVIDIA's property
+and not covered by any licence here. Like the unsigned bridges it is pinned by
+SHA256 and its origin is written into the prefix
+(`Licenses/THIRD-PARTY-UPSCALER.txt`, notices under `Licenses/<version>/`).
+
 Design and packaging details are in [docs/FSR4-PROTON.md](docs/FSR4-PROTON.md)
 and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md).
 
