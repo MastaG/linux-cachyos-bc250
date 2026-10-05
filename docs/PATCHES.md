@@ -151,7 +151,7 @@ This patch set contains:
 > Both cache windows default to 25 ms and can still be changed at runtime or disabled with `0`.
 
 - automatic 6-core / 8-core Cyan Skillfish SMU metrics layout detection — **8-core boards must run the patched SMU firmware; see the warning in [BC-250 APU telemetry](#bc-250-apu-telemetry)**;
-- GPU activity reporting through GPU Metrics and `GPU_LOAD` derived from the GFX ring's emitted-fence count (Cyan Skillfish's `GRBM_STATUS` register reads back all-ones regardless of GPU state, which previously pegged `gpu_busy_percent` at 100% even at idle), with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it) and a real sleep (not a busy-wait) between ring samples;
+- GPU activity reporting through GPU Metrics and `GPU_LOAD` derived from the emitted-fence count of the GFX ring and every compute ring, so compute-only loads such as Vulkan LLM inference register too (Cyan Skillfish's `GRBM_STATUS` register reads back all-ones regardless of GPU state, which previously pegged `gpu_busy_percent` at 100% even at idle), with a tunable per-device cache (`amdgpu.cs_activity_cache_ms`, default 25 ms, `0` disables it) and a real sleep (not a busy-wait) between ring samples;
 - GFX clock read directly from the SMU metrics table (no separate SMU mailbox round trip — see below);
 - a tunable cache (`amdgpu.cs_metrics_cache_ms`, default 25 ms, `0` disables it) for the bulk SMU metrics table refresh backing temperature, power, voltage, socclk/vclk/dclk/uclk, GFX clock and throttler-status reads. Upstream's own internal debounce for that transfer is only 1 ms, so every distinct hwmon attribute a monitoring tool polls in one cycle could otherwise trigger its own SMU mailbox round trip;
 - corrected `gpu_metrics` CPU-power reporting and overflow-safe 16-bit power export;
@@ -992,7 +992,9 @@ Or set them permanently at boot, the same way as the other `amdgpu.*` parameters
 amdgpu.cs_activity_cache_ms=50 amdgpu.cs_metrics_cache_ms=50
 ```
 
-`gpu_busy_percent` itself no longer touches the SMU or any hardware register at all: it is derived purely from the GFX ring's existing software fence-tracking, the same activity signal that already backs `fdinfo`'s `drm-engine-gfx`, sampled with a real sleep between reads rather than a busy-wait. `cs_activity_cache_ms` only bounds how often that essentially free sample is retaken, not SMU traffic.
+`gpu_busy_percent` itself no longer touches the SMU or any hardware register at all: it is derived purely from the existing software fence-tracking of the GFX ring and all compute rings (a sample counts as busy if any of them has an outstanding fence, so compute-only workloads such as llama.cpp over Vulkan are seen), the same activity signal that already backs `fdinfo`'s `drm-engine-gfx`/`drm-engine-compute`, sampled with a real sleep between reads rather than a busy-wait. `cs_activity_cache_ms` only bounds how often that essentially free sample is retaken, not SMU traffic.
+
+**Limitation: ROCm/KFD compute is not seen.** Work submitted through the kernel's own rings (graphics, and Vulkan or OpenCL-via-Mesa compute) is counted. ROCm/HIP workloads run on KFD user queues that the GPU's firmware scheduler maps itself, with no kernel fence, so they leave `gpu_busy_percent` and the governor's `method = "kernel"` flat. The governor's `busy-flag` method still sees them. Vulkan LLM inference (llama.cpp's Vulkan backend) is covered.
 
 ## Patched stable CachyOS Mesa
 

@@ -80,7 +80,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
  #include "amdgpu.h"
  #include "amdgpu_smu.h"
  #include "smu_v11_0.h"
-@@ -60,6 +68,262 @@
+@@ -60,6 +68,280 @@
  
  static uint32_t cyan_skillfish_sclk_default;
  
@@ -284,6 +284,24 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
 +	}
 +}
 +
++/*
++ * Compute work (Vulkan compute, llama.cpp, ...) is submitted to the compute
++ * rings and never touches the GFX ring, so sample all of them.
++ */
++static bool cyan_skillfish_rings_busy(struct amdgpu_device *adev)
++{
++	unsigned int i;
++
++	if (amdgpu_fence_count_emitted(&adev->gfx.gfx_ring[0]))
++		return true;
++
++	for (i = 0; i < adev->gfx.num_compute_rings; i++)
++		if (amdgpu_fence_count_emitted(&adev->gfx.compute_ring[i]))
++			return true;
++
++	return false;
++}
++
 +static uint16_t cyan_skillfish_get_gpu_activity(struct smu_context *smu)
 +{
 +	struct cyan_skillfish_metrics_cache *cache = smu->smu_table.metrics_table;
@@ -316,16 +334,16 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
 +	 * GRBM_STATUS reads back all-ones on this ASIC regardless of GPU
 +	 * state (bus-fault sentinel, not a valid GUI_ACTIVE bit), which
 +	 * previously pegged this at 100% even when the GPU was verifiably
-+	 * idle. Approximate busy state from the GFX ring's emitted-fence
-+	 * count instead: it is the same software-tracked activity signal
-+	 * that already backs the reliable fdinfo drm-engine-gfx accounting,
++	 * idle. Approximate busy state from the emitted-fence count of the GFX
++	 * and compute rings instead: it is the same software-tracked activity
++	 * signal that already backs the reliable fdinfo drm-engine-gfx accounting,
 +	 * and amdgpu_fence_count_emitted() is an existing core helper used
 +	 * historically for exactly this kind of ring activity tracking.
 +	 * Only sysfs/hwmon/gpu_metrics readers reach this (process context),
 +	 * so sleep between samples instead of tying up the CPU.
 +	 */
 +	for (i = 0; i < 32; i++) {
-+		busy += !!amdgpu_fence_count_emitted(&adev->gfx.gfx_ring[0]);
++		busy += cyan_skillfish_rings_busy(adev);
 +		if (i != 31)
 +			usleep_range(45, 55);
 +	}
@@ -343,7 +361,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
  static const struct smu_feature_bits cyan_skillfish_dpm_features = {
  	.bits = {
  		SMU_FEATURE_BIT_INIT(FEATURE_FCLK_DPM_BIT),
-@@ -90,17 +362,23 @@
+@@ -90,17 +380,23 @@
  {
  	struct smu_table_context *smu_table = &smu->smu_table;
  	struct smu_table *tables = smu_table->tables;
@@ -369,7 +387,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
  	ret = smu_driver_table_init(smu, SMU_DRIVER_TABLE_GPU_METRICS,
  				    sizeof(struct gpu_metrics_v2_2),
  				    SMU_GPU_METRICS_CACHE_INTERVAL);
-@@ -128,57 +406,91 @@
+@@ -128,57 +424,91 @@
  	return smu_v11_0_init_smc_tables(smu);
  }
  
@@ -476,7 +494,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
  		break;
  	default:
  		*value = UINT_MAX;
-@@ -203,7 +515,8 @@
+@@ -203,7 +533,8 @@
  		ret = cyan_skillfish_get_smu_metrics_data(smu,
  						   METRICS_CURR_GFXCLK,
  						   (uint32_t *)data);
@@ -486,7 +504,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
  		*size = 4;
  		break;
  	case AMDGPU_PP_SENSOR_GFX_MCLK:
-@@ -249,6 +562,10 @@
+@@ -249,6 +580,10 @@
  						   (uint32_t *)data);
  		*size = 4;
  		break;
@@ -497,7 +515,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
  	default:
  		ret = -EOPNOTSUPP;
  		break;
-@@ -288,6 +605,93 @@
+@@ -288,6 +623,93 @@
  	return cyan_skillfish_get_smu_metrics_data(smu, member_type, value);
  }
  
@@ -591,7 +609,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
  static int cyan_skillfish_emit_clk_levels(struct smu_context *smu,
  					  enum smu_clk_type clk_type, char *buf,
  					  int *offset)
-@@ -318,9 +722,20 @@
+@@ -318,9 +740,20 @@
  		size += sysfs_emit_at(buf, size, "VDDC: %7umV  %10umV\n",
  						CYAN_SKILLFISH_VDDC_MIN, CYAN_SKILLFISH_VDDC_MAX);
  		break;
@@ -613,7 +631,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
  	case SMU_VCLK:
  	case SMU_DCLK:
  		ret = cyan_skillfish_get_current_clk_freq(smu, clk_type, &cur_value);
-@@ -382,54 +797,102 @@
+@@ -382,54 +815,102 @@
  					  cyan_skillfish_dpm_features.bits);
  }
  
