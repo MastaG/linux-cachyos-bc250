@@ -1043,15 +1043,15 @@ class PresetTests(unittest.TestCase):
     )
 
     def helixsr_zip(self, work):
-        # Laid out like HelixSR's v1.0.0 release: one versioned top-level folder.
-        path = work / "HelixSR-1.0.0.zip"
+        # Laid out like HelixSR's v1.0.1 release: one versioned top-level folder.
+        path = work / "HelixSR-1.0.1.zip"
         with zipfile.ZipFile(path, "w") as archive_zip:
             for name, data in {
-                "HelixSR-1.0.0/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
-                "HelixSR-1.0.0/helixsr.ini": self.HELIXSR_INI.encode(),
-                "HelixSR-1.0.0/LICENSE": b"apache",
-                "HelixSR-1.0.0/THIRD_PARTY_NOTICES.md": b"nvidia property",
-                "HelixSR-1.0.0/README.md": b"readme",
+                "HelixSR-1.0.1/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
+                "HelixSR-1.0.1/helixsr.ini": self.HELIXSR_INI.encode(),
+                "HelixSR-1.0.1/LICENSE": b"apache",
+                "HelixSR-1.0.1/THIRD_PARTY_NOTICES.md": b"nvidia property",
+                "HelixSR-1.0.1/README.md": b"readme",
             }.items():
                 archive_zip.writestr(name, data)
         return path
