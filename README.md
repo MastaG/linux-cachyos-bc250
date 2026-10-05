@@ -864,7 +864,7 @@ Please report whether any of them helps or hurts.
 ### HelixSR: DLSS's network instead of FSR4 (opt-in)
 
 All three Proton packages also ship [HelixSR](https://github.com/lonewolf0622/HelixSR)
-1.0.1 by lonewolf0622, the DirectMesh author. It answers OptiScaler as an FSR 3.1
+1.0.2 by lonewolf0622, the DirectMesh author. It answers OptiScaler as an FSR 3.1
 upscaler but runs NVIDIA's DLSS neural network (Model E) as ordinary DirectX 12
 compute shaders, so it needs no NVIDIA GPU or driver. It is developed and tested
 on the BC-250. Opt in per game:

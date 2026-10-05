@@ -168,7 +168,7 @@ that one file, and `PROTON_USE_OPTISCALER` picks one:
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
 - **`helixsr`** — not a FidelityFX build at all:
-  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.0.1, one FSR 3.1 DLL that
+  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.0.2, one FSR 3.1 DLL that
   runs NVIDIA's DLSS Model E network as D3D12 compute. Built with `--helixsr`
   rather than `--ffx-sdk-alt`, because it differs in three ways. The same DLL
   goes in as both `amd_fidelityfx_dx12.dll` and
