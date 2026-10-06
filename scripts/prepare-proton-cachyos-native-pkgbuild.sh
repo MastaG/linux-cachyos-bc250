@@ -246,8 +246,8 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --ffx-sdk-alt fsr411rc10 \\\n'
     '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc10.zip" \\\n'
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \\\n'
-    '        --helixsr "${srcdir}/HelixSR-1.0.2.zip" \\\n'
-    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.0.2" \\\n'
+    '        --helixsr "${srcdir}/HelixSR-1.0.3.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.0.3" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -304,11 +304,11 @@ payload_sources = [
      "e7b53b1f1aa7aa4b767c3f73e72a33a9a3c5563eefd1edf48bf165fcb0feac89", True),
     ("bc250-fsr4-dll-4.0.0-rc10.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc10.zip",
      "eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98", True),
-    # HelixSR 1.0.2 (lonewolf0622): an FSR 3.1 DLL that runs NVIDIA's DLSS Model E
+    # HelixSR 1.0.3 (lonewolf0622): an FSR 3.1 DLL that runs NVIDIA's DLSS Model E
     # network on D3D12. Opt-in only, PROTON_USE_OPTISCALER=helixsr. Per its author,
     # the DLSS weights and kernels inside it remain NVIDIA's property.
-    ("HelixSR-1.0.2.zip", f"{payload_base}/HelixSR-1.0.2.zip",
-     "e14b6d40600d5bfb4a9ecf86a2ba83c599f91e6f6697b6c8b1e5017ba93b3b0e", True),
+    ("HelixSR-1.0.3.zip", f"{payload_base}/HelixSR-1.0.3.zip",
+     "a583a5499499e7e6f829f635262e03b9a8b43e313e76ac6bbd4d81cd5c9964c0", True),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),

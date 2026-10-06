@@ -366,6 +366,9 @@ def optiscaler_artifact(
         "is_dev_file": False,
         "download_url": "artifacts/optiscaler-" + archive_sha256 + ".tar.xz",
         "zip_sha256_hash": archive_sha256,
+        # The DLL name baked into this payload. protonfixes links
+        # PROTON_OPTISCALER_NAME to it when a caller asks for another name.
+        "proxy": args.proxy,
         # .ini files are excluded: protonfixes rewrites OptiScaler.ini in the
         # prefix from PROTON_OPTISCALER_CONFIG, so its content cannot be pinned.
         "sha256_hash": {

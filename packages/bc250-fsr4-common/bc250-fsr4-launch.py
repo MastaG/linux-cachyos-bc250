@@ -45,7 +45,8 @@ UNSHIPPED = (
 #
 # PROTON_OPTISCALER_NAME is the one a caller may still ask for: it does not
 # choose which DLL is loaded -- the manifest pins that -- only which import the
-# game resolves to OptiScaler. See proxy_name().
+# game resolves to OptiScaler; protonfixes links that name to the pinned DLL in
+# the prefix. See proxy_name().
 OWNED = (
     "PROTON_UPSCALER_MANIFEST",
     "PROTON_OPTISCALER_NAME",
@@ -198,10 +199,13 @@ def proxy_name(requested, default):
     OptiScaler, and the upscaler silently never appears. Such a game needs a
     different import, usually dxgi, which is also upstream protonfixes' default.
 
-    Unlike everything else in OWNED this changes no pinned file: the payload is
+    Unlike everything else in OWNED this swaps no pinned file: the payload is
     the same either way, so the worst a wrong name can do is leave OptiScaler
-    unloaded. It is still checked for shape, because it reaches Wine's loader as
-    a name to match and a path fragment has no business there.
+    unloaded. The payload is baked under one name, but Wine's loader redirects
+    the imported name to umu\\<name>, so protonfixes also links the requested
+    name to the pinned DLL in the prefix. It is still checked for shape, because
+    it reaches Wine's loader as a name to match and a path fragment has no
+    business there.
     """
     name = (requested or "").strip() or default
     if not name.lower().endswith(".dll"):

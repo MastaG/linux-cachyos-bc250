@@ -708,9 +708,14 @@ protonfixes' own default:
 PROTON_OPTISCALER_NAME=dxgi.dll %command%
 ```
 
-Nothing else changes: the payload is the same pinned OptiScaler either way, and
-the matching `WINEDLLOVERRIDES` entry follows the name automatically. Confirm it
-worked with `BC250_FSR4_DEBUG=1` and look for the watermark.
+The payload is the same pinned OptiScaler either way. The first launch with a
+new name makes a link of that name next to the pinned `winmm.dll` in the prefix
+(`drive_c/windows/system32/umu/`), because Wine looks for the requested name
+there, and the matching `WINEDLLOVERRIDES` entry follows the name automatically.
+The link always points at the pinned file, so it follows `PROTON_USE_OPTISCALER`
+variant switches. Confirm it worked with `BC250_FSR4_DEBUG=1` and look for the
+watermark. Needs a Proton package built after 2026-10-06; earlier builds ignored
+the name unless you linked the file yourself.
 
 OptiScaler answers to a fixed set of names — `dxgi.dll`, `winmm.dll`,
 `version.dll`, `dbghelp.dll`, `d3d12.dll`, `wininet.dll`, `winhttp.dll` — so pick
@@ -864,7 +869,7 @@ Please report whether any of them helps or hurts.
 ### HelixSR: DLSS's network instead of FSR4 (opt-in)
 
 All three Proton packages also ship [HelixSR](https://github.com/lonewolf0622/HelixSR)
-1.0.2 by lonewolf0622, the DirectMesh author. It answers OptiScaler as an FSR 3.1
+1.0.3 by lonewolf0622, the DirectMesh author. It answers OptiScaler as an FSR 3.1
 upscaler but runs NVIDIA's DLSS neural network (Model E) as ordinary DirectX 12
 compute shaders, so it needs no NVIDIA GPU or driver. It is developed and tested
 on the BC-250. Opt in per game:

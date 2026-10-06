@@ -44,9 +44,15 @@ does not set would quietly hand the default to OptiScaler instead of us.
 `PROTON_OPTISCALER_NAME` is the one variable in the owned set a caller may still
 supply. Everything else there addresses the pinned payload by path or by name, so
 a caller-supplied value would either break the launch or swap in something
-unverified; the proxy name does neither. It selects which import the game resolves
-to OptiScaler, not which DLL is loaded — the manifest pins that either way — so the
-worst a wrong name can do is leave OptiScaler unloaded. The package proxies
+unverified; the proxy name does neither. It selects which import the game resolves to OptiScaler, not which DLL is loaded — the manifest pins that either way — so the
+worst a wrong name can do is leave OptiScaler unloaded. Wine redirects the imported
+name to `system32\umu\<name>`, and the payload is baked as `umu\winmm.dll` only, so
+for any other name the patched protonfixes (`__expose_proxy`) creates a symlink of
+that name to the pinned file at launch (a copy where the filesystem has no
+symlinks). The manifest records the proxy name for this (`proxy` in the optiscaler
+entry); the name must be a plain `<alnum>.dll` and may never collide with a pinned
+file, so it cannot be used to overwrite one. OptiScaler derives its working name
+from the loaded path, so a link named `dxgi.dll` runs as "working as dxgi.dll". The package proxies
 `winmm` because that is what has been tested on the BC-250, but a game that ships
 its own `winmm.dll` (mod loaders and ASI loaders do) gets its own file back and
 the upscaler silently never appears; `PROTON_OPTISCALER_NAME=dxgi.dll` moves it to

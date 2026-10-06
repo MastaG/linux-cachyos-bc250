@@ -8,6 +8,7 @@ import io
 import itertools
 import json
 import lzma
+import os
 import subprocess
 import sys
 import tarfile
@@ -161,6 +162,7 @@ class RuntimeTests(unittest.TestCase):
             "optiscaler": [
                 {
                     "version": "test-opti",
+                    "proxy": "winmm.dll",
                     "is_dev_file": False,
                     "download_url": "artifacts/opti.tar.xz",
                     "zip_sha256_hash": sha256(archive.read_bytes()),
@@ -172,6 +174,7 @@ class RuntimeTests(unittest.TestCase):
                 },
                 {
                     "version": "test-opti-alt",
+                    "proxy": "winmm.dll",
                     "is_dev_file": False,
                     "download_url": "artifacts/opti-alt.tar.xz",
                     "zip_sha256_hash": sha256(variant_archive.read_bytes()),
@@ -183,6 +186,7 @@ class RuntimeTests(unittest.TestCase):
                 },
                 {
                     "version": "test-opti-alt2",
+                    "proxy": "winmm.dll",
                     "is_dev_file": False,
                     "download_url": "artifacts/opti-alt2.tar.xz",
                     "zip_sha256_hash": sha256(second_archive.read_bytes()),
@@ -212,19 +216,7 @@ class RuntimeTests(unittest.TestCase):
             "seed_once": ["Spoofing.Dxgi", "Spoofing.VulkanExtensionSpoofing"],
         }
 
-    def run_upscalers(self, base, inherited, arguments):
-        with mock.patch.object(wrapper, "TOOL", self.work):
-            env = wrapper.environment(
-                self.config, inherited, game=wrapper.game_launch(arguments, inherited)
-            )
-        enabled = {
-            feature
-            for key, feature in [
-                ("PROTON_FSR4_UPGRADE", "fsr4"),
-                ("PROTON_USE_OPTISCALER", "optiscaler"),
-            ]
-            if env.get(key, "0") != "0"
-        }
+    def upscalers_module(self, base):
         tree = ast.parse(self.sources[base])
         tree.body = [
             node
@@ -238,6 +230,22 @@ class RuntimeTests(unittest.TestCase):
         )
         # Execute the hash-verified upstream regression module.
         exec(compile(tree, "upscalers.py", "exec"), module.__dict__)  # noqa: S102
+        return module
+
+    def run_upscalers(self, base, inherited, arguments):
+        with mock.patch.object(wrapper, "TOOL", self.work):
+            env = wrapper.environment(
+                self.config, inherited, game=wrapper.game_launch(arguments, inherited)
+            )
+        enabled = {
+            feature
+            for key, feature in [
+                ("PROTON_FSR4_UPGRADE", "fsr4"),
+                ("PROTON_USE_OPTISCALER", "optiscaler"),
+            ]
+            if env.get(key, "0") != "0"
+        }
+        module = self.upscalers_module(base)
         with mock.patch.object(
             module.urllib.request,
             "urlopen",
@@ -274,6 +282,118 @@ class RuntimeTests(unittest.TestCase):
                 )
                 self.assertEqual(env["WINE_OPTISCALER_NAME"], "dxgi.dll")
                 self.assertEqual(env["WINEDLLOVERRIDES"], "dxgi=n,b")
+
+    def proxy_game(self, name, **extra):
+        return dict(
+            {"SteamAppId": "999999998", "PROTON_OPTISCALER_NAME": name}, **extra
+        )
+
+    def umu(self):
+        return self.prefix / "drive_c/windows/system32/umu"
+
+    def test_a_requested_proxy_name_is_a_file_wine_can_redirect_to(self):
+        # Wine's loader sends the imported name to umu\\<name>. The payload is
+        # baked as winmm.dll, so before this a dxgi request pointed at a file
+        # that was not there and Wine quietly used its builtin dxgi.
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                self.run_upscalers(base, self.proxy_game("dxgi"), ["run"])
+                link = self.umu() / "dxgi.dll"
+                self.assertTrue(link.is_symlink())
+                self.assertEqual(os.readlink(link), "winmm.dll")
+                self.assertEqual(link.read_bytes(), self.files["winmm.dll"])
+
+    def test_the_default_name_gets_no_extra_file(self):
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                self.run_upscalers(base, {"SteamAppId": "999999998"}, ["run"])
+                self.assertEqual(
+                    sorted(p.name for p in self.umu().glob("*.dll")), ["winmm.dll"]
+                )
+
+    def test_a_proxy_name_follows_the_variant_that_is_selected(self):
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                self.run_upscalers(base, self.proxy_game("dxgi.dll"), ["run"])
+                self.run_upscalers(
+                    base,
+                    self.proxy_game("dxgi.dll", PROTON_USE_OPTISCALER="altbridge"),
+                    ["run"],
+                )
+                self.assertEqual(
+                    (self.umu() / "dxgi.dll").read_bytes(), self.variant["winmm.dll"]
+                )
+
+    def test_an_existing_proxy_link_is_left_alone(self):
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                self.run_upscalers(base, self.proxy_game("dxgi.dll"), ["run"])
+                before = os.lstat(self.umu() / "dxgi.dll")
+                self.run_upscalers(base, self.proxy_game("dxgi.dll"), ["run"])
+                after = os.lstat(self.umu() / "dxgi.dll")
+                self.assertEqual((before.st_ino, before.st_mtime_ns),
+                                 (after.st_ino, after.st_mtime_ns))
+
+    def test_a_stale_file_under_the_requested_name_is_replaced(self):
+        # A prefix made by a package that was built with another proxy name
+        # leaves a real, outdated DLL where the new name has to point at ours.
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                self.umu().mkdir(parents=True)
+                (self.umu() / "dxgi.dll").write_bytes(b"outdated payload" * 128)
+                self.run_upscalers(base, self.proxy_game("dxgi.dll"), ["run"])
+                self.assertEqual(
+                    (self.umu() / "dxgi.dll").read_bytes(), self.files["winmm.dll"]
+                )
+
+    def test_a_prefix_without_symlinks_gets_a_copy_that_stays_current(self):
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                with mock.patch("pathlib.Path.symlink_to", side_effect=OSError("no")):
+                    self.run_upscalers(base, self.proxy_game("dxgi.dll"), ["run"])
+                    copy = self.umu() / "dxgi.dll"
+                    self.assertFalse(copy.is_symlink())
+                    self.assertEqual(copy.read_bytes(), self.files["winmm.dll"])
+                    before = os.lstat(copy)
+                    self.run_upscalers(base, self.proxy_game("dxgi.dll"), ["run"])
+                    self.assertEqual(before.st_ino, os.lstat(copy).st_ino)
+                    self.run_upscalers(
+                        base,
+                        self.proxy_game("dxgi.dll", PROTON_USE_OPTISCALER="altbridge"),
+                        ["run"],
+                    )
+                    self.assertEqual(copy.read_bytes(), self.variant["winmm.dll"])
+
+    def test_protonfixes_will_not_link_over_a_pinned_file(self):
+        module = self.upscalers_module("proton-cachyos")
+        expose = getattr(module, "__expose_proxy")
+        item = {
+            "proxy": "winmm.dll",
+            "sha256_hash": {"winmm.dll": "0" * 64, "nvngx_dlss.dll": "1" * 64},
+        }
+        for bad in ("nvngx_dlss.dll", "NVNGX_DLSS.DLL", "a/b.dll", "dxgi", "..dll"):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(RuntimeError, "not usable"):
+                    expose(str(self.prefix), "umu/", item, bad)
+        # The packaged name and its case variants need nothing at all.
+        expose(str(self.prefix), "umu/", item, "WINMM.dll")
+        self.assertFalse((self.prefix / "umu").exists())
+
+    def test_a_manifest_without_a_recorded_proxy_links_nothing(self):
+        module = self.upscalers_module("proton-cachyos")
+        getattr(module, "__expose_proxy")(
+            str(self.prefix), "umu/", {"sha256_hash": {}}, "dxgi.dll"
+        )
+        self.assertFalse((self.prefix / "umu").exists())
+
+    def test_the_builder_records_the_proxy_it_baked_in(self):
+        self.assertIn('"proxy": args.proxy', (ROOT / "scripts/build-fsr4-payload.py").read_text())
 
     def test_a_spoofing_toggle_survives_the_next_launch(self):
         # The whole point, end to end through the real protonfixes module: the
@@ -1043,15 +1163,15 @@ class PresetTests(unittest.TestCase):
     )
 
     def helixsr_zip(self, work):
-        # Laid out like HelixSR's v1.0.2 release: one versioned top-level folder.
-        path = work / "HelixSR-1.0.2.zip"
+        # Laid out like HelixSR's v1.0.3 release: one versioned top-level folder.
+        path = work / "HelixSR-1.0.3.zip"
         with zipfile.ZipFile(path, "w") as archive_zip:
             for name, data in {
-                "HelixSR-1.0.2/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
-                "HelixSR-1.0.2/helixsr.ini": self.HELIXSR_INI.encode(),
-                "HelixSR-1.0.2/LICENSE": b"apache",
-                "HelixSR-1.0.2/THIRD_PARTY_NOTICES.md": b"nvidia property",
-                "HelixSR-1.0.2/README.md": b"readme",
+                "HelixSR-1.0.3/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
+                "HelixSR-1.0.3/helixsr.ini": self.HELIXSR_INI.encode(),
+                "HelixSR-1.0.3/LICENSE": b"apache",
+                "HelixSR-1.0.3/THIRD_PARTY_NOTICES.md": b"nvidia property",
+                "HelixSR-1.0.3/README.md": b"readme",
             }.items():
                 archive_zip.writestr(name, data)
         return path
