@@ -148,17 +148,21 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
-### The bridge variants: `fsr411f` (default), `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
+### The variants: `helixsr` (default), `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
 
 OptiScaler loads two separate things: `amdxcffx64.dll`, the FSR4 provider our
 patched RADV drives, and `amd_fidelityfx_upscaler_dx12.dll`, the FidelityFX
 bridge. OptiScaler bundles a 4.1.1 bridge that would shadow the equally
-versioned provider. The payload is built five times, identical except for
-that one file, and `PROTON_USE_OPTISCALER` picks one:
+versioned provider. The payload is built once per variant, identical except
+for the bridge (and, for HelixSR, its own files), and `PROTON_USE_OPTISCALER`
+picks one:
 
-- **default / `fsr411f`** — the BC-250 FSR4 fork's build (RC11, `4.1.1r11`),
-  passed to the builder with `--ffx-sdk-default fsr411f`. Unsigned, made for
-  and measured on this hardware, and it ships its author's notices.
+- **default / `helixsr`** — see below; passed to the builder with
+  `--ffx-sdk-default helixsr`, which gives it the plain OptiScaler version so
+  an unset variable, `1` and `default` all reach it.
+- **`fsr411f`** — the BC-250 FSR4 fork's build (RC11, `4.1.1r11`), the default
+  before HelixSR. Unsigned, made for and measured on this hardware, and it
+  ships its author's notices.
 - **`signed`** — AMD's signed **4.0.2** bridge laid over OptiScaler's, which
   lets the provider win. This was the default until fsr411f became it; the
   alias is how the builder keeps it reachable.
@@ -167,10 +171,15 @@ that one file, and `PROTON_USE_OPTISCALER` picks one:
 - **`fsr411rc9`, `fsr411rc10`** — the fork's earlier RC9 and RC10 builds, kept
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
-- **`helixsr`** — not a FidelityFX build at all:
-  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.0.3, one FSR 3.1 DLL that
+- **`helixsr`** — the default, and not a FidelityFX build at all:
+  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.2.0, one FSR 3.1 DLL that
   runs NVIDIA's DLSS Model E network as D3D12 compute. Built with `--helixsr`
-  rather than `--ffx-sdk-alt`, because it differs in three ways. The same DLL
+  rather than `--ffx-sdk-alt` (and `--ffx-sdk-default` accepts its name only when
+  `--helixsr` is given), because it differs in four ways. Its release zip holds
+  no network since 1.2.0: `helixsr_weights.bin` and `helixsr_kernels.pak`, built
+  by its setup script from NVIDIA's DLSS DLL, are added to the mirrored
+  `HelixSR-1.2.0-network.zip`, installed beside the DLL and pinned, and the
+  builder refuses an archive without them rather than ship a plain upscale. The same DLL
   goes in as both `amd_fidelityfx_dx12.dll` and
   `amd_fidelityfx_upscaler_dx12.dll`. Its `helixsr.ini` ships beside it with
   only `[Log] Enabled` switched off (section-aware: `[ModelE]` has an `Enabled`
@@ -178,8 +187,9 @@ that one file, and `PROTON_USE_OPTISCALER` picks one:
   `Libraries.FfxDx12Path` and `FfxDx12SRPath` pointing at those two files, as
   HelixSR's README asks. The builder validates them against the pinned
   `OptiScaler.ini` like the preset, and the launcher applies them only when
-  `helixsr` is the selected version (`optiscaler_variant_preset` in the config),
-  before debug and `BC250_OPTISCALER_EXTRA`. Never the default. Its
+  `helixsr` is the selected version (`optiscaler_variant_preset` in the config,
+  keyed by the default's plain version while it is the default), before debug
+  and `BC250_OPTISCALER_EXTRA`. Its
   `LICENSE` and `THIRD_PARTY_NOTICES.md` go to `Licenses/<version>/`; the
   latter says the DLSS weights and kernels remain NVIDIA's property and are
   not covered by HelixSR's licence.

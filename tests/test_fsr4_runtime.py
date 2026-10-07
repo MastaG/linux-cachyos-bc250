@@ -1162,21 +1162,32 @@ class PresetTests(unittest.TestCase):
         "Network = auto\n\n[Log]\n; helixsr.log next to the DLL\nEnabled = true\n"
     )
 
-    def helixsr_zip(self, work):
-        # Laid out like HelixSR's v1.0.3 release: one versioned top-level folder.
-        path = work / "HelixSR-1.0.3.zip"
+    HELIXSR_WEIGHTS = b"helixsr-weights" * 256
+    HELIXSR_KERNELS = b"helixsr-kernels" * 256
+
+    def helixsr_zip(self, work, network=("helixsr_weights.bin", "helixsr_kernels.pak")):
+        # HelixSR's v1.2.0 release folder after its setup script has built the
+        # network files beside the DLL.
+        path = work / "HelixSR-1.2.0.zip"
+        files = {
+            "HelixSR-1.2.0/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
+            "HelixSR-1.2.0/helixsr.ini": self.HELIXSR_INI.encode(),
+            "HelixSR-1.2.0/LICENSE": b"apache",
+            "HelixSR-1.2.0/THIRD_PARTY_NOTICES.md": b"nvidia property",
+            "HelixSR-1.2.0/README.md": b"readme",
+            "HelixSR-1.2.0/helixsr_weights.bin": self.HELIXSR_WEIGHTS,
+            "HelixSR-1.2.0/helixsr_kernels.pak": self.HELIXSR_KERNELS,
+        }
         with zipfile.ZipFile(path, "w") as archive_zip:
-            for name, data in {
-                "HelixSR-1.0.3/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
-                "HelixSR-1.0.3/helixsr.ini": self.HELIXSR_INI.encode(),
-                "HelixSR-1.0.3/LICENSE": b"apache",
-                "HelixSR-1.0.3/THIRD_PARTY_NOTICES.md": b"nvidia property",
-                "HelixSR-1.0.3/README.md": b"readme",
-            }.items():
+            for name, data in files.items():
+                if name.rsplit("/", 1)[1].startswith("helixsr_") and \
+                        name.rsplit("/", 1)[1] not in network:
+                    continue
                 archive_zip.writestr(name, data)
         return path
 
-    def build_payload(self, default_name, helixsr=False):
+    def build_payload(self, default_name, helixsr=False,
+                      network=("helixsr_weights.bin", "helixsr_kernels.pak")):
         with tempfile.TemporaryDirectory(prefix="payload-default-") as temporary:
             work = Path(temporary)
             archive, fork, fakenvapi, signed, provider, licenses, preset = \
@@ -1197,7 +1208,7 @@ class PresetTests(unittest.TestCase):
             if default_name:
                 command += ["--ffx-sdk-default", default_name]
             if helixsr:
-                command += ["--helixsr", str(self.helixsr_zip(work)),
+                command += ["--helixsr", str(self.helixsr_zip(work, network)),
                             "https://example/helixsr"]
             result = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -1246,6 +1257,12 @@ class PresetTests(unittest.TestCase):
         # The one DLL under both FidelityFX names.
         self.assertEqual(tree["OptiScaler/amd_fidelityfx_upscaler_dx12.dll"], self.HELIXSR_DLL)
         self.assertEqual(tree["OptiScaler/amd_fidelityfx_dx12.dll"], self.HELIXSR_DLL)
+        # The network files built by HelixSR's setup sit beside the DLL, pinned.
+        self.assertEqual(tree["OptiScaler/helixsr_weights.bin"], self.HELIXSR_WEIGHTS)
+        self.assertEqual(tree["OptiScaler/helixsr_kernels.pak"], self.HELIXSR_KERNELS)
+        hashes = self.entries[version]["sha256_hash"]
+        self.assertIn("OptiScaler/helixsr_weights.bin", hashes)
+        self.assertIn("OptiScaler/helixsr_kernels.pak", hashes)
         # Only [Log] is switched off; [ModelE] keeps its own Enabled = true.
         ini = tree["OptiScaler/helixsr.ini"].decode()
         log = ini[ini.index("[Log]"):]
@@ -1266,6 +1283,39 @@ class PresetTests(unittest.TestCase):
         self.assertEqual(
             set(config["optiscaler_variant_preset"][version]),
             {"Libraries.FfxDx12Path", "Libraries.FfxDx12SRPath"})
+
+    def test_helixsr_can_be_the_default_and_the_bridges_stay_reachable(self):
+        config, bridges = self.build_payload("helixsr", helixsr=True)
+        default = config["optiscaler_version"]
+        aliases = config["optiscaler_aliases"]
+        # It takes the plain version, so "1" and an unset variable reach it,
+        # and its library paths apply without naming it.
+        self.assertEqual(aliases["helixsr"], default)
+        self.assertEqual(bridges[default], self.HELIXSR_DLL)
+        self.assertIn("OptiScaler/helixsr_weights.bin", self.trees[default])
+        self.assertEqual(set(config["optiscaler_variant_preset"]), {default})
+        # What used to be the default is an ordinary opt-in variant now.
+        self.assertNotEqual(aliases["fsr411f"], default)
+        self.assertEqual(bridges[aliases["fsr411f"]], self.FORK_BRIDGE)
+        self.assertEqual(bridges[aliases["signed"]], self.SIGNED_BRIDGE)
+        self.assertIn("ships it by default",
+                      self.trees[default]["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
+        self.assertIn("selected explicitly",
+                      self.trees[aliases["fsr411f"]]["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
+
+    def test_helixsr_as_default_needs_its_archive(self):
+        with self.assertRaises(AssertionError):
+            self.build_payload("helixsr", helixsr=False)
+
+    def test_helixsr_without_its_network_files_fails_the_build(self):
+        # Without them HelixSR only does a plain upscale: refuse rather than
+        # ship that as if it were the neural upscaler.
+        for missing in ("helixsr_weights.bin", "helixsr_kernels.pak"):
+            with self.subTest(missing=missing), self.assertRaises(Exception):
+                self.build_payload(
+                    "fsr411f", helixsr=True,
+                    network=tuple(n for n in ("helixsr_weights.bin", "helixsr_kernels.pak")
+                                  if n != missing))
 
     def test_a_default_naming_no_variant_fails_the_build(self):
         with self.assertRaises(AssertionError):

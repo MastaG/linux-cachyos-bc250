@@ -141,8 +141,17 @@ HELIXSR_PRESET = {
 }
 
 
-def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path]:
+HELIXSR_NETWORK_FILES = ("helixsr_weights.bin", "helixsr_kernels.pak")
+
+
+def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str, Path]]:
     """Unpack a HelixSR release: its DLL, its helixsr.ini with logging off, its notices.
+
+    Since 1.2.0 the upstream zip carries no network: its setup script builds
+    helixsr_weights.bin and helixsr_kernels.pak from NVIDIA's DLSS DLL. The
+    archive given here is that zip with those two files added beside the DLL,
+    and both are required: without them HelixSR only does a plain upscale, which
+    would ship as a silent downgrade.
 
     HelixSR is one FSR 3.1 DLL (amd_fidelityfx_dx12.dll) that runs NVIDIA's
     DLSS Model E network. Its release zip has everything under a versioned
@@ -164,6 +173,13 @@ def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path]:
     if len(dlls) != 1:
         raise RuntimeError("HelixSR archive must contain exactly one amd_fidelityfx_dx12.dll")
     root = dlls[0].parent
+    network = {}
+    for name in HELIXSR_NETWORK_FILES:
+        if not (root / name).is_file() or (root / name).stat().st_size == 0:
+            raise RuntimeError(
+                f"HelixSR archive has no {name}: run its setup script on the "
+                "release and archive the folder it produced")
+        network[name] = root / name
     ini = (root / "helixsr.ini").read_text(encoding="utf-8")
     # Section-aware: [ModelE] has an "Enabled = true" of its own.
     lines = ini.splitlines(keepends=True)
@@ -185,7 +201,7 @@ def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path]:
         if not (root / name).is_file():
             raise RuntimeError("HelixSR archive has no " + name)
         shutil.copy2(root / name, notices / name)
-    return dlls[0], "".join(lines), notices
+    return dlls[0], "".join(lines), notices, network
 
 
 def seed_fakenvapi_settings(extracted: Path) -> Path | None:
@@ -414,8 +430,9 @@ def main() -> int:
     # package and without anyone hand-editing a prefix -- which pinning makes
     # impossible anyway, since every file is verified before launch.
     ap.add_argument("--ffx-sdk-default", default="",
-                    help="name of an --ffx-sdk-alt variant to ship as the default; "
-                         "the AMD-signed --ffx-sdk bridge then becomes the "
+                    help="name of an --ffx-sdk-alt variant, or 'helixsr' when "
+                         "--helixsr is given, to ship as the default; the "
+                         "AMD-signed --ffx-sdk bridge then becomes the "
                          "'signed' variant")
     ap.add_argument("--ffx-sdk-alt", action="append", default=[], nargs=3,
                     metavar=("NAME", "PATH", "ORIGIN"),
@@ -424,7 +441,8 @@ def main() -> int:
                          "and the URL recorded in the prefix. Repeatable.")
     ap.add_argument("--helixsr", nargs=2, metavar=("ARCHIVE", "ORIGIN"),
                     help="HelixSR release zip and the URL recorded in the prefix; "
-                         "adds the opt-in 'helixsr' variant")
+                         "adds the 'helixsr' variant (opt-in unless named by "
+                         "--ffx-sdk-default)")
     ap.add_argument("--dlss", type=Path, required=True, help="NVIDIA nvngx_dlss.dll surrogate")
     ap.add_argument("--licenses", type=Path, required=True, help="directory of license notices")
     ap.add_argument("--preset", type=Path, required=True, help="optiscaler-preset.json")
@@ -457,7 +475,7 @@ def main() -> int:
     SIGNED_NAME = "signed"
     if args.ffx_sdk_default and args.ffx_sdk_default not in {
         name for name, _, _ in args.ffx_sdk_alt
-    }:
+    } | ({HELIXSR_NAME} if args.helixsr else set()):
         raise SystemExit(
             f"ERROR: --ffx-sdk-default names no variant: {args.ffx_sdk_default!r}")
 
@@ -503,11 +521,14 @@ def main() -> int:
             )
 
         if args.helixsr:
-            # Never the default: it replaces the FSR4 path this package exists
-            # for with a different upscaler, so it is only ever asked for by name.
+            # As the default it takes the plain OptiScaler version, like any
+            # other default, and its library paths in variant_presets then apply
+            # to every launch that does not name another variant.
             source, origin = Path(args.helixsr[0]), args.helixsr[1]
-            dll, ini, notices = helixsr_from(source, staging)
-            version = args.optiscaler_version + "-" + HELIXSR_NAME
+            dll, ini, notices, network = helixsr_from(source, staging)
+            is_default = args.ffx_sdk_default == HELIXSR_NAME
+            version = (args.optiscaler_version if is_default
+                       else args.optiscaler_version + "-" + HELIXSR_NAME)
             aliases[HELIXSR_NAME] = version
             variant_presets[version] = dict(HELIXSR_PRESET)
             provenance = (
@@ -518,14 +539,21 @@ def main() -> int:
                 "HelixSR answers OptiScaler as FSR 3.1 and runs NVIDIA's DLSS Model E "
                 "network (its trained weights and GPU kernels translated to DirectX 12). "
                 "Per its author, those components remain the property of NVIDIA "
-                "Corporation and are not covered by HelixSR's licence; see "
-                f"Licenses/{version}/. Selected explicitly by "
-                f"PROTON_USE_OPTISCALER={HELIXSR_NAME}. helixsr.ini is shipped with "
-                "logging switched off.\n"
+                "Corporation and are not covered by HelixSR's licence; "
+                "helixsr_weights.bin and helixsr_kernels.pak beside the DLL are "
+                "built from NVIDIA's DLSS DLL by HelixSR's own setup script; see "
+                f"Licenses/{version}/. "
+                + ("This package ships it by default; the FidelityFX bridges "
+                   "remain available through PROTON_USE_OPTISCALER (signed, "
+                   "fsr411f, ...). "
+                   if is_default else
+                   f"Selected explicitly by PROTON_USE_OPTISCALER={HELIXSR_NAME}. ")
+                + "helixsr.ini is shipped with logging switched off.\n"
             )
             variants.append((
                 dll, version, provenance, notices,
-                {"OptiScaler/amd_fidelityfx_dx12.dll": dll, "OptiScaler/helixsr.ini": ini},
+                {"OptiScaler/amd_fidelityfx_dx12.dll": dll, "OptiScaler/helixsr.ini": ini,
+                 **{f"OptiScaler/{name}": path for name, path in network.items()}},
             ))
 
         entries = []

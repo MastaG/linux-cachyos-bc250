@@ -692,7 +692,7 @@ Per game, if you want them:
 ```text
 BC250_FSR4_DEBUG=1 %command%              # FSR4 watermark + OptiScaler log + PROTON_LOG
 PROTON_FSR4_UPGRADE=0 %command%           # turn the packaged FSR4 upgrade off
-PROTON_USE_OPTISCALER=signed %command%    # AMD's signed bridge instead of the default, see below
+PROTON_USE_OPTISCALER=fsr411f %command%   # the FSR4 fork's bridge instead of the default HelixSR, see below
 BC250_OPTISCALER_EXTRA="A.B=c;D.E=f"      # override individual OptiScaler settings
 PROTON_OPTISCALER_NAME=dxgi.dll %command% # load OptiScaler as dxgi instead of winmm
 ```
@@ -806,25 +806,28 @@ change sticks:
 
 ### Which FidelityFX bridge you get, and the alternatives
 
-One file in the payload — the FidelityFX bridge, `amd_fidelityfx_upscaler_dx12.dll`
-— exists in five pinned builds. Each package ships all five and swaps only that
-file; `PROTON_USE_OPTISCALER` picks one per game:
+The upscaler OptiScaler hands a game to is **HelixSR by default** (see the next
+section). Underneath it, one file in the payload — the FidelityFX bridge,
+`amd_fidelityfx_upscaler_dx12.dll` — exists in five other pinned builds. Each
+package ships all of them and swaps only that file; `PROTON_USE_OPTISCALER`
+picks one per game:
 
 ```text
-                                          # (unset) BC-250 FSR4 fork RC11, 4.1.1r11 — the default
+                                          # (unset) HelixSR, DLSS Model E network — the default
+PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork RC11, 4.1.1r11 — the default until HelixSR
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
-PROTON_USE_OPTISCALER=fsr411f %command%   # the default, by name
+PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR, by name
 PROTON_USE_OPTISCALER=fsr411rc9 %command%  # the older RC9 build
 PROTON_USE_OPTISCALER=fsr411rc10 %command% # the older RC10 build
 ```
 
-RC9 and RC10 are kept selectable so their performance can be compared against
-the default rather than being deleted when superseded. That is the standing
-policy: a new release becomes the default, older ones stay reachable. All three
-Proton packages ship the same five builds.
+RC9, RC10 and RC11 are kept selectable so their performance can be compared
+against the default rather than being deleted when superseded. That is the
+standing policy: a new default replaces the old one, which stays reachable by
+name. All three Proton packages ship the same builds.
 
-| | default (`fsr411f`) | `signed` | `fsr411b` |
+| | `fsr411f` | `signed` | `fsr411b` |
 |---|---|---|---|
 | Source | [bc250-fsr4-fork v4.0.0-rc11](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11) | [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) |
 | Watermark shows | `4.1.1r11` | `4.1.1 / SOURCE: DRIVER` (the provider; the bridge file itself is 4.0.2) | `4.1.1b` |
@@ -832,8 +835,8 @@ Proton packages ship the same five builds.
 | Tested on a BC-250 by its author | yes | — | no |
 | Signed | no | AMD | no |
 
-**The default is the BC-250 fork's build**, by daniel-h-0, because it is the one
-made for and measured on this hardware. RC11 is a version-identification and
+**`fsr411f` is the BC-250 fork's build**, by daniel-h-0, the default before
+HelixSR, because it is the one made for and measured on this hardware. RC11 is a version-identification and
 validation release over RC10: same 348 shader programs, same performance, same
 underlying model — the author's own release notes describe it as passing "a
 complete shader rebuild and nine synthetic image comparisons against RC10."
@@ -850,7 +853,7 @@ already what this package enforces. To confirm which build is running, add
 
 Two things to know about the alternatives:
 
-- Neither the default nor `fsr411b` is a provider version bump. Each binary
+- Neither `fsr411f` nor `fsr411b` is a provider version bump. Each binary
   carries its own embedded model, so either likely moves upscaling off the
   provider path the RADV patches target, onto the model baked into the bridge.
   `signed` is the one that leaves the provider in charge: AMD's 4.0.2 bridge is
@@ -859,28 +862,29 @@ Two things to know about the alternatives:
   ever uses a DLL from the game's own folder — the bridge and provider always
   come from the pinned payload, and the game's FSR/DLSS DLLs are only the API
   it talks to.
-- The default and `fsr411b` are unsigned. The build pins each by SHA256 and
+- `fsr411f` and `fsr411b` are unsigned. The build pins each by SHA256 and
   writes its origin into the prefix as `Licenses/THIRD-PARTY-UPSCALER.txt`, so
   they are reproducible — not vouched for. The fork's build additionally ships
   its author's licence notices into `Licenses/<version>/`, as that release asks.
 
 Please report whether any of them helps or hurts.
 
-### HelixSR: DLSS's network instead of FSR4 (opt-in)
+### HelixSR: DLSS's network instead of FSR4 (the default)
 
 All three Proton packages also ship [HelixSR](https://github.com/lonewolf0622/HelixSR)
-1.0.3 by lonewolf0622, the DirectMesh author. It answers OptiScaler as an FSR 3.1
+1.2.0 by lonewolf0622, the DirectMesh author. It answers OptiScaler as an FSR 3.1
 upscaler but runs NVIDIA's DLSS neural network (Model E) as ordinary DirectX 12
 compute shaders, so it needs no NVIDIA GPU or driver. It is developed and tested
-on the BC-250. Opt in per game:
+on the BC-250. It is what you get without any launch option; to go back to the
+FSR4 fork's bridge for a game that misbehaves:
 
 ```text
-PROTON_USE_OPTISCALER=helixsr %command%
+PROTON_USE_OPTISCALER=fsr411f %command%
 ```
 
-This replaces the FSR4 upscaler for that game with HelixSR; without the
-variable nothing changes. It is Direct3D 12 only (Vulkan games are not
-supported; D3D11 games through OptiScaler are untested). Pick DLSS, XeSS or FSR
+HelixSR replaces the FSR4 upscaler. It is Direct3D 12 only (Vulkan games are not
+supported; D3D11 games through OptiScaler are untested, so if one looks wrong,
+try `fsr411f`). Pick DLSS, XeSS or FSR
 in the game as usual, OptiScaler hands it to HelixSR. Its own log
 (`helixsr.log`) is switched off in the shipped `helixsr.ini`; every other
 setting is the author's default (no sharpening, like DLSS). Its author measures
@@ -889,8 +893,12 @@ setting is the author's default (no sharpening, like DLSS). Its author measures
 which the shipped settings keep switched off.)
 
 Provenance, stated plainly: HelixSR's own code is Apache-2.0, but the DLSS
-network weights and kernels inside it are, per its author, NVIDIA's property
-and not covered by any licence here. Like the unsigned bridges it is pinned by
+network weights and kernels it runs are, per its author, NVIDIA's property
+and not covered by any licence here. Since 1.2.0 its release no longer contains
+them: its setup script builds `helixsr_weights.bin` and `helixsr_kernels.pak`
+from NVIDIA's public DLSS 310.7.0 DLL. We ran that script once and mirrored the
+result (the `HelixSR-1.2.0-network.zip` payload), so the Proton packages need no
+setup step and nothing is downloaded at game launch. Like the unsigned bridges it is pinned by
 SHA256 and its origin is written into the prefix
 (`Licenses/THIRD-PARTY-UPSCALER.txt`, notices under `Licenses/<version>/`).
 

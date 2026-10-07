@@ -552,22 +552,22 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - FSR4 and OptiScaler are on by default. They remain launch options, so
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
-- The FidelityFX bridge defaults to the BC-250 FSR4 fork's
+- The default upscaler is now HelixSR (see below). The BC-250 FSR4 fork's
   [RC11](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11)
-  build (\`4.1.1r11\`, by daniel-h-0), the one made for and measured on this
-  hardware; it ships that release's licence notices into the prefix. Two
+  bridge (\`4.1.1r11\`, by daniel-h-0), the previous default, stays one launch
+  option away: \`PROTON_USE_OPTISCALER=fsr411f %command%\`. Two more
   alternatives swap only that file, per game, each pinned by SHA256:
   \`PROTON_USE_OPTISCALER=signed %command%\` for AMD's signed 4.0.2 bridge, and
   \`PROTON_USE_OPTISCALER=fsr411b %command%\` for the third-party
   [4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b)
-  rebuild aimed at RDNA2 ghosting. Neither the default nor 4.1.1b is a provider
+  rebuild aimed at RDNA2 ghosting. Neither 4.1.1r11 nor 4.1.1b is a provider
   bump: each carries its own embedded model, and both are unsigned.
-- **New: HelixSR** ([1.0.3](https://github.com/lonewolf0622/HelixSR/releases/tag/v1.0.3)
-  by lonewolf0622), opt-in per game with \`PROTON_USE_OPTISCALER=helixsr %command%\`:
-  an FSR 3.1 upscaler that runs NVIDIA's DLSS network (Model E) as D3D12 compute,
+- **Changed: HelixSR is the default** ([1.2.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v1.2.0)
+  by lonewolf0622), replacing the FSR4 fork's bridge. It is an FSR 3.1 upscaler that runs NVIDIA's DLSS network (Model E) as D3D12 compute,
   so DLSS-quality reconstruction without an NVIDIA GPU. Direct3D 12 games only.
-  It replaces FSR4 for that game; its log is switched off. Per its author, the
-  DLSS weights and kernels inside it remain NVIDIA's property.
+  It replaces FSR4 for the game; its log is switched off. Per its author, the
+  DLSS weights and kernels it runs remain NVIDIA's property. If a game looks
+  wrong, \`PROTON_USE_OPTISCALER=fsr411f %command%\` goes back to the old default.
 
 \`\`\`bash
 sudo pacman -S protonge-latest-bc250
