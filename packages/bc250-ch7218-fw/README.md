@@ -4,8 +4,8 @@ Firmware images and a manual flash command for the **UGREEN DisplayPort to HDMI 
 adapter** (DP134 / 85564, DP135 / 85996), which is built on a Chrontel **CH7218A**.
 
 Nothing in this package runs by itself. No service, no hook, no timer. You flash
-the adapter by typing a command, and only an adapter that reports exactly
-firmware `07.00.54` is accepted.
+the adapter by typing a command, and only an adapter on firmware `07.00.xx`
+(`07.00.54` or an older build of that line) is accepted.
 
 ## Why
 
@@ -81,9 +81,13 @@ end for five seconds, or power the whole board off and on.
    updater's own length and checksum rule.
 2. Exactly one adapter is found, by the Chrontel identity it reports over
    DisplayPort (`2B 02 F0` and the name `CH7218`), or you named it with `--aux`.
-3. The adapter reports firmware `07.00.54`. Anything else (other branches such as
-   `07.08.xx`, USB-C variants, other vendors' cables that use this chip) is
-   refused, because these images are built from the 07.00.54 code.
+3. The adapter reports firmware `07.00.xx` with `xx` no higher than 54. An older
+   build on that line is updated (flashing any of the three images also brings it
+   up to 07.00.54, which is what UGREEN's own update does). A newer build (that
+   would be a downgrade), another line such as `07.08.xx`, a USB-C variant, or
+   another vendor's cable that uses this chip is refused, because these images
+   are built from the 07.00.54 code. The firmware version is read from the chip
+   with UGREEN's updater (`-v`).
 4. You type `flash`, unless you passed `--yes`.
 
 UGREEN's updater always opens `/dev/drm_dp_aux1`. The wrapper therefore runs it in

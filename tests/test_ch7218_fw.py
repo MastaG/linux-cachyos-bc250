@@ -179,14 +179,27 @@ esac
         self.assertIn("DID NOT REPORT SUCCESS", r.stderr)
         self.assertFalse((self.state / "last-flash").exists())
 
-    def test_other_firmware_versions_are_refused(self):
-        self.adapter(0)
-        self.version = "07:08:19"
-        self.write_fwu(success=True)
-        r = self.run_flash("flash", "tmds", "--yes")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("07:00:54", r.stderr)
-        self.assertNotIn("-f", self.log.read_text().split())
+    def test_other_firmware_lines_and_newer_builds_are_refused(self):
+        for version in ("07:08:19", "07:00:55", "07:00:99", "08:00:10", "06:00:10"):
+            with self.subTest(version=version):
+                self.adapter(0)
+                self.version = version
+                self.write_fwu(success=True)
+                self.log.write_text("")
+                r = self.run_flash("flash", "tmds", "--yes")
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("Not flashing", r.stderr)
+                self.assertNotIn("-f", self.log.read_text().split())
+
+    def test_an_older_build_on_the_same_line_is_updated(self):
+        for version in ("07:00:40", "07:00:01", "07:00:54"):
+            with self.subTest(version=version):
+                self.adapter(0)
+                self.version = version
+                self.write_fwu(success=True)
+                r = self.run_flash("flash", "original", "--yes")
+                self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+                self.assertEqual("older build" in r.stdout, version != "07:00:54")
 
     def test_a_modified_image_is_refused(self):
         self.adapter(0)

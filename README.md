@@ -1015,7 +1015,7 @@ sudo bc250-ch7218-flash flash tmds --dry-run   # every check, no write
 sudo bc250-ch7218-flash flash tmds             # or: original | tmds-frl
 ```
 
-It only touches an adapter that reports firmware `07.00.54`, checks the image against its checksum first, and asks you to type `flash`. The new firmware runs after the adapter is power-cycled; `flash original` goes back to UGREEN's. Flashing firmware carries a small risk of leaving a device unusable if the write is interrupted, so do not cut power while it runs. This package is not endorsed by UGREEN or Chrontel.
+It only touches an adapter on firmware `07.00.xx` (`07.00.54` or an older build, which it then also brings up to 54, as UGREEN's own update does), checks the image against its checksum first, and asks you to type `flash`. The new firmware runs after the adapter is power-cycled; `flash original` goes back to UGREEN's. Flashing firmware carries a small risk of leaving a device unusable if the write is interrupted, so do not cut power while it runs. This package is not endorsed by UGREEN or Chrontel.
 
 ## Downgrading a package
 

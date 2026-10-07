@@ -538,8 +538,8 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   (a second byte) kept running. The first fixed image is what the author runs;
   the second is untested.
 - Nothing runs on its own: flashing is \`sudo bc250-ch7218-flash flash
-  original|tmds|tmds-frl\`, run by hand, and only on an adapter that reports
-  firmware 07.00.54. Read \`/usr/share/doc/bc250-ch7218-fw/README.md\` first.
+  original|tmds|tmds-frl\`, run by hand, and only on an adapter on firmware
+  07.00.xx (54 or older). Read \`/usr/share/doc/bc250-ch7218-fw/README.md\` first.
 - Not part of \`linux-cachyos-bc250-meta\`:
   \`sudo pacman -S bc250-ch7218-fw\`.
 

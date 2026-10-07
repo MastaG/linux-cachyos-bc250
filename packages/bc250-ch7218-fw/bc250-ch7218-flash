@@ -12,15 +12,25 @@ AUXDIR="${BC250_CH7218_AUXDIR:-/dev}"
 STATE_DIR="${BC250_CH7218_STATE_DIR:-/var/lib/bc250-ch7218-fw}"
 FWU="$LIBDIR/ch7218_fwu"
 
-# The only firmware base these images are built from, and so the only one this
-# tool will flash over. Other branches (07.08.xx, the USB-C builds) are
-# different code: flashing 07.00.54 over them is not something to guess about.
-REQUIRED_VERSION="07:00:54"
+# These images are UGREEN's 07.00.54 and two one/two-byte variants of it, so the
+# adapter must be on the same code line: 07.00.xx. Anything older on that line
+# is fine, and is exactly what UGREEN's own update to 07.00.54 is for. Newer
+# (a downgrade), a different line (07.08.xx, USB-C builds) or another vendor's
+# firmware on this chip is not something to guess about, so it is refused.
+VERSION_LINE="07:00"
+VERSION_LATEST=54
 
 # DPCD 0x500..0x508: the OUI 2B 02 F0 followed by the ASCII name "CH7218".
 SIGNATURE="2b02f0434837323138"
 
 die() { printf 'bc250-ch7218-flash: %s\n' "$*" >&2; exit 1; }
+
+# 0 when $1 ("07:00:40") is on the 07.00 line and not newer than the images.
+version_ok() {
+    [[ "$1" =~ ^([0-9]+:[0-9]+):([0-9]+)$ ]] || return 1
+    [[ "${BASH_REMATCH[1]}" == "$VERSION_LINE" ]] || return 1
+    ((10#${BASH_REMATCH[2]} <= VERSION_LATEST))
+}
 
 image_file() {
     case "$1" in
@@ -120,7 +130,7 @@ cmd_status() {
         found=1
         v="$(read_version "$n")"
         printf 'drm_dp_aux%s  connector %s  CH7218 firmware %s' "$n" "$(connector_of "$n")" "${v:-unreadable}"
-        [[ "$v" == "$REQUIRED_VERSION" ]] && printf '  (flashable with this tool)'
+        version_ok "$v" && printf '  (flashable with this tool)'
         printf '\n'
     done < <(find_adapters)
     if [[ -r "$STATE_DIR/last-flash" ]]; then
@@ -182,15 +192,19 @@ cmd_flash() {
 
     local version
     version="$(read_version "$aux")"
-    [[ "$version" == "$REQUIRED_VERSION" ]] \
-        || die "drm_dp_aux$aux reports firmware '${version:-unreadable}', these images are for $REQUIRED_VERSION only. Not flashing."
+    version_ok "$version" \
+        || die "drm_dp_aux$aux reports firmware '${version:-unreadable}'. These images are for ${VERSION_LINE//:/.}.xx up to ${VERSION_LINE//:/.}.$VERSION_LATEST (older builds on that line are updated, newer ones are not downgraded). Not flashing."
+    local upgrade_note=""
+    [[ "$version" != "$VERSION_LINE:$VERSION_LATEST" ]] \
+        && upgrade_note="This adapter is on an older build (${version//:/.}): flashing also brings it up to ${VERSION_LINE//:/.}.$VERSION_LATEST, as UGREEN's own update does."
 
     cat <<SUMMARY
 
 About to flash:   $alias   ($file)
 Adapter:          drm_dp_aux$aux  connector $(connector_of "$aux")  firmware $version
 $(image_blurb "$alias")
-
+${upgrade_note:+$upgrade_note
+}
  - The adapter's HDMI output will go dark. If you are looking at that screen,
    stop and run this from SSH instead.
  - Do not power off or unplug anything until it says "Update Success".
