@@ -10,7 +10,7 @@ Expose the GFX1013 ACE compute queue when paired with the BC-250 kernel fixes an
  1 file changed, 5 insertions(+), 6 deletions(-)
 
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
-index cbe544a90ab..5f4aa1d2523 100644
+index 6185a9b79b2..650fa27255c 100644
 --- a/src/amd/common/ac_gpu_info.c
 +++ b/src/amd/common/ac_gpu_info.c
 @@ -498,11 +498,9 @@ ac_fill_hw_ip_info(struct radeon_info *info, const struct drm_amdgpu_info_device
@@ -28,7 +28,7 @@ index cbe544a90ab..5f4aa1d2523 100644
        info->ip[ip_type].num_queues = util_bitcount(ip_info->available_rings);
     }
  
-@@ -1037,7 +1035,8 @@ void ac_fill_bug_info(struct radeon_info *info)
+@@ -1040,7 +1038,8 @@ void ac_fill_bug_info(struct radeon_info *info)
      * dimension mode.
      */
     info->has_async_compute_threadgroup_bug = info->family == CHIP_ICELAND ||
