@@ -19,6 +19,7 @@ source "${ROOT_DIR}/scripts/retired-packages.sh"
 : "${BC250_DUAL_AUDIO_FINGERPRINT:?BC250_DUAL_AUDIO_FINGERPRINT is required}"
 : "${BC250_CEC_FINGERPRINT:?BC250_CEC_FINGERPRINT is required}"
 : "${BC250_PACCACHE_CLEANUP_FINGERPRINT:?BC250_PACCACHE_CLEANUP_FINGERPRINT is required}"
+: "${BC250_CH7218_FW_FINGERPRINT:?BC250_CH7218_FW_FINGERPRINT is required}"
 : "${LINUX_CACHYOS_BC250_META_FINGERPRINT:?LINUX_CACHYOS_BC250_META_FINGERPRINT is required}"
 : "${PROTONGE_LATEST_BC250_FINGERPRINT:?PROTONGE_LATEST_BC250_FINGERPRINT is required}"
 : "${PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT:?PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT is required}"
@@ -32,6 +33,7 @@ BUILD_MESA_GIT="${BUILD_MESA_GIT:-false}"
 BUILD_BC250_DUAL_AUDIO="${BUILD_BC250_DUAL_AUDIO:-false}"
 BUILD_BC250_CEC="${BUILD_BC250_CEC:-false}"
 BUILD_BC250_PACCACHE_CLEANUP="${BUILD_BC250_PACCACHE_CLEANUP:-false}"
+BUILD_BC250_CH7218_FW="${BUILD_BC250_CH7218_FW:-false}"
 BUILD_LINUX_CACHYOS_BC250_META="${BUILD_LINUX_CACHYOS_BC250_META:-false}"
 BUILD_PROTONGE_LATEST_BC250="${BUILD_PROTONGE_LATEST_BC250:-false}"
 BUILD_PROTON_CACHYOS_NATIVE_BC250="${BUILD_PROTON_CACHYOS_NATIVE_BC250:-false}"
@@ -46,6 +48,7 @@ required_metadata=(
     bc250-dual-audio-info.env
     bc250-cec-info.env
     bc250-paccache-cleanup-info.env
+    bc250-ch7218-fw-info.env
     linux-cachyos-bc250-meta-info.env
     protonge-latest-bc250-info.env
     proton-cachyos-native-bc250-info.env
@@ -127,10 +130,13 @@ bc250_dual_audio_pkgrel="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGRE
 
 bc250_cec_info="$OUT_DIR/bc250-cec-info.env"
 bc250_paccache_cleanup_info="$OUT_DIR/bc250-paccache-cleanup-info.env"
+bc250_ch7218_fw_info="$OUT_DIR/bc250-ch7218-fw-info.env"
 bc250_cec_pkgver="$(value "$bc250_cec_info" BC250_CEC_PKGVER)"
 bc250_paccache_cleanup_pkgver="$(value "$bc250_paccache_cleanup_info" BC250_PACCACHE_CLEANUP_PKGVER)"
+bc250_ch7218_fw_pkgver="$(value "$bc250_ch7218_fw_info" BC250_CH7218_FW_PKGVER)"
 bc250_cec_pkgrel="$(value "$bc250_cec_info" BC250_CEC_PKGREL)"
 bc250_paccache_cleanup_pkgrel="$(value "$bc250_paccache_cleanup_info" BC250_PACCACHE_CLEANUP_PKGREL)"
+bc250_ch7218_fw_pkgrel="$(value "$bc250_ch7218_fw_info" BC250_CH7218_FW_PKGREL)"
 
 linux_cachyos_bc250_meta_info="$OUT_DIR/linux-cachyos-bc250-meta-info.env"
 linux_cachyos_bc250_meta_pkgver="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGVER)"
@@ -171,6 +177,7 @@ for field in \
     bc250_dual_audio_pkgver bc250_dual_audio_pkgrel \
     bc250_cec_pkgver bc250_cec_pkgrel \
     bc250_paccache_cleanup_pkgver bc250_paccache_cleanup_pkgrel \
+    bc250_ch7218_fw_pkgver bc250_ch7218_fw_pkgrel \
     linux_cachyos_bc250_meta_pkgver linux_cachyos_bc250_meta_pkgrel \
     protonge_pkgver protonge_pkgrel protonge_ge_tag protonge_optiscaler \
     proton_native_pkgver proton_native_pkgrel proton_native_optiscaler; do
@@ -220,6 +227,7 @@ mesa_git_count="$(pkgbase_count mesa-git)"
 bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
 bc250_cec_count="$(pkgbase_count bc250-cec)"
 bc250_paccache_cleanup_count="$(pkgbase_count bc250-paccache-cleanup)"
+bc250_ch7218_fw_count="$(pkgbase_count bc250-ch7218-fw)"
 linux_cachyos_bc250_meta_count="$(pkgbase_count linux-cachyos-bc250-meta)"
 protonge_count="$(pkgbase_count protonge-latest-bc250)"
 proton_native_count="$(pkgbase_count proton-cachyos-native-bc250)"
@@ -235,6 +243,7 @@ proton_slr_count="$(pkgbase_count proton-cachyos-slr-bc250)"
 (( bc250_dual_audio_count == 1 )) || { printf 'ERROR: expected exactly one bc250-dual-audio package; found %d\n' "$bc250_dual_audio_count" >&2; exit 1; }
 (( bc250_cec_count == 1 )) || { printf 'ERROR: expected exactly one bc250-cec package; found %d\n' "$bc250_cec_count" >&2; exit 1; }
 (( bc250_paccache_cleanup_count == 1 )) || { printf 'ERROR: expected exactly one bc250-paccache-cleanup package; found %d\n' "$bc250_paccache_cleanup_count" >&2; exit 1; }
+(( bc250_ch7218_fw_count == 1 )) || { printf 'ERROR: expected exactly one bc250-ch7218-fw package; found %d\n' "$bc250_ch7218_fw_count" >&2; exit 1; }
 (( linux_cachyos_bc250_meta_count == 1 )) || { printf 'ERROR: expected exactly one linux-cachyos-bc250-meta package; found %d\n' "$linux_cachyos_bc250_meta_count" >&2; exit 1; }
 (( protonge_count == 1 )) || { printf 'ERROR: expected exactly one protonge-latest-bc250 package; found %d\n' "$protonge_count" >&2; exit 1; }
 (( proton_native_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-native-bc250 package; found %d\n' "$proton_native_count" >&2; exit 1; }
@@ -276,6 +285,7 @@ MESA_GIT_FINGERPRINT="$(fingerprint_from "$mesa_git_info" MESA_GIT_FINGERPRINT "
 BC250_DUAL_AUDIO_FINGERPRINT="$(fingerprint_from "$bc250_dual_audio_info" BC250_DUAL_AUDIO_FINGERPRINT "$BC250_DUAL_AUDIO_FINGERPRINT")"
 BC250_CEC_FINGERPRINT="$(fingerprint_from "$bc250_cec_info" BC250_CEC_FINGERPRINT "$BC250_CEC_FINGERPRINT")"
 BC250_PACCACHE_CLEANUP_FINGERPRINT="$(fingerprint_from "$bc250_paccache_cleanup_info" BC250_PACCACHE_CLEANUP_FINGERPRINT "$BC250_PACCACHE_CLEANUP_FINGERPRINT")"
+BC250_CH7218_FW_FINGERPRINT="$(fingerprint_from "$bc250_ch7218_fw_info" BC250_CH7218_FW_FINGERPRINT "$BC250_CH7218_FW_FINGERPRINT")"
 LINUX_CACHYOS_BC250_META_FINGERPRINT="$(fingerprint_from "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_FINGERPRINT "$LINUX_CACHYOS_BC250_META_FINGERPRINT")"
 PROTONGE_LATEST_BC250_FINGERPRINT="$(fingerprint_from "$protonge_info" PROTONGE_LATEST_BC250_FINGERPRINT "$PROTONGE_LATEST_BC250_FINGERPRINT")"
 PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$(fingerprint_from "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT")"
@@ -283,7 +293,7 @@ PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$(fingerprint_from "$proton_native_info
 SOURCE_FINGERPRINT="$(printf '%s\n' \
     "$KERNEL_STABLE_FINGERPRINT" "$KERNEL_RC_FINGERPRINT" "$KERNEL_BORE_FINGERPRINT" \
     "$MESA_FINGERPRINT" "$LIB32_MESA_FINGERPRINT" "$MESA_GIT_FINGERPRINT" \
-    "$BC250_DUAL_AUDIO_FINGERPRINT" "$BC250_CEC_FINGERPRINT" "$BC250_PACCACHE_CLEANUP_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
+    "$BC250_DUAL_AUDIO_FINGERPRINT" "$BC250_CEC_FINGERPRINT" "$BC250_PACCACHE_CLEANUP_FINGERPRINT" "$BC250_CH7218_FW_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
     "$PROTONGE_LATEST_BC250_FINGERPRINT" "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" | \
     sha256sum | awk '{print $1}')"
 
@@ -298,6 +308,7 @@ MESA_GIT_FINGERPRINT=${MESA_GIT_FINGERPRINT}
 BC250_DUAL_AUDIO_FINGERPRINT=${BC250_DUAL_AUDIO_FINGERPRINT}
 BC250_CEC_FINGERPRINT=${BC250_CEC_FINGERPRINT}
 BC250_PACCACHE_CLEANUP_FINGERPRINT=${BC250_PACCACHE_CLEANUP_FINGERPRINT}
+BC250_CH7218_FW_FINGERPRINT=${BC250_CH7218_FW_FINGERPRINT}
 LINUX_CACHYOS_BC250_META_FINGERPRINT=${LINUX_CACHYOS_BC250_META_FINGERPRINT}
 PROTONGE_LATEST_BC250_FINGERPRINT=${PROTONGE_LATEST_BC250_FINGERPRINT}
 PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT=${PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT}
@@ -310,6 +321,7 @@ LAST_RUN_MESA_GIT_BUILD=${BUILD_MESA_GIT}
 LAST_RUN_BC250_DUAL_AUDIO_BUILD=${BUILD_BC250_DUAL_AUDIO}
 LAST_RUN_BC250_CEC_BUILD=${BUILD_BC250_CEC}
 LAST_RUN_BC250_PACCACHE_CLEANUP_BUILD=${BUILD_BC250_PACCACHE_CLEANUP}
+LAST_RUN_BC250_CH7218_FW_BUILD=${BUILD_BC250_CH7218_FW}
 LAST_RUN_LINUX_CACHYOS_BC250_META_BUILD=${BUILD_LINUX_CACHYOS_BC250_META}
 LAST_RUN_PROTONGE_LATEST_BC250_BUILD=${BUILD_PROTONGE_LATEST_BC250}
 LAST_RUN_PROTON_CACHYOS_NATIVE_BC250_BUILD=${BUILD_PROTON_CACHYOS_NATIVE_BC250}
@@ -339,8 +351,10 @@ BC250_DUAL_AUDIO_PKGVER=${bc250_dual_audio_pkgver}
 BC250_DUAL_AUDIO_PKGREL=${bc250_dual_audio_pkgrel}
 BC250_CEC_PKGVER=${bc250_cec_pkgver}
 BC250_PACCACHE_CLEANUP_PKGVER=${bc250_paccache_cleanup_pkgver}
+BC250_CH7218_FW_PKGVER=${bc250_ch7218_fw_pkgver}
 BC250_CEC_PKGREL=${bc250_cec_pkgrel}
 BC250_PACCACHE_CLEANUP_PKGREL=${bc250_paccache_cleanup_pkgrel}
+BC250_CH7218_FW_PKGREL=${bc250_ch7218_fw_pkgrel}
 LINUX_CACHYOS_BC250_META_PKGVER=${linux_cachyos_bc250_meta_pkgver}
 LINUX_CACHYOS_BC250_META_PKGREL=${linux_cachyos_bc250_meta_pkgrel}
 PROTONGE_LATEST_BC250_PKGVER=${protonge_pkgver}
@@ -515,6 +529,20 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - Not part of \`linux-cachyos-bc250-meta\`; install it if you want it:
   \`sudo pacman -S bc250-paccache-cleanup\`.
 
+## BC-250 CH7218 adapter firmware flasher (opt-in)
+
+- Package version: \`${bc250_ch7218_fw_pkgver}-${bc250_ch7218_fw_pkgrel}\`
+- For the UGREEN DisplayPort to HDMI 2.1 adapter (Chrontel CH7218A): UGREEN's
+  own Linux updater, UGREEN's 07.00.54 firmware unchanged, and two copies of it
+  with the HDMI scrambling watchdog (one byte) and the HDMI 2.1 link monitor
+  (a second byte) kept running. The first fixed image is what the author runs;
+  the second is untested.
+- Nothing runs on its own: flashing is \`sudo bc250-ch7218-flash flash
+  original|tmds|tmds-frl\`, run by hand, and only on an adapter that reports
+  firmware 07.00.54. Read \`/usr/share/doc/bc250-ch7218-fw/README.md\` first.
+- Not part of \`linux-cachyos-bc250-meta\`:
+  \`sudo pacman -S bc250-ch7218-fw\`.
+
 ## aic8800d80-dkms -- removed
 
 - This repository no longer builds the AIC8800D80 USB WiFi driver: upstream
@@ -630,6 +658,7 @@ printf '    mesa-git:      %s-%s (64-bit + lib32)\n' "$mesa_git_pkgver" "$mesa_g
 printf '    bc250-dual-audio: %s-%s\n' "$bc250_dual_audio_pkgver" "$bc250_dual_audio_pkgrel"
 printf '    bc250-cec: %s-%s\n' "$bc250_cec_pkgver" "$bc250_cec_pkgrel"
 printf '    bc250-paccache-cleanup: %s-%s\n' "$bc250_paccache_cleanup_pkgver" "$bc250_paccache_cleanup_pkgrel"
+printf '    bc250-ch7218-fw: %s-%s\n' "$bc250_ch7218_fw_pkgver" "$bc250_ch7218_fw_pkgrel"
 printf '    linux-cachyos-bc250-meta: %s-%s\n' "$linux_cachyos_bc250_meta_pkgver" "$linux_cachyos_bc250_meta_pkgrel"
 printf '    protonge-latest-bc250: %s-%s (%s, OptiScaler %s)\n' \
     "$protonge_pkgver" "$protonge_pkgrel" "$protonge_ge_tag" "$protonge_optiscaler"

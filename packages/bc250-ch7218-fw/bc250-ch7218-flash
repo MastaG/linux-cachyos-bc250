@@ -1,0 +1,236 @@
+#!/bin/bash
+# bc250-ch7218-flash: look at, and manually flash, the firmware of a UGREEN
+# DP-to-HDMI 2.1 adapter (Chrontel CH7218A) with UGREEN's own Linux updater.
+#
+# Nothing here runs on its own: no service, no hook. Every flash is typed in by
+# a person, behind the checks below. See /usr/share/doc/bc250-ch7218-fw/README.md.
+set -u
+
+LIBDIR="${BC250_CH7218_LIBDIR:-/usr/lib/bc250-ch7218-fw}"
+IMGDIR="${BC250_CH7218_IMGDIR:-/usr/share/bc250-ch7218-fw/firmware}"
+AUXDIR="${BC250_CH7218_AUXDIR:-/dev}"
+STATE_DIR="${BC250_CH7218_STATE_DIR:-/var/lib/bc250-ch7218-fw}"
+FWU="$LIBDIR/ch7218_fwu"
+
+# The only firmware base these images are built from, and so the only one this
+# tool will flash over. Other branches (07.08.xx, the USB-C builds) are
+# different code: flashing 07.00.54 over them is not something to guess about.
+REQUIRED_VERSION="07:00:54"
+
+# DPCD 0x500..0x508: the OUI 2B 02 F0 followed by the ASCII name "CH7218".
+SIGNATURE="2b02f0434837323138"
+
+die() { printf 'bc250-ch7218-flash: %s\n' "$*" >&2; exit 1; }
+
+image_file() {
+    case "$1" in
+        original) echo "CH7218A-IMG.G000.07.00.54.IMG" ;;
+        tmds)     echo "CH7218A-IMG.G000.07.00.54.nowatchdog-tmds.IMG" ;;
+        tmds-frl) echo "CH7218A-IMG.G000.07.00.54.nowatchdog-tmds+frl.IMG" ;;
+        *) return 1 ;;
+    esac
+}
+
+image_blurb() {
+    case "$1" in
+        original) echo "UGREEN's own 07.00.54, unchanged. Use this to go back." ;;
+        tmds)     echo "07.00.54 with the HDMI scrambling watchdog kept alive (1 byte). Running on the author's board." ;;
+        tmds-frl) echo "tmds plus the FRL link monitor kept alive (2 bytes). NOT TESTED on hardware yet." ;;
+    esac
+}
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  bc250-ch7218-flash list                 the three firmware images
+  sudo bc250-ch7218-flash status          find CH7218 adapters, read their firmware version
+  sudo bc250-ch7218-flash flash IMAGE [--aux N] [--yes] [--dry-run]
+
+IMAGE is one of: original | tmds | tmds-frl      (see "list")
+
+Flashing makes the adapter's HDMI output go dark for a moment and the new code
+only runs after the adapter is power-cycled. Run it from SSH, not from the
+screen the adapter drives, and do not cut power while it writes.
+USAGE
+}
+
+# Read the identity bytes at DPCD 0x500 from one aux node.
+dpcd_identity() {
+    dd if="$1" bs=1 skip=$((0x500)) count=9 2>/dev/null | od -An -tx1 | tr -d ' \n'
+}
+
+# Print the aux node numbers that carry a CH7218, one per line.
+find_adapters() {
+    local node n
+    for node in "$AUXDIR"/drm_dp_aux[0-9]*; do
+        [[ -e "$node" ]] || continue
+        n="${node##*drm_dp_aux}"
+        [[ "$(dpcd_identity "$node")" == "$SIGNATURE" ]] && printf '%s\n' "$n"
+    done
+}
+
+connector_of() {
+    local link
+    link="$(readlink -f "/sys/class/drm_dp_aux_dev/drm_dp_aux$1/device" 2>/dev/null)" || return 0
+    basename "$link" 2>/dev/null | sed 's/^card[0-9]*-//'
+}
+
+# Run the vendor updater against exactly one aux node. The updater hard-codes
+# /dev/drm_dp_aux1 and would otherwise touch whichever adapter happens to be
+# there, so it runs in a private mount namespace whose /dev holds only the
+# chosen node, under that name. Nothing outside the namespace changes.
+run_fwu() {
+    local n="$1"; shift
+    local node="$AUXDIR/drm_dp_aux$n" major minor
+    major=$((0x$(stat -c %t "$node")))
+    minor=$((0x$(stat -c %T "$node")))
+    unshare --mount --propagation private -- bash -c '
+        set -e
+        mount -t tmpfs -o mode=755 tmpfs /dev
+        mknod -m 666 /dev/null c 1 3
+        mknod -m 600 /dev/drm_dp_aux1 c "$1" "$2"
+        shift 2
+        exec "$@"
+    ' _ "$major" "$minor" "$FWU" "$@"
+}
+
+read_version() {
+    local out
+    out="$(run_fwu "$1" -v 2>&1)" || true
+    sed -nE 's/.*FW Version:[[:space:]]*([0-9]+:[0-9]+:[0-9]+).*/\1/p' <<<"$out" | head -1
+}
+
+expected_sha() {
+    awk -v f="$1" '$2 == f || $2 == "*" f { print $1; exit }' "$IMGDIR/SHA256SUMS" 2>/dev/null
+}
+
+cmd_list() {
+    local a f
+    for a in original tmds tmds-frl; do
+        f="$(image_file "$a")"
+        printf '%-9s %s\n          %s\n          sha256 %s\n' "$a" "$f" "$(image_blurb "$a")" "$(expected_sha "$f")"
+    done
+}
+
+cmd_status() {
+    [[ "$EUID" -eq 0 ]] || die "status reads the DisplayPort AUX channel, which needs root: sudo bc250-ch7218-flash status"
+    local found=0 n v
+    while read -r n; do
+        [[ -n "$n" ]] || continue
+        found=1
+        v="$(read_version "$n")"
+        printf 'drm_dp_aux%s  connector %s  CH7218 firmware %s' "$n" "$(connector_of "$n")" "${v:-unreadable}"
+        [[ "$v" == "$REQUIRED_VERSION" ]] && printf '  (flashable with this tool)'
+        printf '\n'
+    done < <(find_adapters)
+    if [[ -r "$STATE_DIR/last-flash" ]]; then
+        printf 'last flash made by this tool: %s\n' "$(cat "$STATE_DIR/last-flash")"
+        printf '(the version number does not change between the three images, so it cannot tell them apart)\n'
+    fi
+    ((found)) || { echo "no CH7218 adapter found (checked $AUXDIR/drm_dp_aux*)"; exit 1; }
+}
+
+# [length u16 LE][code][sum16 of bytes 2..length, LE, stored at offset length]:
+# the same rule the vendor updater applies, checked here first.
+image_is_sane() {
+    python3 -I - "$1" <<'PY'
+import sys
+d = open(sys.argv[1], 'rb').read()
+n = int.from_bytes(d[:2], 'little')
+ok = len(d) == 65536 and 2 < n < len(d) - 2 and sum(d[2:n]) & 0xFFFF == int.from_bytes(d[n:n + 2], 'little')
+sys.exit(0 if ok else 1)
+PY
+}
+
+cmd_flash() {
+    local alias="${1:-}" aux="" yes=0 dry=0 file path want have
+    shift || true
+    while (($#)); do
+        case "$1" in
+            --aux) aux="${2:-}"; shift ;;
+            --yes) yes=1 ;;
+            --dry-run) dry=1 ;;
+            *) die "unknown option: $1" ;;
+        esac
+        shift
+    done
+    file="$(image_file "$alias")" || die "IMAGE must be original, tmds or tmds-frl (see: bc250-ch7218-flash list)"
+    path="$IMGDIR/$file"
+    [[ "$EUID" -eq 0 ]] || die "flashing needs root: sudo bc250-ch7218-flash flash $alias"
+    [[ -x "$FWU" ]] || die "the vendor updater is missing: $FWU"
+    [[ -r "$path" ]] || die "image missing: $path"
+
+    # The image must be exactly what the package shipped, and well-formed.
+    want="$(expected_sha "$file")"
+    have="$(sha256sum "$path" | awk '{print $1}')"
+    [[ -n "$want" && "$want" == "$have" ]] || die "$file does not match SHA256SUMS: reinstall bc250-ch7218-fw"
+    image_is_sane "$path" || die "$file fails the image length/checksum rule"
+
+    local adapters
+    mapfile -t adapters < <(find_adapters)
+    if [[ -n "$aux" ]]; then
+        [[ "$aux" =~ ^[0-9]+$ ]] || die "--aux takes a number, e.g. --aux 0"
+        [[ "$(dpcd_identity "$AUXDIR/drm_dp_aux$aux" 2>/dev/null)" == "$SIGNATURE" ]] \
+            || die "drm_dp_aux$aux is not a CH7218 adapter"
+    else
+        case "${#adapters[@]}" in
+            0) die "no CH7218 adapter found" ;;
+            1) aux="${adapters[0]}" ;;
+            *) die "several CH7218 adapters (aux ${adapters[*]}): choose one with --aux N, see: bc250-ch7218-flash status" ;;
+        esac
+    fi
+
+    local version
+    version="$(read_version "$aux")"
+    [[ "$version" == "$REQUIRED_VERSION" ]] \
+        || die "drm_dp_aux$aux reports firmware '${version:-unreadable}', these images are for $REQUIRED_VERSION only. Not flashing."
+
+    cat <<SUMMARY
+
+About to flash:   $alias   ($file)
+Adapter:          drm_dp_aux$aux  connector $(connector_of "$aux")  firmware $version
+$(image_blurb "$alias")
+
+ - The adapter's HDMI output will go dark. If you are looking at that screen,
+   stop and run this from SSH instead.
+ - Do not power off or unplug anything until it says "Update Success".
+ - The new code runs after the adapter is power-cycled (unplug its DisplayPort
+   end for 5 seconds, or power the board off and on).
+ - To go back at any time: flash "original".
+SUMMARY
+    if ((dry)); then
+        echo "dry run: would run the vendor updater on drm_dp_aux$aux with: -f $path"
+        exit 0
+    fi
+    if ((!yes)); then
+        read -r -p 'Type "flash" to continue: ' reply
+        [[ "${reply:-}" == flash ]] || die "cancelled, nothing was written"
+    fi
+
+    local out status
+    out="$(run_fwu "$aux" -f "$path" 2>&1)"; status=$?
+    printf '%s\n' "$out"
+    if ((status == 0)) && grep -q 'Update Success' <<<"$out"; then
+        mkdir -p "$STATE_DIR"
+        printf '%s on drm_dp_aux%s at %s\n' "$alias" "$aux" "$(date '+%F %T')" > "$STATE_DIR/last-flash"
+        echo
+        echo "Flashed and verified. Power-cycle the adapter for the new firmware to run."
+        exit 0
+    fi
+    cat >&2 <<'FAILED'
+
+THE UPDATE DID NOT REPORT SUCCESS.
+Do not power the adapter off yet. Run the same command again, or flash
+"original", and look at the output above. The updater verifies by reading the
+flash back, so a clean second run is the way to know it is good.
+FAILED
+    exit 1
+}
+
+case "${1:-}" in
+    list) cmd_list ;;
+    status) cmd_status ;;
+    flash) shift; cmd_flash "$@" ;;
+    -h|--help|help|"") usage ;;
+    *) usage >&2; exit 2 ;;
+esac

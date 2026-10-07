@@ -1,0 +1,12 @@
+post_install() {
+    echo "==> bc250-ch7218-fw installed. It does nothing by itself."
+    echo "==>   bc250-ch7218-flash list          the three firmware images"
+    echo "==>   sudo bc250-ch7218-flash status   find the adapter and read its firmware version"
+    echo "==>   sudo bc250-ch7218-flash flash original|tmds|tmds-frl"
+    echo "==> Flash from SSH, not from the screen the adapter drives. Read first:"
+    echo "==>   /usr/share/doc/bc250-ch7218-fw/README.md"
+}
+
+post_upgrade() {
+    echo "==> bc250-ch7218-fw updated. No adapter was touched."
+}

@@ -39,6 +39,7 @@ case "$COMPONENT" in
     bc250-dual-audio) ;;
     bc250-cec) ;;
     bc250-paccache-cleanup) ;;
+    bc250-ch7218-fw) ;;
     linux-cachyos-bc250-meta) ;;
     protonge-latest-bc250) ;;
     proton-cachyos-native-bc250) ;;
@@ -156,6 +157,24 @@ case "$COMPONENT" in
         {
             hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-paccache-cleanup.hook"
             hash_files "$ROOT_DIR/scripts/build-bc250-paccache-cleanup-package.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    bc250-ch7218-fw)
+        # Our wrapper, UGREEN's updater and the three images, all sitting in
+        # the package directory: hash every file in it, so a changed image or
+        # a changed updater rebuilds the package.
+        pkg_dir="$ROOT_DIR/packages/bc250-ch7218-fw"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        {
+            hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-ch7218-fw.install" \
+                "$pkg_dir/bc250-ch7218-flash" "$pkg_dir/ch7218_fwu" "$pkg_dir/README.md" \
+                "$pkg_dir"/firmware/*
+            hash_files "$ROOT_DIR/scripts/build-bc250-ch7218-fw-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

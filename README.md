@@ -26,6 +26,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
 | `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; retrains the link when the display powers on or switches to the board |
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
+| `bc250-ch7218-fw` | Optional: UGREEN's updater and three firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 ---
@@ -1000,6 +1001,21 @@ sudo pacman -S bc250-paccache-cleanup
 ```
 
 With it installed there are no older package versions left on your disk to downgrade to. This repository keeps the previous builds of every package, so a downgrade comes from there instead; see [Downgrading a package](#downgrading-a-package). To keep the last version in the cache instead, copy `/usr/share/libalpm/hooks/bc250-paccache-cleanup.hook` to `/etc/pacman.d/hooks/` and change `-rqk0` to `-rqk1` in its `Exec` line (a hook there overrides the packaged one). To stop the cleanup, remove the package.
+
+## UGREEN DP-to-HDMI 2.1 adapter firmware (optional)
+
+The UGREEN DisplayPort to HDMI 2.1 adapter (DP134 / DP135, a Chrontel CH7218A) has a firmware problem that shows up as a **black picture that never comes back**: a few minutes after the picture starts, the adapter stops resending the HDMI scrambling setup, so anything that resets the TV or receiver's HDMI state without dropping the link for long (an AV receiver input switch, a TV standby and wake) leaves no signal while the DisplayPort side still looks healthy. See the [package README](packages/bc250-ch7218-fw/README.md) for the analysis.
+
+`bc250-ch7218-fw` ships UGREEN's own Linux updater, UGREEN's `07.00.54` firmware unchanged, and two copies of it with the watchdog kept running (`tmds`, which the author runs, and `tmds-frl`, which is untested). Nothing in it runs by itself and it is **not** part of `linux-cachyos-bc250-meta`. You flash by hand, from SSH:
+
+```bash
+sudo pacman -S bc250-ch7218-fw
+sudo bc250-ch7218-flash status                 # finds the adapter and reads its firmware version
+sudo bc250-ch7218-flash flash tmds --dry-run   # every check, no write
+sudo bc250-ch7218-flash flash tmds             # or: original | tmds-frl
+```
+
+It only touches an adapter that reports firmware `07.00.54`, checks the image against its checksum first, and asks you to type `flash`. The new firmware runs after the adapter is power-cycled; `flash original` goes back to UGREEN's. Flashing firmware carries a small risk of leaving a device unusable if the write is interrupted, so do not cut power while it runs. This package is not endorsed by UGREEN or Chrontel.
 
 ## Downgrading a package
 
