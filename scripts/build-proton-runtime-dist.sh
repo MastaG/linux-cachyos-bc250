@@ -77,6 +77,15 @@ if [[ -n "${BC250_PROTON_JOBS:-}" ]]; then
 else
     JOBS="$(nproc)"
     mem_gb="$(awk '/MemTotal/ { print int($2 / 1024 / 1024) }' /proc/meminfo 2>/dev/null || echo 0)"
+    # A container memory limit is what the build can really use, not the host.
+    if [[ -n "${BC250_CONTAINER_MEMORY:-}" ]]; then
+        limit_gb="${BC250_CONTAINER_MEMORY%[gG]}"
+        if [[ ! "$limit_gb" =~ ^[0-9]+$ || "$limit_gb" == 0 ]]; then
+            echo "ERROR: BC250_CONTAINER_MEMORY must be whole gigabytes like 20g, got: $BC250_CONTAINER_MEMORY" >&2
+            exit 2
+        fi
+        (( mem_gb == 0 || limit_gb < mem_gb )) && mem_gb="$limit_gb"
+    fi
     if (( mem_gb > 0 )); then
         by_memory=$(( mem_gb / 3 ))
         (( by_memory < 2 )) && by_memory=2
@@ -253,6 +262,12 @@ EPOCH="$(git -C "$SRC" show -s --format=%ct HEAD 2>/dev/null || date +%s)"
 printf '==> building %s in %s\n' "$NAME" "$IMAGE"
 printf '    %s parallel jobs\n' "$JOBS"
 
+memory=()
+if [[ -n "${BC250_CONTAINER_MEMORY:-}" ]]; then
+    # Swap equal to memory, i.e. none: zram swap is RAM too.
+    memory=(--memory "$BC250_CONTAINER_MEMORY" --memory-swap "$BC250_CONTAINER_MEMORY")
+fi
+
 userns=()
 if [[ "$ENGINE_SPEC" == *podman* ]] \
    && [[ "$("${ENGINE[@]}" info --format '{{.Host.Security.Rootless}}' 2>/dev/null)" == true ]]; then
@@ -279,6 +294,7 @@ fi
 
 "${ENGINE[@]}" run --rm \
     "${userns[@]}" \
+    "${memory[@]}" \
     --security-opt label=disable \
     -v "$SRC:$SRC" \
     -v "$BUILD:$BUILD" \

@@ -219,6 +219,13 @@ BC250_CONTAINER_ENGINE      default podman; split on whitespace, so "sudo podman
 BC250_PKGREL                pkgrel for the build (default 1)
 ```
 
+`scripts/build-proton-runtime-dist.sh` also reads `BC250_CONTAINER_MEMORY`
+(whole gigabytes, e.g. `20g`). It limits the build container's RAM, with swap
+capped to the same figure, and sizes the parallel job count from that limit
+instead of the host's RAM. CI sets it from the `BC250_BUILD_MEMORY` repository
+variable (default `20g`) for every build container it starts, so a self-hosted
+runner cannot starve other workloads on the same machine.
+
 The build runs in an Arch container, but the repacking at the end runs on the
 host, so the host needs `bsdtar` — or GNU `tar` plus a `zstd` binary, which is
 the usual case on Fedora, where `bsdtar` is not installed by default. Both are

@@ -26,6 +26,14 @@ concurrency:
   group: bc250-repository-release
   cancel-in-progress: false
 
+env:
+  # Hard RAM ceiling for each build container this workflow starts. The runner
+  # shares its host with a 32 GiB VM, and an unbounded -j32 build otherwise
+  # makes the kernel OOM-kill the VM. Swap is capped to the same figure so the
+  # (RAM-backed) zram swap cannot be used to get around it. Override without a
+  # commit via the repository variable BC250_BUILD_MEMORY, e.g. 24g.
+  BC250_BUILD_MEMORY: ${{ vars.BC250_BUILD_MEMORY || '20g' }}
+
 jobs:
   build:
     runs-on:
@@ -534,6 +542,7 @@ jobs:
           trap cleanup EXIT INT TERM
 
           docker run -d --name "$container" \
+            --memory "$BC250_BUILD_MEMORY" --memory-swap "$BC250_BUILD_MEMORY" \
             --security-opt label=disable \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -v bc250-ccache:/ccache \
@@ -597,7 +606,9 @@ jobs:
             slr_work="${RUNNER_TEMP}/bc250-proton"
             slr_tarball="${slr_work}/proton-cachyos-slr-bc250-${SLR_VERSION}-dist.tar.xz"
             mkdir -p "$slr_work"
-            if BC250_CONTAINER_ENGINE=docker ./scripts/build-proton-runtime-dist.sh \
+            if BC250_CONTAINER_ENGINE=docker \
+                 BC250_CONTAINER_MEMORY="$BC250_BUILD_MEMORY" \
+                 ./scripts/build-proton-runtime-dist.sh \
                  --repo https://github.com/CachyOS/proton-cachyos.git \
                  --tag "$SLR_TAG" \
                  --name proton-cachyos-slr-bc250 \
