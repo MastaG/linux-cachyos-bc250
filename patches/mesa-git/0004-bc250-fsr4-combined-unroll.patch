@@ -61,7 +61,7 @@ index cc716ceabcd..a4aa9d3e22d 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 6a9b2bb89ea..3a3238ef5d3 100644
+index 2600d72fb96..0d86825630a 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -182,6 +182,10260 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
@@ -10355,7 +10355,7 @@ index 6a9b2bb89ea..3a3238ef5d3 100644
     } else {
        uint32_t *spirv = (uint32_t *)stage->spirv.data;
        assert(stage->spirv.size % 4 == 0);
-@@ -712,7 +10971,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -713,7 +10972,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
         */
        NIR_PASS(_, nir, nir_lower_variable_initializers, ~0);
  
@@ -10365,7 +10365,7 @@ index 6a9b2bb89ea..3a3238ef5d3 100644
  
        progress = false;
        struct nir_lower_coopmat_args coopmat_args = {
-@@ -931,7 +11191,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -932,7 +11192,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
           deferred_options.has_sdot_4x8 = true;
           nir->options = &deferred_options;
           radv_optimize_nir(nir, false);

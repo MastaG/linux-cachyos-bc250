@@ -50,7 +50,7 @@ index a4aa9d3e22d..40818ced40c 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 3a3238ef5d3..3450556b224 100644
+index 0d86825630a..2e5cd08285f 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8497,7 +8497,7 @@ bc250_fsr4_dynamic_columns(nir_shader *nir, unsigned profile)
@@ -4250,7 +4250,7 @@ index 3a3238ef5d3..3450556b224 100644
        assert(stage->spirv.size % 4 == 0);
  
        const bool dump_spirv = compiler_info->debug.dump_spirv &&
-@@ -10916,7 +15079,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -10917,7 +15080,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
           .buffer_descriptor_size = compiler_info->buffer_descriptor_size,
           .buffer_descriptor_alignment = compiler_info->buffer_descriptor_alignment,
        };
@@ -4259,7 +4259,7 @@ index 3a3238ef5d3..3450556b224 100644
                           &compiler_info->nir_options[stage->stage]);
        nir->info.internal |= is_internal;
        assert(nir->info.stage == stage->stage);
-@@ -10971,7 +15134,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -10972,7 +15135,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
         */
        NIR_PASS(_, nir, nir_lower_variable_initializers, ~0);
  

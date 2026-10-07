@@ -99,7 +99,7 @@ index e17da25945e..b29f1471df5 100644
        if (dst.regClass() == s1) {
           Operand op1(get_alu_src(ctx, instr->src[0]));
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 837c2ec19d6..6a9b2bb89ea 100644
+index 79456fc53ec..2600d72fb96 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -60,6 +60,8 @@ get_nir_options_for_stage(struct radv_compiler_info *compiler_info, mesa_shader_
@@ -233,7 +233,7 @@ index 837c2ec19d6..6a9b2bb89ea 100644
  void
  radv_optimize_nir(struct nir_shader *shader, bool optimize_conservatively)
  {
-@@ -802,7 +919,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -803,7 +920,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        NIR_PASS(_, nir, nir_opt_find_array_copies);
        NIR_PASS(_, nir, nir_lower_vars_to_ssa);
  

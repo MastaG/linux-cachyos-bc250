@@ -64,7 +64,7 @@ index 40818ced40c..d7856b8933c 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 3450556b224..c44a4a5b031 100644
+index 2e5cd08285f..d201ad0a0b8 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8523,6 +8523,30 @@ bc250_fsr4_profile(const void *bytes, size_t size)
@@ -178,7 +178,7 @@ index 3450556b224..c44a4a5b031 100644
        assert(stage->spirv.size % 4 == 0);
  
        const bool dump_spirv = compiler_info->debug.dump_spirv &&
-@@ -15203,6 +15286,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -15204,6 +15287,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        NIR_PASS(_, nir, nir_lower_doubles, NULL, nir->options->lower_doubles_options);
  
        NIR_PASS(_, nir, nir_normalize_sin_cos);

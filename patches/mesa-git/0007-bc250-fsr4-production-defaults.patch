@@ -100,7 +100,7 @@ index d7856b8933c..448de3529b8 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index c44a4a5b031..935d3ff48d5 100644
+index d201ad0a0b8..1ff86db26f5 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8557,11 +8557,11 @@ bc250_fsr4_profile(const void *bytes, size_t size)
