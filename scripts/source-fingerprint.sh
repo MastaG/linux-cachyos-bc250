@@ -138,7 +138,8 @@ case "$COMPONENT" in
         {
             hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-cec-daemon.sh" \
                 "$pkg_dir/bc250-cec.service" "$pkg_dir/bc250-cec.install" \
-                "$pkg_dir/bc250-cec.conf"
+                "$pkg_dir/bc250-cec.conf" "$pkg_dir/bc250-cec-keymap.sh" \
+                "$pkg_dir/71-bc250-cec-keys.rules"
             hash_files "$ROOT_DIR/scripts/build-bc250-cec-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'

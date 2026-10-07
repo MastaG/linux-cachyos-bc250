@@ -1,3 +1,12 @@
+# The udev rule only fires for devices that appear later; remap the remote
+# that already exists now.
+apply_remote_keys() {
+    local rc
+    for rc in /sys/class/rc/rc*; do
+        [[ -e "$rc" ]] && /usr/lib/bc250-cec/bc250-cec-keymap.sh "${rc##*/}" || true
+    done
+}
+
 post_install() {
     echo "==> BC-250 CEC installed: identifies as 'SteamOS' on the HDMI CEC bus,"
     echo "==>   retrains the display link when the display reports powering on, and"
@@ -6,6 +15,10 @@ post_install() {
     echo "==>   one appears (most DP-to-HDMI adapters do not pass CEC) -- check with:"
     echo "==>   cec-ctl --list-devices"
     systemctl enable --now bc250-cec.service >/dev/null 2>&1 || true
+    udevadm control --reload >/dev/null 2>&1 || true
+    apply_remote_keys
+    echo "==> The TV remote's OK is mapped to Enter and Back to Esc (set"
+    echo "==>   BC250_CEC_REMOTE_KEYS=0 in /etc/bc250-cec.conf to turn that off)."
     echo "==> Watch it react to the display turning on:"
     echo "==>   sudo journalctl -u bc250-cec -f"
     echo "==> To change its display name, which triggers it reacts to, or the wake"
@@ -20,6 +33,8 @@ post_upgrade() {
     # code is actually running rather than the old one carrying on.
     systemctl enable bc250-cec.service >/dev/null 2>&1 || true
     systemctl restart bc250-cec.service >/dev/null 2>&1 || true
+    udevadm control --reload >/dev/null 2>&1 || true
+    apply_remote_keys
 }
 
 # Runs before pacman removes this package's files, while the unit file this

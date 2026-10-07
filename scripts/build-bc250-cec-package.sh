@@ -13,7 +13,8 @@ OUT_DIR="${ROOT_DIR}/out/repo"
 rm -rf -- "$BUILD_DIR"
 mkdir -p -- "$BUILD_DIR"
 cp -- "$PKG_DIR/PKGBUILD" "$PKG_DIR/bc250-cec-daemon.sh" "$PKG_DIR/bc250-cec.service" \
-    "$PKG_DIR/bc250-cec.install" "$PKG_DIR/bc250-cec.conf" "$BUILD_DIR/"
+    "$PKG_DIR/bc250-cec.install" "$PKG_DIR/bc250-cec.conf" \
+    "$PKG_DIR/bc250-cec-keymap.sh" "$PKG_DIR/71-bc250-cec-keys.rules" "$BUILD_DIR/"
 
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/scripts/repo-package-helpers.sh"

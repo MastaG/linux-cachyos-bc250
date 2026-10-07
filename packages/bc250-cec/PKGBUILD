@@ -7,7 +7,7 @@
 # next to this PKGBUILD.
 pkgname=bc250-cec
 pkgver=1
-pkgrel=16
+pkgrel=17
 pkgdesc="BC-250 HDMI CEC: identify as SteamOS on the CEC bus and retrain the display link when the display powers on or switches to it"
 arch=('any')
 url="https://github.com/MastaG/linux-cachyos-bc250"
@@ -19,8 +19,12 @@ source=(
     'bc250-cec-daemon.sh'
     'bc250-cec.service'
     'bc250-cec.conf'
+    'bc250-cec-keymap.sh'
+    '71-bc250-cec-keys.rules'
 )
 sha256sums=('SKIP'
+            'SKIP'
+            'SKIP'
             'SKIP'
             'SKIP')
 
@@ -31,4 +35,8 @@ package() {
         "$pkgdir/usr/lib/systemd/system/bc250-cec.service"
     install -Dm644 "$srcdir/bc250-cec.conf" \
         "$pkgdir/etc/bc250-cec.conf"
+    install -Dm755 "$srcdir/bc250-cec-keymap.sh" \
+        "$pkgdir/usr/lib/bc250-cec/bc250-cec-keymap.sh"
+    install -Dm644 "$srcdir/71-bc250-cec-keys.rules" \
+        "$pkgdir/usr/lib/udev/rules.d/71-bc250-cec-keys.rules"
 }
