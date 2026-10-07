@@ -226,6 +226,14 @@ instead of the host's RAM. CI sets it from the `BC250_BUILD_MEMORY` repository
 variable (default `20g`) for every build container it starts, so a self-hosted
 runner cannot starve other workloads on the same machine.
 
+The memory cap alone does not stop an OOM: at `-j32` a build reaches the
+ceiling and dies without an error. CI therefore also pins each component build
+to a CPU list with `taskset` (repository variable `BC250_BUILD_CPUS`, default
+`0-5,16-21`, i.e. 6 cores with both SMT threads on the 9950X3D; `all` lifts the
+limit). `nproc`, ninja, meson and cargo all follow CPU affinity, so every
+`-j$(nproc)` and every default job count shrinks together. A cgroup `cpuset`
+would be cleaner but rootless podman has no `cpuset` controller here.
+
 The build runs in an Arch container, but the repacking at the end runs on the
 host, so the host needs `bsdtar` — or GNU `tar` plus a `zstd` binary, which is
 the usual case on Fedora, where `bsdtar` is not installed by default. Both are

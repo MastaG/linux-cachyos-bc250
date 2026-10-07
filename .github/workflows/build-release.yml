@@ -33,6 +33,14 @@ env:
   # (RAM-backed) zram swap cannot be used to get around it. Override without a
   # commit via the repository variable BC250_BUILD_MEMORY, e.g. 24g.
   BC250_BUILD_MEMORY: ${{ vars.BC250_BUILD_MEMORY || '20g' }}
+  # Which CPUs the component builds may use. The memory cap alone is not
+  # enough: at -j32 the 20 GB ceiling is reached (peak 20G, the compile dies
+  # without an error). nproc, ninja, meson and cargo all honour CPU affinity,
+  # so pinning the build shrinks every one of them at once, which MAKEFLAGS
+  # alone does not. The default is 6 cores with both SMT threads (this host
+  # numbers siblings n and n+16); set the repository variable BC250_BUILD_CPUS
+  # to another list, or to "all" to lift the limit.
+  BC250_BUILD_CPUS: ${{ vars.BC250_BUILD_CPUS || '0-5,16-21' }}
 
 jobs:
   build:
@@ -654,7 +662,9 @@ jobs:
             [[ "$wanted" == true ]] || continue
 
             echo "::group::build $name"
-            if docker exec "$container" bash /workspace/scripts/ci-build.sh component "$name"; then
+            pin=()
+            [[ "$BC250_BUILD_CPUS" == all ]] || pin=(taskset -c "$BC250_BUILD_CPUS")
+            if docker exec "$container" "${pin[@]}" bash /workspace/scripts/ci-build.sh component "$name"; then
               echo "==> component $name: built"
               echo "::endgroup::"
               # Publish immediately. Fail-soft: the final publish is still
