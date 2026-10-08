@@ -27,7 +27,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; retrains the link when the display powers on or switches to the board |
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `bc250-ch7218-fw` | Optional: UGREEN's updater and three firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
-| `bc250-vcn-fw` | Optional, experimental: the firmware file for the VCN video-block patch in `linux-cachyos-rc-bc250` |
+| `bc250-vcn-fw` | Optional, experimental: the firmware file for the VCN video-block patch in `linux-cachyos-rc-bc250` (needs `amdgpu.bc250_vcn=1`) |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 ---
@@ -1007,12 +1007,14 @@ With it installed there are no older package versions left on your disk to downg
 
 `linux-cachyos-rc-bc250` carries `0019-bc250-vcn.patch`, which switches on the BC-250's Video Core Next block (VCN 2.0). Mainline Linux skips it. The patch is a port of the PS5 one from the ps5-linux project ([ps5-linux-patches PR #38](https://github.com/ps5-linux/ps5-linux-patches/pull/38)) and is **RC only until it has been tested on hardware**; the stable and BORE kernels do not have it.
 
-It needs a firmware file that is not in linux-firmware, shipped by the optional `bc250-vcn-fw` package (see its README for where the file comes from). Without the file the kernel simply leaves the block off.
+It is **off by default** (`amdgpu.bc250_vcn=1` switches it on): the first attempt hung the author's board at boot, so nobody gets it by accident. It also needs a firmware file that is not in linux-firmware, shipped by the optional `bc250-vcn-fw` package (see its README for where the file comes from). Without the file, or without the parameter, the kernel simply leaves the block off.
 
 ```bash
 sudo pacman -S bc250-vcn-fw   # the mkinitcpio hook rebuilds the initramfs in the same run
-sudo reboot                   # into linux-cachyos-rc-bc250
+# add amdgpu.bc250_vcn=1 to the kernel command line, then reboot into linux-cachyos-rc-bc250
 ```
+
+If the board does not come up, pick the stable kernel in the boot menu and drop the parameter again.
 
 ## UGREEN DP-to-HDMI 2.1 adapter firmware (optional)
 

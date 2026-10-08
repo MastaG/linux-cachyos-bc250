@@ -3,7 +3,9 @@ Subject: [PATCH] drm/amdgpu: enable the VCN 2.0 video block on the BC-250
 
 Cyan Skillfish reports UVD/VCN 2.0.3 in its IP discovery table, but
 mainline skips the block, so there is no hardware video decode or encode.
-Add vcn_v2_0 for the BC-250 (PCI device 0x13fe) with the bring-up changes
+Add vcn_v2_0 for the BC-250 (PCI device 0x13fe), behind amdgpu.bc250_vcn=1
+(default off: a failed bring-up hangs the board at boot, seen on the test
+board), with the bring-up changes
 the ps5-linux project found for this silicon (ps5-linux-patches PR #38,
 which does the same for the PS5, device 0x13fb):
 
@@ -18,21 +20,61 @@ which does the same for the PS5, device 0x13fb):
 No other board is affected: every change is keyed on device 0x13fe.
 
 ---
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+index 831e71aec33f..60d94d02a109 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+@@ -259,6 +259,7 @@ extern int amdgpu_sg_display;
+ extern int amdgpu_bc250_hdmi21;
+ extern int amdgpu_bc250_ch7218_quirk;
+ extern int amdgpu_bc250_pcon_force_dsc;
++extern int amdgpu_bc250_vcn;
+ extern int amdgpu_umsch_mm;
+ extern int amdgpu_seamless;
+ extern int amdgpu_umsch_mm_fwlog;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c
-index 7ab2ad2c5ba9..8e94ad88cdfd 100644
+index 7ab2ad2c5ba9..e7309732fdb9 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c
 @@ -2909,6 +2909,10 @@ static int amdgpu_discovery_set_mm_ip_blocks(struct amdgpu_device *adev)
  				amdgpu_device_ip_block_add(adev, &jpeg_v2_0_ip_block);
  			break;
  		case IP_VERSION(2, 0, 3):
-+			if (adev->pdev->device == 0x13fe) {
++			if (adev->pdev->device == 0x13fe && amdgpu_bc250_vcn) {
 +				adev->vcn.num_vcn_inst = 1;
 +				amdgpu_device_ip_block_add(adev, &vcn_v2_0_ip_block);
 +			}
  			break;
  		case IP_VERSION(2, 5, 0):
  			amdgpu_device_ip_block_add(adev, &vcn_v2_5_ip_block);
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 999c01d35d65..5ece7d106ff3 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -239,6 +239,7 @@ int amdgpu_sg_display = -1; /* auto */
+ int amdgpu_bc250_hdmi21 = 1;
+ int amdgpu_bc250_ch7218_quirk;
+ int amdgpu_bc250_pcon_force_dsc;
++int amdgpu_bc250_vcn;
+ int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
+ int amdgpu_umsch_mm;
+ int amdgpu_seamless = -1; /* auto */
+@@ -1020,6 +1021,15 @@ module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
+ MODULE_PARM_DESC(bc250_ch7218_quirk, "BC-250: opt-in CH7218 DP-to-HDMI 2.1 adapter quirk (0 = disabled (default), 1 = enabled)");
+ module_param_named(bc250_ch7218_quirk, amdgpu_bc250_ch7218_quirk, int, 0444);
+ 
++/**
++ * DOC: bc250_vcn (int)
++ * BC-250: bring up the VCN 2.0 video block. Needs amdgpu/ps5_vcn.bin
++ * (bc250-vcn-fw). Experimental: a failed bring-up can hang the board at boot,
++ * so this is off unless asked for (0 = disabled (default), 1 = enabled).
++ */
++MODULE_PARM_DESC(bc250_vcn, "BC-250: experimental VCN 2.0 video block (0 = disabled (default), 1 = enabled)");
++module_param_named(bc250_vcn, amdgpu_bc250_vcn, int, 0444);
++
+ /**
+  * DOC: bc250_pcon_force_dsc (int)
+  * BC-250 (Cyan Skillfish, DCN 2.0.1) only. Experimental, opt-in. Some DP to
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
 index 17db7264269e..7e3284225b7a 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c

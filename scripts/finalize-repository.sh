@@ -438,7 +438,7 @@ cat > RELEASE_NOTES.md <<EOF_NOTES
 - The \`hdmi21-vtem-on-tmds.patch\` carry ("Emit VTEM for HF-VSDB VRR on TMDS links", upstream \`640fd039dc8b\`) has been **dropped**. It is queued for Linux 7.4 -- it landed in \`drm-next\` on 2026-09-02, one day after 7.3-rc1 was tagged -- so it arrives on its own with the next series. It also only ever applied through a passive DP++ adapter; through an active DP->HDMI converter the GPU speaks DisplayPort and the code never ran. The other seven patches of the original backport arrived in \`cachyos-7.3-rc2-1\` via CachyOS's \`7.3/hdmi\` merge and were dropped earlier.
 - **\`ch7218-vrr-allowlist.patch\` (RC only)** -- FreeSync passthrough on a Chrontel CH7218 DP-to-HDMI 2.1 adapter (DPCD branch OUI \`2B:02:F0\`, UGREEN DP134 and most compact "8K" plugs). CachyOS's 7.2 kernel lists this converter in the FreeSync PCON allowlist; its 7.3 HDMI branch was rebuilt on a different VRR series and does not, so with the same adapter VRR worked on \`linux-cachyos-bc250\` and was silently absent on \`linux-cachyos-rc-bc250\`. One static table entry, unconditional (it cannot be gated and only states the chip may carry VRR, which it does). Unrelated to the opt-in CH7218 quirk above.
 - **\`pcon-vrr-hf-vsdb.patch\` (RC only)** -- the allowlist entry above was necessary but not sufficient. On 7.3 a DP-to-HDMI PCON gets its VRR range only from the AMD FreeSync EDID block, parsed by DMUB/DMCU firmware that DCN201 does not have, so the parse always fails on a BC-250 and the range stays 0/0 even when every DPCD gate passes. This adds what 7.2 already does: fall back to the HDMI Forum VRR range the DRM core parses in software. Covers TVs without an AMD block too. \`drm.debug=0x2\` logs the decision as \`VRR: PCON HF-VSDB fallback\`.
-- **\`bc250-vcn.patch\` (RC only, experimental)** -- enables the VCN 2.0 video block (hardware video decode/encode). Needs the \`bc250-vcn-fw\` package for its firmware; without that file the block stays off and nothing else changes.
+- **\`bc250-vcn.patch\` (RC only, experimental, OFF by default)** -- the VCN 2.0 video block (hardware video decode/encode), behind \`amdgpu.bc250_vcn=1\`. The first bring-up hung the author's board at boot, so it is opt-in. Needs the \`bc250-vcn-fw\` package for its firmware; without the file or the parameter the block stays off and nothing else changes.
 
 ### BORE: \`${bore_pkgbase}\`
 
@@ -565,9 +565,10 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   video decode and encode). It is not in linux-firmware; the file is the one the
   ps5-linux project ships for the same silicon family, with AMD's licence text.
   Read \`/usr/share/doc/bc250-vcn-fw/README.md\` for where it comes from.
-- Only the RC kernel uses it. Without the file that kernel leaves the VCN block
-  off and nothing else changes. The mkinitcpio hook rebuilds the initramfs in
-  the same pacman run; then reboot into the RC kernel.
+- Only the RC kernel uses it, and only with \`amdgpu.bc250_vcn=1\` on the
+  command line (off by default: the first attempt hung the author's board).
+  Without the file or the parameter the VCN block stays off and nothing else
+  changes. The mkinitcpio hook rebuilds the initramfs in the same pacman run.
 - Not part of \`linux-cachyos-bc250-meta\`: \`sudo pacman -S bc250-vcn-fw\`.
 
 ## aic8800d80-dkms -- removed

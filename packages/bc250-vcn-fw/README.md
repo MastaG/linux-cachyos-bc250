@@ -9,10 +9,12 @@ text. Nothing runs and nothing is configured.
 ## Do you need it
 
 Only if you run **`linux-cachyos-rc-bc250`**, the only kernel with the VCN patch
-for now (`pacman -S bc250-vcn-fw`). The stable and BORE kernels ignore the file.
+for now (`pacman -S bc250-vcn-fw`), **and** boot it with `amdgpu.bc250_vcn=1`.
+The patch is off by default because the first bring-up hung the author's board
+at boot. The stable and BORE kernels ignore the file.
 
-With the file missing, the patched kernel leaves the VCN block off and everything
-else works as before.
+With the file missing, or the parameter not set, the patched kernel leaves the
+VCN block off and everything else works as before.
 
 amdgpu loads from the initramfs, so the file has to be in there. pacman takes
 care of that: the mkinitcpio hook watches `usr/lib/firmware/*` and rebuilds the

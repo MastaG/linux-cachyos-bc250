@@ -11,7 +11,7 @@
 # everything flat next to this file.
 pkgname=bc250-vcn-fw
 pkgver=1
-pkgrel=2
+pkgrel=3
 pkgdesc="Video Core Next (VCN 2.0) firmware for the BC-250, for the linux-cachyos-rc-bc250 VCN patch"
 arch=('any')
 url="https://github.com/MastaG/linux-cachyos-bc250"

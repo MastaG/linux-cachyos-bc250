@@ -66,6 +66,14 @@ class KernelPatchTests(unittest.TestCase):
         self.assertIn(f"amdgpu/{FW_NAME}", self.patch.read_text())
         self.assertTrue((PKG / FW_NAME).is_file())
 
+    def test_bring_up_is_opt_in(self):
+        """A failed bring-up hangs the board at boot, so the block must stay off
+        unless amdgpu.bc250_vcn=1 is given."""
+        text = self.patch.read_text()
+        self.assertIn("module_param_named(bc250_vcn, amdgpu_bc250_vcn, int, 0444)", text)
+        self.assertIn("adev->pdev->device == 0x13fe && amdgpu_bc250_vcn", text)
+        self.assertIn("+int amdgpu_bc250_vcn;", text)  # zero-initialised: default off
+
     def test_every_change_is_keyed_on_the_bc250_device_id(self):
         added = [l[1:] for l in self.patch.read_text().splitlines()
                  if l.startswith("+") and not l.startswith("+++")]

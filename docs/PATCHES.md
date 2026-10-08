@@ -54,7 +54,7 @@ The stable and BORE kernels carry these sixteen BC-250 patches in `patches/linux
 0016-bc250-vrm-memory-hwmon.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same sixteen patches (content-identical, renumbered around its own series-specific carries) plus the RC-only entries below (`0019-bc250-vcn.patch` is RC-only until it has been tested on hardware):
+`patches/linux-cachyos-rc` carries the same sixteen patches (content-identical, renumbered around its own series-specific carries) plus the RC-only entries below (`0019-bc250-vcn.patch` is RC-only and off by default -- `amdgpu.bc250_vcn=1` -- until it works on hardware; the first attempt hung the test board at boot):
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
