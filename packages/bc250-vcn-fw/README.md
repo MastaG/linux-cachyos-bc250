@@ -14,11 +14,11 @@ for now (`pacman -S bc250-vcn-fw`). The stable and BORE kernels ignore the file.
 With the file missing, the patched kernel leaves the VCN block off and everything
 else works as before.
 
-After installing, rebuild the initramfs and reboot, because amdgpu loads from it:
-
-```
-sudo mkinitcpio -P
-```
+amdgpu loads from the initramfs, so the file has to be in there. pacman takes
+care of that: the mkinitcpio hook watches `usr/lib/firmware/*` and rebuilds the
+images in the same run that installs this package (on CachyOS Limine installs
+that is the `limine-mkinitcpio` hook, and `mkinitcpio -P` does not exist
+there). All that is left is a reboot into the RC kernel.
 
 ## Where the file comes from
 

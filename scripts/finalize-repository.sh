@@ -566,8 +566,8 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   ps5-linux project ships for the same silicon family, with AMD's licence text.
   Read \`/usr/share/doc/bc250-vcn-fw/README.md\` for where it comes from.
 - Only the RC kernel uses it. Without the file that kernel leaves the VCN block
-  off and nothing else changes. After installing, run \`sudo mkinitcpio -P\` and
-  reboot.
+  off and nothing else changes. The mkinitcpio hook rebuilds the initramfs in
+  the same pacman run; then reboot into the RC kernel.
 - Not part of \`linux-cachyos-bc250-meta\`: \`sudo pacman -S bc250-vcn-fw\`.
 
 ## aic8800d80-dkms -- removed

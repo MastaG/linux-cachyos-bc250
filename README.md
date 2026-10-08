@@ -1010,9 +1010,8 @@ With it installed there are no older package versions left on your disk to downg
 It needs a firmware file that is not in linux-firmware, shipped by the optional `bc250-vcn-fw` package (see its README for where the file comes from). Without the file the kernel simply leaves the block off.
 
 ```bash
-sudo pacman -S bc250-vcn-fw
-sudo mkinitcpio -P   # amdgpu loads from the initramfs
-sudo reboot
+sudo pacman -S bc250-vcn-fw   # the mkinitcpio hook rebuilds the initramfs in the same run
+sudo reboot                   # into linux-cachyos-rc-bc250
 ```
 
 ## UGREEN DP-to-HDMI 2.1 adapter firmware (optional)
