@@ -17,8 +17,9 @@ else works as before.
 amdgpu loads from the initramfs, so the file has to be in there. pacman takes
 care of that: the mkinitcpio hook watches `usr/lib/firmware/*` and rebuilds the
 images in the same run that installs this package (on CachyOS Limine installs
-that is the `limine-mkinitcpio` hook, and `mkinitcpio -P` does not exist
-there). All that is left is a reboot into the RC kernel.
+that is the `limine-mkinitcpio` hook; if you ever need to run it by hand, the
+command there is `sudo limine-mkinitcpio`, not `mkinitcpio -P`). All that is
+left is a reboot into the RC kernel.
 
 ## Where the file comes from
 
