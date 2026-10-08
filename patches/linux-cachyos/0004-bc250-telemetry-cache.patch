@@ -1,0 +1,203 @@
+From 53dfb1b0a323856ae4830eb1b1488aff71c492a7 Mon Sep 17 00:00:00 2001
+From: Local Kernel Test <kernel-test@localhost>
+Date: Thu, 8 Oct 2026 22:25:10 +0200
+Subject: [PATCH 4/4] amdgpu: cache BC-250 telemetry samples
+
+---
+ .../amd/pm/swsmu/smu11/cyan_skillfish_ppt.c   | 108 +++++++++++++++++-
+ 1 file changed, 105 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
+index 0fa34036f..1aa15a60d 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
+@@ -26,7 +26,9 @@
+ #include <linux/atomic.h>
+ #include <linux/cpumask.h>
+ #include <linux/delay.h>
++#include <linux/jiffies.h>
+ #include <linux/limits.h>
++#include <linux/spinlock.h>
+ #include <linux/topology.h>
+ 
+ #include "amdgpu.h"
+@@ -66,6 +68,25 @@ static struct gfx_user_settings {
+ 
+ static uint32_t cyan_skillfish_sclk_default;
+ 
++static uint cs_activity_cache_ms = 25;
++module_param(cs_activity_cache_ms, uint, 0644);
++MODULE_PARM_DESC(cs_activity_cache_ms,
++		 "GPU activity ring sample cache window in ms (0 = off)");
++
++/*
++ * smu_cmn_get_metrics_table() only debounces the bulk SmuMetrics_t transfer
++ * for 1 ms internally, well below what individual sensor/hwmon consumers
++ * need. Every distinct hwmon attribute (temperature, power, voltage,
++ * socclk/vclk/dclk/uclk, throttler status) triggers its own call, so a
++ * monitoring tool polling several of them per cycle can still generate one
++ * SMU mailbox round trip per attribute. Give it the same cache window as the
++ * GFXCLK mailbox query and GPU activity sampling above.
++ */
++static uint cs_metrics_cache_ms = 25;
++module_param(cs_metrics_cache_ms, uint, 0644);
++MODULE_PARM_DESC(cs_metrics_cache_ms,
++		 "Bulk SmuMetrics_t table refresh cache window in ms (0 = off)");
++
+ /*
+  * Keep the standard pp_dpm_socclk ABI by default. When explicitly enabled,
+  * use that otherwise-simple Cyan Skillfish clock node as a diagnostic view of
+@@ -76,6 +97,25 @@ module_param(cs_full_telemetry, bool, 0644);
+ MODULE_PARM_DESC(cs_full_telemetry,
+ 		 "Expose full BC-250 APU telemetry through pp_dpm_socclk");
+ 
++/*
++ * Keep the activity cache private to this ASIC implementation. The SMU
++ * metrics transfer only writes the leading SmuMetrics_8core_t, so the cache
++ * tail is preserved when the firmware metrics table is refreshed.
++ */
++struct cyan_skillfish_metrics_cache {
++	/*
++	 * Sized for the largest layout. A patched SMU exports 284 bytes; the
++	 * stock firmware writes only its own 244 and the remainder is simply
++	 * never interpreted.
++	 */
++	SmuMetrics_8core_t metrics;
++	spinlock_t gpu_activity_lock;
++	unsigned long gpu_activity_time;
++	uint16_t gpu_activity;
++	spinlock_t metrics_lock;
++	unsigned long metrics_time;
++};
++
+ /*
+  * Force the 8-core metrics layout. Normally the layout is selected
+  * automatically from the number of physical cores present.
+@@ -248,11 +288,31 @@ static bool cyan_skillfish_rings_busy(struct amdgpu_device *adev)
+ 
+ static uint16_t cyan_skillfish_get_gpu_activity(struct smu_context *smu)
+ {
++	struct cyan_skillfish_metrics_cache *cache = smu->smu_table.metrics_table;
+ 	struct amdgpu_device *adev = smu->adev;
++	unsigned long flags, now = jiffies;
+ 	uint16_t activity;
+ 	unsigned int busy = 0;
++	unsigned int cache_ms = cs_activity_cache_ms;
+ 	int i;
+ 
++	/*
++	 * Sensor and GPU Metrics consumers can request activity back-to-back.
++	 * Reuse a very recent sample so those reads do not each spend ~1.55 ms
++	 * busy-waiting on the same ring sampling window. Keep the lock
++	 * outside that sampling window; concurrent misses may sample twice but
++	 * cannot corrupt the cached value.
++	 */
++	spin_lock_irqsave(&cache->gpu_activity_lock, flags);
++	if (cache_ms && cache->gpu_activity_time &&
++	    time_before(now, cache->gpu_activity_time +
++			msecs_to_jiffies(cache_ms))) {
++		activity = cache->gpu_activity;
++		spin_unlock_irqrestore(&cache->gpu_activity_lock, flags);
++		return activity;
++	}
++	spin_unlock_irqrestore(&cache->gpu_activity_lock, flags);
++
+ 	/*
+ 	 * Cyan Skillfish does not publish GFX activity in SmuMetrics_t, and
+ 	 * GRBM_STATUS reads back all-ones on this ASIC regardless of GPU
+@@ -274,6 +334,11 @@ static uint16_t cyan_skillfish_get_gpu_activity(struct smu_context *smu)
+ 
+ 	activity = DIV_ROUND_CLOSEST(busy * 10000, 32);
+ 
++	spin_lock_irqsave(&cache->gpu_activity_lock, flags);
++	cache->gpu_activity = activity;
++	cache->gpu_activity_time = jiffies;
++	spin_unlock_irqrestore(&cache->gpu_activity_lock, flags);
++
+ 	return activity;
+ }
+ 
+@@ -307,6 +372,7 @@ static int cyan_skillfish_tables_init(struct smu_context *smu)
+ {
+ 	struct smu_table_context *smu_table = &smu->smu_table;
+ 	struct smu_table *tables = smu_table->tables;
++	struct cyan_skillfish_metrics_cache *metrics_cache;
+ 	int ret;
+ 
+ 	SMU_TABLE_INIT(tables, SMU_TABLE_SMU_METRICS,
+@@ -314,10 +380,15 @@ static int cyan_skillfish_tables_init(struct smu_context *smu)
+ 				PAGE_SIZE,
+ 				AMDGPU_GEM_DOMAIN_VRAM);
+ 
+-	smu_table->metrics_table = kzalloc_obj(SmuMetrics_8core_t);
++	smu_table->metrics_table =
++		kzalloc_obj(struct cyan_skillfish_metrics_cache);
+ 	if (!smu_table->metrics_table)
+ 		goto err0_out;
+ 
++	metrics_cache = smu_table->metrics_table;
++	spin_lock_init(&metrics_cache->gpu_activity_lock);
++	spin_lock_init(&metrics_cache->metrics_lock);
++
+ 	ret = smu_driver_table_init(smu, SMU_DRIVER_TABLE_GPU_METRICS,
+ 				    sizeof(struct gpu_metrics_v2_2),
+ 				    SMU_GPU_METRICS_CACHE_INTERVAL);
+@@ -345,6 +416,37 @@ static int cyan_skillfish_init_smc_tables(struct smu_context *smu)
+ 	return smu_v11_0_init_smc_tables(smu);
+ }
+ 
++static int cyan_skillfish_refresh_metrics_table(struct smu_context *smu)
++{
++	struct cyan_skillfish_metrics_cache *cache = smu->smu_table.metrics_table;
++	unsigned long flags, now = jiffies;
++	unsigned int cache_ms = cs_metrics_cache_ms;
++	int ret;
++
++	if (cache_ms) {
++		spin_lock_irqsave(&cache->metrics_lock, flags);
++		if (cache->metrics_time &&
++		    time_before(now, cache->metrics_time +
++				msecs_to_jiffies(cache_ms))) {
++			spin_unlock_irqrestore(&cache->metrics_lock, flags);
++			return 0;
++		}
++		spin_unlock_irqrestore(&cache->metrics_lock, flags);
++	}
++
++	ret = smu_cmn_get_metrics_table(smu, NULL, false);
++	if (ret)
++		return ret;
++
++	if (cache_ms) {
++		spin_lock_irqsave(&cache->metrics_lock, flags);
++		cache->metrics_time = jiffies;
++		spin_unlock_irqrestore(&cache->metrics_lock, flags);
++	}
++
++	return 0;
++}
++
+ static int
+ cyan_skillfish_get_smu_metrics_data(struct smu_context *smu,
+ 					MetricsMember_t member,
+@@ -355,7 +457,7 @@ cyan_skillfish_get_smu_metrics_data(struct smu_context *smu,
+ 	bool average = member == METRICS_AVERAGE_SOCKETPOWER;
+ 	int ret = 0;
+ 
+-	ret = smu_cmn_get_metrics_table(smu, NULL, false);
++	ret = cyan_skillfish_refresh_metrics_table(smu);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -532,7 +634,7 @@ static int cyan_skillfish_emit_smu_table(struct smu_context *smu, char *buf,
+ 	int size = *size_ptr;
+ 	int ret, i;
+ 
+-	ret = smu_cmn_get_metrics_table(smu, NULL, false);
++	ret = cyan_skillfish_refresh_metrics_table(smu);
+ 	if (ret)
+ 		return ret;
+ 
+-- 
+2.56.0
+

@@ -1,0 +1,149 @@
+From aaea3161167d4e5fd31446cdf3a2742aad9846f5 Mon Sep 17 00:00:00 2001
+From: Local Kernel Test <kernel-test@localhost>
+Date: Thu, 8 Oct 2026 22:25:01 +0200
+Subject: [PATCH 3/4] amdgpu: expose full BC-250 telemetry
+
+---
+ .../amd/pm/swsmu/smu11/cyan_skillfish_ppt.c   | 110 +++++++++++++++++-
+ 1 file changed, 109 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
+index 6cbcb227f..0fa34036f 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
+@@ -66,6 +66,16 @@ static struct gfx_user_settings {
+ 
+ static uint32_t cyan_skillfish_sclk_default;
+ 
++/*
++ * Keep the standard pp_dpm_socclk ABI by default. When explicitly enabled,
++ * use that otherwise-simple Cyan Skillfish clock node as a diagnostic view of
++ * the complete Current SMU metrics table.
++ */
++static bool cs_full_telemetry;
++module_param(cs_full_telemetry, bool, 0644);
++MODULE_PARM_DESC(cs_full_telemetry,
++		 "Expose full BC-250 APU telemetry through pp_dpm_socclk");
++
+ /*
+  * Force the 8-core metrics layout. Normally the layout is selected
+  * automatically from the number of physical cores present.
+@@ -503,6 +513,93 @@ static int cyan_skillfish_get_current_clk_freq(struct smu_context *smu,
+ 	return cyan_skillfish_get_smu_metrics_data(smu, member_type, value);
+ }
+ 
++static const char *cyan_skillfish_layout_name(enum cyan_skillfish_metrics_layout layout)
++{
++	switch (layout) {
++	case CS_METRICS_8CORE:
++		return "8-core";
++	default:
++		return "6-core stock";
++	}
++}
++
++static int cyan_skillfish_emit_smu_table(struct smu_context *smu, char *buf,
++					 int *size_ptr)
++{
++	struct smu_table_context *smu_table = &smu->smu_table;
++	enum cyan_skillfish_metrics_layout layout;
++	struct cyan_skillfish_metrics_view view;
++	int size = *size_ptr;
++	int ret, i;
++
++	ret = smu_cmn_get_metrics_table(smu, NULL, false);
++	if (ret)
++		return ret;
++
++	layout = cyan_skillfish_metrics_layout();
++	cyan_skillfish_decode_metrics(smu_table->metrics_table, layout, false,
++				      &view);
++
++	size += sysfs_emit_at(buf, size, "layout: %s\n",
++			      cyan_skillfish_layout_name(layout));
++
++	size += sysfs_emit_at(buf, size,
++			      "\ncore     clk     power    temp    C0%%\n");
++	for (i = 0; i < view.ncores; i++) {
++		size += sysfs_emit_at(buf, size, "core %d: %5uMHz", i,
++				      view.CoreFrequency[i]);
++		if (view.core_power_valid[i])
++			size += sysfs_emit_at(buf, size, "  %5uW",
++					      view.CorePower[i] / 1000);
++		else
++			size += sysfs_emit_at(buf, size, "     n/a");
++		if (view.core_temp_valid[i])
++			size += sysfs_emit_at(buf, size, "  %4u C",
++					      view.CoreTemperature[i] / 100);
++		else
++			size += sysfs_emit_at(buf, size, "     n/a");
++		if (view.c0_valid[i])
++			size += sysfs_emit_at(buf, size, "  %4u\n",
++					      view.C0Residency[i]);
++		else
++			size += sysfs_emit_at(buf, size, "   n/a\n");
++	}
++
++	size += sysfs_emit_at(buf, size, "\n");
++	for (i = 0; i < 2; i++)
++		size += sysfs_emit_at(buf, size,
++				      "L3 #%d: %5uMHz          %4u C\n",
++				      i, view.L3Frequency[i],
++				      view.L3Temperature[i] / 100);
++
++	size += sysfs_emit_at(buf, size, "\n");
++	size += sysfs_emit_at(buf, size, "gfx:   %5uMHz          %4u C\n",
++			      view.GfxclkFrequency, view.GfxTemperature / 100);
++
++	size += sysfs_emit_at(buf, size, "soc:   %5uMHz          %4u C\n",
++			      view.SocclkFrequency, view.SocTemperature / 100);
++	size += sysfs_emit_at(buf, size, "vclk:  %5uMHz\n", view.VclkFrequency);
++	size += sysfs_emit_at(buf, size, "dclk:  %5uMHz\n", view.DclkFrequency);
++	size += sysfs_emit_at(buf, size, "mem:   %5uMHz\n", view.MemclkFrequency);
++	size += sysfs_emit_at(buf, size, "edge:                    %4u C\n",
++			      view.EdgeTemperature / 100);
++
++	size += sysfs_emit_at(buf, size, "\n");
++	for (i = 0; i < 2; i++)
++		size += sysfs_emit_at(buf, size, "pd %s: %5umV  %4uA  %4uW\n",
++				      i == 0 ? "cpu" : "gpu",
++				      view.Voltage[i], view.Current[i] / 1000,
++				      view.Power[i] / 1000);
++	size += sysfs_emit_at(buf, size, "pd socket:          %4uW\n",
++			      view.CurrentSocketPower / 1000);
++
++	size += sysfs_emit_at(buf, size, "\nthrottle: 0x%x\n\n",
++			      view.ThrottlerStatus);
++
++	*size_ptr = size;
++	return 0;
++}
++
+ static int cyan_skillfish_emit_clk_levels(struct smu_context *smu,
+ 					  enum smu_clk_type clk_type, char *buf,
+ 					  int *offset)
+@@ -533,9 +630,20 @@ static int cyan_skillfish_emit_clk_levels(struct smu_context *smu,
+ 		size += sysfs_emit_at(buf, size, "VDDC: %7umV  %10umV\n",
+ 						CYAN_SKILLFISH_VDDC_MIN, CYAN_SKILLFISH_VDDC_MAX);
+ 		break;
++	case SMU_SOCCLK:
++		if (cs_full_telemetry) {
++			ret = cyan_skillfish_emit_smu_table(smu, buf, &size);
++			if (ret)
++				return ret;
++			break;
++		}
++		ret = cyan_skillfish_get_current_clk_freq(smu, clk_type, &cur_value);
++		if (ret)
++			return ret;
++		size += sysfs_emit_at(buf, size, "0: %uMhz *\n", cur_value);
++		break;
+ 	case SMU_FCLK:
+ 	case SMU_MCLK:
+-	case SMU_SOCCLK:
+ 	case SMU_VCLK:
+ 	case SMU_DCLK:
+ 		ret = cyan_skillfish_get_current_clk_freq(smu, clk_type, &cur_value);
+-- 
+2.56.0
+

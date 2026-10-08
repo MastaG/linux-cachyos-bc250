@@ -33,49 +33,55 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these sixteen BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same sixteen patches plus its own three series-specific carries, nineteen in total:
+The stable and BORE kernels carry these nineteen BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same nineteen patches plus its own three series-specific carries, twenty-two in total:
 
 ```text
-0001-bc250-8core-telemetry-gpu-activity.patch
-0002-nct6687d-hwmon.patch
-0003-gfx1013-pasid-tlb-invalidation.patch
-0004-gfx1013-compute-gfxoff-guard.patch
-0005-bc250-kfd-flush-tlb-by-runlist.patch
-0006-amdgpu-ttm-null-page-guard.patch
-0007-cyan-skillfish-sclk-range.patch
-0008-bc250-40cu-unlock.patch
-0009-dcn201-hdmi21-pcon.patch
-0010-dcn201-enable-dsc.patch
-0011-cs-relink-after-long-blank.patch
-0012-ch7218-pcon-quirk.patch
-0013-ch7218-dsc-restore.patch
-0014-pcon-force-dsc.patch
-0015-bc250-psp-ccp.patch
-0016-bc250-vrm-memory-hwmon.patch
+0001-bc250-8core-metrics.patch
+0002-bc250-telemetry-gpu-load.patch
+0003-bc250-full-telemetry.patch
+0004-bc250-telemetry-cache.patch
+0005-nct6687d-hwmon.patch
+0006-gfx1013-pasid-tlb-invalidation.patch
+0007-gfx1013-compute-gfxoff-guard.patch
+0008-bc250-kfd-flush-tlb-by-runlist.patch
+0009-amdgpu-ttm-null-page-guard.patch
+0010-cyan-skillfish-sclk-range.patch
+0011-bc250-40cu-unlock.patch
+0012-dcn201-hdmi21-pcon.patch
+0013-dcn201-enable-dsc.patch
+0014-cs-relink-after-long-blank.patch
+0015-ch7218-pcon-quirk.patch
+0016-ch7218-dsc-restore.patch
+0017-pcon-force-dsc.patch
+0018-bc250-psp-ccp.patch
+0019-bc250-vrm-memory-hwmon.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same sixteen patches (content-identical, renumbered around its own series-specific carries) plus the RC-only entries below (`0019-bc250-vcn.patch` is RC-only and off by default -- `amdgpu.bc250_vcn=1` -- until it works on hardware; the first attempt hung the test board at boot):
+`patches/linux-cachyos-rc` carries the same nineteen patches (content-identical) plus the RC-only entries below (`0022-bc250-vcn.patch` is RC-only and off by default -- `amdgpu.bc250_vcn=1` -- until it works on hardware; the first attempt hung the test board at boot):
 
 ```text
-0001-bc250-8core-telemetry-gpu-activity.patch
-0002-nct6687d-hwmon.patch
-0003-gfx1013-pasid-tlb-invalidation.patch
-0004-gfx1013-compute-gfxoff-guard.patch
-0005-bc250-kfd-flush-tlb-by-runlist.patch
-0006-amdgpu-ttm-null-page-guard.patch
-0007-cyan-skillfish-sclk-range.patch
-0008-bc250-40cu-unlock.patch
-0009-dcn201-hdmi21-pcon.patch
-0010-dcn201-enable-dsc.patch
-0011-cs-relink-after-long-blank.patch
-0012-ch7218-pcon-quirk.patch
-0013-ch7218-dsc-restore.patch
-0014-ch7218-vrr-allowlist.patch
-0015-pcon-force-dsc.patch
-0016-pcon-vrr-hf-vsdb.patch
-0017-bc250-psp-ccp.patch
-0018-bc250-vrm-memory-hwmon.patch
-0019-bc250-vcn.patch
+0001-bc250-8core-metrics.patch
+0002-bc250-telemetry-gpu-load.patch
+0003-bc250-full-telemetry.patch
+0004-bc250-telemetry-cache.patch
+0005-nct6687d-hwmon.patch
+0006-gfx1013-pasid-tlb-invalidation.patch
+0007-gfx1013-compute-gfxoff-guard.patch
+0008-bc250-kfd-flush-tlb-by-runlist.patch
+0009-amdgpu-ttm-null-page-guard.patch
+0010-cyan-skillfish-sclk-range.patch
+0011-bc250-40cu-unlock.patch
+0012-dcn201-hdmi21-pcon.patch
+0013-dcn201-enable-dsc.patch
+0014-cs-relink-after-long-blank.patch
+0015-ch7218-pcon-quirk.patch
+0016-ch7218-dsc-restore.patch
+0017-ch7218-vrr-allowlist.patch
+0018-pcon-force-dsc.patch
+0019-pcon-vrr-hf-vsdb.patch
+0020-bc250-psp-ccp.patch
+0021-bc250-vrm-memory-hwmon.patch
+0022-bc250-vcn.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -631,9 +637,10 @@ its own — no governor code, no polling, no D-Bus involved.
 
 Two extra factors, established the same way:
 
-- The `0001-bc250-8core-telemetry-gpu-activity.patch` telemetry rework earlier
-  in this repository's history was never the cause — it only changes metrics
-  *decode*, a completely different code path from the OD-commit write path
+- The `0001-bc250-8core-metrics.patch` through
+  `0004-bc250-telemetry-cache.patch` telemetry series was never the cause — it
+  changes metrics decode, GPU activity reporting, and telemetry caching, all
+  separate from the OD-commit write path
   above. It does very plausibly make the symptom *worse* by keeping the SMU
   busier around boot (a bigger periodic metrics transfer, before this rework
   removed the extra `GetGfxclkFrequency` mailbox call — see [above](#kernel-patch-set)),
