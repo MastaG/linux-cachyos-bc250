@@ -1,4 +1,4 @@
-From: MastaG <badouri.g@gmail.com>
+From: MastaG <mastag@gmail.com>
 Subject: [PATCH] drm/amdgpu: enable the VCN 2.0 video block on the BC-250
 
 Cyan Skillfish reports UVD/VCN 2.0.3 in its IP discovery table, but

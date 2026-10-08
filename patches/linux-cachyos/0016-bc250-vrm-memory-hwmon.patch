@@ -1,4 +1,4 @@
-From: MastaG <badouri.g@gmail.com>
+From: MastaG <mastag@gmail.com>
 Subject: [PATCH] hwmon: add BC-250 VRM and GDDR6 temperature drivers
 
 Kconfig and Makefile entries for two out-of-tree BC-250 hwmon drivers by
