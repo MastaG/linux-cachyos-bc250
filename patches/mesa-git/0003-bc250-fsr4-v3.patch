@@ -64,10 +64,10 @@ upstream's sdot_4x8_iadd lowering unchanged.
  4 files changed, 207 insertions(+), 6 deletions(-)
 
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-index e17da25945e..b29f1471df5 100644
+index c58a491e2f0..caef3534adf 100644
 --- a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-@@ -1769,6 +1769,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1776,6 +1776,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
@@ -75,7 +75,7 @@ index e17da25945e..b29f1471df5 100644
     case nir_op_imul24_relaxed: {
        if (dst.regClass() == s1) {
           emit_sop2_instruction(ctx, instr, aco_opcode::s_mul_i32, dst, false, 0x3);
-@@ -1779,6 +1780,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1786,6 +1787,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
