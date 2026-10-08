@@ -388,8 +388,7 @@ class KernelPatchSetTests(unittest.TestCase):
     weeks, and nothing said so until CI went red.
 
     The two sets can legitimately have different *lengths* now: each carries
-    its own series-specific patches (the gud FORTIFY workaround, needed on 7.3-rc
-    but reverted upstream on 7.2), so the same logical patch does not always sit
+    its own series-specific patches (e.g. the RC-first VCN bring-up), so the same logical patch does not always sit
     at the same number prefix in both directories. Comparison is therefore by content name (the part after the
     `NNNN-`), not by full filename or position.
     """
@@ -400,9 +399,8 @@ class KernelPatchSetTests(unittest.TestCase):
     # Patches that legitimately exist in one set only, with the reason.
     STABLE_ONLY = {}
     RC_ONLY = {
-        "gud-bound-tv-mode-count.patch": (
-            "FORTIFY workaround for a bug upstream reverted on the 7.2 branch "
-            "but that is still present on 7.3-rc"
+        "bc250-vcn.patch": (
+            "VCN bring-up needs hardware testing; RC first, stable once it has proven itself"
         ),
         "ch7218-vrr-allowlist.patch": (
             "CachyOS 7.2/hdmi already lists the CH7218 in the FreeSync PCON "

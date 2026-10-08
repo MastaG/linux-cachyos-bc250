@@ -20,6 +20,7 @@ source "${ROOT_DIR}/scripts/retired-packages.sh"
 : "${BC250_CEC_FINGERPRINT:?BC250_CEC_FINGERPRINT is required}"
 : "${BC250_PACCACHE_CLEANUP_FINGERPRINT:?BC250_PACCACHE_CLEANUP_FINGERPRINT is required}"
 : "${BC250_CH7218_FW_FINGERPRINT:?BC250_CH7218_FW_FINGERPRINT is required}"
+: "${BC250_VCN_FW_FINGERPRINT:?BC250_VCN_FW_FINGERPRINT is required}"
 : "${LINUX_CACHYOS_BC250_META_FINGERPRINT:?LINUX_CACHYOS_BC250_META_FINGERPRINT is required}"
 : "${PROTONGE_LATEST_BC250_FINGERPRINT:?PROTONGE_LATEST_BC250_FINGERPRINT is required}"
 : "${PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT:?PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT is required}"
@@ -34,6 +35,7 @@ BUILD_BC250_DUAL_AUDIO="${BUILD_BC250_DUAL_AUDIO:-false}"
 BUILD_BC250_CEC="${BUILD_BC250_CEC:-false}"
 BUILD_BC250_PACCACHE_CLEANUP="${BUILD_BC250_PACCACHE_CLEANUP:-false}"
 BUILD_BC250_CH7218_FW="${BUILD_BC250_CH7218_FW:-false}"
+BUILD_BC250_VCN_FW="${BUILD_BC250_VCN_FW:-false}"
 BUILD_LINUX_CACHYOS_BC250_META="${BUILD_LINUX_CACHYOS_BC250_META:-false}"
 BUILD_PROTONGE_LATEST_BC250="${BUILD_PROTONGE_LATEST_BC250:-false}"
 BUILD_PROTON_CACHYOS_NATIVE_BC250="${BUILD_PROTON_CACHYOS_NATIVE_BC250:-false}"
@@ -49,6 +51,7 @@ required_metadata=(
     bc250-cec-info.env
     bc250-paccache-cleanup-info.env
     bc250-ch7218-fw-info.env
+    bc250-vcn-fw-info.env
     linux-cachyos-bc250-meta-info.env
     protonge-latest-bc250-info.env
     proton-cachyos-native-bc250-info.env
@@ -131,12 +134,15 @@ bc250_dual_audio_pkgrel="$(value "$bc250_dual_audio_info" BC250_DUAL_AUDIO_PKGRE
 bc250_cec_info="$OUT_DIR/bc250-cec-info.env"
 bc250_paccache_cleanup_info="$OUT_DIR/bc250-paccache-cleanup-info.env"
 bc250_ch7218_fw_info="$OUT_DIR/bc250-ch7218-fw-info.env"
+bc250_vcn_fw_info="$OUT_DIR/bc250-vcn-fw-info.env"
 bc250_cec_pkgver="$(value "$bc250_cec_info" BC250_CEC_PKGVER)"
 bc250_paccache_cleanup_pkgver="$(value "$bc250_paccache_cleanup_info" BC250_PACCACHE_CLEANUP_PKGVER)"
 bc250_ch7218_fw_pkgver="$(value "$bc250_ch7218_fw_info" BC250_CH7218_FW_PKGVER)"
+bc250_vcn_fw_pkgver="$(value "$bc250_vcn_fw_info" BC250_VCN_FW_PKGVER)"
 bc250_cec_pkgrel="$(value "$bc250_cec_info" BC250_CEC_PKGREL)"
 bc250_paccache_cleanup_pkgrel="$(value "$bc250_paccache_cleanup_info" BC250_PACCACHE_CLEANUP_PKGREL)"
 bc250_ch7218_fw_pkgrel="$(value "$bc250_ch7218_fw_info" BC250_CH7218_FW_PKGREL)"
+bc250_vcn_fw_pkgrel="$(value "$bc250_vcn_fw_info" BC250_VCN_FW_PKGREL)"
 
 linux_cachyos_bc250_meta_info="$OUT_DIR/linux-cachyos-bc250-meta-info.env"
 linux_cachyos_bc250_meta_pkgver="$(value "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_PKGVER)"
@@ -178,6 +184,7 @@ for field in \
     bc250_cec_pkgver bc250_cec_pkgrel \
     bc250_paccache_cleanup_pkgver bc250_paccache_cleanup_pkgrel \
     bc250_ch7218_fw_pkgver bc250_ch7218_fw_pkgrel \
+    bc250_vcn_fw_pkgver bc250_vcn_fw_pkgrel \
     linux_cachyos_bc250_meta_pkgver linux_cachyos_bc250_meta_pkgrel \
     protonge_pkgver protonge_pkgrel protonge_ge_tag protonge_optiscaler \
     proton_native_pkgver proton_native_pkgrel proton_native_optiscaler; do
@@ -228,6 +235,7 @@ bc250_dual_audio_count="$(pkgbase_count bc250-dual-audio)"
 bc250_cec_count="$(pkgbase_count bc250-cec)"
 bc250_paccache_cleanup_count="$(pkgbase_count bc250-paccache-cleanup)"
 bc250_ch7218_fw_count="$(pkgbase_count bc250-ch7218-fw)"
+bc250_vcn_fw_count="$(pkgbase_count bc250-vcn-fw)"
 linux_cachyos_bc250_meta_count="$(pkgbase_count linux-cachyos-bc250-meta)"
 protonge_count="$(pkgbase_count protonge-latest-bc250)"
 proton_native_count="$(pkgbase_count proton-cachyos-native-bc250)"
@@ -244,6 +252,7 @@ proton_slr_count="$(pkgbase_count proton-cachyos-slr-bc250)"
 (( bc250_cec_count == 1 )) || { printf 'ERROR: expected exactly one bc250-cec package; found %d\n' "$bc250_cec_count" >&2; exit 1; }
 (( bc250_paccache_cleanup_count == 1 )) || { printf 'ERROR: expected exactly one bc250-paccache-cleanup package; found %d\n' "$bc250_paccache_cleanup_count" >&2; exit 1; }
 (( bc250_ch7218_fw_count == 1 )) || { printf 'ERROR: expected exactly one bc250-ch7218-fw package; found %d\n' "$bc250_ch7218_fw_count" >&2; exit 1; }
+(( bc250_vcn_fw_count == 1 )) || { printf 'ERROR: expected exactly one bc250-vcn-fw package; found %d\n' "$bc250_vcn_fw_count" >&2; exit 1; }
 (( linux_cachyos_bc250_meta_count == 1 )) || { printf 'ERROR: expected exactly one linux-cachyos-bc250-meta package; found %d\n' "$linux_cachyos_bc250_meta_count" >&2; exit 1; }
 (( protonge_count == 1 )) || { printf 'ERROR: expected exactly one protonge-latest-bc250 package; found %d\n' "$protonge_count" >&2; exit 1; }
 (( proton_native_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-native-bc250 package; found %d\n' "$proton_native_count" >&2; exit 1; }
@@ -286,6 +295,7 @@ BC250_DUAL_AUDIO_FINGERPRINT="$(fingerprint_from "$bc250_dual_audio_info" BC250_
 BC250_CEC_FINGERPRINT="$(fingerprint_from "$bc250_cec_info" BC250_CEC_FINGERPRINT "$BC250_CEC_FINGERPRINT")"
 BC250_PACCACHE_CLEANUP_FINGERPRINT="$(fingerprint_from "$bc250_paccache_cleanup_info" BC250_PACCACHE_CLEANUP_FINGERPRINT "$BC250_PACCACHE_CLEANUP_FINGERPRINT")"
 BC250_CH7218_FW_FINGERPRINT="$(fingerprint_from "$bc250_ch7218_fw_info" BC250_CH7218_FW_FINGERPRINT "$BC250_CH7218_FW_FINGERPRINT")"
+BC250_VCN_FW_FINGERPRINT="$(fingerprint_from "$bc250_vcn_fw_info" BC250_VCN_FW_FINGERPRINT "$BC250_VCN_FW_FINGERPRINT")"
 LINUX_CACHYOS_BC250_META_FINGERPRINT="$(fingerprint_from "$linux_cachyos_bc250_meta_info" LINUX_CACHYOS_BC250_META_FINGERPRINT "$LINUX_CACHYOS_BC250_META_FINGERPRINT")"
 PROTONGE_LATEST_BC250_FINGERPRINT="$(fingerprint_from "$protonge_info" PROTONGE_LATEST_BC250_FINGERPRINT "$PROTONGE_LATEST_BC250_FINGERPRINT")"
 PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$(fingerprint_from "$proton_native_info" PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT")"
@@ -293,7 +303,7 @@ PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$(fingerprint_from "$proton_native_info
 SOURCE_FINGERPRINT="$(printf '%s\n' \
     "$KERNEL_STABLE_FINGERPRINT" "$KERNEL_RC_FINGERPRINT" "$KERNEL_BORE_FINGERPRINT" \
     "$MESA_FINGERPRINT" "$LIB32_MESA_FINGERPRINT" "$MESA_GIT_FINGERPRINT" \
-    "$BC250_DUAL_AUDIO_FINGERPRINT" "$BC250_CEC_FINGERPRINT" "$BC250_PACCACHE_CLEANUP_FINGERPRINT" "$BC250_CH7218_FW_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
+    "$BC250_DUAL_AUDIO_FINGERPRINT" "$BC250_CEC_FINGERPRINT" "$BC250_PACCACHE_CLEANUP_FINGERPRINT" "$BC250_CH7218_FW_FINGERPRINT" "$BC250_VCN_FW_FINGERPRINT" "$LINUX_CACHYOS_BC250_META_FINGERPRINT" \
     "$PROTONGE_LATEST_BC250_FINGERPRINT" "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" | \
     sha256sum | awk '{print $1}')"
 
@@ -309,6 +319,7 @@ BC250_DUAL_AUDIO_FINGERPRINT=${BC250_DUAL_AUDIO_FINGERPRINT}
 BC250_CEC_FINGERPRINT=${BC250_CEC_FINGERPRINT}
 BC250_PACCACHE_CLEANUP_FINGERPRINT=${BC250_PACCACHE_CLEANUP_FINGERPRINT}
 BC250_CH7218_FW_FINGERPRINT=${BC250_CH7218_FW_FINGERPRINT}
+BC250_VCN_FW_FINGERPRINT=${BC250_VCN_FW_FINGERPRINT}
 LINUX_CACHYOS_BC250_META_FINGERPRINT=${LINUX_CACHYOS_BC250_META_FINGERPRINT}
 PROTONGE_LATEST_BC250_FINGERPRINT=${PROTONGE_LATEST_BC250_FINGERPRINT}
 PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT=${PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT}
@@ -322,6 +333,7 @@ LAST_RUN_BC250_DUAL_AUDIO_BUILD=${BUILD_BC250_DUAL_AUDIO}
 LAST_RUN_BC250_CEC_BUILD=${BUILD_BC250_CEC}
 LAST_RUN_BC250_PACCACHE_CLEANUP_BUILD=${BUILD_BC250_PACCACHE_CLEANUP}
 LAST_RUN_BC250_CH7218_FW_BUILD=${BUILD_BC250_CH7218_FW}
+LAST_RUN_BC250_VCN_FW_BUILD=${BUILD_BC250_VCN_FW}
 LAST_RUN_LINUX_CACHYOS_BC250_META_BUILD=${BUILD_LINUX_CACHYOS_BC250_META}
 LAST_RUN_PROTONGE_LATEST_BC250_BUILD=${BUILD_PROTONGE_LATEST_BC250}
 LAST_RUN_PROTON_CACHYOS_NATIVE_BC250_BUILD=${BUILD_PROTON_CACHYOS_NATIVE_BC250}
@@ -352,9 +364,11 @@ BC250_DUAL_AUDIO_PKGREL=${bc250_dual_audio_pkgrel}
 BC250_CEC_PKGVER=${bc250_cec_pkgver}
 BC250_PACCACHE_CLEANUP_PKGVER=${bc250_paccache_cleanup_pkgver}
 BC250_CH7218_FW_PKGVER=${bc250_ch7218_fw_pkgver}
+BC250_VCN_FW_PKGVER=${bc250_vcn_fw_pkgver}
 BC250_CEC_PKGREL=${bc250_cec_pkgrel}
 BC250_PACCACHE_CLEANUP_PKGREL=${bc250_paccache_cleanup_pkgrel}
 BC250_CH7218_FW_PKGREL=${bc250_ch7218_fw_pkgrel}
+BC250_VCN_FW_PKGREL=${bc250_vcn_fw_pkgrel}
 LINUX_CACHYOS_BC250_META_PKGVER=${linux_cachyos_bc250_meta_pkgver}
 LINUX_CACHYOS_BC250_META_PKGREL=${linux_cachyos_bc250_meta_pkgrel}
 PROTONGE_LATEST_BC250_PKGVER=${protonge_pkgver}
@@ -424,7 +438,7 @@ cat > RELEASE_NOTES.md <<EOF_NOTES
 - The \`hdmi21-vtem-on-tmds.patch\` carry ("Emit VTEM for HF-VSDB VRR on TMDS links", upstream \`640fd039dc8b\`) has been **dropped**. It is queued for Linux 7.4 -- it landed in \`drm-next\` on 2026-09-02, one day after 7.3-rc1 was tagged -- so it arrives on its own with the next series. It also only ever applied through a passive DP++ adapter; through an active DP->HDMI converter the GPU speaks DisplayPort and the code never ran. The other seven patches of the original backport arrived in \`cachyos-7.3-rc2-1\` via CachyOS's \`7.3/hdmi\` merge and were dropped earlier.
 - **\`ch7218-vrr-allowlist.patch\` (RC only)** -- FreeSync passthrough on a Chrontel CH7218 DP-to-HDMI 2.1 adapter (DPCD branch OUI \`2B:02:F0\`, UGREEN DP134 and most compact "8K" plugs). CachyOS's 7.2 kernel lists this converter in the FreeSync PCON allowlist; its 7.3 HDMI branch was rebuilt on a different VRR series and does not, so with the same adapter VRR worked on \`linux-cachyos-bc250\` and was silently absent on \`linux-cachyos-rc-bc250\`. One static table entry, unconditional (it cannot be gated and only states the chip may carry VRR, which it does). Unrelated to the opt-in CH7218 quirk above.
 - **\`pcon-vrr-hf-vsdb.patch\` (RC only)** -- the allowlist entry above was necessary but not sufficient. On 7.3 a DP-to-HDMI PCON gets its VRR range only from the AMD FreeSync EDID block, parsed by DMUB/DMCU firmware that DCN201 does not have, so the parse always fails on a BC-250 and the range stays 0/0 even when every DPCD gate passes. This adds what 7.2 already does: fall back to the HDMI Forum VRR range the DRM core parses in software. Covers TVs without an AMD block too. \`drm.debug=0x2\` logs the decision as \`VRR: PCON HF-VSDB fallback\`.
-- Also carries \`gud-bound-tv-mode-count.patch\` ("drm/gud: bound the TV mode count"), which rejects a firmware-reported mode count larger than the array it is read into. Only reachable with a GUD USB display attached. Dropped from the stable/BORE set: upstream reverted the commit that causes the underlying FORTIFY_SOURCE trap on the 7.2 branch, confirmed by reading the reverted state directly and not just assuming a version bump fixed it. The 7.3-rc branch still carries the vulnerable code, confirmed by a real \`-O3\`/ThinLTO build that reproduces the failure without this patch.
+- **\`bc250-vcn.patch\` (RC only, experimental)** -- enables the VCN 2.0 video block (hardware video decode/encode). Needs the \`bc250-vcn-fw\` package for its firmware; without that file the block stays off and nothing else changes.
 
 ### BORE: \`${bore_pkgbase}\`
 
@@ -542,6 +556,19 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   07.00.xx (54 or older). Read \`/usr/share/doc/bc250-ch7218-fw/README.md\` first.
 - Not part of \`linux-cachyos-bc250-meta\`:
   \`sudo pacman -S bc250-ch7218-fw\`.
+
+## BC-250 VCN firmware (opt-in, experimental)
+
+- Package version: \`${bc250_vcn_fw_pkgver}-${bc250_vcn_fw_pkgrel}\`
+- The firmware file \`amdgpu/ps5_vcn.bin\` that the VCN patch in
+  \`linux-cachyos-rc-bc250\` needs to switch on the BC-250's video block (hardware
+  video decode and encode). It is not in linux-firmware; the file is the one the
+  ps5-linux project ships for the same silicon family, with AMD's licence text.
+  Read \`/usr/share/doc/bc250-vcn-fw/README.md\` for where it comes from.
+- Only the RC kernel uses it. Without the file that kernel leaves the VCN block
+  off and nothing else changes. After installing, run \`sudo mkinitcpio -P\` and
+  reboot.
+- Not part of \`linux-cachyos-bc250-meta\`: \`sudo pacman -S bc250-vcn-fw\`.
 
 ## aic8800d80-dkms -- removed
 
@@ -662,6 +689,7 @@ printf '    bc250-dual-audio: %s-%s\n' "$bc250_dual_audio_pkgver" "$bc250_dual_a
 printf '    bc250-cec: %s-%s\n' "$bc250_cec_pkgver" "$bc250_cec_pkgrel"
 printf '    bc250-paccache-cleanup: %s-%s\n' "$bc250_paccache_cleanup_pkgver" "$bc250_paccache_cleanup_pkgrel"
 printf '    bc250-ch7218-fw: %s-%s\n' "$bc250_ch7218_fw_pkgver" "$bc250_ch7218_fw_pkgrel"
+printf '    bc250-vcn-fw: %s-%s\n' "$bc250_vcn_fw_pkgver" "$bc250_vcn_fw_pkgrel"
 printf '    linux-cachyos-bc250-meta: %s-%s\n' "$linux_cachyos_bc250_meta_pkgver" "$linux_cachyos_bc250_meta_pkgrel"
 printf '    protonge-latest-bc250: %s-%s (%s, OptiScaler %s)\n' \
     "$protonge_pkgver" "$protonge_pkgrel" "$protonge_ge_tag" "$protonge_optiscaler"

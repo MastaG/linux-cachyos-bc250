@@ -54,7 +54,7 @@ The stable and BORE kernels carry these sixteen BC-250 patches in `patches/linux
 0016-bc250-vrm-memory-hwmon.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same sixteen patches (content-identical, renumbered around its own series-specific carries) plus the three RC-only entries below:
+`patches/linux-cachyos-rc` carries the same sixteen patches (content-identical, renumbered around its own series-specific carries) plus the RC-only entries below (`0019-bc250-vcn.patch` is RC-only until it has been tested on hardware):
 
 ```text
 0001-bc250-8core-telemetry-gpu-activity.patch
@@ -65,17 +65,17 @@ The stable and BORE kernels carry these sixteen BC-250 patches in `patches/linux
 0006-amdgpu-ttm-null-page-guard.patch
 0007-cyan-skillfish-sclk-range.patch
 0008-bc250-40cu-unlock.patch
-0009-gud-bound-tv-mode-count.patch
-0010-dcn201-hdmi21-pcon.patch
-0011-dcn201-enable-dsc.patch
-0012-cs-relink-after-long-blank.patch
-0013-ch7218-pcon-quirk.patch
-0014-ch7218-dsc-restore.patch
-0015-ch7218-vrr-allowlist.patch
-0016-pcon-force-dsc.patch
-0017-pcon-vrr-hf-vsdb.patch
-0018-bc250-psp-ccp.patch
-0019-bc250-vrm-memory-hwmon.patch
+0009-dcn201-hdmi21-pcon.patch
+0010-dcn201-enable-dsc.patch
+0011-cs-relink-after-long-blank.patch
+0012-ch7218-pcon-quirk.patch
+0013-ch7218-dsc-restore.patch
+0014-ch7218-vrr-allowlist.patch
+0015-pcon-force-dsc.patch
+0016-pcon-vrr-hf-vsdb.patch
+0017-bc250-psp-ccp.patch
+0018-bc250-vrm-memory-hwmon.patch
+0019-bc250-vcn.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -110,8 +110,7 @@ condition.
 cannot drift against the others.
 
 Known pre-existing noise that is *not* a regression: `cyan-skillfish-sclk-range`
-applies with `offset 1` on stable, `gud-bound-tv-mode-count` with `fuzz 1` on
-RC, and upstream's own `dkms-clang.patch` with `offset -5` on both.
+applies with `offset 1` on stable, and upstream's own `dkms-clang.patch` with `offset -5` on both.
 
 #### Disabled patches
 
@@ -131,15 +130,6 @@ One of them, `cs-release-gfx-override-at-modeset.patch`, was shipped and then wi
 There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
 #### Patches that exist in one set only
-
-- `gud-bound-tv-mode-count.patch` — RC only, as of this writing. A FORTIFY_SOURCE workaround for a `drm/gud` bug (`da1ea35fea67`) that trips `__read_overflow` at `-O3` with ThinLTO:
-
-  ```text
-  ld.lld: error: call to __read_overflow marked "dontcall-error": detected
-  read beyond size of object (1st parameter)
-  ```
-
-  Upstream **reverted** the commit that causes this on the branch the stable/BORE kernels track, so the vulnerable code is gone there and the workaround was dropped from `patches/linux-cachyos` — confirmed by reading the reverted-to state directly, not by assuming a version bump fixed it. The 7.3-rc branch still carries the vulnerable code verbatim, confirmed the same way and by a real `-O3`/ThinLTO build that reproduces the failure without this patch and passes with it, so it stays in `patches/linux-cachyos-rc` until 7.3 either reverts it too or lands its own fix. **Do not drop this from the RC set on a version bump alone** — verify with `git apply --check -R gud-bound-tv-mode-count.patch` against the new tree (should fail cleanly if the patch is still needed) and, ideally, a real build.
 
 - `ch7218-vrr-allowlist.patch` — RC only. One line: the Chrontel CH7218 (DPCD branch OUI `2B:02:F0`) added to `dm_freesync_pcon_whitelist`, plus its `DP_BRANCH_DEVICE_ID_2B02F0` define. CachyOS's 7.2 kernel already has this through its `7.2/hdmi` branch, which is why VRR through a CH7218 works on `linux-cachyos-bc250`; its `7.3/hdmi` branch was rebuilt on a different VRR series (HF-VSDB / ALLM / passive VRR, Aug 2026) and dropped the entry, so on 7.3-rc the same adapter fails the allowlist and DC refuses to pass FreeSync through — VRR silently absent on `linux-cachyos-rc-bc250`, identical hardware. Unconditional on purpose: a static table cannot be gated, and the entry only states that this converter may carry FreeSync-over-HDMI, which the chip does. Unrelated to the opt-in `ch7218-pcon-quirk.patch`, which is about capability *misreporting*. **Drop it when the RC source carries the ID itself** — the duplicate define then fails the build, which is the intended signal.
 
@@ -190,9 +180,7 @@ higher-bandwidth path than anything this patch touched.
 ## 4K120 4:4:4 through an HDMI 2.1 PCON
 
 Two patches, `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` — `0009`
-and `0010` in the stable/BORE set, `0010` and `0011` in the RC set (the RC set
-carries one extra series-specific patch, `gud-bound-tv-mode-count`, ahead of
-these; see [patches that exist in one set only](#patches-that-exist-in-one-set-only)).
+and `0010` in the stable/BORE set and in the RC set.
 Called "the PCON patch" and "the DSC patch" below. Together they make 3840x2160@120Hz at full 4:4:4
 chroma reachable on a BC-250 through a DisplayPort 1.4 → HDMI 2.1 FRL protocol
 converter. **Both are on by default**, behind one parameter that exists as an

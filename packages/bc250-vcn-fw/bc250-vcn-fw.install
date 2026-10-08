@@ -1,0 +1,10 @@
+post_install() {
+    echo "==> bc250-vcn-fw installed: /usr/lib/firmware/amdgpu/ps5_vcn.bin"
+    echo "==> amdgpu loads from the initramfs, so rebuild it once, then reboot:"
+    echo "==>   sudo mkinitcpio -P"
+    echo "==> Only the linux-cachyos-rc-bc250 kernel uses this file (VCN patch)."
+}
+
+post_upgrade() {
+    echo "==> bc250-vcn-fw updated. Rebuild the initramfs (sudo mkinitcpio -P) and reboot."
+}

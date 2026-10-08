@@ -1,0 +1,40 @@
+# Maintainer: MastaG
+#
+# Opt-in and deliberately NOT a dependency of linux-cachyos-bc250-meta: the
+# kernel patch that uses this firmware (0019-bc250-vcn.patch) is only in the
+# linux-cachyos-rc-bc250 kernel for now. Without the patch the file is unused;
+# without the file the patched kernel simply leaves the VCN block off.
+#
+# Not derived from an upstream PKGBUILD. source= is the files next to this one.
+# The firmware is not in linux-firmware; see README.md for where it comes from.
+# makepkg finds local sources by file name, so the build script copies
+# everything flat next to this file.
+pkgname=bc250-vcn-fw
+pkgver=1
+pkgrel=1
+pkgdesc="Video Core Next (VCN 2.0) firmware for the BC-250, for the linux-cachyos-rc-bc250 VCN patch"
+arch=('any')
+url="https://github.com/MastaG/linux-cachyos-bc250"
+license=('custom:AMD-redistributable-firmware')
+install=bc250-vcn-fw.install
+source=(
+    'ps5_vcn.bin'
+    'LICENSE.amdgpu'
+    'README.md'
+    'SHA256SUMS'
+)
+sha256sums=('bbd15ab65e76178c2918e8224b6ab4ab1711f1b59d935ee131ab188a9712e596'
+            '572872598565dc3513470de971a32bf9db301f47afeef3636345eadae33b2eee'
+            'SKIP'
+            'SKIP')
+# Firmware must reach the user byte for byte.
+options=('!strip' '!debug')
+
+package() {
+    # Uncompressed on purpose: the kernel tries the plain name first, and the
+    # bytes then match SHA256SUMS exactly.
+    install -Dm644 "$srcdir/ps5_vcn.bin" "$pkgdir/usr/lib/firmware/amdgpu/ps5_vcn.bin"
+    install -Dm644 "$srcdir/LICENSE.amdgpu" "$pkgdir/usr/share/licenses/$pkgname/LICENSE.amdgpu"
+    install -Dm644 "$srcdir/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 "$srcdir/SHA256SUMS" "$pkgdir/usr/share/doc/$pkgname/SHA256SUMS"
+}

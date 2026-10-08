@@ -27,6 +27,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; retrains the link when the display powers on or switches to the board |
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `bc250-ch7218-fw` | Optional: UGREEN's updater and three firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
+| `bc250-vcn-fw` | Optional, experimental: the firmware file for the VCN video-block patch in `linux-cachyos-rc-bc250` |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 ---
@@ -1001,6 +1002,18 @@ sudo pacman -S bc250-paccache-cleanup
 ```
 
 With it installed there are no older package versions left on your disk to downgrade to. This repository keeps the previous builds of every package, so a downgrade comes from there instead; see [Downgrading a package](#downgrading-a-package). To keep the last version in the cache instead, copy `/usr/share/libalpm/hooks/bc250-paccache-cleanup.hook` to `/etc/pacman.d/hooks/` and change `-rqk0` to `-rqk1` in its `Exec` line (a hook there overrides the packaged one). To stop the cleanup, remove the package.
+
+## Hardware video (VCN), experimental
+
+`linux-cachyos-rc-bc250` carries `0019-bc250-vcn.patch`, which switches on the BC-250's Video Core Next block (VCN 2.0). Mainline Linux skips it. The patch is a port of the PS5 one from the ps5-linux project ([ps5-linux-patches PR #38](https://github.com/ps5-linux/ps5-linux-patches/pull/38)) and is **RC only until it has been tested on hardware**; the stable and BORE kernels do not have it.
+
+It needs a firmware file that is not in linux-firmware, shipped by the optional `bc250-vcn-fw` package (see its README for where the file comes from). Without the file the kernel simply leaves the block off.
+
+```bash
+sudo pacman -S bc250-vcn-fw
+sudo mkinitcpio -P   # amdgpu loads from the initramfs
+sudo reboot
+```
 
 ## UGREEN DP-to-HDMI 2.1 adapter firmware (optional)
 

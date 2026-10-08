@@ -77,6 +77,7 @@ bc250-dual-audio
 bc250-cec
 bc250-paccache-cleanup
 bc250-ch7218-fw
+bc250-vcn-fw
 linux-cachyos-bc250-meta
 protonge-latest-bc250
 proton-cachyos-native-bc250
@@ -135,6 +136,7 @@ A complete fixed release contains at least:
 - `bc250-cec` + its PKGBUILD, `.SRCINFO` and `bc250-cec-info.env`;
 - `bc250-paccache-cleanup` + its PKGBUILD, `.SRCINFO` and `bc250-paccache-cleanup-info.env`;
 - `bc250-ch7218-fw` + its PKGBUILD, `.SRCINFO` and `bc250-ch7218-fw-info.env`;
+- `bc250-vcn-fw` + its PKGBUILD, `.SRCINFO` and `bc250-vcn-fw-info.env`;
 - `linux-cachyos-bc250-meta` + its PKGBUILD, `.SRCINFO` and `linux-cachyos-bc250-meta-info.env`;
 - `protonge-latest-bc250` + its PKGBUILD, `.SRCINFO` and `protonge-latest-bc250-info.env`;
 - `proton-cachyos-native-bc250` + its PKGBUILD, `.SRCINFO` and `proton-cachyos-native-bc250-info.env`;

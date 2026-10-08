@@ -40,6 +40,7 @@ case "$COMPONENT" in
     bc250-cec) ;;
     bc250-paccache-cleanup) ;;
     bc250-ch7218-fw) ;;
+    bc250-vcn-fw) ;;
     linux-cachyos-bc250-meta) ;;
     protonge-latest-bc250) ;;
     proton-cachyos-native-bc250) ;;
@@ -175,6 +176,21 @@ case "$COMPONENT" in
                 "$pkg_dir/bc250-ch7218-flash" "$pkg_dir/ch7218_fwu" "$pkg_dir/README.md" \
                 "$pkg_dir"/firmware/*
             hash_files "$ROOT_DIR/scripts/build-bc250-ch7218-fw-package.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    bc250-vcn-fw)
+        # The firmware, its licence and our PKGBUILD/README: hash every file in
+        # the package directory, so a changed blob rebuilds the package.
+        pkg_dir="$ROOT_DIR/packages/bc250-vcn-fw"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        {
+            hash_files "$pkg_dir"/*
+            hash_files "$ROOT_DIR/scripts/build-bc250-vcn-fw-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;
