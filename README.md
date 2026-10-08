@@ -898,7 +898,7 @@ network weights and kernels it runs are, per its author, NVIDIA's property
 and not covered by any licence here. Since 1.2.0 its release no longer contains
 them: its setup script builds `helixsr_weights.bin` and `helixsr_kernels.pak`
 from NVIDIA's public DLSS 310.7.0 DLL. We ran that script once and mirrored the
-result (the `HelixSR-1.2.0-network.zip` payload), so the Proton packages need no
+result (the `HelixSR-1.3.0-network.zip` payload), so the Proton packages need no
 setup step and nothing is downloaded at game launch. Like the unsigned bridges it is pinned by
 SHA256 and its origin is written into the prefix
 (`Licenses/THIRD-PARTY-UPSCALER.txt`, notices under `Licenses/<version>/`).
