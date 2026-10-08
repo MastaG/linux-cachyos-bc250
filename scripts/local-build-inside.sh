@@ -93,6 +93,12 @@ fi
     exit 1
 }
 
+# The git clones makepkg leaves in build/ borrow objects from a mirror by an
+# absolute /workspace path that only exists in here. Make them relative so git
+# works on them from the host too -- also after a failed build, which is when
+# you most want to look at the source.
+trap '/workspace/scripts/relativize-git-alternates.sh /workspace/build || true' EXIT
+
 for component in "${COMPONENTS[@]}"; do
     case "$component" in
         proton-cachyos-native-bc250)
