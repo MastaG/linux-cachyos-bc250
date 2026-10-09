@@ -104,7 +104,7 @@ sha256s = '\n'.join(f"  '{sha}'" for _, sha, _ in patches)
 b2s = '\n'.join(f"  '{b2}'" for _, _, b2 in patches)
 inject = (
     '# BC-250 / GFX1013 patch set. 0001 and the FSR4 patches 0003-0007 are on by\n'
-    '# default; 0002 (DirectMesh mesh/task shaders) is opt-in with RADV_DIRECTMESH=1.\n'
+    '# default; 0002 (DirectMesh mesh/task shaders) is on with a BC-250 unless RADV_DIRECTMESH=0.\n'
     f'source+=(\n{names}\n)\n'
     f'sha256sums+=(\n{sha256s}\n)\n'
     f'b2sums+=(\n{b2s}\n)\n\n'

@@ -83,8 +83,8 @@ PY
 
 # Apply the complete BC-250 Mesa series through CachyOS' native user-patch
 # mechanism. 0001 and the FSR4 patches 0003-0007 are on by default; 0002
-# (DirectMesh mesh/task shaders) only takes effect on GFX1013 with
-# RADV_DIRECTMESH=1.
+# (DirectMesh mesh/task shaders) only takes effect on GFX1013, on by
+# default with a BC-250 (RADV_DIRECTMESH=0 turns it off).
 patch_names=()
 for patch in "${MESA_GIT_PATCHES[@]}"; do
     name="$(basename "$patch")"

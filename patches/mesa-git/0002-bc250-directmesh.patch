@@ -1,20 +1,20 @@
 From 939b874845c249322ca89cfcb5b848b9b4f60011 Mon Sep 17 00:00:00 2001
 From: lonewolf0622 <hoseinxmusic@gmail.com>
 Date: Tue, 29 Sep 2026 21:25:10 -0400
-Subject: [PATCH] radv/bc250: DirectMesh v1.3 mesh and task shaders for GFX1013
+Subject: [PATCH] radv/bc250: DirectMesh v1.3.1 mesh and task shaders for GFX1013
 
 VK_EXT_mesh_shader (Mesh + Task) and VK_KHR_fragment_shader_barycentric on
 the BC-250, plus (v1.2) VK_EXT_device_generated_commands for Mesh/Task draws,
 multiview with Mesh shaders, and indirect Task draws whose rarely used extra
 chunks are recorded once per call, and (v1.3) indexed Mesh draws, where
 eligible Mesh-only triangle pipelines run their index work as compute and
-draw with ordinary indexed draws, all drawn on a safe direct path: one launch per Mesh workgroup, no
+draw with ordinary indexed draws (v1.3.1: stored in GTT, not VRAM), all drawn on a safe direct path: one launch per Mesh workgroup, no
 split/replay, and an export chosen per workgroup that rules out the index
 patterns that hang this chip. An automatic converter rewrites application
 Mesh/Task shaders into a form that path accepts; anything nothing can prove
 safe takes the older split/expansion path or is refused at pipeline
-creation, never the raw route. Enabled per game with RADV_DIRECTMESH=1,
-and it only ever affects GFX1013.
+creation, never the raw route. On by default with a BC-250 (PCI 1002:13fe or
+1002:143f); RADV_DIRECTMESH=0 turns it off, and it only ever affects GFX1013.
 
 Author's validation (real hardware, RADV_DIRECTMESH=1), v1.1:
 dEQP-VK.mesh_shader.ext.* plus the fragment-barycentric Mesh cases that run
@@ -29,35 +29,37 @@ dEQP-VK.mesh_shader.* 1,902/1,902 including all multiview cases, image
 checks against vertex-shader references, indirect-pool overflow, storage
 exhaustion and command-buffer reuse with no GPU faults; meshlets of 96+
 vertices draw about 1.5-1.9x faster than v1.2 through the indexed route.
+v1.3.1: the index-route storage moves from VRAM (up to 128 MiB of the
+BC-250's 512 MiB carveout; at 4K that caused framebuffer pin failures and a
+GPU hang) to GTT with unchanged speed (44 benchmark cases within about 1%),
+Mesh CTS 1,902 passed / 0 failed, and a 4K game workload that hung on v1.3
+ran about 23,000 frames.
 
 Source: https://github.com/lonewolf0622/bc250meshtaskwork, release
-directmesh-v1.3 (commit a2428cb), patches/bc250-directmesh-mesa-26.2.1.patch
-sha256 b5b4a49035df5542d20f239320b1caed30dd8cd911925bf38aecb83848cdd779.
+directmesh-v1.3.1 (commit 3977ab4), patches/bc250-directmesh-mesa-26.2.1.patch
+sha256 6669d4644d9a00ad8da022dd2716c59e4d235a2c6f0eb4f272c9c8d9fbcc9b77.
 
-Changes on top of upstream (this repository): RADV_DIRECTMESH=1 is made the one
-opt-in for everything the series changes by default. Upstream also
+Changes on top of upstream (this repository): everything the series changes by
+default is behind one decision, radv_bc250_directmesh_requested(): RADV_DIRECTMESH=1
+forces it on, any other value turns it off, and unset means on exactly when a
+BC-250 is present (upstream v1.3.1's rule, evaluated once). Upstream also
 exposes mesh/task shaders, fragment shader barycentrics and a no-op
 VK_KHR_fragment_shading_rate on every GFX1013 device, and changed the
-winsys IB reuse there, whether or not the switch was set - and without the
-switch the fail-closed direct-path checks are not filled in. Here
+winsys IB reuse there, whether or not DirectMesh was on; here
 bc250_native_mesh, bc250_barycentrics, bc250_vrs_noop and the IB retention
-all require radv_bc250_directmesh_requested() (RADV_DIRECTMESH exactly
-"1", the same test radv_bc250_directmesh_env uses), so without the switch a
-GFX1013 device exposes what the base driver exposes. The comment claiming
-mesh is exposed through RADV_PERFTEST=mesh is corrected: there is no such
-perftest flag (unknown names are ignored); the switch's only RADV_PERFTEST
-effect is turning on nircache when RADV_PERFTEST is unset.
+all require radv_bc250_directmesh_requested(), so a GFX1013 device in a
+system where DirectMesh is off exposes what the base driver exposes. The
+comment claiming mesh is exposed through RADV_PERFTEST=mesh is corrected:
+there is no such perftest flag (unknown names are ignored); the switch's only
+RADV_PERFTEST effect is turning on nircache when RADV_PERFTEST is unset.
 
 The two v1.2 fixes this repository carried are upstream as of v1.3: the
 DXVK carve-out (DXVK keeps graphics pipeline libraries while the preset turns
 hybrid Task on) is decided on the first vkCreateInstance only, and
 BC250_CAPTURE_POINTERS is read once instead of with getenv on every state
-flush on every GPU.
-
-v1.3 calls radv_bc250_idx_restore() at the top of radv_before_draw and
-radv_before_taskmesh_draw. It lives in another file, so every draw on every
-GPU paid a call to find the index route inactive; here the two hot paths
-test cmd_buffer->bc250_idx_restore inline first. Behaviour is unchanged.
+flush on every GPU. The inline bc250_idx_restore test in radv_before_draw and
+radv_before_taskmesh_draw (so ordinary draws do not pay a call) is upstream
+as of v1.3.1.
 
 Replaces this repository's earlier 0002-0004 (the RADV_GFX103 experimental
 mesh/task path, which in practice only worked for Final Fantasy VII
@@ -180,7 +182,7 @@ upstream's change and re-applying DirectMesh's intent on top:
  .../nir/radv_nir_lower_fs_barycentric.c       |  260 +-
  .../radv_nir_lower_primitive_shading_rate.c   |   79 +
  src/amd/vulkan/radv_aco_shader_info.h         |    1 +
- src/amd/vulkan/radv_bc250.c                   | 8812 +++++++++++++++++
+ src/amd/vulkan/radv_bc250.c                   | 8857 +++++++++++++++++
  src/amd/vulkan/radv_bc250.h                   |  200 +
  src/amd/vulkan/radv_bc250_dgc.c               |  811 ++
  src/amd/vulkan/radv_bc250_dgc.h               |   18 +
@@ -197,7 +199,7 @@ upstream's change and re-applying DirectMesh's intent on top:
  src/amd/vulkan/radv_dgc.c                     |   28 +-
  src/amd/vulkan/radv_dgc.h                     |    1 +
  src/amd/vulkan/radv_image.c                   |    8 +-
- src/amd/vulkan/radv_instance.c                |    4 +
+ src/amd/vulkan/radv_instance.c                |    5 +
  src/amd/vulkan/radv_physical_device.c         |  166 +-
  src/amd/vulkan/radv_physical_device.h         |   19 +
  src/amd/vulkan/radv_pipeline.c                |   29 +-
@@ -212,7 +214,7 @@ upstream's change and re-applying DirectMesh's intent on top:
  src/amd/vulkan/radv_query.c                   |   46 +-
  src/amd/vulkan/radv_queue.c                   |  277 +-
  src/amd/vulkan/radv_queue.h                   |   39 +
- src/amd/vulkan/radv_radeon_winsys.h           |   36 +
+ src/amd/vulkan/radv_radeon_winsys.h           |   29 +
  src/amd/vulkan/radv_shader.c                  |  369 +-
  src/amd/vulkan/radv_shader.h                  |  222 +-
  src/amd/vulkan/radv_shader_args.c             |   17 +-
@@ -237,19 +239,10 @@ upstream's change and re-applying DirectMesh's intent on top:
  src/vulkan/runtime/vk_queue.h                 |   12 +
  src/vulkan/runtime/vk_sync.c                  |   40 +-
  src/vulkan/runtime/vk_sync.h                  |   41 +
- 82 files changed, 20610 insertions(+), 421 deletions(-)
- create mode 100644 src/amd/vulkan/radv_bc250.c
- create mode 100644 src/amd/vulkan/radv_bc250.h
- create mode 100644 src/amd/vulkan/radv_bc250_dgc.c
- create mode 100644 src/amd/vulkan/radv_bc250_dgc.h
- create mode 100644 src/amd/vulkan/radv_bc250_pipeline_plan.h
- create mode 100644 src/amd/vulkan/radv_bc250_route.h
- create mode 100644 src/amd/vulkan/radv_bc250_timer.c
- create mode 100644 src/amd/vulkan/radv_bc250_timer.h
- create mode 100644 src/compiler/nir/tests/opt_uub_tests.cpp
+ 82 files changed, 20649 insertions(+), 421 deletions(-)
 
 diff --git a/src/amd/common/ac_cmdbuf.c b/src/amd/common/ac_cmdbuf.c
-index ea67cbf1c2b..9a23c66f3c1 100644
+index ea67cbf..9a23c66 100644
 --- a/src/amd/common/ac_cmdbuf.c
 +++ b/src/amd/common/ac_cmdbuf.c
 @@ -965,6 +965,7 @@ ac_set_tracked_regs_to_clear_state(struct ac_tracked_regs *tracked_regs,
@@ -272,7 +265,7 @@ index ea67cbf1c2b..9a23c66f3c1 100644
  
  void
 diff --git a/src/amd/common/ac_cmdbuf.h b/src/amd/common/ac_cmdbuf.h
-index 15724fd6002..02d35dcb310 100644
+index 15724fd..02d35dc 100644
 --- a/src/amd/common/ac_cmdbuf.h
 +++ b/src/amd/common/ac_cmdbuf.h
 @@ -156,6 +156,7 @@ enum ac_tracked_reg
@@ -284,7 +277,7 @@ index 15724fd6002..02d35dcb310 100644
  
     /* 3 consecutive registers */
 diff --git a/src/amd/common/ac_descriptors.c b/src/amd/common/ac_descriptors.c
-index 8a78a1e7eeb..af27a96d328 100644
+index 8a78a1e..af27a96 100644
 --- a/src/amd/common/ac_descriptors.c
 +++ b/src/amd/common/ac_descriptors.c
 @@ -5,6 +5,7 @@
@@ -316,7 +309,7 @@ index 8a78a1e7eeb..af27a96d328 100644
  }
  
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
-index 25010b745a0..a5092fb82e2 100644
+index 25010b7..a5092fb 100644
 --- a/src/amd/common/ac_gpu_info.c
 +++ b/src/amd/common/ac_gpu_info.c
 @@ -1060,6 +1060,14 @@ void ac_fill_bug_info(struct radeon_info *info)
@@ -335,7 +328,7 @@ index 25010b745a0..a5092fb82e2 100644
  
     /* When LLVM is fixed to handle multiparts shaders, this value will depend
 diff --git a/src/amd/common/nir/ac_nir.h b/src/amd/common/nir/ac_nir.h
-index 76d972ec4cd..83e99c230ad 100644
+index 76d972e..83e99c2 100644
 --- a/src/amd/common/nir/ac_nir.h
 +++ b/src/amd/common/nir/ac_nir.h
 @@ -245,10 +245,121 @@ typedef struct {
@@ -462,7 +455,7 @@ index 76d972ec4cd..83e99c230ad 100644
  ac_nir_lower_ngg_nogs(nir_shader *shader, const ac_nir_lower_ngg_options *options,
                        uint32_t *out_lds_vertex_size, uint8_t *out_lds_scratch_size);
 diff --git a/src/amd/common/nir/ac_nir_helpers.h b/src/amd/common/nir/ac_nir_helpers.h
-index cf0b00ec431..d07edca47b3 100644
+index cf0b00e..d07edca 100644
 --- a/src/amd/common/nir/ac_nir_helpers.h
 +++ b/src/amd/common/nir/ac_nir_helpers.h
 @@ -209,6 +209,15 @@ ac_nir_ngg_alloc_vertices_and_primitives(nir_builder *b,
@@ -482,7 +475,7 @@ index cf0b00ec431..d07edca47b3 100644
  ac_nir_create_output_phis(nir_builder *b,
                            const uint64_t outputs_written,
 diff --git a/src/amd/common/nir/ac_nir_lower_ngg_mesh.c b/src/amd/common/nir/ac_nir_lower_ngg_mesh.c
-index f71ace01797..8f7493cc97f 100644
+index f71ace0..8f7493c 100644
 --- a/src/amd/common/nir/ac_nir_lower_ngg_mesh.c
 +++ b/src/amd/common/nir/ac_nir_lower_ngg_mesh.c
 @@ -9,6 +9,11 @@
@@ -4177,7 +4170,7 @@ index f71ace01797..8f7493cc97f 100644
     nir_progress(true, impl, nir_metadata_none);
     nir_validate_shader(shader, "after emitting NGG MS");
 diff --git a/src/amd/common/nir/ac_nir_prerast_utils.c b/src/amd/common/nir/ac_nir_prerast_utils.c
-index b20016b602c..e765fe9b571 100644
+index b20016b..e765fe9 100644
 --- a/src/amd/common/nir/ac_nir_prerast_utils.c
 +++ b/src/amd/common/nir/ac_nir_prerast_utils.c
 @@ -813,7 +813,8 @@ ac_nir_clamp_vertex_color_outputs(nir_builder *b, ac_nir_prerast_out *out)
@@ -4244,7 +4237,7 @@ index b20016b602c..e765fe9b571 100644
     }
  
 diff --git a/src/amd/compiler/aco_scheduler.cpp b/src/amd/compiler/aco_scheduler.cpp
-index a27c904b658..d4a47708b50 100644
+index a27c904..d4a4770 100644
 --- a/src/amd/compiler/aco_scheduler.cpp
 +++ b/src/amd/compiler/aco_scheduler.cpp
 @@ -771,6 +771,17 @@ perform_hazard_query(hazard_query* query, Instruction* instr, bool upwards)
@@ -4266,7 +4259,7 @@ index a27c904b658..d4a47708b50 100644
        return hazard_fail_barrier;
  
 diff --git a/src/amd/compiler/aco_shader_info.h b/src/amd/compiler/aco_shader_info.h
-index 227423a8de3..ceacff7a1a3 100644
+index 227423a..ceacff7 100644
 --- a/src/amd/compiler/aco_shader_info.h
 +++ b/src/amd/compiler/aco_shader_info.h
 @@ -114,6 +114,10 @@ struct aco_shader_info {
@@ -4292,7 +4285,7 @@ index 227423a8de3..ceacff7a1a3 100644
     enum amd_gfx_level gfx_level;
     uint32_t address32_hi;
 diff --git a/src/amd/compiler/instruction_selection/aco_isel_setup.cpp b/src/amd/compiler/instruction_selection/aco_isel_setup.cpp
-index a55dad3797f..b1712ca4ec8 100644
+index a55dad3..b1712ca 100644
 --- a/src/amd/compiler/instruction_selection/aco_isel_setup.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_isel_setup.cpp
 @@ -774,9 +774,16 @@ setup_isel_context(Program* program, unsigned shader_count, struct nir_shader* c
@@ -4315,7 +4308,7 @@ index a55dad3797f..b1712ca4ec8 100644
     setup_tcs_info(&ctx);
  
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-index 1377b18ef06..c58a491e2f0 100644
+index 1377b18..c58a491 100644
 --- a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
 @@ -78,7 +78,10 @@ get_alu_src(struct isel_context* ctx, nir_alu_src src, unsigned size = 1)
@@ -4331,7 +4324,7 @@ index 1377b18ef06..c58a491e2f0 100644
        for (unsigned i = 0; continuous && i < size; i += 2) {
           if (src.swizzle[i] % 2 != 0 || src.swizzle[i + 1] != (src.swizzle[i] + 1))
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_intrinsics.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_intrinsics.cpp
-index 268515bcb70..c6398810b48 100644
+index 268515b..c639881 100644
 --- a/src/amd/compiler/instruction_selection/aco_select_nir_intrinsics.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_select_nir_intrinsics.cpp
 @@ -4784,6 +4784,16 @@ visit_intrinsic(isel_context* ctx, nir_intrinsic_instr* instr)
@@ -4352,7 +4345,7 @@ index 268515bcb70..c6398810b48 100644
        break;
     }
 diff --git a/src/amd/llvm/ac_nir_to_llvm.c b/src/amd/llvm/ac_nir_to_llvm.c
-index c60b1aca1b8..cfe0d131af5 100644
+index c60b1ac..cfe0d13 100644
 --- a/src/amd/llvm/ac_nir_to_llvm.c
 +++ b/src/amd/llvm/ac_nir_to_llvm.c
 @@ -3901,10 +3901,13 @@ static void setup_gds(struct ac_nir_context *ctx, nir_function_impl *impl)
@@ -4371,7 +4364,7 @@ index c60b1aca1b8..cfe0d131af5 100644
        nir_foreach_block(block, impl) {
           nir_foreach_instr(instr, block) {
 diff --git a/src/amd/vulkan/meson.build b/src/amd/vulkan/meson.build
-index 0f97c815d4d..994279e40b2 100644
+index 0f97c81..994279e 100644
 --- a/src/amd/vulkan/meson.build
 +++ b/src/amd/vulkan/meson.build
 @@ -142,6 +142,8 @@ libradv_files = files(
@@ -4392,7 +4385,7 @@ index 0f97c815d4d..994279e40b2 100644
    'radv_event.c',
    'radv_event.h',
 diff --git a/src/amd/vulkan/meta/radv_meta.c b/src/amd/vulkan/meta/radv_meta.c
-index 68977aae50e..daffb0adc79 100644
+index 68977aa..daffb0a 100644
 --- a/src/amd/vulkan/meta/radv_meta.c
 +++ b/src/amd/vulkan/meta/radv_meta.c
 @@ -461,7 +461,7 @@ radv_meta_bind_descriptors(struct radv_cmd_buffer *cmd_buffer, VkPipelineBindPoi
@@ -4405,7 +4398,7 @@ index 68977aae50e..daffb0adc79 100644
     };
  
 diff --git a/src/amd/vulkan/meta/radv_meta.h b/src/amd/vulkan/meta/radv_meta.h
-index b1753d0732b..a131a3bad59 100644
+index b1753d0..a131a3b 100644
 --- a/src/amd/vulkan/meta/radv_meta.h
 +++ b/src/amd/vulkan/meta/radv_meta.h
 @@ -85,6 +85,8 @@ extern const VkFormat radv_fs_key_format_exemplars[NUM_META_FS_KEYS];
@@ -4426,7 +4419,7 @@ index b1753d0732b..a131a3bad59 100644
  
  VkResult radv_device_init_meta(struct radv_device *device);
 diff --git a/src/amd/vulkan/meta/radv_meta_buffer.c b/src/amd/vulkan/meta/radv_meta_buffer.c
-index 48319c3ecfd..3090fa6f0a6 100644
+index 48319c3..3090fa6 100644
 --- a/src/amd/vulkan/meta/radv_meta_buffer.c
 +++ b/src/amd/vulkan/meta/radv_meta_buffer.c
 @@ -418,7 +418,7 @@ radv_update_memory(struct radv_cmd_buffer *cmd_buffer, uint64_t va, uint64_t siz
@@ -4439,7 +4432,7 @@ index 48319c3ecfd..3090fa6f0a6 100644
        radv_copy_memory(cmd_buffer, src_va, va, size, src_copy_flags, dst_copy_flags);
     }
 diff --git a/src/amd/vulkan/meta/radv_meta_copy_indirect_cs.c b/src/amd/vulkan/meta/radv_meta_copy_indirect_cs.c
-index 0b11bd07117..160fb1d5052 100644
+index 0b11bd0..160fb1d 100644
 --- a/src/amd/vulkan/meta/radv_meta_copy_indirect_cs.c
 +++ b/src/amd/vulkan/meta/radv_meta_copy_indirect_cs.c
 @@ -153,7 +153,7 @@ radv_compute_copy_memory_indirect(struct radv_cmd_buffer *cmd_buffer,
@@ -4461,7 +4454,7 @@ index 0b11bd07117..160fb1d5052 100644
     result =
        radv_compute_copy_memory_to_image_indirect_preprocess(cmd_buffer, pCopyMemoryToImageIndirectInfo, upload_addr);
 diff --git a/src/amd/vulkan/meta/radv_meta_copy_vrs_htile.c b/src/amd/vulkan/meta/radv_meta_copy_vrs_htile.c
-index 619d533aff3..293c6c40967 100644
+index 619d533..293c6c4 100644
 --- a/src/amd/vulkan/meta/radv_meta_copy_vrs_htile.c
 +++ b/src/amd/vulkan/meta/radv_meta_copy_vrs_htile.c
 @@ -81,10 +81,15 @@ radv_copy_vrs_htile(struct radv_cmd_buffer *cmd_buffer, struct radv_image_view *
@@ -4481,7 +4474,7 @@ index 619d533aff3..293c6c40967 100644
     if (result != VK_SUCCESS) {
        vk_command_buffer_set_error(&cmd_buffer->vk, result);
 diff --git a/src/amd/vulkan/nir/radv_nir.h b/src/amd/vulkan/nir/radv_nir.h
-index b46406a391c..2866c6c7b52 100644
+index b46406a..2866c6c 100644
 --- a/src/amd/vulkan/nir/radv_nir.h
 +++ b/src/amd/vulkan/nir/radv_nir.h
 @@ -47,13 +47,23 @@ bool radv_nir_optimize_vs_inputs_to_const(nir_shader *shader, const struct radv_
@@ -4510,7 +4503,7 @@ index b46406a391c..2866c6c7b52 100644
  bool radv_nir_lower_intrinsics_early(nir_shader *nir, bool lower_view_index_to_zero);
  
 diff --git a/src/amd/vulkan/nir/radv_nir_lower_abi.c b/src/amd/vulkan/nir/radv_nir_lower_abi.c
-index 8ac5bdbb69d..c9a3f644972 100644
+index 8ac5bdb..c9a3f64 100644
 --- a/src/amd/vulkan/nir/radv_nir_lower_abi.c
 +++ b/src/amd/vulkan/nir/radv_nir_lower_abi.c
 @@ -138,6 +138,10 @@ lower_abi_instr(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
@@ -4572,7 +4565,7 @@ index 8ac5bdbb69d..c9a3f644972 100644
        progress = false;
        break;
 diff --git a/src/amd/vulkan/nir/radv_nir_lower_fs_barycentric.c b/src/amd/vulkan/nir/radv_nir_lower_fs_barycentric.c
-index 93e49da15b0..c7e91cea420 100644
+index 93e49da..c7e91ce 100644
 --- a/src/amd/vulkan/nir/radv_nir_lower_fs_barycentric.c
 +++ b/src/amd/vulkan/nir/radv_nir_lower_fs_barycentric.c
 @@ -16,6 +16,14 @@ typedef struct {
@@ -4884,7 +4877,7 @@ index 93e49da15b0..c7e91cea420 100644
 +   return nir_progress(true, impl, nir_metadata_none);
 +}
 diff --git a/src/amd/vulkan/nir/radv_nir_lower_primitive_shading_rate.c b/src/amd/vulkan/nir/radv_nir_lower_primitive_shading_rate.c
-index ba387a64012..19aa667ce64 100644
+index ba387a6..19aa667 100644
 --- a/src/amd/vulkan/nir/radv_nir_lower_primitive_shading_rate.c
 +++ b/src/amd/vulkan/nir/radv_nir_lower_primitive_shading_rate.c
 @@ -86,3 +86,82 @@ radv_nir_lower_primitive_shading_rate(nir_shader *nir, enum amd_gfx_level gfx_le
@@ -4971,7 +4964,7 @@ index ba387a64012..19aa667ce64 100644
 +   return nir_progress(progress, impl, nir_metadata_none);
 +}
 diff --git a/src/amd/vulkan/radv_aco_shader_info.h b/src/amd/vulkan/radv_aco_shader_info.h
-index b44f98ec8c4..c3fa19a93e5 100644
+index b44f98e..c3fa19a 100644
 --- a/src/amd/vulkan/radv_aco_shader_info.h
 +++ b/src/amd/vulkan/radv_aco_shader_info.h
 @@ -69,6 +69,7 @@ radv_aco_convert_shader_info(struct aco_shader_info *aco_info, const struct radv
@@ -4984,10 +4977,10 @@ index b44f98ec8c4..c3fa19a93e5 100644
  static inline void
 diff --git a/src/amd/vulkan/radv_bc250.c b/src/amd/vulkan/radv_bc250.c
 new file mode 100644
-index 00000000000..05f01ffb88a
+index 0000000..8807f73
 --- /dev/null
 +++ b/src/amd/vulkan/radv_bc250.c
-@@ -0,0 +1,8812 @@
+@@ -0,0 +1,8857 @@
 +/* SPDX-License-Identifier: MIT
 + * Experimental BC250 TASK scheduling on the graphics queue.
 + * No ACE queue, task rings, native TASK packets, or device-generation spoofing.
@@ -12845,6 +12838,47 @@ index 00000000000..05f01ffb88a
 + * additions require their own release validation. The switches themselves only act on GFX1013. */
 +bool radv_bc250_directmesh_hybrid;
 +
++/* True when the system has a BC-250 (Cyan Skillfish, GFX1013) GPU. Runs before any device is opened, so it
++ * reads the PCI ids from sysfs. */
++static bool
++radv_bc250_present(void)
++{
++   for (unsigned i = 0; i < 16; i++) {
++      char path[64];
++      unsigned vendor = 0, device = 0;
++      snprintf(path, sizeof(path), "/sys/class/drm/card%u/device/vendor", i);
++      FILE *f = fopen(path, "r");
++      if (!f)
++         continue;
++      bool ok = fscanf(f, "%x", &vendor) == 1;
++      fclose(f);
++      snprintf(path, sizeof(path), "/sys/class/drm/card%u/device/device", i);
++      f = fopen(path, "r");
++      if (!f)
++         continue;
++      ok = ok && fscanf(f, "%x", &device) == 1;
++      fclose(f);
++      if (ok && vendor == 0x1002 && (device == 0x13fe || device == 0x143f))
++         return true;
++   }
++   return false;
++}
++
++/* DirectMesh is on by default with a BC-250 present and off otherwise; RADV_DIRECTMESH=1 forces it on and any
++ * other value (RADV_DIRECTMESH=0) turns it off. This is the one switch for everything the series changes: without
++ * it GFX1013 exposes no mesh/task shaders, no fragment shader barycentrics, no no-op VRS and keeps the base
++ * driver's IB reuse. Decided once; it is asked from instance, physical device and winsys setup. */
++bool
++radv_bc250_directmesh_requested(void)
++{
++   static int decided = -1;
++   if (decided < 0) {
++      const char *on = getenv("RADV_DIRECTMESH");
++      decided = on ? !strcmp(on, "1") : radv_bc250_present();
++   }
++   return decided;
++}
++
 +void
 +radv_bc250_directmesh_env(void)
 +{
@@ -13267,8 +13301,11 @@ index 00000000000..05f01ffb88a
 +   if (!bo) {
 +      if (!bc250_idx_reserve(device, size))
 +         return false;
-+      VkResult result = radv_bo_create(device, NULL, size, 4096, RADEON_DOMAIN_VRAM,
-+                                       RADEON_FLAG_NO_CPU_ACCESS | RADEON_FLAG_NO_INTERPROCESS_SHARING,
++      /* GTT, not VRAM: the BC-250's VRAM carveout is 512 MiB and the desktop alone nearly fills it; VRAM-only
++       * index storage evicted the game's and the display's buffers at 4K. GTT is the same memory on this APU. */
++      VkResult result = radv_bo_create(device, NULL, size, 4096, RADEON_DOMAIN_GTT,
++                                       RADEON_FLAG_NO_CPU_ACCESS | RADEON_FLAG_GTT_WC |
++                                          RADEON_FLAG_NO_INTERPROCESS_SHARING,
 +                                       RADV_BO_PRIORITY_SCRATCH, 0, true, &bo);
 +      if (result != VK_SUCCESS) {
 +         p_atomic_add(&device->bc250_idx_storage_bytes, -(int32_t)size);
@@ -13658,8 +13695,9 @@ index 00000000000..05f01ffb88a
 +               fprintf(stderr, "BC250 IDX: indirect Mesh fallback (storage unavailable)\n");
 +            return false;
 +         }
-+         if (radv_bo_create(device, NULL, pool_bytes, 4096, dbg ? RADEON_DOMAIN_GTT : RADEON_DOMAIN_VRAM,
-+                            (dbg ? RADEON_FLAG_CPU_ACCESS : RADEON_FLAG_NO_CPU_ACCESS) |
++         /* GTT like the index pages (the VRAM carveout is too small to hold it). */
++         if (radv_bo_create(device, NULL, pool_bytes, 4096, RADEON_DOMAIN_GTT,
++                            (dbg ? RADEON_FLAG_CPU_ACCESS : RADEON_FLAG_NO_CPU_ACCESS | RADEON_FLAG_GTT_WC) |
 +                               RADEON_FLAG_NO_INTERPROCESS_SHARING,
 +                            RADV_BO_PRIORITY_SCRATCH, 0, true, &cmd_buffer->bc250_idx_pool_bo) != VK_SUCCESS) {
 +            cmd_buffer->bc250_idx_pool_bo = NULL;
@@ -13802,7 +13840,7 @@ index 00000000000..05f01ffb88a
 +}
 diff --git a/src/amd/vulkan/radv_bc250.h b/src/amd/vulkan/radv_bc250.h
 new file mode 100644
-index 00000000000..cd8ca5c495d
+index 0000000..5d1552e
 --- /dev/null
 +++ b/src/amd/vulkan/radv_bc250.h
 @@ -0,0 +1,200 @@
@@ -13964,7 +14002,7 @@ index 00000000000..cd8ca5c495d
 +/* RADV_BC250_TASK_GRID_FOLD: set only around the Task-route split. */
 +extern __thread bool radv_bc250_split_task_grid_fold;
 +void radv_bc250_directmesh_env(void);
-+/* Set when RADV_DIRECTMESH=1 (and not the user) enabled RADV_BC250_HYBRID_TASK. */
++/* Set when the DirectMesh preset (and not the user) enabled RADV_BC250_HYBRID_TASK. */
 +extern bool radv_bc250_directmesh_hybrid;
 +bool radv_bc250_bary_cid_slot(const struct nir_shader *producer, const struct nir_shader *fs, int *slot);
 +bool radv_bc250_split_mesh(struct nir_shader *mesh, struct nir_shader *task, struct nir_shader *fs, bool direct_split,
@@ -14008,7 +14046,7 @@ index 00000000000..cd8ca5c495d
 +#endif
 diff --git a/src/amd/vulkan/radv_bc250_dgc.c b/src/amd/vulkan/radv_bc250_dgc.c
 new file mode 100644
-index 00000000000..9924909fdcf
+index 0000000..9924909
 --- /dev/null
 +++ b/src/amd/vulkan/radv_bc250_dgc.c
 @@ -0,0 +1,811 @@
@@ -14825,7 +14863,7 @@ index 00000000000..9924909fdcf
 +}
 diff --git a/src/amd/vulkan/radv_bc250_dgc.h b/src/amd/vulkan/radv_bc250_dgc.h
 new file mode 100644
-index 00000000000..cda5fb09f3f
+index 0000000..cda5fb0
 --- /dev/null
 +++ b/src/amd/vulkan/radv_bc250_dgc.h
 @@ -0,0 +1,18 @@
@@ -14849,7 +14887,7 @@ index 00000000000..cda5fb09f3f
 +#endif
 diff --git a/src/amd/vulkan/radv_bc250_pipeline_plan.h b/src/amd/vulkan/radv_bc250_pipeline_plan.h
 new file mode 100644
-index 00000000000..deb7d390d3f
+index 0000000..deb7d39
 --- /dev/null
 +++ b/src/amd/vulkan/radv_bc250_pipeline_plan.h
 @@ -0,0 +1,72 @@
@@ -14927,7 +14965,7 @@ index 00000000000..deb7d390d3f
 +#endif
 diff --git a/src/amd/vulkan/radv_bc250_route.h b/src/amd/vulkan/radv_bc250_route.h
 new file mode 100644
-index 00000000000..46c36e53313
+index 0000000..46c36e5
 --- /dev/null
 +++ b/src/amd/vulkan/radv_bc250_route.h
 @@ -0,0 +1,17 @@
@@ -14950,7 +14988,7 @@ index 00000000000..46c36e53313
 +#endif
 diff --git a/src/amd/vulkan/radv_bc250_timer.c b/src/amd/vulkan/radv_bc250_timer.c
 new file mode 100644
-index 00000000000..a612b2008d9
+index 0000000..a612b20
 --- /dev/null
 +++ b/src/amd/vulkan/radv_bc250_timer.c
 @@ -0,0 +1,1181 @@
@@ -16137,7 +16175,7 @@ index 00000000000..a612b2008d9
 +}
 diff --git a/src/amd/vulkan/radv_bc250_timer.h b/src/amd/vulkan/radv_bc250_timer.h
 new file mode 100644
-index 00000000000..e86e2593ef8
+index 0000000..e86e259
 --- /dev/null
 +++ b/src/amd/vulkan/radv_bc250_timer.h
 @@ -0,0 +1,225 @@
@@ -16367,7 +16405,7 @@ index 00000000000..e86e2593ef8
 +
 +#endif /* RADV_BC250_TIMER_H */
 diff --git a/src/amd/vulkan/radv_cmd_buffer.c b/src/amd/vulkan/radv_cmd_buffer.c
-index 36aea63f811..f6a6bfb76e2 100644
+index 36aea63..f6a6bfb 100644
 --- a/src/amd/vulkan/radv_cmd_buffer.c
 +++ b/src/amd/vulkan/radv_cmd_buffer.c
 @@ -9,6 +9,7 @@
@@ -18162,7 +18200,7 @@ index 36aea63f811..f6a6bfb76e2 100644
  
     for (uint32_t i = 0; i < stageCount; i++) {
 diff --git a/src/amd/vulkan/radv_cmd_buffer.h b/src/amd/vulkan/radv_cmd_buffer.h
-index a2a7f1892bb..e242d4c7ace 100644
+index a2a7f18..e242d4c 100644
 --- a/src/amd/vulkan/radv_cmd_buffer.h
 +++ b/src/amd/vulkan/radv_cmd_buffer.h
 @@ -390,6 +390,7 @@ struct radv_cmd_state {
@@ -18291,7 +18329,7 @@ index a2a7f1892bb..e242d4c7ace 100644
 +
  #endif /* RADV_CMD_BUFFER_H */
 diff --git a/src/amd/vulkan/radv_cp_dma.c b/src/amd/vulkan/radv_cp_dma.c
-index 3f435615671..09037eb599d 100644
+index 3f43561..09037eb 100644
 --- a/src/amd/vulkan/radv_cp_dma.c
 +++ b/src/amd/vulkan/radv_cp_dma.c
 @@ -173,7 +173,7 @@ radv_cp_dma_realign_engine(struct radv_cmd_buffer *cmd_buffer, unsigned size)
@@ -18304,7 +18342,7 @@ index 3f435615671..09037eb599d 100644
  
     radv_emit_cp_dma(cmd_buffer, va, va + SI_CPDMA_ALIGNMENT, size, 0);
 diff --git a/src/amd/vulkan/radv_device.c b/src/amd/vulkan/radv_device.c
-index c01cbffc0de..09b8c2a9639 100644
+index c01cbff..09b8c2a 100644
 --- a/src/amd/vulkan/radv_device.c
 +++ b/src/amd/vulkan/radv_device.c
 @@ -11,6 +11,7 @@
@@ -18851,7 +18889,7 @@ index c01cbffc0de..09b8c2a9639 100644
     return VK_SUCCESS;
  
 diff --git a/src/amd/vulkan/radv_device.h b/src/amd/vulkan/radv_device.h
-index 1593c378005..7604a97f0aa 100644
+index 1593c37..7604a97 100644
 --- a/src/amd/vulkan/radv_device.h
 +++ b/src/amd/vulkan/radv_device.h
 @@ -15,6 +15,7 @@
@@ -18969,7 +19007,7 @@ index 1593c378005..7604a97f0aa 100644
     struct radeon_winsys *ws;
  
 diff --git a/src/amd/vulkan/radv_device_memory.c b/src/amd/vulkan/radv_device_memory.c
-index 57aeb1d2515..e180fe6421c 100644
+index 57aeb1d..e180fe6 100644
 --- a/src/amd/vulkan/radv_device_memory.c
 +++ b/src/amd/vulkan/radv_device_memory.c
 @@ -257,12 +257,42 @@ fail:
@@ -19017,7 +19055,7 @@ index 57aeb1d2515..e180fe6421c 100644
  
  VKAPI_ATTR void VKAPI_CALL
 diff --git a/src/amd/vulkan/radv_dgc.c b/src/amd/vulkan/radv_dgc.c
-index 266c88aea83..f397dba15d5 100644
+index 266c88a..f397dba 100644
 --- a/src/amd/vulkan/radv_dgc.c
 +++ b/src/amd/vulkan/radv_dgc.c
 @@ -5,6 +5,7 @@
@@ -19091,7 +19129,7 @@ index 266c88aea83..f397dba15d5 100644
        for (uint32_t j = layout->vk.pc_layouts[i].dst_offset_B / 4, k = 0; k < layout->vk.pc_layouts[i].size_B / 4;
             j++, k++) {
 diff --git a/src/amd/vulkan/radv_dgc.h b/src/amd/vulkan/radv_dgc.h
-index e8cb58f7a81..ce38b8290c0 100644
+index e8cb58f..ce38b82 100644
 --- a/src/amd/vulkan/radv_dgc.h
 +++ b/src/amd/vulkan/radv_dgc.h
 @@ -22,6 +22,7 @@ struct radv_indirect_command_layout {
@@ -19103,7 +19141,7 @@ index e8cb58f7a81..ce38b8290c0 100644
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
 diff --git a/src/amd/vulkan/radv_image.c b/src/amd/vulkan/radv_image.c
-index 51d52d308ab..adf7217c1b4 100644
+index 51d52d3..adf7217 100644
 --- a/src/amd/vulkan/radv_image.c
 +++ b/src/amd/vulkan/radv_image.c
 @@ -657,8 +657,12 @@ radv_get_surface_flags(struct radv_device *device, struct radv_image *image, uns
@@ -19122,7 +19160,7 @@ index 51d52d308ab..adf7217c1b4 100644
     if (!(image->vk.usage & (VK_IMAGE_USAGE_2_SAMPLED_BIT_KHR | VK_IMAGE_USAGE_2_STORAGE_BIT_KHR)))
        flags |= RADEON_SURF_NO_TEXTURE;
 diff --git a/src/amd/vulkan/radv_instance.c b/src/amd/vulkan/radv_instance.c
-index 65330d89e05..62970d91793 100644
+index 65330d8..7be6814 100644
 --- a/src/amd/vulkan/radv_instance.c
 +++ b/src/amd/vulkan/radv_instance.c
 @@ -20,6 +20,7 @@
@@ -19133,18 +19171,19 @@ index 65330d89e05..62970d91793 100644
  #include "radv_wsi.h"
  
  #include "util/bitset.h"
-@@ -255,6 +256,9 @@ radv_CreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationC
+@@ -255,6 +256,10 @@ radv_CreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationC
     if (!pAllocator)
        pAllocator = vk_default_allocator();
  
-+   /* RADV_DIRECTMESH=1: BC-250 direct Mesh settings, before any option is read. */
++   /* DirectMesh (on with a BC-250 unless RADV_DIRECTMESH=0, or RADV_DIRECTMESH=1): BC-250 direct Mesh settings,
++    * before any option is read. */
 +   radv_bc250_directmesh_env();
 +
     instance = vk_zalloc(pAllocator, sizeof(*instance), 8, VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE);
     if (!instance)
        return vk_error(NULL, VK_ERROR_OUT_OF_HOST_MEMORY);
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 5edb3255fc1..cc716ceabcd 100644
+index 5edb325..ee0b983 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -30,6 +30,7 @@
@@ -19425,7 +19464,7 @@ index 5edb3255fc1..cc716ceabcd 100644
 +      radv_compute_queue_enabled(pdev) &&
 +      (debug_get_bool_option("BC250_NATIVE_TASK_COMPILE", false) ||
 +       debug_get_bool_option("RADV_BC250_NATIVE_TASK", false));
-+   /* RADV_DIRECTMESH=1: DXVK (D3D9-11, no Mesh shaders) keeps GPL, shader objects and pipeline binaries
++   /* DirectMesh on: DXVK (D3D9-11, no Mesh shaders) keeps GPL, shader objects and pipeline binaries
 +    * instead of the preset's hybrid Task. An explicit RADV_BC250_HYBRID_TASK still applies. */
 +   const bool bc250_dxvk = instance->vk.app_info.engine_name && !strcmp(instance->vk.app_info.engine_name, "DXVK");
 +   pdev->bc250_hybrid_task = pdev->bc250_native_mesh &&
@@ -19439,12 +19478,12 @@ index 5edb3255fc1..cc716ceabcd 100644
 +   /* GFX1013 has no ROTATE_PC_PTR or LOAD_PROVOKING_VTX; the fragment shader
 +    * recovers the API vertex order from a position reference exported by the
 +    * last pre-rasterization stage (radv_nir_bc250_lower_bary_rotation). On by
-+    * default with RADV_DIRECTMESH=1: without it vkd3d-proton hides mesh shaders (UE5 workaround). */
++    * default with DirectMesh: without it vkd3d-proton hides mesh shaders (UE5 workaround). */
 +   pdev->bc250_barycentrics = pdev->info.family == CHIP_GFX1013 && radv_bc250_directmesh_requested() &&
 +      !debug_get_bool_option("RADV_BC250_NO_BARYCENTRICS", false);
 +   /* No VRS hardware on GFX10.1 (the VRS registers and HTILE fields are GFX10.3+), but vkd3d-proton
 +    * reports DirectX 12 Ultimate (feature level 12_2) only with VRS tier 2: the extension is exposed
-+    * and shading is always 1x1 (radv_nir_bc250_vrs_noop). On by default with RADV_DIRECTMESH=1;
++    * and shading is always 1x1 (radv_nir_bc250_vrs_noop). On by default with DirectMesh;
 +    * RADV_BC250_VRS_NOOP=0 hides it. */
 +   pdev->bc250_vrs_noop = pdev->info.family == CHIP_GFX1013 && radv_bc250_directmesh_requested() &&
 +      debug_get_bool_option("RADV_BC250_VRS_NOOP", true);
@@ -19505,7 +19544,7 @@ index 5edb3255fc1..cc716ceabcd 100644
     } else {
        if (pdev->info.all_vram_visible && pdev->drirc.debug.hide_rebar_on_dgpu) {
 diff --git a/src/amd/vulkan/radv_physical_device.h b/src/amd/vulkan/radv_physical_device.h
-index 214d30d5eda..5aa6bfd8ec3 100644
+index 214d30d..5aa6bfd 100644
 --- a/src/amd/vulkan/radv_physical_device.h
 +++ b/src/amd/vulkan/radv_physical_device.h
 @@ -115,6 +115,25 @@ struct radv_physical_device {
@@ -19535,7 +19574,7 @@ index 214d30d5eda..5aa6bfd8ec3 100644
     bool use_ngg_culling;
  
 diff --git a/src/amd/vulkan/radv_pipeline.c b/src/amd/vulkan/radv_pipeline.c
-index 7bc63a544c0..067bc0fce44 100644
+index 7bc63a5..067bc0f 100644
 --- a/src/amd/vulkan/radv_pipeline.c
 +++ b/src/amd/vulkan/radv_pipeline.c
 @@ -9,6 +9,7 @@
@@ -19589,7 +19628,7 @@ index 7bc63a544c0..067bc0fce44 100644
     NIR_PASS(_, stage->nir, radv_nir_lower_abi, gfx_level, stage, gfx_state, compiler_info->hw.address32_hi);
  
 diff --git a/src/amd/vulkan/radv_pipeline_binary.c b/src/amd/vulkan/radv_pipeline_binary.c
-index 8c0d691d9c8..2d2a108fea6 100644
+index 8c0d691..2d2a108 100644
 --- a/src/amd/vulkan/radv_pipeline_binary.c
 +++ b/src/amd/vulkan/radv_pipeline_binary.c
 @@ -5,6 +5,7 @@
@@ -19782,7 +19821,7 @@ index 8c0d691d9c8..2d2a108fea6 100644
  
     return result;
 diff --git a/src/amd/vulkan/radv_pipeline_binary.h b/src/amd/vulkan/radv_pipeline_binary.h
-index b981d489180..3927757abd1 100644
+index b981d48..3927757 100644
 --- a/src/amd/vulkan/radv_pipeline_binary.h
 +++ b/src/amd/vulkan/radv_pipeline_binary.h
 @@ -17,6 +17,9 @@ struct radv_ray_tracing_stage_info;
@@ -19815,7 +19854,7 @@ index b981d489180..3927757abd1 100644
                                                   struct radv_shader *shader, struct util_dynarray *pipeline_binaries,
                                                   uint32_t *num_binaries);
 diff --git a/src/amd/vulkan/radv_pipeline_cache.c b/src/amd/vulkan/radv_pipeline_cache.c
-index b58ddd166e0..9d993869da4 100644
+index b58ddd1..9d99386 100644
 --- a/src/amd/vulkan/radv_pipeline_cache.c
 +++ b/src/amd/vulkan/radv_pipeline_cache.c
 @@ -5,6 +5,7 @@
@@ -20068,7 +20107,7 @@ index b58ddd166e0..9d993869da4 100644
  
     *found_in_internal_cache = complete;
 diff --git a/src/amd/vulkan/radv_pipeline_cache.h b/src/amd/vulkan/radv_pipeline_cache.h
-index 5680d92341c..639d0521727 100644
+index 5680d92..639d052 100644
 --- a/src/amd/vulkan/radv_pipeline_cache.h
 +++ b/src/amd/vulkan/radv_pipeline_cache.h
 @@ -39,8 +39,11 @@ struct radv_shader *radv_shader_create(struct radv_device *device, struct vk_pip
@@ -20097,7 +20136,7 @@ index 5680d92341c..639d0521727 100644
 +
  #endif /* RADV_PIPELINE_CACHE_H */
 diff --git a/src/amd/vulkan/radv_pipeline_graphics.c b/src/amd/vulkan/radv_pipeline_graphics.c
-index b742d71c490..1f14f41b427 100644
+index b742d71..1f14f41 100644
 --- a/src/amd/vulkan/radv_pipeline_graphics.c
 +++ b/src/amd/vulkan/radv_pipeline_graphics.c
 @@ -10,6 +10,7 @@
@@ -21675,7 +21714,7 @@ index b742d71c490..1f14f41b427 100644
        pPipelines[i] = VK_NULL_HANDLE;
  
 diff --git a/src/amd/vulkan/radv_pipeline_graphics.h b/src/amd/vulkan/radv_pipeline_graphics.h
-index 4d8d32af478..0332fca9935 100644
+index 4d8d32a..0332fca 100644
 --- a/src/amd/vulkan/radv_pipeline_graphics.h
 +++ b/src/amd/vulkan/radv_pipeline_graphics.h
 @@ -17,6 +17,7 @@
@@ -21745,7 +21784,7 @@ index 4d8d32af478..0332fca9935 100644
  
  struct radv_vgt_shader_key radv_get_vgt_shader_key(const struct radv_device *device, struct radv_shader **shaders,
 diff --git a/src/amd/vulkan/radv_pipeline_layout.c b/src/amd/vulkan/radv_pipeline_layout.c
-index c19bb0d55a0..30c158120b0 100644
+index c19bb0d..30c1581 100644
 --- a/src/amd/vulkan/radv_pipeline_layout.c
 +++ b/src/amd/vulkan/radv_pipeline_layout.c
 @@ -88,6 +88,13 @@ radv_CreatePipelineLayout(VkDevice _device, const VkPipelineLayoutCreateInfo *pC
@@ -21763,7 +21802,7 @@ index c19bb0d55a0..30c158120b0 100644
     for (uint32_t set = 0; set < pCreateInfo->setLayoutCount; set++) {
        VK_FROM_HANDLE(radv_descriptor_set_layout, set_layout, pCreateInfo->pSetLayouts[set]);
 diff --git a/src/amd/vulkan/radv_pipeline_layout.h b/src/amd/vulkan/radv_pipeline_layout.h
-index 7d9dbbdc3d0..a1f07d803b5 100644
+index 7d9dbbd..a1f07d8 100644
 --- a/src/amd/vulkan/radv_pipeline_layout.h
 +++ b/src/amd/vulkan/radv_pipeline_layout.h
 @@ -27,6 +27,7 @@ struct radv_pipeline_layout {
@@ -21775,7 +21814,7 @@ index 7d9dbbdc3d0..a1f07d803b5 100644
     blake3_hash hash;
  };
 diff --git a/src/amd/vulkan/radv_query.c b/src/amd/vulkan/radv_query.c
-index 873a38974ec..038115df730 100644
+index 873a389..038115d 100644
 --- a/src/amd/vulkan/radv_query.c
 +++ b/src/amd/vulkan/radv_query.c
 @@ -466,7 +466,9 @@ radv_get_pipelinestat_query_size(struct radv_device *device)
@@ -21867,7 +21906,7 @@ index 873a38974ec..038115df730 100644
           pool->stride = radv_get_pipelinestat_query_size(device) * 2;
        } else {
 diff --git a/src/amd/vulkan/radv_queue.c b/src/amd/vulkan/radv_queue.c
-index cfa67993779..9a9ee95b986 100644
+index cfa6799..9a9ee95 100644
 --- a/src/amd/vulkan/radv_queue.c
 +++ b/src/amd/vulkan/radv_queue.c
 @@ -9,6 +9,8 @@
@@ -22223,7 +22262,7 @@ index cfa67993779..9a9ee95b986 100644
  
     if (queue->state.qf == RADV_QUEUE_VIDEO_ENC && device->hw_vcn_enc_ctx)
 diff --git a/src/amd/vulkan/radv_queue.h b/src/amd/vulkan/radv_queue.h
-index bb4b49428a6..51e67a5fa49 100644
+index bb4b494..51e67a5 100644
 --- a/src/amd/vulkan/radv_queue.h
 +++ b/src/amd/vulkan/radv_queue.h
 @@ -81,6 +81,8 @@ struct radv_queue_state {
@@ -22289,10 +22328,10 @@ index bb4b49428a6..51e67a5fa49 100644
  
  bool radv_queue_internal_submit(struct radv_queue *queue, struct ac_cmdbuf *cs);
 diff --git a/src/amd/vulkan/radv_radeon_winsys.h b/src/amd/vulkan/radv_radeon_winsys.h
-index 2acdc002102..a6ce1b1af79 100644
+index 2acdc00..cdbda0f 100644
 --- a/src/amd/vulkan/radv_radeon_winsys.h
 +++ b/src/amd/vulkan/radv_radeon_winsys.h
-@@ -174,6 +174,39 @@ struct radeon_winsys_bo {
+@@ -174,6 +174,32 @@ struct radeon_winsys_bo {
     uint64_t obj_id;
  };
  
@@ -22309,15 +22348,8 @@ index 2acdc002102..a6ce1b1af79 100644
 +};
 +extern __thread struct radv_bc250_ws_prof radv_bc250_ws_prof;
 +extern bool radv_bc250_ws_prof_enabled;
-+/* RADV_DIRECTMESH=1 is the one opt-in for everything the BC-250 DirectMesh series changes by default:
-+ * without it GFX1013 exposes no mesh/task shaders, no fragment shader barycentrics, no no-op VRS and
-+ * keeps the base driver's IB reuse. */
-+static inline bool
-+radv_bc250_directmesh_requested(void)
-+{
-+   const char *on = getenv("RADV_DIRECTMESH");
-+   return on && !strcmp(on, "1");
-+}
++/* True when the DirectMesh series is on (on by default with a BC-250, RADV_DIRECTMESH=0 turns it off). */
++bool radv_bc250_directmesh_requested(void);
 +/* process-wide BO churn counters (relaxed atomics, only with radv_bc250_ws_prof_enabled) */
 +enum {
 +   RADV_BC250_WS_BO_CREATES,
@@ -22332,7 +22364,7 @@ index 2acdc002102..a6ce1b1af79 100644
  struct radv_winsys_submit_info {
     enum amd_ip_type ip_type;
     int queue_index;
-@@ -295,6 +328,9 @@ struct radeon_winsys {
+@@ -295,6 +321,9 @@ struct radeon_winsys {
  
     void (*cs_execute_secondary)(struct ac_cmdbuf *parent, struct ac_cmdbuf *child, bool allow_ib2);
  
@@ -22343,7 +22375,7 @@ index 2acdc002102..a6ce1b1af79 100644
                           const bool predicate);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 855de7a9e3e..79456fc53ec 100644
+index 855de7a..79456fc 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -9,6 +9,7 @@
@@ -22848,7 +22880,7 @@ index 855de7a9e3e..79456fc53ec 100644
     for (unsigned i = 0; i < shader_count; ++i)
        dump_shader |= radv_can_dump_shader(compiler_info, shaders[i]);
 diff --git a/src/amd/vulkan/radv_shader.h b/src/amd/vulkan/radv_shader.h
-index a7f5f2eb40d..432f53208eb 100644
+index a7f5f2e..594c664 100644
 --- a/src/amd/vulkan/radv_shader.h
 +++ b/src/amd/vulkan/radv_shader.h
 @@ -142,7 +142,11 @@ struct radv_graphics_state_key {
@@ -23130,7 +23162,7 @@ index a7f5f2eb40d..432f53208eb 100644
 +      uint32_t lds_cover : 1;
 +      /* RADV_BC250_MESH_MERGED_CHECK: one ranked check gives the adaptive shared and renumbered results. */
 +      uint32_t merged_check : 1;
-+      /* RADV_BC250_MESH_IDXPASS (prototype): eligible Mesh draws become an index pass plus an indexed draw. */
++      /* RADV_BC250_MESH_IDXPASS: eligible Mesh draws become an index pass plus an indexed draw. */
 +      uint32_t idxpass : 1;
 +      uint32_t padding : 18;
 +   } bc250x;
@@ -23139,7 +23171,7 @@ index a7f5f2eb40d..432f53208eb 100644
     struct {
        bool dump_spirv;
 diff --git a/src/amd/vulkan/radv_shader_args.c b/src/amd/vulkan/radv_shader_args.c
-index 59f97e1cbe0..966c2f92f07 100644
+index 59f97e1..966c2f9 100644
 --- a/src/amd/vulkan/radv_shader_args.c
 +++ b/src/amd/vulkan/radv_shader_args.c
 @@ -317,6 +317,9 @@ declare_ms_input_sgprs(struct radv_shader_args_state *state, const struct radv_s
@@ -23202,7 +23234,7 @@ index 59f97e1cbe0..966c2f92f07 100644
  
              if (previous_stage != MESA_SHADER_MESH || compiler_info->ac->gfx_level < GFX11) {
 diff --git a/src/amd/vulkan/radv_shader_args.h b/src/amd/vulkan/radv_shader_args.h
-index f4d2fedddd6..b4845277356 100644
+index f4d2fed..b484527 100644
 --- a/src/amd/vulkan/radv_shader_args.h
 +++ b/src/amd/vulkan/radv_shader_args.h
 @@ -34,7 +34,10 @@ enum radv_ud_index {
@@ -23228,7 +23260,7 @@ index f4d2fedddd6..b4845277356 100644
     struct ac_arg ngg_state;
     struct ac_arg ngg_lds_layout;
 diff --git a/src/amd/vulkan/radv_shader_info.c b/src/amd/vulkan/radv_shader_info.c
-index 6a3f39b2c84..bc55bc82728 100644
+index 6a3f39b..bc55bc8 100644
 --- a/src/amd/vulkan/radv_shader_info.c
 +++ b/src/amd/vulkan/radv_shader_info.c
 @@ -4,6 +4,7 @@
@@ -23497,7 +23529,7 @@ index 6a3f39b2c84..bc55bc82728 100644
     dst_info->loads_dynamic_offsets |= src_info->loads_dynamic_offsets;
     dst_info->loads_dynamic_descriptors_offset_addr |= src_info->loads_dynamic_descriptors_offset_addr;
 diff --git a/src/amd/vulkan/radv_shader_info.h b/src/amd/vulkan/radv_shader_info.h
-index c1410070b34..c16c1846f4b 100644
+index c141007..c16c184 100644
 --- a/src/amd/vulkan/radv_shader_info.h
 +++ b/src/amd/vulkan/radv_shader_info.h
 @@ -76,6 +76,29 @@ struct gfx10_ngg_info {
@@ -23586,7 +23618,7 @@ index c1410070b34..c16c1846f4b 100644
  
     struct radv_streamout_info so;
 diff --git a/src/amd/vulkan/radv_shader_object.c b/src/amd/vulkan/radv_shader_object.c
-index 80d23fa76f0..3568504f922 100644
+index 80d23fa..3568504 100644
 --- a/src/amd/vulkan/radv_shader_object.c
 +++ b/src/amd/vulkan/radv_shader_object.c
 @@ -7,11 +7,14 @@
@@ -24202,7 +24234,7 @@ index 80d23fa76f0..3568504f922 100644
     return VK_SUCCESS;
  }
 diff --git a/src/amd/vulkan/radv_shader_object.h b/src/amd/vulkan/radv_shader_object.h
-index a1713cf5bb3..04dcebc9edc 100644
+index a1713cf..04dcebc 100644
 --- a/src/amd/vulkan/radv_shader_object.h
 +++ b/src/amd/vulkan/radv_shader_object.h
 @@ -12,6 +12,10 @@
@@ -24236,7 +24268,7 @@ index a1713cf5bb3..04dcebc9edc 100644
 +
  #endif /* RADV_SHADER_OBJECT_H */
 diff --git a/src/amd/vulkan/radv_video.c b/src/amd/vulkan/radv_video.c
-index 23bcd6ed7b0..02aed5e8a68 100644
+index 23bcd6e..02aed5e 100644
 --- a/src/amd/vulkan/radv_video.c
 +++ b/src/amd/vulkan/radv_video.c
 @@ -1259,7 +1259,7 @@ radv_CmdControlVideoCodingKHR(VkCommandBuffer commandBuffer, const VkVideoCoding
@@ -24258,7 +24290,7 @@ index 23bcd6ed7b0..02aed5e8a68 100644
  
     switch (vid->vk.op) {
 diff --git a/src/amd/vulkan/radv_wsi.c b/src/amd/vulkan/radv_wsi.c
-index d862dad3efb..8b357ed4bd1 100644
+index d862dad..8b357ed 100644
 --- a/src/amd/vulkan/radv_wsi.c
 +++ b/src/amd/vulkan/radv_wsi.c
 @@ -7,6 +7,7 @@
@@ -24302,7 +24334,7 @@ index d862dad3efb..8b357ed4bd1 100644
 +   return wsi_QueuePresentKHR(_queue, pPresentInfo);
 +}
 diff --git a/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_bo.c b/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_bo.c
-index 63ff7fa6dd7..c7845bb2ce7 100644
+index 63ff7fa..c7845bb 100644
 --- a/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_bo.c
 +++ b/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_bo.c
 @@ -22,12 +22,15 @@
@@ -24361,7 +24393,7 @@ index 63ff7fa6dd7..c7845bb2ce7 100644
     *out_bo = (struct radeon_winsys_bo *)bo;
     return VK_SUCCESS;
 diff --git a/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_cs.c b/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_cs.c
-index 350715a6432..6e475107f3b 100644
+index 350715a..6e47510 100644
 --- a/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_cs.c
 +++ b/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_cs.c
 @@ -14,6 +14,7 @@
@@ -24661,7 +24693,7 @@ index 350715a6432..6e475107f3b 100644
     ws->base.cs_submit = radv_amdgpu_winsys_cs_submit;
     ws->base.cs_dump = radv_amdgpu_winsys_cs_dump;
 diff --git a/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.c b/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.c
-index 8d0682171ae..18c006ef012 100644
+index 8d06821..18c006e 100644
 --- a/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.c
 +++ b/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.c
 @@ -8,6 +8,7 @@
@@ -24686,7 +24718,7 @@ index 8d0682171ae..18c006ef012 100644
     u_rwlock_init(&ws->global_bo_list.lock);
     list_inithead(&ws->log_bo_list);
 diff --git a/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.h b/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.h
-index bf1236bc0ad..24cea5af1dd 100644
+index bf1236b..24cea5a 100644
 --- a/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.h
 +++ b/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.h
 @@ -51,6 +51,10 @@ struct radv_amdgpu_winsys {
@@ -24701,7 +24733,7 @@ index bf1236bc0ad..24cea5af1dd 100644
     struct radv_amdgpu_alloc_tracker *alloc_tracker;
  
 diff --git a/src/compiler/nir/meson.build b/src/compiler/nir/meson.build
-index c5f6075201c..f0716c3afc0 100644
+index c5f6075..f0716c3 100644
 --- a/src/compiler/nir/meson.build
 +++ b/src/compiler/nir/meson.build
 @@ -455,6 +455,7 @@ if with_tests and not with_nir_headers_only
@@ -24713,7 +24745,7 @@ index c5f6075201c..f0716c3afc0 100644
            'tests/opt_peephole_select.cpp',
            'tests/opt_shrink_vectors_tests.cpp',
 diff --git a/src/compiler/nir/nir_divergence_analysis.c b/src/compiler/nir/nir_divergence_analysis.c
-index 7f5686d1ec8..16e0d6c0cad 100644
+index 7f5686d..16e0d6c 100644
 --- a/src/compiler/nir/nir_divergence_analysis.c
 +++ b/src/compiler/nir/nir_divergence_analysis.c
 @@ -248,6 +248,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
@@ -24733,7 +24765,7 @@ index 7f5686d1ec8..16e0d6c0cad 100644
     case nir_intrinsic_load_btd_shader_type_intel:
     case nir_intrinsic_load_base_global_invocation_id:
 diff --git a/src/compiler/nir/nir_intrinsics.py b/src/compiler/nir/nir_intrinsics.py
-index 2df458e0e19..e7f12aae5f3 100644
+index 2df458e..e7f12aa 100644
 --- a/src/compiler/nir/nir_intrinsics.py
 +++ b/src/compiler/nir/nir_intrinsics.py
 @@ -979,6 +979,9 @@ intrinsic("global_atomic_agx",  src_comp=[1, 1, 0], dest_comp=0, indices=[ACCESS
@@ -24748,7 +24780,7 @@ index 2df458e0e19..e7f12aae5f3 100644
  intrinsic("shared_atomic_swap",  src_comp=[1, 0, 0], dest_comp=0, indices=[ACCESS, BASE, ATOMIC_OP])
 diff --git a/src/compiler/nir/tests/opt_uub_tests.cpp b/src/compiler/nir/tests/opt_uub_tests.cpp
 new file mode 100644
-index 00000000000..0903990205c
+index 0000000..0903990
 --- /dev/null
 +++ b/src/compiler/nir/tests/opt_uub_tests.cpp
 @@ -0,0 +1,33 @@
@@ -24786,7 +24818,7 @@ index 00000000000..0903990205c
 +TEST_F(nir_opt_uub_test, negative_min) { check(nir_op_imin, -1, false, true); }
 +TEST_F(nir_opt_uub_test, excluded_64bit) { check(nir_op_imax, 63, false, false, 64); }
 diff --git a/src/compiler/shader_info.h b/src/compiler/shader_info.h
-index b788afceefe..456930268c4 100644
+index b788afc..4569302 100644
 --- a/src/compiler/shader_info.h
 +++ b/src/compiler/shader_info.h
 @@ -44,6 +44,8 @@ enum shader_info_hash_type {
@@ -24799,7 +24831,7 @@ index b788afceefe..456930268c4 100644
  
     /* Descriptive name provided by the client; may be NULL */
 diff --git a/src/vulkan/runtime/vk_device.h b/src/vulkan/runtime/vk_device.h
-index ce975c0e2dc..c982c12f7fa 100644
+index ce975c0..c982c12 100644
 --- a/src/vulkan/runtime/vk_device.h
 +++ b/src/vulkan/runtime/vk_device.h
 @@ -305,6 +305,22 @@ struct vk_device {
@@ -24826,7 +24858,7 @@ index ce975c0e2dc..c982c12f7fa 100644
  
     mtx_t swapchain_private_mtx;
 diff --git a/src/vulkan/runtime/vk_queue.c b/src/vulkan/runtime/vk_queue.c
-index 78439dbbefb..e9b2dbfe1be 100644
+index 78439db..e9b2dbf 100644
 --- a/src/vulkan/runtime/vk_queue.c
 +++ b/src/vulkan/runtime/vk_queue.c
 @@ -25,6 +25,7 @@
@@ -24952,7 +24984,7 @@ index 78439dbbefb..e9b2dbfe1be 100644
  
     if (vk_device_is_lost(queue->base.device))
 diff --git a/src/vulkan/runtime/vk_queue.h b/src/vulkan/runtime/vk_queue.h
-index 82b8d1401f0..f60df004005 100644
+index 82b8d14..f60df00 100644
 --- a/src/vulkan/runtime/vk_queue.h
 +++ b/src/vulkan/runtime/vk_queue.h
 @@ -71,6 +71,18 @@ struct vk_queue {
@@ -24975,7 +25007,7 @@ index 82b8d1401f0..f60df004005 100644
        /** Current submit mode
         *
 diff --git a/src/vulkan/runtime/vk_sync.c b/src/vulkan/runtime/vk_sync.c
-index e5eb1346f4d..a4438bd80cf 100644
+index e5eb134..a4438bd 100644
 --- a/src/vulkan/runtime/vk_sync.c
 +++ b/src/vulkan/runtime/vk_sync.c
 @@ -100,7 +100,10 @@ vk_sync_init(struct vk_device *device,
@@ -25090,7 +25122,7 @@ index e5eb1346f4d..a4438bd80cf 100644
  }
  
 diff --git a/src/vulkan/runtime/vk_sync.h b/src/vulkan/runtime/vk_sync.h
-index bc9f1ba1ea9..1a10d5aac8b 100644
+index bc9f1ba..1a10d5a 100644
 --- a/src/vulkan/runtime/vk_sync.h
 +++ b/src/vulkan/runtime/vk_sync.h
 @@ -325,8 +325,49 @@ enum vk_sync_flags {
