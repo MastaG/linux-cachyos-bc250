@@ -1,7 +1,7 @@
 # Maintainer: MastaG
 #
 # Opt-in and deliberately NOT a dependency of linux-cachyos-bc250-meta: the
-# kernel patch that uses this firmware (0019-bc250-vcn.patch) is only in the
+# kernel patch that uses this firmware (0022-bc250-vcn.patch) is only in the
 # linux-cachyos-rc-bc250 kernel for now. Without the patch the file is unused;
 # without the file the patched kernel simply leaves the VCN block off.
 #

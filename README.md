@@ -1005,7 +1005,7 @@ With it installed there are no older package versions left on your disk to downg
 
 ## Hardware video (VCN), experimental
 
-`linux-cachyos-rc-bc250` carries `0019-bc250-vcn.patch`, which switches on the BC-250's Video Core Next block (VCN 2.0). Mainline Linux skips it. The patch is a port of the PS5 one from the ps5-linux project ([ps5-linux-patches PR #38](https://github.com/ps5-linux/ps5-linux-patches/pull/38)) and is **RC only until it has been tested on hardware**; the stable and BORE kernels do not have it.
+`linux-cachyos-rc-bc250` carries `0022-bc250-vcn.patch`, which switches on the BC-250's Video Core Next block (VCN 2.0). Mainline Linux skips it. The patch is a port of the PS5 one from the ps5-linux project ([ps5-linux-patches PR #38](https://github.com/ps5-linux/ps5-linux-patches/pull/38)) and is **RC only until it has been tested on hardware**; the stable and BORE kernels do not have it.
 
 It is **off by default** (`amdgpu.bc250_vcn=1` switches it on): the first attempt hung the author's board at boot, so nobody gets it by accident. It also needs a firmware file that is not in linux-firmware, shipped by the optional `bc250-vcn-fw` package (see its README for where the file comes from). Without the file, or without the parameter, the kernel simply leaves the block off.
 

@@ -1,7 +1,7 @@
 # bc250-vcn-fw
 
 The firmware file `amdgpu/ps5_vcn.bin` for the BC-250's Video Core Next (VCN 2.0)
-block, which the `0019-bc250-vcn.patch` kernel patch brings up.
+block, which the `0022-bc250-vcn.patch` kernel patch brings up.
 
 It installs one file, `/usr/lib/firmware/amdgpu/ps5_vcn.bin`, plus AMD's licence
 text. Nothing runs and nothing is configured.
