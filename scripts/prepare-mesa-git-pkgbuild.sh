@@ -95,8 +95,14 @@ done
 # Pin the already-resolved Mesa commit through the PKGBUILD's supported
 # user.cfg override. This leaves upstream customization.cfg byte-for-byte
 # untouched while preventing Mesa main from moving during a workflow run.
+# _antilag=false: Mesa main deleted the anti-lag Vulkan layer (b99595dedb8,
+# "vulkan: delete anti-lag layer"), but the PKGBUILD still adds it to
+# -D vulkan-layers whenever _antilag is true, and meson then fails with
+# 'Value "anti-lag" for option "vulkan-layers" is not in allowed choices'.
+# Nothing is lost: the layer no longer exists in the source.
 cat > "$MESA_GIT_BUILD_DIR/mesa-userpatches/user.cfg" <<EOF_USERCFG
 _mesa_commit="${MESA_GIT_COMMIT}"
+_antilag="false"
 EOF_USERCFG
 
 python3 - "$MESA_GIT_BUILD_DIR/PKGBUILD" "$MESA_GIT_PKGREL" "$MESA_GIT_MARCH" "$MESA_GIT_MTUNE" <<'PY'
