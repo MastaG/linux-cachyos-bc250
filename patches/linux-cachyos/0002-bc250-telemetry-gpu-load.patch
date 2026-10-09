@@ -1,0 +1,103 @@
+From b5d67c8d16fb00765e6126988fffa1018276bb2c Mon Sep 17 00:00:00 2001
+From: Local Kernel Test <kernel-test@localhost>
+Date: Thu, 8 Oct 2026 22:24:53 +0200
+Subject: [PATCH 2/4] amdgpu: report BC-250 GPU load
+
+---
+ .../amd/pm/swsmu/smu11/cyan_skillfish_ppt.c   | 58 +++++++++++++++++++
+ 1 file changed, 58 insertions(+)
+
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
+index 258479dd0..6cbcb227f 100644
+--- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
+@@ -23,7 +23,9 @@
+ 
+ #define SWSMU_CODE_LAYER_L2
+ 
++#include <linux/atomic.h>
+ #include <linux/cpumask.h>
++#include <linux/delay.h>
+ #include <linux/limits.h>
+ #include <linux/topology.h>
+ 
+@@ -216,6 +218,55 @@ static void cyan_skillfish_decode_metrics(const void *buf,
+ 	}
+ }
+ 
++/*
++ * Compute work (Vulkan compute, llama.cpp, ...) is submitted to the compute
++ * rings and never touches the GFX ring, so sample all of them.
++ */
++static bool cyan_skillfish_rings_busy(struct amdgpu_device *adev)
++{
++	unsigned int i;
++
++	if (amdgpu_fence_count_emitted(&adev->gfx.gfx_ring[0]))
++		return true;
++
++	for (i = 0; i < adev->gfx.num_compute_rings; i++)
++		if (amdgpu_fence_count_emitted(&adev->gfx.compute_ring[i]))
++			return true;
++
++	return false;
++}
++
++static uint16_t cyan_skillfish_get_gpu_activity(struct smu_context *smu)
++{
++	struct amdgpu_device *adev = smu->adev;
++	uint16_t activity;
++	unsigned int busy = 0;
++	int i;
++
++	/*
++	 * Cyan Skillfish does not publish GFX activity in SmuMetrics_t, and
++	 * GRBM_STATUS reads back all-ones on this ASIC regardless of GPU
++	 * state (bus-fault sentinel, not a valid GUI_ACTIVE bit), which
++	 * previously pegged this at 100% even when the GPU was verifiably
++	 * idle. Approximate busy state from the emitted-fence count of the GFX
++	 * and compute rings instead: it is the same software-tracked activity
++	 * signal that already backs the reliable fdinfo drm-engine-gfx accounting,
++	 * and amdgpu_fence_count_emitted() is an existing core helper used
++	 * historically for exactly this kind of ring activity tracking.
++	 * Only sysfs/hwmon/gpu_metrics readers reach this (process context),
++	 * so sleep between samples instead of tying up the CPU.
++	 */
++	for (i = 0; i < 32; i++) {
++		busy += cyan_skillfish_rings_busy(adev);
++		if (i != 31)
++			usleep_range(45, 55);
++	}
++
++	activity = DIV_ROUND_CLOSEST(busy * 10000, 32);
++
++	return activity;
++}
++
+ static const struct smu_feature_bits cyan_skillfish_dpm_features = {
+ 	.bits = {
+ 		SMU_FEATURE_BIT_INIT(FEATURE_FCLK_DPM_BIT),
+@@ -409,6 +460,10 @@ static int cyan_skillfish_read_sensor(struct smu_context *smu,
+ 						   (uint32_t *)data);
+ 		*size = 4;
+ 		break;
++	case AMDGPU_PP_SENSOR_GPU_LOAD:
++		*(uint32_t *)data = cyan_skillfish_get_gpu_activity(smu) / 100;
++		*size = 4;
++		break;
+ 	default:
+ 		ret = -EOPNOTSUPP;
+ 		break;
+@@ -575,6 +630,9 @@ static ssize_t cyan_skillfish_get_gpu_metrics(struct smu_context *smu,
+ 	cyan_skillfish_decode_metrics(&metrics, layout, true, &avg);
+ 
+ 	smu_cmn_init_soft_gpu_metrics(gpu_metrics, 2, 2);
++	gpu_metrics->average_gfx_activity =
++		cyan_skillfish_get_gpu_activity(smu);
++
+ 	gpu_metrics->temperature_gfx = cur.GfxTemperature;
+ 	gpu_metrics->temperature_soc = cur.SocTemperature;
+ 
+-- 
+2.56.0
+
