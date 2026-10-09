@@ -1,27 +1,18 @@
 # bc250-vcn-fw
 
 The firmware file `amdgpu/ps5_vcn.bin` for the BC-250's Video Core Next (VCN 2.0)
-block, which the `0022-bc250-vcn.patch` kernel patch brings up.
+block. It is parked: see below.
 
 It installs one file, `/usr/lib/firmware/amdgpu/ps5_vcn.bin`, plus AMD's licence
 text. Nothing runs and nothing is configured.
 
 ## Do you need it
 
-Only if you run **`linux-cachyos-rc-bc250`**, the only kernel with the VCN patch
-for now (`pacman -S bc250-vcn-fw`), **and** boot it with `amdgpu.bc250_vcn=1`.
-The patch is off by default because the first bring-up hung the author's board
-at boot. The stable and BORE kernels ignore the file.
-
-With the file missing, or the parameter not set, the patched kernel leaves the
-VCN block off and everything else works as before.
-
-amdgpu loads from the initramfs, so the file has to be in there. pacman takes
-care of that: the mkinitcpio hook watches `usr/lib/firmware/*` and rebuilds the
-images in the same run that installs this package (on CachyOS Limine installs
-that is the `limine-mkinitcpio` hook; if you ever need to run it by hand, the
-command there is `sudo limine-mkinitcpio`, not `mkinitcpio -P`). All that is
-left is a reboot into the RC kernel.
+**No.** No shipped kernel uses this file. The kernel patch that did
+(`bc250-vcn.patch`, now parked in `patches/linux-cachyos-rc/disabled/`) freezes the
+BC-250 on the first register read of the VCN block, so it was taken out of the
+RC kernel. The package is kept so that anyone who wants to continue that work
+has the firmware to hand.
 
 ## Where the file comes from
 

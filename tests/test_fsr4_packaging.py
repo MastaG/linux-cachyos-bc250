@@ -399,9 +399,6 @@ class KernelPatchSetTests(unittest.TestCase):
     # Patches that legitimately exist in one set only, with the reason.
     STABLE_ONLY = {}
     RC_ONLY = {
-        "bc250-vcn.patch": (
-            "VCN bring-up needs hardware testing; RC first, stable once it has proven itself"
-        ),
         "ch7218-vrr-allowlist.patch": (
             "CachyOS 7.2/hdmi already lists the CH7218 in the FreeSync PCON "
             "allowlist; its 7.3 HDMI branch does not, so the RC set adds it"

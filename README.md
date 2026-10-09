@@ -27,7 +27,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; retrains the link when the display powers on or switches to the board |
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `bc250-ch7218-fw` | Optional: UGREEN's updater and three firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
-| `bc250-vcn-fw` | Optional, experimental: the firmware file for the VCN video-block patch in `linux-cachyos-rc-bc250` (needs `amdgpu.bc250_vcn=1`) |
+| `bc250-vcn-fw` | Parked: the firmware file for the BC-250 VCN video-block experiment. No shipped kernel uses it (see [Hardware video (VCN)](#hardware-video-vcn-parked)) |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 ---
@@ -1003,18 +1003,11 @@ sudo pacman -S bc250-paccache-cleanup
 
 With it installed there are no older package versions left on your disk to downgrade to. This repository keeps the previous builds of every package, so a downgrade comes from there instead; see [Downgrading a package](#downgrading-a-package). To keep the last version in the cache instead, copy `/usr/share/libalpm/hooks/bc250-paccache-cleanup.hook` to `/etc/pacman.d/hooks/` and change `-rqk0` to `-rqk1` in its `Exec` line (a hook there overrides the packaged one). To stop the cleanup, remove the package.
 
-## Hardware video (VCN), experimental
+## Hardware video (VCN), parked
 
-`linux-cachyos-rc-bc250` carries `0022-bc250-vcn.patch`, which switches on the BC-250's Video Core Next block (VCN 2.0). Mainline Linux skips it. The patch is a port of the PS5 one from the ps5-linux project ([ps5-linux-patches PR #38](https://github.com/ps5-linux/ps5-linux-patches/pull/38)) and is **RC only until it has been tested on hardware**; the stable and BORE kernels do not have it.
+The BC-250 reports a Video Core Next block (VCN 2.0.3) in its IP discovery table, and mainline Linux skips it. We ported the PS5's VCN patch from the ps5-linux project ([ps5-linux-patches PR #38](https://github.com/ps5-linux/ps5-linux-patches/pull/38)) and tested it on two boards. **It does not work: the machine freezes.**
 
-It is **off by default** (`amdgpu.bc250_vcn=1` switches it on): the first attempt hung the author's board at boot, so nobody gets it by accident. It also needs a firmware file that is not in linux-firmware, shipped by the optional `bc250-vcn-fw` package (see its README for where the file comes from). Without the file, or without the parameter, the kernel simply leaves the block off.
-
-```bash
-sudo pacman -S bc250-vcn-fw   # the mkinitcpio hook rebuilds the initramfs in the same run
-# add amdgpu.bc250_vcn=1 to the kernel command line, then reboot into linux-cachyos-rc-bc250
-```
-
-If the board does not come up, pick the stable kernel in the boot menu and drop the parameter again.
+What we found: the BC-250's security processor refuses the VCN firmware, so the patch loads it directly the way the PS5 does. With that, every other part of the GPU initialises, and then the first register read of the VCN block never returns. The block's addresses are right (the same as the PS5's), and nothing in the driver powers it up. People who tried harder, down to wiring things to the board, report that the block appears to be disabled on purpose in hardware. So **no kernel we ship carries the patch**: it is kept, unapplied, in `patches/linux-cachyos-rc/disabled/bc250-vcn.patch` together with a note on how it was tested, and the optional `bc250-vcn-fw` package (the firmware file) stays in the repository for anyone who wants to continue. You do not need either for anything.
 
 ## UGREEN DP-to-HDMI 2.1 adapter firmware (optional)
 

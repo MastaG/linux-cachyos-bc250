@@ -1,9 +1,9 @@
 post_install() {
     echo "==> bc250-vcn-fw installed: /usr/lib/firmware/amdgpu/ps5_vcn.bin"
     echo "==> The initramfs is rebuilt by the mkinitcpio hook during this same"
-    echo "==> pacman run (it watches usr/lib/firmware). Nothing is switched on:"
-    echo "==> boot linux-cachyos-rc-bc250 with amdgpu.bc250_vcn=1 to try VCN."
-    echo "==> Experimental: if the board hangs at boot, pick the stable kernel."
+    echo "==> pacman run (it watches usr/lib/firmware). Nothing uses this file:"
+    echo "==> the BC-250 VCN kernel patch is parked (it freezes the board)."
+    echo "==> You can remove this package unless you work on VCN yourself."
 }
 
 post_upgrade() {

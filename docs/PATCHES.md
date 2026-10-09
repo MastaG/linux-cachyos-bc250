@@ -57,7 +57,7 @@ The stable and BORE kernels carry these nineteen BC-250 patches in `patches/linu
 0019-bc250-vrm-memory-hwmon.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same nineteen patches (content-identical) plus the RC-only entries below (`0022-bc250-vcn.patch` is RC-only and off by default -- `amdgpu.bc250_vcn=1` -- until it works on hardware; the first attempt hung the test board at boot):
+`patches/linux-cachyos-rc` carries the same nineteen patches (content-identical) plus the RC-only entries below (the VCN patch is not among them: it freezes the BC-250 and is parked in `patches/linux-cachyos-rc/disabled/bc250-vcn.patch`):
 
 ```text
 0001-bc250-8core-metrics.patch
@@ -81,7 +81,6 @@ The stable and BORE kernels carry these nineteen BC-250 patches in `patches/linu
 0019-pcon-vrr-hf-vsdb.patch
 0020-bc250-psp-ccp.patch
 0021-bc250-vrm-memory-hwmon.patch
-0022-bc250-vcn.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.

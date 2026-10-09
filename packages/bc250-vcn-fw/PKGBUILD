@@ -1,9 +1,9 @@
 # Maintainer: MastaG
 #
 # Opt-in and deliberately NOT a dependency of linux-cachyos-bc250-meta: the
-# kernel patch that uses this firmware (0022-bc250-vcn.patch) is only in the
-# linux-cachyos-rc-bc250 kernel for now. Without the patch the file is unused;
-# without the file the patched kernel simply leaves the VCN block off.
+# kernel patch that used this firmware (bc250-vcn.patch) is parked in
+# patches/linux-cachyos-rc/disabled/ because it freezes the BC-250. The file is
+# kept for anyone who wants to continue; nothing shipped uses it.
 #
 # Not derived from an upstream PKGBUILD. source= is the files next to this one.
 # The firmware is not in linux-firmware; see README.md for where it comes from.
@@ -12,7 +12,7 @@
 pkgname=bc250-vcn-fw
 pkgver=1
 pkgrel=3
-pkgdesc="Video Core Next (VCN 2.0) firmware for the BC-250, for the linux-cachyos-rc-bc250 VCN patch"
+pkgdesc="Video Core Next (VCN 2.0) firmware for the BC-250, for the parked BC-250 VCN experiment"
 arch=('any')
 url="https://github.com/MastaG/linux-cachyos-bc250"
 license=('custom:AMD-redistributable-firmware')

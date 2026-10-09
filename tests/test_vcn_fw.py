@@ -56,19 +56,23 @@ class FirmwareFileTests(unittest.TestCase):
 
 
 class KernelPatchTests(unittest.TestCase):
-    patch = next(iter(RC.glob("*-bc250-vcn.patch")), None)
+    # The kernel patch is parked in disabled/: on the BC-250 the first register
+    # read of the VCN block freezes the machine, so no kernel ships it.
+    patch = RC / "disabled" / "bc250-vcn.patch"
 
-    def test_patch_exists_in_rc_only_for_now(self):
-        self.assertIsNotNone(self.patch)
+    def test_patch_is_parked_and_not_applied(self):
+        self.assertTrue(self.patch.is_file())
+        self.assertEqual(list(RC.glob("*-bc250-vcn.patch")), [])
         self.assertEqual(list(STABLE.glob("*-bc250-vcn.patch")), [])
+        self.assertEqual(list(STABLE.glob("disabled/*bc250-vcn.patch")), [])
 
     def test_patch_asks_for_the_file_the_package_ships(self):
         self.assertIn(f"amdgpu/{FW_NAME}", self.patch.read_text())
         self.assertTrue((PKG / FW_NAME).is_file())
 
     def test_bring_up_is_opt_in(self):
-        """A failed bring-up hangs the board at boot, so the block must stay off
-        unless amdgpu.bc250_vcn=1 is given."""
+        """Should the patch ever be re-enabled, the block must stay off unless
+        amdgpu.bc250_vcn=1 is given."""
         text = self.patch.read_text()
         self.assertIn("module_param_named(bc250_vcn, amdgpu_bc250_vcn, int, 0444)", text)
         self.assertIn("adev->pdev->device == 0x13fe && amdgpu_bc250_vcn", text)
