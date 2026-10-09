@@ -172,13 +172,13 @@ picks one:
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
 - **`helixsr`** — the default, and not a FidelityFX build at all:
-  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.3.0, one FSR 3.1 DLL that
+  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.4.1, one FSR 3.1 DLL that
   runs NVIDIA's DLSS Model E network as D3D12 compute. Built with `--helixsr`
   rather than `--ffx-sdk-alt` (and `--ffx-sdk-default` accepts its name only when
   `--helixsr` is given), because it differs in four ways. Its release zip holds
   no network since 1.2.0: `helixsr_weights.bin` and `helixsr_kernels.pak`, built
   by its setup script from NVIDIA's DLSS DLL, are added to the mirrored
-  `HelixSR-1.3.0-network.zip`, installed beside the DLL and pinned, and the
+  `HelixSR-1.4.1-network.zip`, installed beside the DLL and pinned, and the
   builder refuses an archive without them rather than ship a plain upscale. The same DLL
   goes in as both `amd_fidelityfx_dx12.dll` and
   `amd_fidelityfx_upscaler_dx12.dll`. Its `helixsr.ini` ships beside it with
