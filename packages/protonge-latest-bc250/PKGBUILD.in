@@ -62,11 +62,11 @@ source=(
     # PROTON_USE_OPTISCALER=fsr411rc9 / fsr411rc10.
     "bc250-fsr4-dll-4.0.0-rc9.tar.xz::@PAYLOAD_BASE@/bc250-fsr4-dll-4.0.0-rc9.tar.xz"
     "bc250-fsr4-dll-4.0.0-rc10.zip::@PAYLOAD_BASE@/bc250-fsr4-dll-4.0.0-rc10.zip"
-    # HelixSR 1.4.1 (lonewolf0622): an FSR 3.1 DLL that runs NVIDIA's DLSS Model E
+    # HelixSR 1.4.3 (lonewolf0622): an FSR 3.1 DLL that runs NVIDIA's DLSS Model E
     # network on D3D12. The default upscaler; PROTON_USE_OPTISCALER=helixsr names it. Mirrored like
     # the bridges above. Per its author, the DLSS weights and kernels inside it
     # remain NVIDIA's property and are not covered by HelixSR's licence.
-    "HelixSR-1.4.1-network.zip::@PAYLOAD_BASE@/HelixSR-1.4.1-network.zip"
+    "HelixSR-1.4.3-network.zip::@PAYLOAD_BASE@/HelixSR-1.4.3-network.zip"
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     "@FAKENVAPI_ASSET@::@FAKENVAPI_URL@"
@@ -93,7 +93,7 @@ noextract=(
     "bc250-fsr4-dll-4.0.0-rc11.zip"
     "bc250-fsr4-dll-4.0.0-rc9.tar.xz"
     "bc250-fsr4-dll-4.0.0-rc10.zip"
-    "HelixSR-1.4.1-network.zip"
+    "HelixSR-1.4.3-network.zip"
 )
 
 # Two checksum arrays, because the two kinds of source are pinned differently.
@@ -117,7 +117,7 @@ sha256sums=(
     '95ef0c6ea887e0506a3a92f7e4648e7ab7e1100e99f5eff2f70dd33b8dff2a72'
     'e7b53b1f1aa7aa4b767c3f73e72a33a9a3c5563eefd1edf48bf165fcb0feac89'
     'eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98'
-    '3f80f23c00355aaccf96e4e3e506419425e8cc7041b3e49ca364a1201c618252'
+    '2765b876867505c49cc0458f039ed02db485ce219ecb2adea5903605a172910f'
     '@FAKENVAPI_SHA256@'
     'be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e'
     '@SHA_PATCH@'
@@ -199,8 +199,8 @@ build() {
             "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc9" \
         --ffx-sdk-alt fsr411rc10 "$srcdir/bc250-fsr4-dll-4.0.0-rc10.zip" \
             "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \
-        --helixsr "$srcdir/HelixSR-1.4.1-network.zip" \
-            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.4.1" \
+        --helixsr "$srcdir/HelixSR-1.4.3-network.zip" \
+            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.4.3" \
         --dlss "$srcdir/nvngx_dlss.dll" \
         --licenses "$srcdir" \
         --preset "$srcdir/optiscaler-preset.json" \

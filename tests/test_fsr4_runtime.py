@@ -1166,17 +1166,17 @@ class PresetTests(unittest.TestCase):
     HELIXSR_KERNELS = b"helixsr-kernels" * 256
 
     def helixsr_zip(self, work, network=("helixsr_weights.bin", "helixsr_kernels.pak")):
-        # HelixSR's v1.4.1 release folder after its setup script has built the
+        # HelixSR's v1.4.3 release folder after its setup script has built the
         # network files beside the DLL.
-        path = work / "HelixSR-1.4.1.zip"
+        path = work / "HelixSR-1.4.3.zip"
         files = {
-            "HelixSR-1.4.1/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
-            "HelixSR-1.4.1/helixsr.ini": self.HELIXSR_INI.encode(),
-            "HelixSR-1.4.1/LICENSE": b"apache",
-            "HelixSR-1.4.1/THIRD_PARTY_NOTICES.md": b"nvidia property",
-            "HelixSR-1.4.1/README.md": b"readme",
-            "HelixSR-1.4.1/helixsr_weights.bin": self.HELIXSR_WEIGHTS,
-            "HelixSR-1.4.1/helixsr_kernels.pak": self.HELIXSR_KERNELS,
+            "HelixSR-1.4.3/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
+            "HelixSR-1.4.3/helixsr.ini": self.HELIXSR_INI.encode(),
+            "HelixSR-1.4.3/LICENSE": b"apache",
+            "HelixSR-1.4.3/THIRD_PARTY_NOTICES.md": b"nvidia property",
+            "HelixSR-1.4.3/README.md": b"readme",
+            "HelixSR-1.4.3/helixsr_weights.bin": self.HELIXSR_WEIGHTS,
+            "HelixSR-1.4.3/helixsr_kernels.pak": self.HELIXSR_KERNELS,
         }
         with zipfile.ZipFile(path, "w") as archive_zip:
             for name, data in files.items():
