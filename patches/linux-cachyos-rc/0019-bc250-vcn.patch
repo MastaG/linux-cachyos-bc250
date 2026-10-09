@@ -16,6 +16,13 @@ which does the same for the PS5, device 0x13fb):
 - power gating is left off at start, the block is soft reset in a fixed
   order, and a firmware that never reports ready returns -ETIMEDOUT
 - stop falls back to a reset when the block never goes idle
+- the VCN firmware is never handed to the PSP: the BIOS-booted PSP of this
+  board refuses ps5_vcn.bin (LOAD_IP_FW answers 0xFFFF0008, seen on the test
+  board), as it is not signed for it, so the driver copies the firmware into
+  the VCN buffer itself (the direct path the PS5 uses) while graphics and
+  SDMA stay on the PSP
+- "bc250-vcn:" messages mark each bring-up step, so the last one printed shows
+  where a hang is
 
 No other board is affected: every change is keyed on device 0x13fe.
 
@@ -76,7 +83,7 @@ index 999c01d35d65..5ece7d106ff3 100644
   * DOC: bc250_pcon_force_dsc (int)
   * BC-250 (Cyan Skillfish, DCN 2.0.1) only. Experimental, opt-in. Some DP to
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
-index 17db7264269e..7e3284225b7a 100644
+index 17db7264269e..b25cab383c24 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.c
 @@ -75,6 +75,7 @@ MODULE_FIRMWARE(FIRMWARE_RENOIR);
@@ -108,11 +115,67 @@ index 17db7264269e..7e3284225b7a 100644
  						 "amdgpu/%s.bin", ucode_prefix);
  			if (r)
  				amdgpu_ucode_release(&adev->vcn.inst[0].fw);
+@@ -203,7 +208,7 @@ int amdgpu_vcn_sw_init(struct amdgpu_device *adev, int i)
+ 	}
+ 
+ 	bo_size = AMDGPU_VCN_STACK_SIZE + AMDGPU_VCN_CONTEXT_SIZE;
+-	if (adev->firmware.load_type != AMDGPU_FW_LOAD_PSP)
++	if (!amdgpu_vcn_fw_via_psp(adev))
+ 		bo_size += AMDGPU_GPU_PAGE_ALIGN(le32_to_cpu(hdr->ucode_size_bytes) + 8);
+ 
+ 	if (amdgpu_ip_version(adev, UVD_HWIP, 0) >= IP_VERSION(5, 0, 0)) {
+@@ -394,7 +399,7 @@ int amdgpu_vcn_resume(struct amdgpu_device *adev, int i)
+ 		unsigned int offset;
+ 
+ 		hdr = (const struct common_firmware_header *)adev->vcn.inst[i].fw->data;
+-		if (adev->firmware.load_type != AMDGPU_FW_LOAD_PSP) {
++		if (!amdgpu_vcn_fw_via_psp(adev)) {
+ 			offset = le32_to_cpu(hdr->ucode_array_offset_bytes);
+ 			if (drm_dev_enter(adev_to_drm(adev), &idx)) {
+ 				memcpy_toio(adev->vcn.inst[i].cpu_addr,
+@@ -1127,11 +1132,17 @@ enum amdgpu_ring_priority_level amdgpu_vcn_get_enc_ring_prio(int ring)
+ 	}
+ }
+ 
++bool amdgpu_vcn_fw_via_psp(struct amdgpu_device *adev)
++{
++	return adev->firmware.load_type == AMDGPU_FW_LOAD_PSP &&
++	       adev->pdev->device != 0x13fe;
++}
++
+ void amdgpu_vcn_setup_ucode(struct amdgpu_device *adev, int i)
+ {
+ 	unsigned int idx;
+ 
+-	if (adev->firmware.load_type == AMDGPU_FW_LOAD_PSP) {
++	if (amdgpu_vcn_fw_via_psp(adev)) {
+ 		const struct common_firmware_header *hdr;
+ 
+ 		if (adev->vcn.harvest_config & (1 << i))
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.h
+index bea95307fd42..0f19540a8ece 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vcn.h
+@@ -276,6 +276,14 @@ struct dpg_pause_state {
+ 	enum internal_dpg_state jpeg;
+ };
+ 
++/*
++ * BC-250: the BIOS-booted PSP refuses the out of tree ps5_vcn.bin
++ * (LOAD_IP_FW answers 0xFFFF0008), so the VCN firmware is copied into the VCN
++ * buffer by the driver (the direct path) while everything else stays on the
++ * PSP.
++ */
++bool amdgpu_vcn_fw_via_psp(struct amdgpu_device *adev);
++
+ struct amdgpu_vcn_reg{
+ 	unsigned	data0;
+ 	unsigned	data1;
 diff --git a/drivers/gpu/drm/amd/amdgpu/vcn_v2_0.c b/drivers/gpu/drm/amd/amdgpu/vcn_v2_0.c
-index 0442bfcfd384..4dcb3a435f12 100644
+index 0442bfcfd384..3b8b2f587fa3 100644
 --- a/drivers/gpu/drm/amd/amdgpu/vcn_v2_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/vcn_v2_0.c
-@@ -90,6 +90,25 @@ static const struct amdgpu_hwip_reg_entry vcn_reg_list_2_0[] = {
+@@ -90,6 +90,32 @@ static const struct amdgpu_hwip_reg_entry vcn_reg_list_2_0[] = {
  	SOC15_REG_ENTRY_STR(VCN, 0, mmUVD_DPG_PAUSE)
  };
  
@@ -120,6 +183,13 @@ index 0442bfcfd384..4dcb3a435f12 100644
 +{
 +	return adev->pdev->device == 0x13fe;
 +}
++
++/* Breadcrumbs for the bring-up: the last one printed shows where a hang is. */
++#define BC250_VCN_TRACE(adev, fmt, ...) \
++	do { \
++		if (vcn_v2_0_is_bc250(adev)) \
++			dev_info((adev)->dev, "bc250-vcn: " fmt "\n", ##__VA_ARGS__); \
++	} while (0)
 +
 +static void vcn_v2_0_bc250_reset(struct amdgpu_device *adev)
 +{
@@ -138,7 +208,7 @@ index 0442bfcfd384..4dcb3a435f12 100644
  static void vcn_v2_0_set_dec_ring_funcs(struct amdgpu_device *adev);
  static void vcn_v2_0_set_enc_ring_funcs(struct amdgpu_device *adev);
  static void vcn_v2_0_set_irq_funcs(struct amdgpu_device *adev);
-@@ -167,7 +186,7 @@ static int vcn_v2_0_sw_init(struct amdgpu_ip_block *ip_block)
+@@ -167,7 +193,7 @@ static int vcn_v2_0_sw_init(struct amdgpu_ip_block *ip_block)
  
  	ring = &adev->vcn.inst->ring_dec;
  
@@ -147,7 +217,7 @@ index 0442bfcfd384..4dcb3a435f12 100644
  	ring->doorbell_index = adev->doorbell_index.vcn.vcn_ring0_1 << 1;
  	ring->vm_hub = AMDGPU_MMHUB0(0);
  
-@@ -199,7 +218,7 @@ static int vcn_v2_0_sw_init(struct amdgpu_ip_block *ip_block)
+@@ -199,7 +225,7 @@ static int vcn_v2_0_sw_init(struct amdgpu_ip_block *ip_block)
  		enum amdgpu_ring_priority_level hw_prio = amdgpu_vcn_get_enc_ring_prio(i);
  
  		ring = &adev->vcn.inst->ring_enc[i];
@@ -156,25 +226,67 @@ index 0442bfcfd384..4dcb3a435f12 100644
  		ring->vm_hub = AMDGPU_MMHUB0(0);
  		if (!amdgpu_sriov_vf(adev))
  			ring->doorbell_index = (adev->doorbell_index.vcn.vcn_ring0_1 << 1) + 2 + i;
-@@ -291,6 +310,12 @@ static int vcn_v2_0_hw_init(struct amdgpu_ip_block *ip_block)
+@@ -285,13 +311,25 @@ static int vcn_v2_0_hw_init(struct amdgpu_ip_block *ip_block)
+ 	struct amdgpu_ring *ring = &adev->vcn.inst->ring_dec;
+ 	int i, r;
+ 
++	BC250_VCN_TRACE(adev, "hw_init: enter");
+ 	adev->nbio.funcs->vcn_doorbell_range(adev, ring->use_doorbell,
+ 					     ring->doorbell_index, 0);
++	BC250_VCN_TRACE(adev, "hw_init: doorbell range set");
+ 
  	if (amdgpu_sriov_vf(adev))
  		vcn_v2_0_start_sriov(adev);
  
 +	if (vcn_v2_0_is_bc250(adev)) {
++		BC250_VCN_TRACE(adev, "hw_init: ungating");
 +		r = vcn_v2_0_set_pg_state(adev->vcn.inst, AMD_PG_STATE_UNGATE);
++		BC250_VCN_TRACE(adev, "hw_init: ungate returned %d", r);
 +		if (r)
 +			return r;
 +	}
 +
++	BC250_VCN_TRACE(adev, "hw_init: decode ring test");
  	r = amdgpu_ring_test_helper(ring);
++	BC250_VCN_TRACE(adev, "hw_init: decode ring test returned %d", r);
  	if (r)
  		return r;
-@@ -1013,7 +1038,27 @@ static int vcn_v2_0_start(struct amdgpu_vcn_inst *vinst)
+ 
+@@ -388,7 +426,7 @@ static void vcn_v2_0_mc_resume(struct amdgpu_vcn_inst *vinst)
+ 		return;
+ 
+ 	/* cache window 0: fw */
+-	if (adev->firmware.load_type == AMDGPU_FW_LOAD_PSP) {
++	if (amdgpu_vcn_fw_via_psp(adev)) {
+ 		WREG32_SOC15(UVD, 0, mmUVD_LMI_VCPU_CACHE_64BIT_BAR_LOW,
+ 			(adev->firmware.ucode[AMDGPU_UCODE_ID_VCN].tmr_mc_addr_lo));
+ 		WREG32_SOC15(UVD, 0, mmUVD_LMI_VCPU_CACHE_64BIT_BAR_HIGH,
+@@ -443,7 +481,7 @@ static void vcn_v2_0_mc_resume_dpg_mode(struct amdgpu_vcn_inst *vinst,
+ 	uint32_t offset;
+ 
+ 	/* cache window 0: fw */
+-	if (adev->firmware.load_type == AMDGPU_FW_LOAD_PSP) {
++	if (amdgpu_vcn_fw_via_psp(adev)) {
+ 		if (!indirect) {
+ 			WREG32_SOC15_DPG_MODE(0, SOC15_DPG_MODE_OFFSET(
+ 				UVD, 0, mmUVD_LMI_VCPU_CACHE_64BIT_BAR_LOW),
+@@ -1007,20 +1045,48 @@ static int vcn_v2_0_start(struct amdgpu_vcn_inst *vinst)
+ 	uint32_t lmi_swap_cntl;
+ 	int i, j, r;
+ 
++	BC250_VCN_TRACE(adev, "start: enter (dpm %d)", adev->pm.dpm_enabled);
+ 	if (adev->pm.dpm_enabled)
+ 		amdgpu_dpm_enable_vcn(adev, true, 0);
++	BC250_VCN_TRACE(adev, "start: dpm done");
+ 
  	if (adev->pg_flags & AMD_PG_SUPPORT_VCN_DPG)
  		return vcn_v2_0_start_dpg_mode(vinst, adev->vcn.inst->indirect_sram);
  
 -	vcn_v2_0_disable_static_power_gating(vinst);
 +	if (vcn_v2_0_is_bc250(adev)) {
++		BC250_VCN_TRACE(adev, "start: first register read (UVD_POWER_STATUS)");
++		BC250_VCN_TRACE(adev, "start: UVD_POWER_STATUS = 0x%08x",
++				RREG32_SOC15(UVD, 0, mmUVD_POWER_STATUS));
 +		WREG32_SOC15(UVD, 0, mmUVD_POWER_STATUS,
 +			RREG32_SOC15(UVD, 0, mmUVD_POWER_STATUS) & 2);
 +		WREG32_P(SOC15_REG_OFFSET(UVD, 0, mmUVD_SOFT_RESET),
@@ -192,13 +304,42 @@ index 0442bfcfd384..4dcb3a435f12 100644
 +		WREG32_SOC15(UVD, 0, mmUVD_RB_RPTR2, 0);
 +		WREG32_SOC15(UVD, 0, mmUVD_RB_WPTR2, 0);
 +		WREG32_SOC15(UVD, 0, mmJPEG_SYS_INT_STATUS, 0);
++		BC250_VCN_TRACE(adev, "start: reset sequence done");
 +	} else {
 +		vcn_v2_0_disable_static_power_gating(vinst);
 +	}
  
  	/* set uvd status busy */
  	tmp = RREG32_SOC15(UVD, 0, mmUVD_STATUS) | UVD_STATUS__UVD_BUSY;
-@@ -1096,6 +1141,13 @@ static int vcn_v2_0_start(struct amdgpu_vcn_inst *vinst)
+ 	WREG32_SOC15(UVD, 0, mmUVD_STATUS, tmp);
+ 
+ 	/*SW clock gating */
++	BC250_VCN_TRACE(adev, "start: disabling clock gating");
+ 	vcn_v2_0_disable_clock_gating(vinst);
++	BC250_VCN_TRACE(adev, "start: clock gating disabled");
+ 
+ 	/* enable VCPU clock */
+ 	WREG32_P(SOC15_REG_OFFSET(UVD, 0, mmUVD_VCPU_CNTL),
+@@ -1064,7 +1130,9 @@ static int vcn_v2_0_start(struct amdgpu_vcn_inst *vinst)
+ 		(0x1 << UVD_MPC_SET_MUX__SET_1__SHIFT) |
+ 		(0x2 << UVD_MPC_SET_MUX__SET_2__SHIFT)));
+ 
++	BC250_VCN_TRACE(adev, "start: mc_resume");
+ 	vcn_v2_0_mc_resume(vinst);
++	BC250_VCN_TRACE(adev, "start: mc_resume done");
+ 
+ 	/* release VCPU reset to boot */
+ 	WREG32_P(SOC15_REG_OFFSET(UVD, 0, mmUVD_SOFT_RESET), 0,
+@@ -1086,6 +1154,8 @@ static int vcn_v2_0_start(struct amdgpu_vcn_inst *vinst)
+ 	lmi_swap_cntl = 0xa;
+ #endif
+ 	WREG32_SOC15(UVD, 0, mmUVD_LMI_SWAP_CNTL, lmi_swap_cntl);
++	BC250_VCN_TRACE(adev, "start: waiting for the VCPU (UVD_STATUS = 0x%08x)",
++			RREG32_SOC15(UVD, 0, mmUVD_STATUS));
+ 
+ 	for (i = 0; i < 10; ++i) {
+ 		uint32_t status;
+@@ -1096,6 +1166,13 @@ static int vcn_v2_0_start(struct amdgpu_vcn_inst *vinst)
  				break;
  			mdelay(10);
  		}
@@ -212,7 +353,7 @@ index 0442bfcfd384..4dcb3a435f12 100644
  		r = 0;
  		if (status & 2)
  			break;
-@@ -1228,6 +1280,8 @@ static int vcn_v2_0_stop(struct amdgpu_vcn_inst *vinst)
+@@ -1228,6 +1305,8 @@ static int vcn_v2_0_stop(struct amdgpu_vcn_inst *vinst)
  
  	/* wait for uvd idle */
  	r = SOC15_WAIT_ON_RREG(VCN, 0, mmUVD_STATUS, UVD_STATUS__IDLE, 0x7);
@@ -221,7 +362,7 @@ index 0442bfcfd384..4dcb3a435f12 100644
  	if (r)
  		return r;
  
-@@ -1236,6 +1290,8 @@ static int vcn_v2_0_stop(struct amdgpu_vcn_inst *vinst)
+@@ -1236,6 +1315,8 @@ static int vcn_v2_0_stop(struct amdgpu_vcn_inst *vinst)
  		UVD_LMI_STATUS__WRITE_CLEAN_MASK |
  		UVD_LMI_STATUS__WRITE_CLEAN_RAW_MASK;
  	r = SOC15_WAIT_ON_RREG(VCN, 0, mmUVD_LMI_STATUS, tmp, tmp);
@@ -230,7 +371,7 @@ index 0442bfcfd384..4dcb3a435f12 100644
  	if (r)
  		return r;
  
-@@ -1272,6 +1328,15 @@ static int vcn_v2_0_stop(struct amdgpu_vcn_inst *vinst)
+@@ -1272,6 +1353,15 @@ static int vcn_v2_0_stop(struct amdgpu_vcn_inst *vinst)
  	/* clear status */
  	WREG32_SOC15(VCN, 0, mmUVD_STATUS, 0);
  
@@ -246,3 +387,12 @@ index 0442bfcfd384..4dcb3a435f12 100644
  	vcn_v2_0_enable_clock_gating(vinst);
  	vcn_v2_0_enable_static_power_gating(vinst);
  
+@@ -1988,7 +2078,7 @@ static int vcn_v2_0_start_sriov(struct amdgpu_device *adev)
+ 			0xFFFFFFFF, 0x00000004);
+ 
+ 		/* mc resume*/
+-		if (adev->firmware.load_type == AMDGPU_FW_LOAD_PSP) {
++		if (amdgpu_vcn_fw_via_psp(adev)) {
+ 			MMSCH_V2_0_INSERT_DIRECT_WT(
+ 				SOC15_REG_OFFSET(UVD, 0,
+ 					mmUVD_LMI_VCPU_CACHE_64BIT_BAR_LOW),
