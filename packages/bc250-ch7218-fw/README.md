@@ -28,7 +28,7 @@ had a no-signal since.
 | `original` | `CH7218A-IMG.G000.07.00.54.IMG` | UGREEN's firmware, byte for byte as UGREEN published it |
 | `tmds` | `...07.00.54.nowatchdog-tmds.IMG` | the original with the TMDS watchdog's countdown removed (one byte). **In use on the author's board.** |
 | `tmds-frl` | `...07.00.54.nowatchdog-tmds+frl.IMG` | `tmds` plus the same change to the FRL monitor (a second byte). **Not tested on hardware yet.** |
-| `ugreen-69` | `CH7218A-IMG.G000.07.00.69.IMG` | UGREEN's later firmware, byte for byte, sent to the author after he reported the problem to them. An **optional update**; see below. It still has the bug. |
+| `ugreen-69` | `CH7218A-IMG.G000.07.00.69.IMG` | UGREEN's later firmware, byte for byte, sent to the author after he reported the problem to them. An **optional update**; see below. Still contains the watchdog code behind the bug; not tested on hardware yet. |
 | `tmds-69` | `...07.00.69.nowatchdog-tmds.IMG` | `ugreen-69` with the same one-byte watchdog fix as `tmds`. **Not tested on hardware yet.** |
 
 Exactly what differs from `original` (file offsets; the image is
@@ -51,7 +51,7 @@ identical but sit at different addresses, so the offsets above do not apply to i
 The author compared the two images function by function (237 of 299 identical after
 ignoring addresses). What the comparison showed:
 
-- **The bug is still there.** The main loop calls the TMDS watchdog under the same
+- **The code that causes the bug is still there.** The main loop calls the TMDS watchdog under the same
   condition, the watchdog has the same 40-round budget (`0x28`) and the same one-shot
   `DEC A`, and an HDMI hot-plug-high while the output is already up still only
   increments a counter: no EDID re-read, no scrambling rewrite, no retrain.
@@ -59,10 +59,13 @@ ignoring addresses). What the comparison showed:
   new flag (`0x5078`) that, when set, skips a short register pulse (bit 6 of `0x2594`) on its retrain path, and the stream-loss
   paths now clear the FRL counter (and the new flag). The sink quirk table grew from 13 to
   19 entries, and the DSC/mode logic that uses it was reworked.
-- **Hardware result (one report, 2026-10-10):** after flashing 07.00.69 and replugging the
-  adapter, an AV receiver input showed no signal even though the board saw a healthy
-  DisplayPort link, and a link retrain (`link_settings` "0 0") brought the picture back.
-  That is the old failure on the new firmware.
+- **Hardware: not tested properly yet.** The one trial so far was not the controlled
+  test: the adapter was power-cycled and its HDMI input was not selected again for over
+  30 minutes. The picture was missing when it was finally selected, and a link retrain
+  brought it back. That is what the old failure looks like, but a 30-minute gap is far
+  beyond the watchdog budget, so it does not show whether 69 behaves differently from 54
+  in the first minutes. The real test is: picture first, wait about 6 minutes, switch
+  the receiver input away and back.
 
 `tmds-69` applies the same one-byte change as `tmds` to 07.00.69: `DEC A` becomes `NOP` in
 the TMDS watchdog, so it keeps rewriting the scrambling setup instead of giving up. The
