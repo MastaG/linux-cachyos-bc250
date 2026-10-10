@@ -59,14 +59,24 @@ ignoring addresses). What the comparison showed:
   new flag (`0x5078`) that, when set, skips a short register pulse (bit 6 of `0x2594`) on its retrain path, and the stream-loss
   paths now clear the FRL counter (and the new flag). The sink quirk table grew from 13 to
   19 entries, and the DSC/mode logic that uses it was reworked.
-- **Hardware (one controlled test, 2026-10-10): 69 survived.** After a link retrain with the
-  picture up and no hot-plug in the kernel log, the receiver input was left alone for
-  well over eight minutes (stock 07.00.54 goes black after about six), then switched
-  away and back: the picture came back by itself. So 07.00.69 may fix the black picture
-  even though the watchdog code looks the same; the difference is somewhere I did not
-  find. One test is not a verdict: repeat it, with longer waits and a TV standby and wake.
-  (An earlier trial, where the adapter was power-cycled and its input was not selected for
-  30 minutes, was not a valid test of this.)
+- **Hardware, 2026-10-10 (one board: adapter, then a Denon receiver, then an LG TV).**
+  Each run started with a link retrain and a picture, with the kernel log checked for
+  hot-plug events afterwards. Stock 07.00.54 goes black after about six minutes.
+  - *Input switch after well over eight minutes, receiver input switched away and back:*
+    **picture came back by itself**, no hot-plug in the log.
+  - *The same after about 36 minutes:* **picture came back by itself**, no hot-plug.
+  - *TV standby and wake (a few minutes off):* picture came back, but the log shows the
+    adapter dropped the DisplayPort link and the board retrained on reconnect. That is
+    the normal hot-plug path and works on 54 as well, so it says little about 69.
+  - An earlier trial, where the adapter was power-cycled and its input was not selected for
+    30 minutes, was not a valid test of this.
+- **Still to test:** watching something on the receiver's own source for over five minutes
+  (which makes the receiver switch to ARC, so the HDMI link is really dropped) and then
+  switching back; the TV off for over five minutes before turning it on; and the same
+  tests with the adapter connected straight to the TV, without the receiver.
+
+Two passes on one setup is not a verdict, and the watchdog code looks the same in both
+images, so why 69 survives is not explained. Treat `ugreen-69` as promising, not as fixed.
 
 `tmds-69` applies the same one-byte change as `tmds` to 07.00.69: `DEC A` becomes `NOP` in
 the TMDS watchdog, so it keeps rewriting the scrambling setup instead of giving up. The
