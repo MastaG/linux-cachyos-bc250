@@ -15,11 +15,13 @@ ORIGINAL = "CH7218A-IMG.G000.07.00.54.IMG"
 TMDS = "CH7218A-IMG.G000.07.00.54.nowatchdog-tmds.IMG"
 TMDS_FRL = "CH7218A-IMG.G000.07.00.54.nowatchdog-tmds+frl.IMG"
 UGREEN_69 = "CH7218A-IMG.G000.07.00.69.IMG"
+TMDS_69 = "CH7218A-IMG.G000.07.00.69.nowatchdog-tmds.IMG"
 
 ORIGINAL_SHA = "a0d2643fed0c17b6b2cbdb27b5b77533745aa578e545217e9d13ad868a0dcb80"
 UGREEN_69_SHA = "d9164ad45fc3219501828c422c7d1d62d8442459ea8066f805d2cb526483ed6d"
 FWU_SHA = "79a87d9d0f4def58a3792661c1055de26d8f9cf29f0537ab316d31826bc42788"
 
+TMDS_69_OFFSET = 0x1872
 TMDS_OFFSET = 0x1A4E
 FRL_OFFSET = 0x27C0
 
@@ -54,8 +56,12 @@ class FirmwareImageTests(unittest.TestCase):
         self.assertEqual((FW / TMDS_FRL).read_bytes(),
                          rebuild(original, [TMDS_OFFSET, FRL_OFFSET]))
 
+    def test_tmds_69_is_ugreen_69_plus_exactly_the_documented_bytes(self):
+        self.assertEqual((FW / TMDS_69).read_bytes(),
+                         rebuild((FW / UGREEN_69).read_bytes(), [TMDS_69_OFFSET]))
+
     def test_every_image_obeys_the_length_and_checksum_rule(self):
-        for name in (ORIGINAL, TMDS, TMDS_FRL, UGREEN_69):
+        for name in (ORIGINAL, TMDS, TMDS_FRL, UGREEN_69, TMDS_69):
             d = (FW / name).read_bytes()
             self.assertEqual(len(d), 65536, name)
             n = int.from_bytes(d[:2], "little")
@@ -66,7 +72,7 @@ class FirmwareImageTests(unittest.TestCase):
         for line in (FW / "SHA256SUMS").read_text().splitlines():
             digest, name = line.split(None, 1)
             listed[name.lstrip("*")] = digest
-        self.assertEqual(set(listed), {ORIGINAL, TMDS, TMDS_FRL, UGREEN_69})
+        self.assertEqual(set(listed), {ORIGINAL, TMDS, TMDS_FRL, UGREEN_69, TMDS_69})
         for name, digest in listed.items():
             self.assertEqual(hashlib.sha256((FW / name).read_bytes()).hexdigest(), digest, name)
 
@@ -79,7 +85,7 @@ class PackagingTests(unittest.TestCase):
     def test_pkgbuild_ships_every_file_the_wrapper_needs(self):
         pkgbuild = (PKG / "PKGBUILD").read_text()
         for name in ("bc250-ch7218-flash", "ch7218_fwu", "README.md", "SHA256SUMS",
-                     ORIGINAL, TMDS, TMDS_FRL, UGREEN_69):
+                     ORIGINAL, TMDS, TMDS_FRL, UGREEN_69, TMDS_69):
             self.assertIn(name, pkgbuild)
         self.assertIn("!strip", pkgbuild, "the vendor binary must not be modified")
 
@@ -221,6 +227,12 @@ esac
         self.assertEqual(back.returncode, 0, back.stderr + back.stdout)
         self.assertIn("downgrade", back.stdout)
         self.assertIn(str(self.img / ORIGINAL), self.log.read_text())
+
+    def test_tmds_69_flashes_the_69_image(self):
+        self.adapter(0)
+        r = self.run_flash("flash", "tmds-69", "--yes")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn(str(self.img / TMDS_69), self.log.read_text())
 
     def test_a_modified_image_is_refused(self):
         self.adapter(0)

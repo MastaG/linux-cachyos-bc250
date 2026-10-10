@@ -39,6 +39,7 @@ image_file() {
         tmds)     echo "CH7218A-IMG.G000.07.00.54.nowatchdog-tmds.IMG" ;;
         tmds-frl) echo "CH7218A-IMG.G000.07.00.54.nowatchdog-tmds+frl.IMG" ;;
         ugreen-69) echo "CH7218A-IMG.G000.07.00.69.IMG" ;;
+        tmds-69)  echo "CH7218A-IMG.G000.07.00.69.nowatchdog-tmds.IMG" ;;
         *) return 1 ;;
     esac
 }
@@ -46,7 +47,7 @@ image_file() {
 # The firmware version each image carries, as the updater reports it.
 image_version() {
     case "$1" in
-        ugreen-69) echo 69 ;;
+        ugreen-69|tmds-69) echo 69 ;;
         *) echo 54 ;;
     esac
 }
@@ -57,17 +58,18 @@ image_blurb() {
         tmds)     echo "07.00.54 with the HDMI scrambling watchdog kept alive (1 byte). Running on the author's board." ;;
         tmds-frl) echo "tmds plus the FRL link monitor kept alive (2 bytes). NOT TESTED on hardware yet." ;;
         ugreen-69) echo "UGREEN's newer 07.00.69, unchanged (their answer to our report). Optional update; NOT TESTED by us yet." ;;
+        tmds-69)  echo "07.00.69 with the same one-byte HDMI scrambling watchdog fix as tmds. NOT TESTED on hardware yet." ;;
     esac
 }
 
 usage() {
     cat <<'USAGE'
 Usage:
-  bc250-ch7218-flash list                 the four firmware images
+  bc250-ch7218-flash list                 the five firmware images
   sudo bc250-ch7218-flash status          find CH7218 adapters, read their firmware version
   sudo bc250-ch7218-flash flash IMAGE [--aux N] [--yes] [--dry-run]
 
-IMAGE is one of: original | tmds | tmds-frl | ugreen-69      (see "list")
+IMAGE is one of: original | tmds | tmds-frl | ugreen-69 | tmds-69      (see "list")
 
 Flashing makes the adapter's HDMI output go dark for a moment and the new code
 only runs after the adapter is power-cycled. Run it from SSH, not from the
@@ -127,7 +129,7 @@ expected_sha() {
 
 cmd_list() {
     local a f
-    for a in original tmds tmds-frl ugreen-69; do
+    for a in original tmds tmds-frl ugreen-69 tmds-69; do
         f="$(image_file "$a")"
         printf '%-9s %s\n          %s\n          sha256 %s\n' "$a" "$f" "$(image_blurb "$a")" "$(expected_sha "$f")"
     done
@@ -175,7 +177,7 @@ cmd_flash() {
         esac
         shift
     done
-    file="$(image_file "$alias")" || die "IMAGE must be original, tmds, tmds-frl or ugreen-69 (see: bc250-ch7218-flash list)"
+    file="$(image_file "$alias")" || die "IMAGE must be original, tmds, tmds-frl, ugreen-69 or tmds-69 (see: bc250-ch7218-flash list)"
     path="$IMGDIR/$file"
     [[ "$EUID" -eq 0 ]] || die "flashing needs root: sudo bc250-ch7218-flash flash $alias"
     [[ -x "$FWU" ]] || die "the vendor updater is missing: $FWU"

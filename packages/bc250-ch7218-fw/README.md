@@ -21,14 +21,15 @@ stock-firmware adapter went black after about six minutes; with `tmds` flashed i
 survived a seven minute idle and a receiver input switch, and the author has not
 had a no-signal since.
 
-## The four images
+## The five images
 
 | name | file | what it is |
 | --- | --- | --- |
 | `original` | `CH7218A-IMG.G000.07.00.54.IMG` | UGREEN's firmware, byte for byte as UGREEN published it |
 | `tmds` | `...07.00.54.nowatchdog-tmds.IMG` | the original with the TMDS watchdog's countdown removed (one byte). **In use on the author's board.** |
 | `tmds-frl` | `...07.00.54.nowatchdog-tmds+frl.IMG` | `tmds` plus the same change to the FRL monitor (a second byte). **Not tested on hardware yet.** |
-| `ugreen-69` | `CH7218A-IMG.G000.07.00.69.IMG` | UGREEN's later firmware, byte for byte, sent to the author after he reported the problem to them. An **optional update**; see below. **Not tested on hardware yet.** |
+| `ugreen-69` | `CH7218A-IMG.G000.07.00.69.IMG` | UGREEN's later firmware, byte for byte, sent to the author after he reported the problem to them. An **optional update**; see below. It still has the bug. |
+| `tmds-69` | `...07.00.69.nowatchdog-tmds.IMG` | `ugreen-69` with the same one-byte watchdog fix as `tmds`. **Not tested on hardware yet.** |
 
 Exactly what differs from `original` (file offsets; the image is
 `[length u16 LE][code][16-bit sum of the code, LE]`):
@@ -39,25 +40,41 @@ Exactly what differs from `original` (file offsets; the image is
 | `0x27C0` | `0x14` | `0x14` | `0x00` | `DEC A` becomes `NOP` in the FRL monitor |
 | `0x6DF2` | `EA` | `D6` | `C2` | low byte of the stored checksum |
 
-Nothing else differs. The repository's tests rebuild both images from `original`
+Nothing else differs. The repository's tests rebuild all the fixed images from their stock images
 and compare them byte for byte.
 
-### About `ugreen-69`
+### About `ugreen-69` and `tmds-69`
 
 UGREEN sent 07.00.69 in reply to the author's technical report and did not say what
-changed. It is a rebuild, not a patch of 07.00.54: the code is laid out differently, so
-none of the offsets above apply to it and there is no `tmds`-style variant of it.
-What the author found by comparing the two images:
+changed. It is a rebuild of the same code, not a patch of 07.00.54: most functions are
+identical but sit at different addresses, so the offsets above do not apply to it.
+The author compared the two images function by function (237 of 299 identical after
+ignoring addresses). What the comparison showed:
 
-- The TMDS watchdog is still there, with the same one-shot countdown (`DEC A`) that
-  `tmds` removes in 07.00.54. Whether UGREEN fixed the black picture some other way is
-  not known: that needs a hardware test (a receiver input switch after seven or more
-  idle minutes).
-- The FRL monitor was changed.
+- **The bug is still there.** The main loop calls the TMDS watchdog under the same
+  condition, the watchdog has the same 40-round budget (`0x28`) and the same one-shot
+  `DEC A`, and an HDMI hot-plug-high while the output is already up still only
+  increments a counter: no EDID re-read, no scrambling rewrite, no retrain.
+- **What changed:** the FRL monitor lost its exemption for one sink (quirk id 2) and got a
+  new flag (`0x5078`) that, when set, skips a short register pulse (bit 6 of `0x2594`) on its retrain path, and the stream-loss
+  paths now clear the FRL counter (and the new flag). The sink quirk table grew from 13 to
+  19 entries, and the DSC/mode logic that uses it was reworked.
+- **Hardware result (one report, 2026-10-10):** after flashing 07.00.69 and replugging the
+  adapter, an AV receiver input showed no signal even though the board saw a healthy
+  DisplayPort link, and a link retrain (`link_settings` "0 0") brought the picture back.
+  That is the old failure on the new firmware.
 
-If 07.00.69 turns out to fix the problem, `tmds` is no longer needed. Until someone has
-tested it, `tmds` stays the image that is known to work. Going back from 69 to any 54
-image is allowed by the tool.
+`tmds-69` applies the same one-byte change as `tmds` to 07.00.69: `DEC A` becomes `NOP` in
+the TMDS watchdog, so it keeps rewriting the scrambling setup instead of giving up. The
+changes against `ugreen-69` are exactly:
+
+| offset | `ugreen-69` | `tmds-69` | meaning |
+| --- | --- | --- | --- |
+| `0x1872` | `0x14` | `0x00` | `DEC A` becomes `NOP` in the TMDS watchdog |
+| `0x6E66` | `E1` | `CD` | low byte of the stored checksum |
+
+It is **not tested on hardware yet**. Going back from 69 to any 54 image is allowed by
+the tool. `tmds` (on 07.00.54) remains the image that is known to work.
 
 The `tmds-frl` image is untested. The author left the FRL monitor alone at first
 because a watchdog that never gives up could, in principle, keep retraining a link
@@ -79,9 +96,9 @@ to a sink that has gone to sleep. Treat it as an experiment, and go back to
 ## Using it
 
 ```
-bc250-ch7218-flash list                         # the four images and their checksums
+bc250-ch7218-flash list                         # the five images and their checksums
 sudo bc250-ch7218-flash status                  # find the adapter, read its firmware version
-sudo bc250-ch7218-flash flash tmds              # flash one of: original | tmds | tmds-frl | ugreen-69
+sudo bc250-ch7218-flash flash tmds              # flash one of: original | tmds | tmds-frl | ugreen-69 | tmds-69
 sudo bc250-ch7218-flash flash tmds --dry-run    # do every check, write nothing
 ```
 

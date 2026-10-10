@@ -26,7 +26,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
 | `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; retrains the link when the display powers on or switches to the board |
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
-| `bc250-ch7218-fw` | Optional: UGREEN's updater and four firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
+| `bc250-ch7218-fw` | Optional: UGREEN's updater and five firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
 | `bc250-vcn-fw` | Parked: the firmware file for the BC-250 VCN video-block experiment. No shipped kernel uses it (see [Hardware video (VCN)](#hardware-video-vcn-parked)) |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
@@ -1013,13 +1013,13 @@ What we found: the BC-250's security processor refuses the VCN firmware, so the 
 
 The UGREEN DisplayPort to HDMI 2.1 adapter (DP134 / DP135, a Chrontel CH7218A) has a firmware problem that shows up as a **black picture that never comes back**: a few minutes after the picture starts, the adapter stops resending the HDMI scrambling setup, so anything that resets the TV or receiver's HDMI state without dropping the link for long (an AV receiver input switch, a TV standby and wake) leaves no signal while the DisplayPort side still looks healthy. See the [package README](packages/bc250-ch7218-fw/README.md) for the analysis.
 
-`bc250-ch7218-fw` ships UGREEN's own Linux updater, UGREEN's `07.00.54` firmware unchanged, two copies of it with the watchdog kept running (`tmds`, which the author runs, and `tmds-frl`, which is untested), and UGREEN's newer `07.00.69` as an optional update (`ugreen-69`, which they sent after our report; untested). Nothing in it runs by itself and it is **not** part of `linux-cachyos-bc250-meta`. You flash by hand, from SSH:
+`bc250-ch7218-fw` ships UGREEN's own Linux updater, UGREEN's `07.00.54` firmware unchanged, two copies of it with the watchdog kept running (`tmds`, which the author runs, and `tmds-frl`, which is untested), and UGREEN's newer `07.00.69` as an optional update (`ugreen-69`, which they sent after our report, plus `tmds-69` with the same watchdog fix; neither is a fix by itself: 69 still shows the black-picture bug, and `tmds-69` is untested). Nothing in it runs by itself and it is **not** part of `linux-cachyos-bc250-meta`. You flash by hand, from SSH:
 
 ```bash
 sudo pacman -S bc250-ch7218-fw
 sudo bc250-ch7218-flash status                 # finds the adapter and reads its firmware version
 sudo bc250-ch7218-flash flash tmds --dry-run   # every check, no write
-sudo bc250-ch7218-flash flash tmds             # or: original | tmds-frl | ugreen-69
+sudo bc250-ch7218-flash flash tmds             # or: original | tmds-frl | ugreen-69 | tmds-69
 ```
 
 It only touches an adapter on firmware `07.00.xx` (`07.00.54` or an older build, which it then also brings up to 54, as UGREEN's own update does), checks the image against its checksum first, and asks you to type `flash`. The new firmware runs after the adapter is power-cycled; `flash original` goes back to UGREEN's. Flashing firmware carries a small risk of leaving a device unusable if the write is interrupted, so do not cut power while it runs. This package is not endorsed by UGREEN or Chrontel.
