@@ -68,15 +68,27 @@ ignoring addresses). What the comparison showed:
   - *TV standby and wake (a few minutes off):* picture came back, but the log shows the
     adapter dropped the DisplayPort link and the board retrained on reconnect. That is
     the normal hot-plug path and works on 54 as well, so it says little about 69.
-  - An earlier trial, where the adapter was power-cycled and its input was not selected for
-    30 minutes, was not a valid test of this.
-- **Still to test:** watching something on the receiver's own source for over five minutes
-  (which makes the receiver switch to ARC, so the HDMI link is really dropped) and then
-  switching back; the TV off for over five minutes before turning it on; and the same
-  tests with the adapter connected straight to the TV, without the receiver.
+  - *Receiver and TV switched off for 10 minutes, then on again about 30 minutes later,
+    with the receiver left on a different input than the board's:* **failed.** The link
+    dropped and was re-formed while the board's input was not the one being watched.
+    Switching to the board's input afterwards gave no picture, about 55 seconds after
+    the link was re-formed, so this is not the six-minute watchdog. Switching inputs back
+    and forth did not help; only a full DisplayPort retrain brought the picture back.
+  - *The same failure, in an earlier trial:* the adapter was power-cycled while the
+    board's input was not selected, and stayed that way for 30 minutes.
+  - **Pattern so far:** every pass had the link formed while the board's input was the
+    active one. Every failure had the link formed while another input was active. That
+    is a hypothesis from three failures, not a finding. It has not been checked whether
+    54, `tmds` or `original` fail the same way, so it may not be specific to 69.
+- **Still to test:** `tmds-69` and the 54 images in the failing sequence (link formed
+  while another input is active, board's input selected 30 minutes later); a retrain
+  with the receiver on another input followed by a short wait, as a faster repro; the
+  receiver's own source for over five minutes (which makes it switch to ARC) and then
+  switching back; and the same tests with the adapter connected straight to the TV,
+  without the receiver.
 
-Two passes on one setup is not a verdict, and the watchdog code looks the same in both
-images, so why 69 survives is not explained. Treat `ugreen-69` as promising, not as fixed.
+Two passes and three failures on one setup is not a verdict, and the watchdog code looks the same in both
+images, so why 69 survives is not explained. Treat `ugreen-69` as not fixed: it survives idle input switches but not a link that was re-formed while another input was active.
 
 `tmds-69` applies the same one-byte change as `tmds` to 07.00.69: `DEC A` becomes `NOP` in
 the TMDS watchdog, so it keeps rewriting the scrambling setup instead of giving up. The
@@ -87,7 +99,7 @@ changes against `ugreen-69` are exactly:
 | `0x1872` | `0x14` | `0x00` | `DEC A` becomes `NOP` in the TMDS watchdog |
 | `0x6E66` | `E1` | `CD` | low byte of the stored checksum |
 
-It is **not tested on hardware**, and since plain 69 passed the first test it may not be needed. Going back from 69 to any 54 image is allowed by
+It is flashed on the author's board and being tested against the failing sequence above; no result yet. Going back from 69 to any 54 image is allowed by
 the tool. `tmds` (on 07.00.54) remains the image with the longest track record.
 
 The `tmds-frl` image is untested. The author left the FRL monitor alone at first
