@@ -5,14 +5,15 @@
 # in it runs on its own; flashing is a command a person types.
 #
 # Not derived from an upstream PKGBUILD. source= is the files next to this one:
-# UGREEN's Linux updater (unmodified), UGREEN's 07.00.54 image (unmodified) and
-# two copies of it with one and two bytes changed (see README.md). makepkg finds
+# UGREEN's Linux updater (unmodified), UGREEN's 07.00.54 image (unmodified), two
+# copies of it with one and two bytes changed, and UGREEN's later 07.00.69 image
+# (unmodified), see README.md. makepkg finds
 # local sources by file name, so the build script copies firmware/* next to this
 # file; in the repository they live in firmware/.
 pkgname=bc250-ch7218-fw
 pkgver=1
-pkgrel=1
-pkgdesc="UGREEN DP-to-HDMI 2.1 (Chrontel CH7218A) adapter: UGREEN's updater, the stock 07.00.54 firmware and two fixed images, behind a manual flash wrapper"
+pkgrel=2
+pkgdesc="UGREEN DP-to-HDMI 2.1 (Chrontel CH7218A) adapter: UGREEN's updater, the stock 07.00.54 firmware, two fixed images and UGREEN's newer 07.00.69, behind a manual flash wrapper"
 arch=('x86_64')
 url="https://github.com/MastaG/linux-cachyos-bc250"
 license=('custom')
@@ -25,9 +26,11 @@ source=(
     'CH7218A-IMG.G000.07.00.54.IMG'
     'CH7218A-IMG.G000.07.00.54.nowatchdog-tmds.IMG'
     'CH7218A-IMG.G000.07.00.54.nowatchdog-tmds+frl.IMG'
+    'CH7218A-IMG.G000.07.00.69.IMG'
     'SHA256SUMS'
 )
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP'
             'SKIP'
             'SKIP'
@@ -45,6 +48,7 @@ package() {
     for f in CH7218A-IMG.G000.07.00.54.IMG \
              CH7218A-IMG.G000.07.00.54.nowatchdog-tmds.IMG \
              CH7218A-IMG.G000.07.00.54.nowatchdog-tmds+frl.IMG \
+             CH7218A-IMG.G000.07.00.69.IMG \
              SHA256SUMS; do
         install -Dm644 "$srcdir/$f" "$pkgdir/usr/share/bc250-ch7218-fw/firmware/$f"
     done

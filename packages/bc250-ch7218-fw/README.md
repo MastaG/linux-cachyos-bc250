@@ -5,7 +5,7 @@ adapter** (DP134 / 85564, DP135 / 85996), which is built on a Chrontel **CH7218A
 
 Nothing in this package runs by itself. No service, no hook, no timer. You flash
 the adapter by typing a command, and only an adapter on firmware `07.00.xx`
-(`07.00.54` or an older build of that line) is accepted.
+(`07.00.69` or an older build of that line) is accepted.
 
 ## Why
 
@@ -21,13 +21,14 @@ stock-firmware adapter went black after about six minutes; with `tmds` flashed i
 survived a seven minute idle and a receiver input switch, and the author has not
 had a no-signal since.
 
-## The three images
+## The four images
 
 | name | file | what it is |
 | --- | --- | --- |
 | `original` | `CH7218A-IMG.G000.07.00.54.IMG` | UGREEN's firmware, byte for byte as UGREEN published it |
 | `tmds` | `...07.00.54.nowatchdog-tmds.IMG` | the original with the TMDS watchdog's countdown removed (one byte). **In use on the author's board.** |
 | `tmds-frl` | `...07.00.54.nowatchdog-tmds+frl.IMG` | `tmds` plus the same change to the FRL monitor (a second byte). **Not tested on hardware yet.** |
+| `ugreen-69` | `CH7218A-IMG.G000.07.00.69.IMG` | UGREEN's later firmware, byte for byte, sent to the author after he reported the problem to them. An **optional update**; see below. **Not tested on hardware yet.** |
 
 Exactly what differs from `original` (file offsets; the image is
 `[length u16 LE][code][16-bit sum of the code, LE]`):
@@ -41,6 +42,23 @@ Exactly what differs from `original` (file offsets; the image is
 Nothing else differs. The repository's tests rebuild both images from `original`
 and compare them byte for byte.
 
+### About `ugreen-69`
+
+UGREEN sent 07.00.69 in reply to the author's technical report and did not say what
+changed. It is a rebuild, not a patch of 07.00.54: the code is laid out differently, so
+none of the offsets above apply to it and there is no `tmds`-style variant of it.
+What the author found by comparing the two images:
+
+- The TMDS watchdog is still there, with the same one-shot countdown (`DEC A`) that
+  `tmds` removes in 07.00.54. Whether UGREEN fixed the black picture some other way is
+  not known: that needs a hardware test (a receiver input switch after seven or more
+  idle minutes).
+- The FRL monitor was changed.
+
+If 07.00.69 turns out to fix the problem, `tmds` is no longer needed. Until someone has
+tested it, `tmds` stays the image that is known to work. Going back from 69 to any 54
+image is allowed by the tool.
+
 The `tmds-frl` image is untested. The author left the FRL monitor alone at first
 because a watchdog that never gives up could, in principle, keep retraining a link
 to a sink that has gone to sleep. Treat it as an experiment, and go back to
@@ -51,6 +69,8 @@ to a sink that has gone to sleep. Treat it as an experiment, and go back to
 - `ch7218_fwu` is UGREEN's own Linux updater for this adapter, unmodified
   (sha256 `79a87d9d0f4def58a3792661c1055de26d8f9cf29f0537ab316d31826bc42788`).
 - `original` is the image from UGREEN's firmware-update instructions, unmodified.
+- `ugreen-69` is the 07.00.69 image UGREEN e-mailed (a Mediafire link) on 2026-10-10, unmodified
+  (sha256 `d9164ad45fc3219501828c422c7d1d62d8442459ea8066f805d2cb526483ed6d`).
 - UGREEN distributes this firmware and updater to the end users of the adapter.
   This package mirrors them, plus the two fixed images, so people with the same
   adapter can install them from one place. It is not endorsed by UGREEN or
@@ -59,9 +79,9 @@ to a sink that has gone to sleep. Treat it as an experiment, and go back to
 ## Using it
 
 ```
-bc250-ch7218-flash list                         # the three images and their checksums
+bc250-ch7218-flash list                         # the four images and their checksums
 sudo bc250-ch7218-flash status                  # find the adapter, read its firmware version
-sudo bc250-ch7218-flash flash tmds              # flash one of: original | tmds | tmds-frl
+sudo bc250-ch7218-flash flash tmds              # flash one of: original | tmds | tmds-frl | ugreen-69
 sudo bc250-ch7218-flash flash tmds --dry-run    # do every check, write nothing
 ```
 
@@ -81,12 +101,12 @@ end for five seconds, or power the whole board off and on.
    updater's own length and checksum rule.
 2. Exactly one adapter is found, by the Chrontel identity it reports over
    DisplayPort (`2B 02 F0` and the name `CH7218`), or you named it with `--aux`.
-3. The adapter reports firmware `07.00.xx` with `xx` no higher than 54. An older
-   build on that line is updated (flashing any of the three images also brings it
-   up to 07.00.54, which is what UGREEN's own update does). A newer build (that
-   would be a downgrade), another line such as `07.08.xx`, a USB-C variant, or
-   another vendor's cable that uses this chip is refused, because these images
-   are built from the 07.00.54 code. The firmware version is read from the chip
+3. The adapter reports firmware `07.00.xx` with `xx` no higher than 69. An older
+   build on that line is updated to the image's own version, which is what UGREEN's
+   own update does. A build newer than 69, another line such as `07.08.xx`, a
+   USB-C variant, or another vendor's cable that uses this chip is refused, because
+   these images are built from the 07.00.54 and 07.00.69 code. Going from 69 back to
+   a 54 image is allowed and the tool says it is a downgrade. The firmware version is read from the chip
    with UGREEN's updater (`-v`).
 4. You type `flash`, unless you passed `--yes`.
 
@@ -98,9 +118,9 @@ outside that namespace changes.
 ### Going back, and when something goes wrong
 
 Flash `original` at any time to return to UGREEN's firmware. The updater reads the
-flash back and compares it, so `Update Success` means the data matched. The three
-images report the same version number, so `status` cannot tell them apart; it
-shows the last image this tool flashed.
+flash back and compares it, so `Update Success` means the data matched. `original`,
+`tmds` and `tmds-frl` report the same version number, so `status` cannot tell those
+three apart; it shows the last image this tool flashed. `ugreen-69` reports 07.00.69.
 
 If a write is interrupted or reports an error, do not power the adapter off.
 Run the same command again. Interrupting a flash can in principle leave the
@@ -109,5 +129,5 @@ your own risk.
 
 ## What it does not do
 
-It does not touch any adapter that is not a CH7218 at `07.00.54`, it does not run
+It does not touch any adapter that is not a CH7218 on `07.00.xx` (69 or older), it does not run
 at boot or on upgrade, and it is not part of `linux-cachyos-bc250-meta`.

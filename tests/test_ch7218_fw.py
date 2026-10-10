@@ -14,8 +14,10 @@ FW = PKG / "firmware"
 ORIGINAL = "CH7218A-IMG.G000.07.00.54.IMG"
 TMDS = "CH7218A-IMG.G000.07.00.54.nowatchdog-tmds.IMG"
 TMDS_FRL = "CH7218A-IMG.G000.07.00.54.nowatchdog-tmds+frl.IMG"
+UGREEN_69 = "CH7218A-IMG.G000.07.00.69.IMG"
 
 ORIGINAL_SHA = "a0d2643fed0c17b6b2cbdb27b5b77533745aa578e545217e9d13ad868a0dcb80"
+UGREEN_69_SHA = "d9164ad45fc3219501828c422c7d1d62d8442459ea8066f805d2cb526483ed6d"
 FWU_SHA = "79a87d9d0f4def58a3792661c1055de26d8f9cf29f0537ab316d31826bc42788"
 
 TMDS_OFFSET = 0x1A4E
@@ -41,6 +43,11 @@ class FirmwareImageTests(unittest.TestCase):
         data = (FW / ORIGINAL).read_bytes()
         self.assertEqual(hashlib.sha256(data).hexdigest(), ORIGINAL_SHA)
 
+    def test_ugreen_69_is_the_unmodified_vendor_image(self):
+        data = (FW / UGREEN_69).read_bytes()
+        self.assertEqual(hashlib.sha256(data).hexdigest(), UGREEN_69_SHA)
+        self.assertIn(UGREEN_69_SHA, (PKG / "README.md").read_text())
+
     def test_fixed_images_are_the_original_plus_exactly_the_documented_bytes(self):
         original = (FW / ORIGINAL).read_bytes()
         self.assertEqual((FW / TMDS).read_bytes(), rebuild(original, [TMDS_OFFSET]))
@@ -48,7 +55,7 @@ class FirmwareImageTests(unittest.TestCase):
                          rebuild(original, [TMDS_OFFSET, FRL_OFFSET]))
 
     def test_every_image_obeys_the_length_and_checksum_rule(self):
-        for name in (ORIGINAL, TMDS, TMDS_FRL):
+        for name in (ORIGINAL, TMDS, TMDS_FRL, UGREEN_69):
             d = (FW / name).read_bytes()
             self.assertEqual(len(d), 65536, name)
             n = int.from_bytes(d[:2], "little")
@@ -59,7 +66,7 @@ class FirmwareImageTests(unittest.TestCase):
         for line in (FW / "SHA256SUMS").read_text().splitlines():
             digest, name = line.split(None, 1)
             listed[name.lstrip("*")] = digest
-        self.assertEqual(set(listed), {ORIGINAL, TMDS, TMDS_FRL})
+        self.assertEqual(set(listed), {ORIGINAL, TMDS, TMDS_FRL, UGREEN_69})
         for name, digest in listed.items():
             self.assertEqual(hashlib.sha256((FW / name).read_bytes()).hexdigest(), digest, name)
 
@@ -72,7 +79,7 @@ class PackagingTests(unittest.TestCase):
     def test_pkgbuild_ships_every_file_the_wrapper_needs(self):
         pkgbuild = (PKG / "PKGBUILD").read_text()
         for name in ("bc250-ch7218-flash", "ch7218_fwu", "README.md", "SHA256SUMS",
-                     ORIGINAL, TMDS, TMDS_FRL):
+                     ORIGINAL, TMDS, TMDS_FRL, UGREEN_69):
             self.assertIn(name, pkgbuild)
         self.assertIn("!strip", pkgbuild, "the vendor binary must not be modified")
 
@@ -180,7 +187,7 @@ esac
         self.assertFalse((self.state / "last-flash").exists())
 
     def test_other_firmware_lines_and_newer_builds_are_refused(self):
-        for version in ("07:08:19", "07:00:55", "07:00:99", "08:00:10", "06:00:10"):
+        for version in ("07:08:19", "07:00:70", "07:00:99", "08:00:10", "06:00:10"):
             with self.subTest(version=version):
                 self.adapter(0)
                 self.version = version
@@ -200,6 +207,20 @@ esac
                 r = self.run_flash("flash", "original", "--yes")
                 self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
                 self.assertEqual("older build" in r.stdout, version != "07:00:54")
+
+    def test_the_69_image_flashes_and_a_54_image_can_go_back_over_it(self):
+        self.adapter(0)
+        r = self.run_flash("flash", "ugreen-69", "--yes")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn(str(self.img / UGREEN_69), self.log.read_text())
+        self.assertNotIn("downgrade", r.stdout)
+        self.version = "07:00:69"
+        self.write_fwu(success=True)
+        self.log.write_text("")
+        back = self.run_flash("flash", "original", "--yes")
+        self.assertEqual(back.returncode, 0, back.stderr + back.stdout)
+        self.assertIn("downgrade", back.stdout)
+        self.assertIn(str(self.img / ORIGINAL), self.log.read_text())
 
     def test_a_modified_image_is_refused(self):
         self.adapter(0)

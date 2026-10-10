@@ -549,10 +549,12 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   own Linux updater, UGREEN's 07.00.54 firmware unchanged, and two copies of it
   with the HDMI scrambling watchdog (one byte) and the HDMI 2.1 link monitor
   (a second byte) kept running. The first fixed image is what the author runs;
-  the second is untested.
+  the second is untested. UGREEN's newer 07.00.69, which they sent after our
+  technical report, is included unchanged as an optional update (\`ugreen-69\`);
+  nobody has tested it on hardware yet.
 - Nothing runs on its own: flashing is \`sudo bc250-ch7218-flash flash
-  original|tmds|tmds-frl\`, run by hand, and only on an adapter on firmware
-  07.00.xx (54 or older). Read \`/usr/share/doc/bc250-ch7218-fw/README.md\` first.
+  original|tmds|tmds-frl|ugreen-69\`, run by hand, and only on an adapter on firmware
+  07.00.xx (69 or older). Read \`/usr/share/doc/bc250-ch7218-fw/README.md\` first.
 - Not part of \`linux-cachyos-bc250-meta\`:
   \`sudo pacman -S bc250-ch7218-fw\`.
 
