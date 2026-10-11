@@ -76,10 +76,10 @@ ignoring addresses). What the comparison showed:
     and forth did not help; only a full DisplayPort retrain brought the picture back.
   - *The same failure, in an earlier trial:* the adapter was power-cycled while the
     board's input was not selected, and stayed that way for 30 minutes.
-  - **Pattern so far:** every pass had the link formed while the board's input was the
-    active one. Every failure had the link formed while another input was active. That
-    is a hypothesis from three failures, not a finding. It has not been checked whether
-    54, `tmds` or `original` fail the same way, so it may not be specific to 69.
+  - **Pattern:** `ugreen-69` passed when the link was formed while the board's input was
+    the active one, and failed when it was formed while another input was active. It has
+    not been checked whether 54, `tmds` or `original` fail the same way, so this may not
+    be specific to 69.
 - **`tmds-69`, same setup, adapter power-cycled before testing (2026-10-11):** all four
   passed, and the picture came back every time when switching to the board's input:
   - adapter plugged in while the TV was off, picture back after switching the TV on;
@@ -87,10 +87,15 @@ ignoring addresses). What the comparison showed:
   - over 30 minutes on another HDMI input (a satellite receiver);
   - TV and receiver both off for over 30 minutes, then switched back on.
 
-  The last two are the sequences `ugreen-69` failed. That points at the TMDS watchdog as
-  the cause, even though 69's watchdog code is the same as 54's. Not yet done: a control
-  run of `ugreen-69` through the same sequence, repeats, and the adapter straight into
-  the TV without the receiver.
+  Both images were tested under the same conditions: the adapter was unplugged and
+  replugged (power-cycled) while the receiver sat on another HDMI input, so the board's
+  input was not active. The receiver always keeps one input active, even in standby, where
+  it passes through the last one used, so with the satellite receiver active the board's
+  input is never selected. `ugreen-69` lost the picture in that situation (twice: after the
+  replug, and after the 30-minute off test); `tmds-69` kept it in all four tests. That
+  points at the TMDS watchdog as the cause, even though 69's watchdog code is the same as
+  54's. Not yet done: repeats, the 54 images in the same sequence, and the adapter
+  straight into the TV without the receiver.
 
 One setup is not a verdict. Treat `ugreen-69` as not fixed: it survives idle input switches but not a link that was re-formed while another input was active.
 
