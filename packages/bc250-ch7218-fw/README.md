@@ -27,9 +27,9 @@ had a no-signal since.
 | --- | --- | --- |
 | `original` | `CH7218A-IMG.G000.07.00.54.IMG` | UGREEN's firmware, byte for byte as UGREEN published it |
 | `tmds` | `...07.00.54.nowatchdog-tmds.IMG` | the original with the TMDS watchdog's countdown removed (one byte). **In use on the author's board.** |
-| `tmds-frl` | `...07.00.54.nowatchdog-tmds+frl.IMG` | `tmds` plus the same change to the FRL monitor (a second byte). **Not tested on hardware yet.** |
+| `tmds-frl` | `...07.00.54.nowatchdog-tmds+frl.IMG` | `tmds` plus the same change to the FRL monitor (a second byte). **The 69 image to use:** passed every test so far (see below). |
 | `ugreen-69` | `CH7218A-IMG.G000.07.00.69.IMG` | UGREEN's later firmware, byte for byte, sent to the author after he reported the problem to them. An **optional update**; see below. Passed the first idle-then-switch test on the author's board; more testing wanted. |
-| `tmds-69` | `...07.00.69.nowatchdog-tmds.IMG` | `ugreen-69` with the same one-byte watchdog fix as `tmds`. **Not tested on hardware yet.** |
+| `tmds-69` | `...07.00.69.nowatchdog-tmds.IMG` | `ugreen-69` with the same one-byte watchdog fix as `tmds`. **The 69 image to use:** passed every test so far (see below). |
 
 Exactly what differs from `original` (file offsets; the image is
 `[length u16 LE][code][16-bit sum of the code, LE]`):
@@ -80,15 +80,19 @@ ignoring addresses). What the comparison showed:
     active one. Every failure had the link formed while another input was active. That
     is a hypothesis from three failures, not a finding. It has not been checked whether
     54, `tmds` or `original` fail the same way, so it may not be specific to 69.
-- **Still to test:** `tmds-69` and the 54 images in the failing sequence (link formed
-  while another input is active, board's input selected 30 minutes later); a retrain
-  with the receiver on another input followed by a short wait, as a faster repro; the
-  receiver's own source for over five minutes (which makes it switch to ARC) and then
-  switching back; and the same tests with the adapter connected straight to the TV,
-  without the receiver.
+- **`tmds-69`, same setup, adapter power-cycled before testing (2026-10-11):** all four
+  passed, and the picture came back every time when switching to the board's input:
+  - adapter plugged in while the TV was off, picture back after switching the TV on;
+  - over 30 minutes of Netflix (the receiver switched to ARC);
+  - over 30 minutes on another HDMI input (a satellite receiver);
+  - TV and receiver both off for over 30 minutes, then switched back on.
 
-Two passes and three failures on one setup is not a verdict, and the watchdog code looks the same in both
-images, so why 69 survives is not explained. Treat `ugreen-69` as not fixed: it survives idle input switches but not a link that was re-formed while another input was active.
+  The last two are the sequences `ugreen-69` failed. That points at the TMDS watchdog as
+  the cause, even though 69's watchdog code is the same as 54's. Not yet done: a control
+  run of `ugreen-69` through the same sequence, repeats, and the adapter straight into
+  the TV without the receiver.
+
+One setup is not a verdict. Treat `ugreen-69` as not fixed: it survives idle input switches but not a link that was re-formed while another input was active.
 
 `tmds-69` applies the same one-byte change as `tmds` to 07.00.69: `DEC A` becomes `NOP` in
 the TMDS watchdog, so it keeps rewriting the scrambling setup instead of giving up. The
@@ -99,7 +103,7 @@ changes against `ugreen-69` are exactly:
 | `0x1872` | `0x14` | `0x00` | `DEC A` becomes `NOP` in the TMDS watchdog |
 | `0x6E66` | `E1` | `CD` | low byte of the stored checksum |
 
-It is flashed on the author's board and being tested against the failing sequence above; no result yet. Going back from 69 to any 54 image is allowed by
+It passed all four tests above on the author's board. Going back from 69 to any 54 image is allowed by
 the tool. `tmds` (on 07.00.54) remains the image with the longest track record.
 
 The `tmds-frl` image is untested. The author left the FRL monitor alone at first

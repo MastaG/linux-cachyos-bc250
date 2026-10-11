@@ -551,8 +551,9 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   (a second byte) kept running. The first fixed image is what the author runs;
   the second is untested. UGREEN's newer 07.00.69, which they sent after our
   technical report, is included unchanged as an optional update (\`ugreen-69\`);
-  it passed a first idle-then-switch test on the author's board (more testing wanted), and a fixed copy,
-  \`tmds-69\`, is included too (untested).
+  it still lost the picture when the link re-formed while another receiver input was
+  active, so a fixed copy, \`tmds-69\`, is included too: it passed every long-idle test
+  on the author's board (one setup, more testing wanted).
 - Nothing runs on its own: flashing is \`sudo bc250-ch7218-flash flash
   original|tmds|tmds-frl|ugreen-69|tmds-69\`, run by hand, and only on an adapter on firmware
   07.00.xx (69 or older). Read \`/usr/share/doc/bc250-ch7218-fw/README.md\` first.
