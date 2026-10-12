@@ -99,7 +99,7 @@ ignoring addresses). What the comparison showed:
 
 One setup is not a verdict. On the author's setup `ugreen-69` survives idle input switches but not a link that was re-formed behind the receiver while another input was active; connected straight to the TV it passed every test, including everything switched off for over an hour.
 
-**VRR:** 07.00.69 (`ugreen-69`, `tmds-69`) no longer reports Adaptive-Sync to the DisplayPort source (DPCD `0x2214` is `0x00`, `0x007` bit 6 is clear), so Linux offers no VRR range. On 07.00.54 the same adapter, TV and kernel give 40 to 120 Hz. Flash `original` (or `tmds`) if you need VRR.
+**VRR:** 07.00.69 (`ugreen-69`, `tmds-69`) no longer reports Adaptive-Sync to the DisplayPort source (DPCD `0x2214` is `0x00`, `0x007` bit 6 is clear), so Linux offers no VRR range. On 07.00.54 the same adapter, TV and kernel give 40 to 120 Hz. Flash `original` (or `tmds`) if you need VRR, or keep 69 and boot the kernel with `amdgpu.bc250_ch7218_vrr=1`, which makes the driver assume the adapter supports Adaptive-Sync (VRR then works on `ugreen-69` straight into an LG OLED G5; one setup).
 
 **Which one?** If you need VRR, use `original`. If you also get link or picture loss after equipment has been turned off, or while the adapter's input was inactive for a while, use `tmds`. If you want the latest firmware and have no use for VRR, use `ugreen-69`, or `tmds-69` if you get that picture loss.
 

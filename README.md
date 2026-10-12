@@ -389,14 +389,14 @@ So it is strictly opt-in. With the parameter unset, the kernel behaves exactly
 as it would without the patch — not "mostly", but literally: every part of the
 workaround checks the switch before doing anything at all.
 
-### Experimental: VRR with CH7218 firmware 07.00.69
+### VRR with CH7218 firmware 07.00.69 (opt-in)
 
 UGREEN's 07.00.69 firmware no longer tells the driver that it supports
 Adaptive-Sync, so KDE and Gamescope offer no VRR although the TV does (07.00.54
 does report it). `amdgpu.bc250_ch7218_vrr=1` makes the driver assume the
-adapter supports it. **Off by default and experimental:** whether the 69
-firmware then really passes variable refresh through is what it is for finding
-out. If the picture misbehaves with VRR on, remove the parameter. It is
+adapter supports it. **Off by default.** Tested on one setup (`ugreen-69`
+straight into an LG OLED G5): VRR works with it. If the picture misbehaves
+with VRR on, remove the parameter. It is
 independent of `bc250_ch7218_quirk`, needs `amdgpu.bc250_hdmi21=1`, and does
 nothing on an adapter that already reports Adaptive-Sync.
 
