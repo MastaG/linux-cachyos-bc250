@@ -550,10 +550,11 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   with the HDMI scrambling watchdog (one byte) and the HDMI 2.1 link monitor
   (a second byte) kept running. The first fixed image is what the author runs;
   the second is untested. UGREEN's newer 07.00.69, which they sent after our
-  technical report, is included unchanged as an optional update (\`ugreen-69\`);
-  it still lost the picture when the link re-formed while another receiver input was
-  active, so a fixed copy, \`tmds-69\`, is included too: it passed every long-idle test
-  on the author's board (one setup, more testing wanted).
+  technical report, is included unchanged (\`ugreen-69\`): the latest firmware, but
+  without VRR support (07.00.54, \`original\`, is the last version with VRR).
+  \`tmds\` (54) and \`tmds-69\` carry a one-byte watchdog timer fix; use one of them if
+  you get link or picture loss after equipment was turned off, or while the input
+  was inactive for a while.
 - Nothing runs on its own: flashing is \`sudo bc250-ch7218-flash flash
   original|tmds|tmds-frl|ugreen-69|tmds-69\`, run by hand, and only on an adapter on firmware
   07.00.xx (69 or older). Read \`/usr/share/doc/bc250-ch7218-fw/README.md\` first.

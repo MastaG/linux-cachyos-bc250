@@ -54,11 +54,11 @@ image_version() {
 
 image_blurb() {
     case "$1" in
-        original) echo "UGREEN's own 07.00.54, unchanged. Use this to go back." ;;
-        tmds)     echo "07.00.54 with the HDMI scrambling watchdog kept alive (1 byte). Running on the author's board." ;;
+        original) echo "UGREEN's own 07.00.54, unchanged. Last version with VRR support. Use this to go back." ;;
+        tmds)     echo "07.00.54 with the watchdog timer fix (1 byte): for black screens after the input was inactive a while (TV/AVR off, other input active). VRR works." ;;
         tmds-frl) echo "tmds plus the FRL link monitor kept alive (2 bytes). NOT TESTED on hardware yet." ;;
-        ugreen-69) echo "UGREEN's newer 07.00.69, unchanged (their answer to our report). Optional update; NOT TESTED by us yet." ;;
-        tmds-69)  echo "07.00.69 with the same one-byte HDMI scrambling watchdog fix as tmds. NOT TESTED on hardware yet." ;;
+        ugreen-69) echo "UGREEN's latest 07.00.69, unchanged. Latest firmware, without VRR support." ;;
+        tmds-69)  echo "07.00.69 with the watchdog timer fix, for black screens after the input was inactive a while (TV/AVR off, other input active). No VRR support." ;;
     esac
 }
 
