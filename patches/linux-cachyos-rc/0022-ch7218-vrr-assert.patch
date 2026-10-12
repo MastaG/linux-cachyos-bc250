@@ -1,0 +1,146 @@
+bc250: opt-in assert Adaptive-Sync for a CH7218 whose firmware denies it
+
+UGREEN's CH7218 firmware 07.00.69 no longer reports Adaptive-Sync support
+(DPCD 0x2214 bit 0 reads 0x00, was 0x15 on 07.00.54) and no longer sets
+"ignore MSA timing parameters" (DPCD 0x007 bit 6, 0x81, was 0xC1). The
+FreeSync-over-PCON check in amdgpu_dm needs both, plus a branch ID on its
+allowlist (2B:02:F0 is), so with 69 the driver publishes no VRR range although
+the TV advertises 40-120 Hz and the same adapter, TV and kernel give VRR with
+54. Measured on a BC-250 with an LG OLED G5; the only variable was the
+firmware in the adapter.
+
+Behind amdgpu.bc250_ch7218_vrr, DEFAULT OFF, EXPERIMENTAL. With it set and a
+CH7218 present, DC treats both bits as set once the DPCD capabilities have been
+read, so the existing FreeSync-over-PCON path runs unchanged. Whether the
+adapter's 69 firmware then really passes variable refresh through to the TV is
+what the parameter exists to find out; if it does not, the symptom is a bad
+picture with VRR enabled, and the parameter goes back to 0.
+
+Independent of amdgpu.bc250_ch7218_quirk: it does not change the adapter's
+identity or ceilings, only these two capability bits. It requires the PCON path
+(bc250_hdmi21=1, the default), through the same bc250_ch7218_detected() test the
+quirk uses. With the parameter unset the driver behaves exactly as without
+this patch.
+
+---
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+index abb6ca1..a2ff710 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+@@ -257,6 +257,7 @@ extern int amdgpu_vcnfw_log;
+ extern int amdgpu_sg_display;
+ extern int amdgpu_bc250_hdmi21;
+ extern int amdgpu_bc250_ch7218_quirk;
++extern int amdgpu_bc250_ch7218_vrr;
+ extern int amdgpu_bc250_pcon_force_dsc;
+ extern int amdgpu_umsch_mm;
+ extern int amdgpu_seamless;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 14f9123..ad63022 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -237,6 +237,7 @@ int amdgpu_vcnfw_log;
+ int amdgpu_sg_display = -1; /* auto */
+ int amdgpu_bc250_hdmi21 = 1;
+ int amdgpu_bc250_ch7218_quirk;
++int amdgpu_bc250_ch7218_vrr;
+ int amdgpu_bc250_pcon_force_dsc;
+ int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
+ int amdgpu_umsch_mm;
+@@ -1008,6 +1009,27 @@ module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
+ MODULE_PARM_DESC(bc250_ch7218_quirk, "BC-250: opt-in CH7218 DP-to-HDMI 2.1 adapter quirk (0 = disabled (default), 1 = enabled)");
+ module_param_named(bc250_ch7218_quirk, amdgpu_bc250_ch7218_quirk, int, 0444);
+ 
++/**
++ * DOC: bc250_ch7218_vrr (int)
++ * BC-250 (Cyan Skillfish, DCN 2.0.1) only. Opt-in, EXPERIMENTAL: tell the
++ * driver that a Chrontel CH7218 DP to HDMI 2.1 adapter supports Adaptive-Sync,
++ * even though its firmware says it does not.
++ *
++ * CH7218 firmware 07.00.54 reports Adaptive-Sync support (DPCD 0x2214 bit 0)
++ * and "ignore MSA timing parameters" (DPCD 0x007 bit 6); 07.00.69 reports
++ * neither, so the driver offers no VRR range although the TV supports one.
++ * With this set, the driver treats both bits as set for a CH7218. Whether
++ * the adapter then actually passes variable refresh through to the TV is the
++ * thing being tested; if the picture misbehaves with VRR enabled, unset it.
++ *
++ * Off by default. Independent of bc250_ch7218_quirk; it needs the PCON path
++ * (bc250_hdmi21=1, the default). With this unset the driver behaves exactly
++ * as it would without it.
++ * (0 = disabled (default), 1 = enabled)
++ */
++MODULE_PARM_DESC(bc250_ch7218_vrr, "BC-250: experimental, assert Adaptive-Sync support for a CH7218 adapter whose firmware (07.00.69) denies it (0 = disabled (default), 1 = enabled)");
++module_param_named(bc250_ch7218_vrr, amdgpu_bc250_ch7218_vrr, int, 0444);
++
+ /**
+  * DOC: bc250_pcon_force_dsc (int)
+  * BC-250 (Cyan Skillfish, DCN 2.0.1) only. Experimental, opt-in. Some DP to
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+index 87f4f4a..0579509 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -963,6 +963,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
+ 
+ 	init_data.flags.bc250_hdmi21 = (amdgpu_bc250_hdmi21 != 0);
+ 	init_data.flags.bc250_ch7218_quirk = (amdgpu_bc250_ch7218_quirk != 0);
++	init_data.flags.bc250_ch7218_vrr = (amdgpu_bc250_ch7218_vrr != 0);
+ 	init_data.flags.bc250_pcon_force_dsc = (amdgpu_bc250_pcon_force_dsc != 0);
+ 
+ 	init_data.flags.seamless_boot_edp_requested = false;
+diff --git a/drivers/gpu/drm/amd/display/dc/dc.h b/drivers/gpu/drm/amd/display/dc/dc.h
+index 6df6bcf..a64abd6 100644
+--- a/drivers/gpu/drm/amd/display/dc/dc.h
++++ b/drivers/gpu/drm/amd/display/dc/dc.h
+@@ -604,6 +604,7 @@ struct dc_config {
+ 	bool enable_frl;
+ 	bool bc250_hdmi21;
+ 	bool bc250_ch7218_quirk;
++	bool bc250_ch7218_vrr;
+ 	bool bc250_pcon_force_dsc;
+ 	bool force_hdmi21_frl_enc_enable;
+ 	bool use_default_clock_table;
+diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
+index 3bcec12..06890d4 100644
+--- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
++++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
+@@ -1209,6 +1209,29 @@ static bool bc250_ch7218_quirk_wanted(const struct dc_link *link)
+ 	       link->dc->config.bc250_ch7218_quirk;
+ }
+ 
++/*
++ * Opt-in (amdgpu.bc250_ch7218_vrr, default 0): CH7218 firmware 07.00.69
++ * stopped reporting Adaptive-Sync support (DPCD 0x2214 bit 0) and "ignore MSA
++ * timing parameters" (DPCD 0x007 bit 6), which the DM FreeSync-over-PCON check
++ * requires, so no VRR range is published although the sink has one. Assert both
++ * for a CH7218. Independent of bc250_ch7218_quirk: it does not change the
++ * adapter's identity, only these two capability bits.
++ */
++static void bc250_ch7218_assert_adaptive_sync(struct dc_link *link)
++{
++	if (!bc250_ch7218_detected(link) || !link->dc->config.bc250_ch7218_vrr)
++		return;
++
++	if (link->dpcd_caps.adaptive_sync_caps.dp_adap_sync_caps.bits.ADAPTIVE_SYNC_SDP_SUPPORT &&
++	    link->dpcd_caps.allow_invalid_MSA_timing_param)
++		return;
++
++	link->dpcd_caps.adaptive_sync_caps.dp_adap_sync_caps.bits.ADAPTIVE_SYNC_SDP_SUPPORT = 1;
++	link->dpcd_caps.allow_invalid_MSA_timing_param = true;
++
++	DC_LOG_DC("BC-250: CH7218 VRR: asserted Adaptive-Sync and MSA-ignore\n");
++}
++
+ /*
+  * Declare the adapter to be what it physically is, and restore the ceilings
+  * its firmware failed to report. Safe to call from anywhere in converter
+@@ -2106,6 +2129,9 @@ static bool retrieve_link_cap(struct dc_link *link)
+ 	link->dpcd_caps.allow_invalid_MSA_timing_param =
+ 		down_strm_port_count.bits.IGNORE_MSA_TIMING_PARAM;
+ 
++	/* BC-250: no-op unless amdgpu.bc250_ch7218_vrr is set. */
++	bc250_ch7218_assert_adaptive_sync(link);
++
+ 	link->dpcd_caps.max_ln_count.raw = dpcd_data[
+ 		DP_MAX_LANE_COUNT - DP_DPCD_REV];
+ 
