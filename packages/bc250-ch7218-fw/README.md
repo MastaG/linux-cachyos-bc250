@@ -29,7 +29,7 @@ had a no-signal since.
 | `tmds` | `...07.00.54.nowatchdog-tmds.IMG` | the original with the TMDS watchdog's countdown removed (one byte). Same as `tmds-69`, but on 07.00.54, so VRR works. We saw the black picture on both the TV and the AV receiver with the unmodified firmware. **In use on the author's board.** |
 | `tmds-frl` | `...07.00.54.nowatchdog-tmds+frl.IMG` | `tmds` plus the same change to the FRL monitor (a second byte). Untested. |
 | `ugreen-69` | `CH7218A-IMG.G000.07.00.69.IMG` | UGREEN's latest firmware (07.00.69), byte for byte, sent to the author after he reported the problem to them. **Latest firmware, without VRR support.** See below. |
-| `tmds-69` | `...07.00.69.nowatchdog-tmds.IMG` | Latest firmware (07.00.69) with the watchdog timer fix, for people who get a black screen after the input has not been active for a while (TV or AV receiver off, or another input active). We only saw this on our Denon receiver with this version. No VRR support. |
+| `tmds-69` | `...07.00.69.nowatchdog-tmds.IMG` | Latest firmware (07.00.69) with the watchdog timer fix, for people who get a black screen after the input has not been active for a while (TV or AV receiver off, or another input active). We saw this with this version on both the TV and our Denon receiver. No VRR support. |
 
 Exactly what differs from `original` (file offsets; the image is
 `[length u16 LE][code][16-bit sum of the code, LE]`):
@@ -97,7 +97,7 @@ ignoring addresses). What the comparison showed:
   54's. Not yet done: repeats, the 54 images in the same sequence, and the adapter
   straight into the TV without the receiver.
 
-One setup is not a verdict. On the author's setup `ugreen-69` survives idle input switches but not a link that was re-formed behind the receiver while another input was active; connected straight to the TV it passed every test, including everything switched off for over an hour.
+One setup is not a verdict. On the author's setup `ugreen-69` survives idle input switches but not a link that was re-formed behind the receiver while another input was active; connected straight to the TV it passed the tests of up to 30 minutes, but then lost the picture after the TV had been off for a long time (2026-10-13): the link re-formed when the TV came on, on another input, and switching to the board's input gave no picture until a retrain.
 
 **VRR:** 07.00.69 (`ugreen-69`, `tmds-69`) no longer reports Adaptive-Sync to the DisplayPort source (DPCD `0x2214` is `0x00`, `0x007` bit 6 is clear), so Linux offers no VRR range. On 07.00.54 the same adapter, TV and kernel give 40 to 120 Hz. Flash `original` (or `tmds`) if you need VRR, or keep 69 and boot the kernel with `amdgpu.bc250_ch7218_vrr=1`, which makes the driver assume the adapter supports Adaptive-Sync (VRR then works on `ugreen-69` straight into an LG OLED G5; one setup).
 
