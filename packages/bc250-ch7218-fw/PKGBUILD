@@ -12,7 +12,7 @@
 # file; in the repository they live in firmware/.
 pkgname=bc250-ch7218-fw
 pkgver=1
-pkgrel=6
+pkgrel=7
 pkgdesc="UGREEN DP-to-HDMI 2.1 (Chrontel CH7218A) adapter: UGREEN's updater, the stock 07.00.54 firmware, two fixed images, UGREEN's newer 07.00.69 and a fixed copy of it, behind a manual flash wrapper"
 arch=('x86_64')
 url="https://github.com/MastaG/linux-cachyos-bc250"

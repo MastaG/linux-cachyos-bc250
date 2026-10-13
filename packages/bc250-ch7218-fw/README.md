@@ -94,8 +94,9 @@ ignoring addresses). What the comparison showed:
   input is never selected. `ugreen-69` lost the picture in that situation (twice: after the
   replug, and after the 30-minute off test); `tmds-69` kept it in all four tests. That
   points at the TMDS watchdog as the cause, even though 69's watchdog code is the same as
-  54's. Not yet done: repeats, the 54 images in the same sequence, and the adapter
-  straight into the TV without the receiver.
+  54's. Also tested by the author with the adapter straight into the TV and the TV off
+  overnight: both `tmds` (54) and `tmds-69` kept the picture. Not yet done: repeats of the
+  receiver sequence on the 54 images.
 
 One setup is not a verdict. On the author's setup `ugreen-69` survives idle input switches but not a link that was re-formed behind the receiver while another input was active; connected straight to the TV it passed the tests of up to 30 minutes, but then lost the picture after the TV had been off for a long time (2026-10-13): the link re-formed when the TV came on, on another input, and switching to the board's input gave no picture until a retrain.
 
