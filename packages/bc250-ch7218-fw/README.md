@@ -113,7 +113,8 @@ changes against `ugreen-69` are exactly:
 | `0x1872` | `0x14` | `0x00` | `DEC A` becomes `NOP` in the TMDS watchdog |
 | `0x6E66` | `E1` | `CD` | low byte of the stored checksum |
 
-It passed all four tests above on the author's board. Going back from 69 to any 54 image is allowed by
+It passed all four tests above on the author's board. Another user runs `tmds-69` together with
+`amdgpu.bc250_ch7218_vrr=1` and has had no problems so far (details not recorded). Going back from 69 to any 54 image is allowed by
 the tool. `tmds` (on 07.00.54) remains the image with the longest track record.
 
 The `tmds-frl` image is untested. The author left the FRL monitor alone at first
