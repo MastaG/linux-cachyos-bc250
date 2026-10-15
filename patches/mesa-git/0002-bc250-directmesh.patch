@@ -19870,7 +19870,7 @@ index b58ddd166e0..9d993869da4 100644
  #include "util/macros.h"
  #include "util/mesa-blake3.h"
  #include "util/u_atomic.h"
-@@ -34,16 +35,58 @@ radv_hash_graphics_spirv_to_nir(blake3_hash hash, const struct radv_shader_stage
+@@ -34,15 +35,58 @@ radv_hash_graphics_spirv_to_nir(blake3_hash hash, const struct radv_shader_stage
     _mesa_blake3_update(&ctx, &stage->key, sizeof(stage->key));
     _mesa_blake3_update(&ctx, options, sizeof(*options));
     _mesa_blake3_update(&ctx, stage->shader_blake3, sizeof(stage->shader_blake3));
@@ -19880,8 +19880,7 @@ index b58ddd166e0..9d993869da4 100644
     for (unsigned i = 0; i < stage->layout.num_sets; i++) {
 -      if (!stage->layout.set[i].layout)
 -         continue;
--      _mesa_blake3_update(&ctx, stage->layout.set[i].layout->hash,
--                          sizeof(stage->layout.set[i].layout->hash));
+-      _mesa_blake3_update(&ctx, stage->layout.set[i].layout->hash, sizeof(stage->layout.set[i].layout->hash));
 +      const struct radv_descriptor_set_layout *layout = stage->layout.set[i].layout;
 +      const uint8_t present = layout != NULL;
 +      _mesa_blake3_update(&ctx, &present, sizeof(present));
