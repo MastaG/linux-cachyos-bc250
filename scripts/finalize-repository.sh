@@ -618,17 +618,16 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   [4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b)
   rebuild aimed at RDNA2 ghosting. Neither 4.1.1r11 nor 4.1.1b is a provider
   bump: each carries its own embedded model, and both are unsigned.
-- **Changed: HelixSR is the default** ([1.4.3](https://github.com/lonewolf0622/HelixSR/releases/tag/v1.4.3)
-  by lonewolf0622), replacing the FSR4 fork's bridge. It is an FSR 3.1 upscaler that runs NVIDIA's DLSS network (Model E) as D3D12 compute,
+- **Changed: HelixSR is the default** ([1.9.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0)
+  by lonewolf0622, marked experimental by its author), replacing the FSR4 fork's bridge. It is an FSR 3.1 upscaler that runs NVIDIA's DLSS network (Model E) as D3D12 compute,
   so DLSS-quality reconstruction without an NVIDIA GPU. Direct3D 12 games only.
-  Since 1.3.0 it picks the shader wave size per GPU and is faster than 1.2.0 on the BC-250 by its
-  author's measurements (about 30% less GPU time in Ultra Performance, and roughly a quarter less
-  at several 1440p and 4K sizes) with the same image, and the \`NetworkResolution\` key in \`helixsr.ini\` defaults to \`auto\`.
-  1.4.3 is the 1.3.0 code again: its author pulled 1.4.0 to 1.4.2 (which added the QSSM and PRSM
-  modes) over ghosting on RDNA 3 under Windows, so those modes are not available for now.
+  1.9.0 is up to about 8% faster than 1.8.1 on the BC-250 by its author's measurements
+  (1080p Quality 1.14 to 1.06 ms), and since 1.7.0 it behaves like DLSS: no sharpening unless
+  \`helixsr.ini\` asks for it (\`Sharpener = nvidia\` or \`rcas\`), DLSS's jitter and render sizes.
+  Its network now lives inside the DLL (one file) instead of two extra files.
   It replaces FSR4 for the game; its log is switched off. Per its author, the
   DLSS weights and kernels it runs remain NVIDIA's property. If a game looks
-  wrong, \`PROTON_USE_OPTISCALER=fsr411f %command%\` goes back to the old default.
+  wrong or crashes, \`PROTON_USE_OPTISCALER=fsr411f %command%\` goes back to the old default.
 
 \`\`\`bash
 sudo pacman -S protonge-latest-bc250

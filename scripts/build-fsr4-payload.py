@@ -142,16 +142,21 @@ HELIXSR_PRESET = {
 
 
 HELIXSR_NETWORK_FILES = ("helixsr_weights.bin", "helixsr_kernels.pak")
+# Since 1.8.0 the setup builds the network into the DLL itself. The release DLL
+# is about 5 MB without it and 13 MB with it (90 shaders), so anything below
+# this is an unbuilt release and would run as a plain bilinear upscale.
+HELIXSR_BUILT_DLL_MIN = 8 * 1024 * 1024
 
 
 def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str, Path]]:
     """Unpack a HelixSR release: its DLL, its helixsr.ini with logging off, its notices.
 
-    Since 1.2.0 the upstream zip carries no network: its setup script builds
-    helixsr_weights.bin and helixsr_kernels.pak from NVIDIA's DLSS DLL. The
-    archive given here is that zip with those two files added beside the DLL,
-    and both are required: without them HelixSR only does a plain upscale, which
-    would ship as a silent downgrade.
+    The upstream zip carries no network: its setup script builds it from
+    NVIDIA's DLSS DLL. Up to 1.7.0 that produced two files,
+    helixsr_weights.bin and helixsr_kernels.pak, beside the DLL; since 1.8.0 it
+    is written into the DLL. The archive given here is the upstream zip after
+    that setup has run, and the network must be there either way: without it
+    HelixSR only does a plain upscale, which would ship as a silent downgrade.
 
     HelixSR is one FSR 3.1 DLL (amd_fidelityfx_dx12.dll) that runs NVIDIA's
     DLSS Model E network. Its release zip has everything under a versioned
@@ -175,24 +180,34 @@ def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str
     root = dlls[0].parent
     network = {}
     for name in HELIXSR_NETWORK_FILES:
-        if not (root / name).is_file() or (root / name).stat().st_size == 0:
-            raise RuntimeError(
-                f"HelixSR archive has no {name}: run its setup script on the "
-                "release and archive the folder it produced")
-        network[name] = root / name
+        if (root / name).is_file() and (root / name).stat().st_size > 0:
+            network[name] = root / name
+    if network and len(network) != len(HELIXSR_NETWORK_FILES):
+        raise RuntimeError("HelixSR archive has only one of its two network files")
+    if not network and dlls[0].stat().st_size < HELIXSR_BUILT_DLL_MIN:
+        raise RuntimeError(
+            "HelixSR archive has no network: run its setup script on the "
+            "release and archive the folder it produced")
     ini = (root / "helixsr.ini").read_text(encoding="utf-8")
     # Section-aware: [ModelE] has an "Enabled = true" of its own.
     lines = ini.splitlines(keepends=True)
-    section, switched = "", 0
+    section, switched, has_log = "", 0, False
     for i, line in enumerate(lines):
         stripped = line.strip()
         if stripped.startswith("[") and stripped.endswith("]"):
             section = stripped[1:-1].strip().lower()
+            has_log = has_log or section == "log"
         elif section == "log" and stripped.replace(" ", "").lower() == "enabled=true":
             lines[i] = line[: len(line) - len(line.lstrip())] + "Enabled = false\n"
             switched += 1
-    if switched != 1:
+    if has_log and switched != 1:
         raise RuntimeError("HelixSR helixsr.ini has no single [Log] Enabled = true to switch off")
+    if not has_log:
+        # 1.9.0 ships an ini without a [Log] section although the DLL still
+        # reads one; without it the log would stay on.
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+        lines += ["\n", "[Log]\n", "Enabled = false\n"]
     # Only the licence texts go to Licenses/, not the release folder itself
     # (which holds the DLL and README too).
     notices = staging / "helixsr-notices"
@@ -540,7 +555,8 @@ def main() -> int:
                 "network (its trained weights and GPU kernels translated to DirectX 12). "
                 "Per its author, those components remain the property of NVIDIA "
                 "Corporation and are not covered by HelixSR's licence; "
-                "helixsr_weights.bin and helixsr_kernels.pak beside the DLL are "
+                "the network in the DLL (before 1.8.0: helixsr_weights.bin and "
+                "helixsr_kernels.pak beside it) is "
                 "built from NVIDIA's DLSS DLL by HelixSR's own setup script; see "
                 f"Licenses/{version}/. "
                 + ("This package ships it by default; the FidelityFX bridges "

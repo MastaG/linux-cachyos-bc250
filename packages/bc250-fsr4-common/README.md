@@ -172,18 +172,22 @@ picks one:
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
 - **`helixsr`** — the default, and not a FidelityFX build at all:
-  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.4.3, one FSR 3.1 DLL that
+  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.9.0, one FSR 3.1 DLL that
   runs NVIDIA's DLSS Model E network as D3D12 compute. Built with `--helixsr`
   rather than `--ffx-sdk-alt` (and `--ffx-sdk-default` accepts its name only when
   `--helixsr` is given), because it differs in four ways. Its release zip holds
-  no network since 1.2.0: `helixsr_weights.bin` and `helixsr_kernels.pak`, built
-  by its setup script from NVIDIA's DLSS DLL, are added to the mirrored
-  `HelixSR-1.4.3-network.zip`, installed beside the DLL and pinned, and the
-  builder refuses an archive without them rather than ship a plain upscale. The same DLL
+  no network: its setup script builds one from NVIDIA's DLSS DLL. Up to 1.7.0
+  that was two files, `helixsr_weights.bin` and `helixsr_kernels.pak`, installed
+  beside the DLL and pinned; since 1.8.0 the setup writes the network into the
+  DLL itself (13 MB instead of 5 MB). We run the setup once and mirror the
+  result as `HelixSR-1.9.0-network.zip`, and the builder refuses an archive
+  without the network (two files, or a DLL under 8 MiB) rather than ship a plain
+  upscale. The same DLL
   goes in as both `amd_fidelityfx_dx12.dll` and
   `amd_fidelityfx_upscaler_dx12.dll`. Its `helixsr.ini` ships beside it with
-  only `[Log] Enabled` switched off (section-aware: `[ModelE]` has an `Enabled`
-  of its own). And the variant carries two OptiScaler settings of its own,
+  only `[Log] Enabled` switched off (section-aware: `[ModelE]` had an `Enabled`
+  of its own; the 1.9.0 ini has no `[Log]` section at all, so the builder adds
+  one, as the DLL still reads it). And the variant carries two OptiScaler settings of its own,
   `Libraries.FfxDx12Path` and `FfxDx12SRPath` pointing at those two files, as
   HelixSR's README asks. The builder validates them against the pinned
   `OptiScaler.ini` like the preset, and the launcher applies them only when

@@ -36,9 +36,9 @@ from pathlib import Path
 
 # The known-good build. Every preset key is present in its OptiScaler.ini, and
 # it is the build the upstream BC-250 FSR4 work was validated against.
-FALLBACK_TAG = "nightly-20260904"
-FALLBACK_ASSET = "OptiScaler_v10.0.0-pre1_20260904.7z"
-FALLBACK_SHA256 = "730d5057338cf68adc3bf38a358985a04629ad00fae305bd717694a392216a53"
+FALLBACK_TAG = "nightly-20261015"
+FALLBACK_ASSET = "OptiScaler_v10.0.0-pre1_20261015.7z"
+FALLBACK_SHA256 = "4690a8a68814919d8f7e6252f39d2121a8c878c4f74d2020bb9132dfb546afde"
 
 NIGHTLY_REPO = "optiscaler/OptiScaler-nightly"
 NIGHTLY_URL = f"https://github.com/{NIGHTLY_REPO}/releases/download"
@@ -55,7 +55,7 @@ MIRROR_BASE = os.environ.get(
 def asset_version(asset: str) -> str | None:
     """Derive the version string protonfixes must ask for, from the asset name.
 
-    OptiScaler_v10.0.0-pre1_20260904.7z -> 10.0.0-pre1-20260904
+    OptiScaler_v10.0.0-pre1_20261015.7z -> 10.0.0-pre1-20261015
 
     The pinned manifest is matched by exact version string, so this has to agree
     with what build-fsr4-payload.py writes into it. Returning None is a reason to

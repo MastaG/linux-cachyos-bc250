@@ -910,12 +910,13 @@ setting is the author's default (no sharpening, like DLSS). Its author measures
 2000 MHz. (HelixSR's `HELIXSR_PROFILE=1` writes its timings to `helixsr.log`,
 which the shipped settings keep switched off.)
 
-Provenance, stated plainly: HelixSR's own code is Apache-2.0, but the DLSS
-network weights and kernels it runs are, per its author, NVIDIA's property
-and not covered by any licence here. Since 1.2.0 its release no longer contains
-them: its setup script builds `helixsr_weights.bin` and `helixsr_kernels.pak`
-from NVIDIA's public DLSS 310.7.0 DLL. We ran that script once and mirrored the
-result (the `HelixSR-1.4.3-network.zip` payload), so the Proton packages need no
+Provenance, stated plainly: HelixSR is free to use under its own freeware
+licence (its source is not published), but the DLSS network weights and
+kernels it runs are, per its author, NVIDIA's property and not covered by any
+licence here. Since 1.2.0 its release no longer contains them: its setup script
+builds the network from NVIDIA's public DLSS 310.7.0 DLL (since 1.8.0 into the
+DLL itself). We ran that script once and mirrored the
+result (the `HelixSR-1.9.0-network.zip` payload), so the Proton packages need no
 setup step and nothing is downloaded at game launch. Like the unsigned bridges it is pinned by
 SHA256 and its origin is written into the prefix
 (`Licenses/THIRD-PARTY-UPSCALER.txt`, notices under `Licenses/<version>/`).

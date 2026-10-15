@@ -1165,18 +1165,27 @@ class PresetTests(unittest.TestCase):
     HELIXSR_WEIGHTS = b"helixsr-weights" * 256
     HELIXSR_KERNELS = b"helixsr-kernels" * 256
 
-    def helixsr_zip(self, work, network=("helixsr_weights.bin", "helixsr_kernels.pak")):
-        # HelixSR's v1.4.3 release folder after its setup script has built the
-        # network files beside the DLL.
-        path = work / "HelixSR-1.4.3.zip"
+    # HelixSR 1.8.0 and later: the setup writes the network into the DLL (13 MB
+    # built, 5 MB not) and the shipped ini has no [Log] section.
+    HELIXSR_BUILT_DLL = b"helixsr-built-in-network" * 400_000
+    HELIXSR_INI_NO_LOG = (
+        "; HelixSR settings.\n\n[Sharpening]\nSharpener = off\n\n"
+        "[Compatibility]\nWaveSize = auto\n"
+    )
+
+    def helixsr_zip(self, work, network=("helixsr_weights.bin", "helixsr_kernels.pak"),
+                    dll=None, ini=None):
+        # HelixSR's release folder after its setup script has run: the network
+        # files beside the DLL (up to 1.7.0), or inside the DLL (1.8.0 and later).
+        path = work / "HelixSR-1.9.0.zip"
         files = {
-            "HelixSR-1.4.3/amd_fidelityfx_dx12.dll": self.HELIXSR_DLL,
-            "HelixSR-1.4.3/helixsr.ini": self.HELIXSR_INI.encode(),
-            "HelixSR-1.4.3/LICENSE": b"apache",
-            "HelixSR-1.4.3/THIRD_PARTY_NOTICES.md": b"nvidia property",
-            "HelixSR-1.4.3/README.md": b"readme",
-            "HelixSR-1.4.3/helixsr_weights.bin": self.HELIXSR_WEIGHTS,
-            "HelixSR-1.4.3/helixsr_kernels.pak": self.HELIXSR_KERNELS,
+            "HelixSR-1.9.0/amd_fidelityfx_dx12.dll": dll or self.HELIXSR_DLL,
+            "HelixSR-1.9.0/helixsr.ini": (ini or self.HELIXSR_INI).encode(),
+            "HelixSR-1.9.0/LICENSE": b"apache",
+            "HelixSR-1.9.0/THIRD_PARTY_NOTICES.md": b"nvidia property",
+            "HelixSR-1.9.0/README.md": b"readme",
+            "HelixSR-1.9.0/helixsr_weights.bin": self.HELIXSR_WEIGHTS,
+            "HelixSR-1.9.0/helixsr_kernels.pak": self.HELIXSR_KERNELS,
         }
         with zipfile.ZipFile(path, "w") as archive_zip:
             for name, data in files.items():
@@ -1187,7 +1196,8 @@ class PresetTests(unittest.TestCase):
         return path
 
     def build_payload(self, default_name, helixsr=False,
-                      network=("helixsr_weights.bin", "helixsr_kernels.pak")):
+                      network=("helixsr_weights.bin", "helixsr_kernels.pak"),
+                      helixsr_dll=None, helixsr_ini=None):
         with tempfile.TemporaryDirectory(prefix="payload-default-") as temporary:
             work = Path(temporary)
             archive, fork, fakenvapi, signed, provider, licenses, preset = \
@@ -1208,7 +1218,7 @@ class PresetTests(unittest.TestCase):
             if default_name:
                 command += ["--ffx-sdk-default", default_name]
             if helixsr:
-                command += ["--helixsr", str(self.helixsr_zip(work, network)),
+                command += ["--helixsr", str(self.helixsr_zip(work, network, helixsr_dll, helixsr_ini)),
                             "https://example/helixsr"]
             result = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -1316,6 +1326,28 @@ class PresetTests(unittest.TestCase):
                     "fsr411f", helixsr=True,
                     network=tuple(n for n in ("helixsr_weights.bin", "helixsr_kernels.pak")
                                   if n != missing))
+
+    def test_helixsr_with_the_network_inside_its_dll(self):
+        # 1.8.0 and later: no network files, the DLL itself carries the network.
+        config, _ = self.build_payload(
+            "fsr411f", helixsr=True, network=(),
+            helixsr_dll=self.HELIXSR_BUILT_DLL, helixsr_ini=self.HELIXSR_INI_NO_LOG)
+        tree = self.trees[config["optiscaler_aliases"]["helixsr"]]
+        self.assertEqual(tree["OptiScaler/amd_fidelityfx_dx12.dll"], self.HELIXSR_BUILT_DLL)
+        self.assertEqual(tree["OptiScaler/amd_fidelityfx_upscaler_dx12.dll"], self.HELIXSR_BUILT_DLL)
+        self.assertNotIn("OptiScaler/helixsr_weights.bin", tree)
+        # The shipped ini has no [Log]; one is added, switched off, and the
+        # author's other settings are untouched.
+        ini = tree["OptiScaler/helixsr.ini"].decode()
+        self.assertTrue(ini.startswith(self.HELIXSR_INI_NO_LOG))
+        self.assertEqual(ini[ini.index("[Log]"):].split(), ["[Log]", "Enabled", "=", "false"])
+
+    def test_an_unbuilt_helixsr_dll_fails_the_build(self):
+        # The release DLL without the network is small and runs as a plain
+        # upscale with a red frame: refuse it rather than ship it.
+        with self.assertRaises(Exception):
+            self.build_payload("fsr411f", helixsr=True, network=(),
+                               helixsr_ini=self.HELIXSR_INI_NO_LOG)
 
     def test_a_default_naming_no_variant_fails_the_build(self):
         with self.assertRaises(AssertionError):
