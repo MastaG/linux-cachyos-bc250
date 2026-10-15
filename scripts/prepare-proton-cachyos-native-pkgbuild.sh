@@ -248,7 +248,7 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \\\n'
     '        --helixsr "${srcdir}/HelixSR-1.9.0-network-fg.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0" \\\n'
-    '        --helixsr-scaler "${srcdir}/HelixSR-Scaler-1.0.1-core.zip" \\\n'
+    '        --helixsr-scaler "${srcdir}/HelixSR-Scaler-1.0.3-core.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
@@ -311,9 +311,9 @@ payload_sources = [
     # NVIDIA components inside it remain NVIDIA's property.
     ("HelixSR-1.9.0-network-fg.zip", f"{payload_base}/HelixSR-1.9.0-network-fg.zip",
      "31fb880936343a2b4919ffcb542f282648ab517691569f3478404d43c88745b2", True),
-    # HelixSR Scaler 1.0.1 (OptiScaler with HelixSR built in, GPL-3.0): the default.
-    ("HelixSR-Scaler-1.0.1-core.zip", f"{payload_base}/HelixSR-Scaler-1.0.1-core.zip",
-     "45038dfabc49cc1fac227dc14ee2cb8a5f208c7f33db410d895a732561d802ae", True),
+    # HelixSR Scaler 1.0.3 (OptiScaler with HelixSR built in, GPL-3.0): the default.
+    ("HelixSR-Scaler-1.0.3-core.zip", f"{payload_base}/HelixSR-Scaler-1.0.3-core.zip",
+     "dfc866755c7a1b4de0e76f77850c4e9f19c16a3cb1f4dfe73f68688ed0d0d716", True),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),

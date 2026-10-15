@@ -619,7 +619,7 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   rebuild aimed at RDNA2 ghosting. Neither 4.1.1r11 nor 4.1.1b is a provider
   bump: each carries its own embedded model, and both are unsigned.
 - **Changed: HelixSR Scaler is the default** ([HelixSR 1.9.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0)
-  with Scaler 1.0.1, by lonewolf0622; the author calls 1.9.0 experimental). The Scaler is OptiScaler
+  with Scaler 1.0.3, by lonewolf0622; the author calls 1.9.0 experimental). The Scaler is OptiScaler
   (GPL-3.0) with HelixSR built in, which runs NVIDIA's DLSS network (Model E) as D3D12 compute,
   so DLSS-quality reconstruction without an NVIDIA GPU. Direct3D 12 games only. Pick DLSS, XeSS or
   FSR in the game; the OptiScaler menu (Insert) shows ONLINE when HelixSR runs. It also runs

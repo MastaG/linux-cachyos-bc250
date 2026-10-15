@@ -176,7 +176,7 @@ picks one:
   new release becomes the default, older ones stay reachable.
 - **`helixsr` (the Scaler)** — built with `--helixsr-scaler` on top of
   `--helixsr` (it needs HelixSR 1.8.0 or later with its `helixsr-fg/` folder).
-  [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler) 1.0.1 is
+  [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler) 1.0.3 is
   OptiScaler v10 (same generation as the nightly: every other library is
   byte-identical, only `OptiScaler.dll` and `OptiScaler.ini` differ) with
   HelixSR built in. The tree is the nightly's with those two files replaced, the

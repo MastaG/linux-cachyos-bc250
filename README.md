@@ -892,7 +892,7 @@ Please report whether any of them helps or hurts.
 ### HelixSR Scaler: DLSS's network instead of FSR4 (the default)
 
 All three Proton packages ship [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
-1.0.1 with [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.9.0, both by
+1.0.3 with [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.9.0, both by
 lonewolf0622, the DirectMesh author. The Scaler is OptiScaler (GPL-3.0, source
 published) with HelixSR built in: HelixSR is one more entry in OptiScaler's
 upscaler list, and it runs NVIDIA's DLSS neural network (Model E) as ordinary
@@ -928,7 +928,7 @@ kernels it runs are, per its author, NVIDIA's property and not covered by any
 licence here. Since 1.2.0 its release no longer contains them: its setup script
 builds the network from NVIDIA's public DLSS 310.7.0 DLL (since 1.8.0 into the
 DLL itself) and, for frame generation, a folder of NVIDIA and Intel files. We ran that script once and mirrored the
-result (the `HelixSR-1.9.0-network-fg.zip` payload; the Scaler's two files are `HelixSR-Scaler-1.0.1-core.zip`), so the Proton packages need no
+result (the `HelixSR-1.9.0-network-fg.zip` payload; the Scaler's two files are `HelixSR-Scaler-1.0.3-core.zip`), so the Proton packages need no
 setup step and nothing is downloaded at game launch. Like the unsigned bridges it is pinned by
 SHA256 and its origin is written into the prefix
 (`Licenses/THIRD-PARTY-UPSCALER.txt`, notices under `Licenses/<version>/`).
