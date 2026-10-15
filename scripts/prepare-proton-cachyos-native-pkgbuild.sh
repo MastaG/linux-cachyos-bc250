@@ -246,7 +246,9 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --ffx-sdk-alt fsr411rc10 \\\n'
     '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc10.zip" \\\n'
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \\\n'
-    '        --helixsr "${srcdir}/HelixSR-1.9.0-network.zip" \\\n'
+    '        --helixsr "${srcdir}/HelixSR-1.9.0-network-fg.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0" \\\n'
+    '        --helixsr-scaler "${srcdir}/HelixSR-Scaler-1.0.1-core.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
@@ -304,11 +306,14 @@ payload_sources = [
      "e7b53b1f1aa7aa4b767c3f73e72a33a9a3c5563eefd1edf48bf165fcb0feac89", True),
     ("bc250-fsr4-dll-4.0.0-rc10.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc10.zip",
      "eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98", True),
-    # HelixSR 1.9.0 (lonewolf0622): an FSR 3.1 DLL that runs NVIDIA's DLSS Model E
-    # network on D3D12. The default upscaler; PROTON_USE_OPTISCALER=helixsr names it. Per its author,
-    # the DLSS weights and kernels inside it remain NVIDIA's property.
-    ("HelixSR-1.9.0-network.zip", f"{payload_base}/HelixSR-1.9.0-network.zip",
-     "a2a7998c288d95e2e61a53ae4ac6c01a3291efae18e5c32fc638fa28a0192518", True),
+    # HelixSR 1.9.0 (lonewolf0622): runs NVIDIA's DLSS Model E network on D3D12
+    # (and, with helixsr-fg/, NVIDIA's DLSS frame generation). Per its author, the
+    # NVIDIA components inside it remain NVIDIA's property.
+    ("HelixSR-1.9.0-network-fg.zip", f"{payload_base}/HelixSR-1.9.0-network-fg.zip",
+     "31fb880936343a2b4919ffcb542f282648ab517691569f3478404d43c88745b2", True),
+    # HelixSR Scaler 1.0.1 (OptiScaler with HelixSR built in, GPL-3.0): the default.
+    ("HelixSR-Scaler-1.0.1-core.zip", f"{payload_base}/HelixSR-Scaler-1.0.1-core.zip",
+     "45038dfabc49cc1fac227dc14ee2cb8a5f208c7f33db410d895a732561d802ae", True),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),

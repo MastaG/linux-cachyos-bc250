@@ -148,7 +148,7 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
-### The variants: `helixsr` (default), `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
+### The variants: `helixsr` (default), `optiscaler`, `helixsr-ffx`, `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
 
 OptiScaler loads two separate things: `amdxcffx64.dll`, the FSR4 provider our
 patched RADV drives, and `amd_fidelityfx_upscaler_dx12.dll`, the FidelityFX
@@ -157,9 +157,12 @@ versioned provider. The payload is built once per variant, identical except
 for the bridge (and, for HelixSR, its own files), and `PROTON_USE_OPTISCALER`
 picks one:
 
-- **default / `helixsr`** — see below; passed to the builder with
-  `--ffx-sdk-default helixsr`, which gives it the plain OptiScaler version so
-  an unset variable, `1` and `default` all reach it.
+- **default / `helixsr`** — HelixSR Scaler, see below; passed to the builder
+  with `--ffx-sdk-default helixsr`, which gives it the plain OptiScaler version
+  so an unset variable, `1` and `default` all reach it. It ships its own
+  OptiScaler.dll and OptiScaler.ini, so it never mixes with another variant.
+- **`optiscaler`** — the stock OptiScaler nightly with the FSR4 fork's bridge
+  (an alias of `fsr411f`'s version): the way to ask for plain OptiScaler.
 - **`fsr411f`** — the BC-250 FSR4 fork's build (RC11, `4.1.1r11`), the default
   before HelixSR. Unsigned, made for and measured on this hardware, and it
   ships its author's notices.
@@ -171,7 +174,20 @@ picks one:
 - **`fsr411rc9`, `fsr411rc10`** — the fork's earlier RC9 and RC10 builds, kept
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
-- **`helixsr`** — the default, and not a FidelityFX build at all:
+- **`helixsr` (the Scaler)** — built with `--helixsr-scaler` on top of
+  `--helixsr` (it needs HelixSR 1.8.0 or later with its `helixsr-fg/` folder).
+  [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler) 1.0.1 is
+  OptiScaler v10 (same generation as the nightly: every other library is
+  byte-identical, only `OptiScaler.dll` and `OptiScaler.ini` differ) with
+  HelixSR built in. The tree is the nightly's with those two files replaced, the
+  `fsr411f` bridge as its FidelityFX library (`--scaler-bridge`), and
+  `HelixSR/helixsr.dll` plus `HelixSR/helixsr-fg/`, which the Scaler finds next
+  to its proxy (`umu/`). Its variant preset sets `Upscalers.Dx12Upscaler = auto`
+  (the Scaler then picks HelixSR) and `FrameGen.Enabled = auto` (the game's own
+  DLSS frame generation drives HelixSR's); both are validated against the
+  Scaler's ini. The Scaler writes `HelixSR/helixsr.ini` and its log at run time,
+  so those are not pinned.
+- **`helixsr-ffx`** — the earlier route, now opt-in, not a FidelityFX build at all:
   [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.9.0, one FSR 3.1 DLL that
   runs NVIDIA's DLSS Model E network as D3D12 compute. Built with `--helixsr`
   rather than `--ffx-sdk-alt` (and `--ffx-sdk-default` accepts its name only when
@@ -180,7 +196,7 @@ picks one:
   that was two files, `helixsr_weights.bin` and `helixsr_kernels.pak`, installed
   beside the DLL and pinned; since 1.8.0 the setup writes the network into the
   DLL itself (13 MB instead of 5 MB). We run the setup once and mirror the
-  result as `HelixSR-1.9.0-network.zip`, and the builder refuses an archive
+  result as `HelixSR-1.9.0-network-fg.zip`, and the builder refuses an archive
   without the network (two files, or a DLL under 8 MiB) rather than ship a plain
   upscale. The same DLL
   goes in as both `amd_fidelityfx_dx12.dll` and
@@ -191,7 +207,7 @@ picks one:
   `Libraries.FfxDx12Path` and `FfxDx12SRPath` pointing at those two files, as
   HelixSR's README asks. The builder validates them against the pinned
   `OptiScaler.ini` like the preset, and the launcher applies them only when
-  `helixsr` is the selected version (`optiscaler_variant_preset` in the config,
+  `helixsr-ffx` is the selected version (`optiscaler_variant_preset` in the config,
   keyed by the default's plain version while it is the default), before debug
   and `BC250_OPTISCALER_EXTRA`. Its
   `LICENSE` and `THIRD_PARTY_NOTICES.md` go to `Licenses/<version>/`; the

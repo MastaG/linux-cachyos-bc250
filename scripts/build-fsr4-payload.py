@@ -130,7 +130,18 @@ def bridge_from(source: Path, staging: Path, name: str) -> tuple[Path, Path | No
     return dll, notices if notices.is_dir() else None
 
 
+# HelixSR Scaler (OptiScaler with HelixSR built in) is "helixsr"; the older
+# route, HelixSR 1.x as OptiScaler's FidelityFX library on the stock nightly, is
+# "helixsr-ffx".
 HELIXSR_NAME = "helixsr"
+HELIXSR_FFX_NAME = "helixsr-ffx"
+# The Scaler finds HelixSR in a HelixSR folder next to its own DLL (the proxy,
+# here umu/winmm.dll) or the game's .exe: HelixSR/helixsr.dll, and
+# HelixSR/helixsr-fg/ for frame generation. Its own backend choice (auto) picks
+# HelixSR when that folder is there, so the preset's "ffx" must not override it.
+# FrameGen.Enabled is "false" in the shared preset; "auto" lets the game's own
+# DLSS frame generation setting (on/off and multiplier) drive HelixSR's.
+SCALER_PRESET = {"Upscalers.Dx12Upscaler": "auto", "FrameGen.Enabled": "auto"}
 # Where OptiScaler finds the HelixSR DLL in the prefix: the payload folder
 # (Libraries.OptiDllPath), under both FidelityFX names. HelixSR's README has
 # both library paths point at it explicitly, or OptiScaler may pick another
@@ -148,7 +159,7 @@ HELIXSR_NETWORK_FILES = ("helixsr_weights.bin", "helixsr_kernels.pak")
 HELIXSR_BUILT_DLL_MIN = 8 * 1024 * 1024
 
 
-def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str, Path]]:
+def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str, Path], dict[str, Path]]:
     """Unpack a HelixSR release: its DLL, its helixsr.ini with logging off, its notices.
 
     The upstream zip carries no network: its setup script builds it from
@@ -216,7 +227,46 @@ def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str
         if not (root / name).is_file():
             raise RuntimeError("HelixSR archive has no " + name)
         shutil.copy2(root / name, notices / name)
-    return dlls[0], "".join(lines), notices, network
+    # Frame generation (helixsr-fg/, built by the same setup): the Scaler runs
+    # the game's DLSS frame generation on it. Absent when the setup ran with
+    # --no-fg, which is fine for the FFX route and refused for the Scaler.
+    fg = {}
+    if (root / "helixsr-fg").is_dir():
+        fg = {f"helixsr-fg/{p.name}": p for p in sorted((root / "helixsr-fg").iterdir())
+              if p.is_file()}
+    return dlls[0], "".join(lines), notices, network, fg
+
+
+def scaler_from(source: Path, staging: Path) -> tuple[Path, Path, Path]:
+    """Unpack HelixSR Scaler (OptiScaler with HelixSR built in): its DLL, ini, notices.
+
+    Only OptiScaler.dll and OptiScaler.ini differ from the stock nightly of the
+    same generation (every other library is byte-identical), so the archive
+    given here holds just those two and the licence texts of the release zip.
+    """
+    unpacked = staging / "scaler"
+    unpacked.mkdir()
+    subprocess.run(
+        ["bsdtar", "-xf", str(source), "--no-same-owner",
+         "--no-same-permissions", "-C", str(unpacked)],
+        check=True,
+    )
+    if any(p.is_symlink() or not (p.is_dir() or p.is_file())
+           for p in unpacked.rglob("*")):
+        raise RuntimeError("HelixSR Scaler archive contains a link or special file")
+    dlls = sorted(unpacked.rglob("OptiScaler.dll"))
+    if len(dlls) != 1:
+        raise RuntimeError("HelixSR Scaler archive must contain exactly one OptiScaler.dll")
+    root = dlls[0].parent
+    if not (root / "OptiScaler.ini").is_file():
+        raise RuntimeError("HelixSR Scaler archive has no OptiScaler.ini")
+    notices = staging / "scaler-notices"
+    notices.mkdir()
+    for path in sorted((root / "Licenses").glob("*")) if (root / "Licenses").is_dir() else []:
+        shutil.copy2(path, notices / path.name)
+    if not any(notices.iterdir()):
+        raise RuntimeError("HelixSR Scaler archive has no Licenses/")
+    return dlls[0], root / "OptiScaler.ini", notices
 
 
 def seed_fakenvapi_settings(extracted: Path) -> Path | None:
@@ -318,7 +368,8 @@ def optiscaler_artifact(
                 shutil.copy2(notice, target)
 
     # Files a variant adds beside the bridge (HelixSR: itself again as
-    # amd_fidelityfx_dx12.dll, and its helixsr.ini).
+    # amd_fidelityfx_dx12.dll, and its helixsr.ini). The Scaler variant also
+    # replaces the proxy and OptiScaler.ini this way.
     for name, content in (extra or {}).items():
         target = extracted / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -326,6 +377,9 @@ def optiscaler_artifact(
             shutil.copy2(content, target)
         else:
             target.write_text(content, encoding="utf-8")
+    if extra and "OptiScaler.ini" in extra:
+        # The ini the launcher will actually edit is this one, not the nightly's.
+        validate_preset(args.preset, extracted / "OptiScaler.ini", variant_preset)
 
     if provenance:
         # Say in the prefix itself where a non-AMD binary came from. Anyone
@@ -445,8 +499,9 @@ def main() -> int:
     # package and without anyone hand-editing a prefix -- which pinning makes
     # impossible anyway, since every file is verified before launch.
     ap.add_argument("--ffx-sdk-default", default="",
-                    help="name of an --ffx-sdk-alt variant, or 'helixsr' when "
-                         "--helixsr is given, to ship as the default; the "
+                    help="name of an --ffx-sdk-alt variant, 'helixsr' when "
+                         "--helixsr-scaler is given or 'helixsr-ffx' when "
+                         "--helixsr is, to ship as the default; the "
                          "AMD-signed --ffx-sdk bridge then becomes the "
                          "'signed' variant")
     ap.add_argument("--ffx-sdk-alt", action="append", default=[], nargs=3,
@@ -455,9 +510,18 @@ def main() -> int:
                          "accepts, the .dll or release archive to take it from, "
                          "and the URL recorded in the prefix. Repeatable.")
     ap.add_argument("--helixsr", nargs=2, metavar=("ARCHIVE", "ORIGIN"),
-                    help="HelixSR release zip and the URL recorded in the prefix; "
-                         "adds the 'helixsr' variant (opt-in unless named by "
-                         "--ffx-sdk-default)")
+                    help="HelixSR release zip (after its setup) and the URL recorded "
+                         "in the prefix; adds the 'helixsr-ffx' variant (opt-in "
+                         "unless named by --ffx-sdk-default)")
+    ap.add_argument("--helixsr-scaler", nargs=2, metavar=("ARCHIVE", "ORIGIN"),
+                    help="HelixSR Scaler archive (OptiScaler.dll, OptiScaler.ini, "
+                         "Licenses/) and the URL recorded in the prefix; adds the "
+                         "'helixsr' variant, which needs --helixsr for the "
+                         "HelixSR DLL and its frame generation folder")
+    ap.add_argument("--scaler-bridge", default="fsr411f",
+                    help="name of the --ffx-sdk-alt bridge the HelixSR Scaler "
+                         "variant ships as its FidelityFX library (what OptiScaler "
+                         "offers as FSR4 and uses for Direct3D 11 and Vulkan)")
     ap.add_argument("--dlss", type=Path, required=True, help="NVIDIA nvngx_dlss.dll surrogate")
     ap.add_argument("--licenses", type=Path, required=True, help="directory of license notices")
     ap.add_argument("--preset", type=Path, required=True, help="optiscaler-preset.json")
@@ -488,9 +552,13 @@ def main() -> int:
     # variants, and "what this package used to do" has to stay one launch option
     # away.
     SIGNED_NAME = "signed"
+    bridges = {}
+    if args.helixsr_scaler and not args.helixsr:
+        raise SystemExit("ERROR: --helixsr-scaler needs --helixsr (its DLL and frame generation)")
     if args.ffx_sdk_default and args.ffx_sdk_default not in {
         name for name, _, _ in args.ffx_sdk_alt
-    } | ({HELIXSR_NAME} if args.helixsr else set()):
+    } | ({HELIXSR_FFX_NAME} if args.helixsr else set()) \
+      | ({HELIXSR_NAME} if args.helixsr_scaler else set()):
         raise SystemExit(
             f"ERROR: --ffx-sdk-default names no variant: {args.ffx_sdk_default!r}")
 
@@ -521,10 +589,12 @@ def main() -> int:
             variants.append((args.ffx_sdk, signed_version, "", None, None))
 
         for name, path, origin in args.ffx_sdk_alt:
-            if name in ("", "default", "1", "0", SIGNED_NAME, HELIXSR_NAME) or name in aliases:
+            if name in ("", "default", "1", "0", SIGNED_NAME, HELIXSR_NAME,
+                        HELIXSR_FFX_NAME, "optiscaler") or name in aliases:
                 raise SystemExit(f"ERROR: unusable variant name: {name!r}")
             source = Path(path)
             dll, notices = bridge_from(source, staging, name)
+            bridges[name] = (dll, notices, origin)
             is_default = name == args.ffx_sdk_default
             version = (args.optiscaler_version if is_default
                        else args.optiscaler_version + "-" + name)
@@ -535,16 +605,18 @@ def main() -> int:
                 (dll, version, unsigned_provenance(dll, origin, is_default), notices, None)
             )
 
+        helixsr = None
         if args.helixsr:
+            helixsr = helixsr_from(Path(args.helixsr[0]), staging)
+            dll, ini, notices, network, fg = helixsr
+            origin = args.helixsr[1]
             # As the default it takes the plain OptiScaler version, like any
             # other default, and its library paths in variant_presets then apply
             # to every launch that does not name another variant.
-            source, origin = Path(args.helixsr[0]), args.helixsr[1]
-            dll, ini, notices, network = helixsr_from(source, staging)
-            is_default = args.ffx_sdk_default == HELIXSR_NAME
+            is_default = args.ffx_sdk_default == HELIXSR_FFX_NAME
             version = (args.optiscaler_version if is_default
-                       else args.optiscaler_version + "-" + HELIXSR_NAME)
-            aliases[HELIXSR_NAME] = version
+                       else args.optiscaler_version + "-" + HELIXSR_FFX_NAME)
+            aliases[HELIXSR_FFX_NAME] = version
             variant_presets[version] = dict(HELIXSR_PRESET)
             provenance = (
                 "amd_fidelityfx_dx12.dll and amd_fidelityfx_upscaler_dx12.dll in "
@@ -563,7 +635,7 @@ def main() -> int:
                    "remain available through PROTON_USE_OPTISCALER (signed, "
                    "fsr411f, ...). "
                    if is_default else
-                   f"Selected explicitly by PROTON_USE_OPTISCALER={HELIXSR_NAME}. ")
+                   f"Selected explicitly by PROTON_USE_OPTISCALER={HELIXSR_FFX_NAME}. ")
                 + "helixsr.ini is shipped with logging switched off.\n"
             )
             variants.append((
@@ -571,6 +643,71 @@ def main() -> int:
                 {"OptiScaler/amd_fidelityfx_dx12.dll": dll, "OptiScaler/helixsr.ini": ini,
                  **{f"OptiScaler/{name}": path for name, path in network.items()}},
             ))
+
+        if args.helixsr_scaler:
+            scaler_dll, scaler_ini, scaler_notices = scaler_from(
+                Path(args.helixsr_scaler[0]), staging)
+            dll, _ini, helix_notices, network, fg = helixsr
+            if network:
+                raise SystemExit("ERROR: the Scaler needs HelixSR 1.8.0 or later "
+                                 "(network inside the DLL)")
+            if not fg:
+                raise SystemExit("ERROR: HelixSR archive has no helixsr-fg/: run its "
+                                 "setup without --no-fg and archive the folder it produced")
+            if args.scaler_bridge not in bridges:
+                raise SystemExit(f"ERROR: --scaler-bridge names no --ffx-sdk-alt: "
+                                 f"{args.scaler_bridge!r}")
+            bridge, bridge_notices, bridge_origin = bridges[args.scaler_bridge]
+            is_default = args.ffx_sdk_default == HELIXSR_NAME
+            version = (args.optiscaler_version if is_default
+                       else args.optiscaler_version + "-" + HELIXSR_NAME)
+            aliases[HELIXSR_NAME] = version
+            variant_presets[version] = dict(SCALER_PRESET)
+            merged = staging / "scaler-all-notices"
+            merged.mkdir()
+            for path in sorted(scaler_notices.iterdir()):
+                shutil.copy2(path, merged / path.name)
+            for path in sorted(helix_notices.iterdir()):
+                shutil.copy2(path, merged / ("HelixSR-" + path.name))
+            for path in sorted(bridge_notices.rglob("*")) if bridge_notices else []:
+                if path.is_file():
+                    shutil.copy2(path, merged / (args.scaler_bridge + "-" + path.name))
+            provenance = (
+                f"{args.proxy} in this directory is HelixSR Scaler, OptiScaler with HelixSR "
+                "built in (GPL-3.0; source: https://github.com/lonewolf0622/HelixSR-Scaler), "
+                "NOT the stock OptiScaler nightly.\n\n"
+                f"Origin: {args.helixsr_scaler[1]}\n"
+                f"SHA256: {digest(scaler_dll)}\n\n"
+                "HelixSR/helixsr.dll is HelixSR, which runs NVIDIA's DLSS Model E network "
+                f"as DirectX 12 compute.\nOrigin: {args.helixsr[1]}\n"
+                f"SHA256: {digest(dll)}\n\n"
+                "HelixSR/helixsr-fg/ holds the files its frame generation runs on "
+                "(NVIDIA's DLSS frame generation network and NGX core, Intel's XeLL), "
+                "built or fetched by HelixSR's own setup script. Per its author, "
+                "the NVIDIA components remain the property of NVIDIA Corporation and "
+                f"are not covered by HelixSR's licence; see Licenses/{version}/.\n\n"
+                "OptiScaler/amd_fidelityfx_upscaler_dx12.dll is the "
+                f"{args.scaler_bridge} FSR4 bridge (origin: {bridge_origin}); it is what "
+                "OptiScaler offers as FSR4 and uses for Direct3D 11 and Vulkan games.\n"
+                + ("This package ships the Scaler by default; the stock OptiScaler "
+                   "nightly stays available with PROTON_USE_OPTISCALER=optiscaler "
+                   "(and the bridge variants).\n"
+                   if is_default else
+                   f"Selected explicitly by PROTON_USE_OPTISCALER={HELIXSR_NAME}.\n")
+            )
+            extra = {
+                args.proxy: scaler_dll,
+                "OptiScaler.ini": scaler_ini,
+                "HelixSR/helixsr.dll": dll,
+                **{f"HelixSR/{name}": path for name, path in fg.items()},
+            }
+            variants.append((bridge, version, provenance, merged, extra))
+
+        # The stock OptiScaler nightly, selected with one name whichever variant
+        # is the default: the FSR4 fork's bridge, like the packages shipped
+        # before HelixSR became the default. Other bridges are their own names.
+        if "fsr411f" in aliases:
+            aliases["optiscaler"] = aliases["fsr411f"]
 
         entries = []
         for ffx_sdk, version, provenance, notices, extra in variants:

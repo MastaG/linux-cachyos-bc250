@@ -710,7 +710,7 @@ Per game, if you want them:
 ```text
 BC250_FSR4_DEBUG=1 %command%              # FSR4 watermark + OptiScaler log + PROTON_LOG
 PROTON_FSR4_UPGRADE=0 %command%           # turn the packaged FSR4 upgrade off
-PROTON_USE_OPTISCALER=fsr411f %command%   # the FSR4 fork's bridge instead of the default HelixSR, see below
+PROTON_USE_OPTISCALER=fsr411f %command%   # the FSR4 fork's bridge instead of the default HelixSR Scaler, see below
 BC250_OPTISCALER_EXTRA="A.B=c;D.E=f"      # override individual OptiScaler settings
 PROTON_OPTISCALER_NAME=dxgi.dll %command% # load OptiScaler as dxgi instead of winmm
 ```
@@ -824,18 +824,20 @@ change sticks:
 
 ### Which FidelityFX bridge you get, and the alternatives
 
-The upscaler OptiScaler hands a game to is **HelixSR by default** (see the next
-section). Underneath it, one file in the payload — the FidelityFX bridge,
-`amd_fidelityfx_upscaler_dx12.dll` — exists in five other pinned builds. Each
-package ships all of them and swaps only that file; `PROTON_USE_OPTISCALER`
-picks one per game:
+The upscaler a game gets is **HelixSR Scaler by default** (see the next
+section). For the stock OptiScaler nightly, one file in the payload — the
+FidelityFX bridge, `amd_fidelityfx_upscaler_dx12.dll` — exists in five other
+pinned builds. Each package ships all of them and swaps only that file;
+`PROTON_USE_OPTISCALER` picks one per game:
 
 ```text
-                                          # (unset) HelixSR, DLSS Model E network — the default
+                                          # (unset) HelixSR Scaler, DLSS Model E network — the default
+PROTON_USE_OPTISCALER=optiscaler %command%  # stock OptiScaler nightly with the fsr411f bridge
 PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork RC11, 4.1.1r11 — the default until HelixSR
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
-PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR, by name
+PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR Scaler, by name
+PROTON_USE_OPTISCALER=helixsr-ffx %command% # HelixSR as the stock nightly's FidelityFX library
 PROTON_USE_OPTISCALER=fsr411rc9 %command%  # the older RC9 build
 PROTON_USE_OPTISCALER=fsr411rc10 %command% # the older RC10 build
 ```
@@ -887,36 +889,46 @@ Two things to know about the alternatives:
 
 Please report whether any of them helps or hurts.
 
-### HelixSR: DLSS's network instead of FSR4 (the default)
+### HelixSR Scaler: DLSS's network instead of FSR4 (the default)
 
-All three Proton packages also ship [HelixSR](https://github.com/lonewolf0622/HelixSR)
-1.2.0 by lonewolf0622, the DirectMesh author. It answers OptiScaler as an FSR 3.1
-upscaler but runs NVIDIA's DLSS neural network (Model E) as ordinary DirectX 12
-compute shaders, so it needs no NVIDIA GPU or driver. It is developed and tested
-on the BC-250. It is what you get without any launch option; to go back to the
-FSR4 fork's bridge for a game that misbehaves:
+All three Proton packages ship [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
+1.0.1 with [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.9.0, both by
+lonewolf0622, the DirectMesh author. The Scaler is OptiScaler (GPL-3.0, source
+published) with HelixSR built in: HelixSR is one more entry in OptiScaler's
+upscaler list, and it runs NVIDIA's DLSS neural network (Model E) as ordinary
+DirectX 12 compute shaders, so it needs no NVIDIA GPU or driver. It is developed
+and tested on the BC-250. It is what you get without any launch option; pick
+DLSS, XeSS or FSR in the game as usual and it reaches HelixSR, and the Insert
+menu shows ONLINE at the top when HelixSR runs.
+
+The Scaler also runs HelixSR's DLSS frame generation: when a game has DLSS Frame
+Generation, turning it on in the game runs NVIDIA's frame generation network on
+the GPU (experimental; its author measures about 4.6 ms per generated frame at
+1080p on a BC-250, and HelixSR's log reports whether the GPU can run it). It
+needs 32-lane waves, which every RDNA GPU has, the BC-250 included.
+
+The Scaler brings its own OptiScaler build, so the stock nightly and the other
+DLLs are separate choices, one launch option away:
 
 ```text
-PROTON_USE_OPTISCALER=fsr411f %command%
+PROTON_USE_OPTISCALER=optiscaler %command%   # the stock OptiScaler nightly with the FSR4 fork's bridge
+PROTON_USE_OPTISCALER=helixsr-ffx %command%  # the nightly with HelixSR 1.9.0 as its FidelityFX library
+PROTON_USE_OPTISCALER=fsr411f %command%      # (and signed, fsr411b, fsr411rc9, fsr411rc10) other bridge DLLs
 ```
 
-HelixSR replaces the FSR4 upscaler. It is Direct3D 12 only (Vulkan games are not
-supported; D3D11 games through OptiScaler are untested, so if one looks wrong,
-try `fsr411f`). Pick DLSS, XeSS or FSR
-in the game as usual, OptiScaler hands it to HelixSR. Its own log
-(`helixsr.log`) is switched off in the shipped `helixsr.ini`; every other
-setting is the author's default (no sharpening, like DLSS). Its author measures
-1.4 ms per frame for 1080p Quality and 4.4 ms for 4K Performance on a BC-250 at
-2000 MHz. (HelixSR's `HELIXSR_PROFILE=1` writes its timings to `helixsr.log`,
-which the shipped settings keep switched off.)
+HelixSR is Direct3D 12 only (Vulkan games are not supported). The Scaler's
+Direct3D 11 and Vulkan upscaler is the FSR4 fork's bridge, as before. Its
+`helixsr.log` is HelixSR's own, in `system32/umu/HelixSR` of the prefix; sharpening
+is OptiScaler's. Its author measures 1.06 ms per frame for 1080p Quality and
+3.3 ms for 4K Performance on a BC-250 at 2000 MHz.
 
 Provenance, stated plainly: HelixSR is free to use under its own freeware
 licence (its source is not published), but the DLSS network weights and
 kernels it runs are, per its author, NVIDIA's property and not covered by any
 licence here. Since 1.2.0 its release no longer contains them: its setup script
 builds the network from NVIDIA's public DLSS 310.7.0 DLL (since 1.8.0 into the
-DLL itself). We ran that script once and mirrored the
-result (the `HelixSR-1.9.0-network.zip` payload), so the Proton packages need no
+DLL itself) and, for frame generation, a folder of NVIDIA and Intel files. We ran that script once and mirrored the
+result (the `HelixSR-1.9.0-network-fg.zip` payload; the Scaler's two files are `HelixSR-Scaler-1.0.1-core.zip`), so the Proton packages need no
 setup step and nothing is downloaded at game launch. Like the unsigned bridges it is pinned by
 SHA256 and its origin is written into the prefix
 (`Licenses/THIRD-PARTY-UPSCALER.txt`, notices under `Licenses/<version>/`).

@@ -49,6 +49,7 @@ STUB_INI = (
     b"[FSR]\nFsr4ForceModel=auto\n"
     b"[Spoofing]\nDxgi=auto\nVulkanExtensionSpoofing=auto\n"
     b"[Libraries]\nFfxDx12Path=auto\nFfxDx12SRPath=auto\n"
+    b"[Upscalers]\nDx12Upscaler=auto\n[FrameGen]\nEnabled=auto\n"
 )
 
 
@@ -538,18 +539,18 @@ class RuntimeTests(unittest.TestCase):
         # must not leak into the FSR4 variants that share the same preset.
         paths = {"Libraries.FfxDx12Path": "C:\\x\\amd_fidelityfx_dx12.dll",
                  "Libraries.FfxDx12SRPath": "C:\\x\\amd_fidelityfx_upscaler_dx12.dll"}
-        self.config["optiscaler_aliases"]["helixsr"] = "test-opti-helixsr"
+        self.config["optiscaler_aliases"]["helixsr-ffx"] = "test-opti-helixsr"
         self.config["optiscaler_variant_preset"] = {"test-opti-helixsr": paths}
         default = self.applied_preset({"SteamAppId": "999999998"})
         for key in paths:
             self.assertNotIn(key, default)
         chosen = self.applied_preset(
-            {"SteamAppId": "999999998", "PROTON_USE_OPTISCALER": "helixsr"})
+            {"SteamAppId": "999999998", "PROTON_USE_OPTISCALER": "helixsr-ffx"})
         for key, value in paths.items():
             self.assertEqual(chosen[key], value)
         # A launch option still has the last word.
         overridden = self.applied_preset({
-            "SteamAppId": "999999998", "PROTON_USE_OPTISCALER": "helixsr",
+            "SteamAppId": "999999998", "PROTON_USE_OPTISCALER": "helixsr-ffx",
             "BC250_OPTISCALER_EXTRA": "Libraries.FfxDx12Path=auto"})
         self.assertEqual(overridden["Libraries.FfxDx12Path"], "auto")
 
@@ -1186,6 +1187,8 @@ class PresetTests(unittest.TestCase):
             "HelixSR-1.9.0/README.md": b"readme",
             "HelixSR-1.9.0/helixsr_weights.bin": self.HELIXSR_WEIGHTS,
             "HelixSR-1.9.0/helixsr_kernels.pak": self.HELIXSR_KERNELS,
+            "HelixSR-1.9.0/helixsr-fg/nvngx_dlssg.dll": b"dlssg" * 64,
+            "HelixSR-1.9.0/helixsr-fg/_nvngx.dll": b"ngx" * 64,
         }
         with zipfile.ZipFile(path, "w") as archive_zip:
             for name, data in files.items():
@@ -1195,9 +1198,26 @@ class PresetTests(unittest.TestCase):
                 archive_zip.writestr(name, data)
         return path
 
+    SCALER_DLL = b"helixsr-scaler-optiscaler" * 64
+    SCALER_INI = STUB_INI + b"[HelixSR]\nWaveSize=auto\nFrameGeneration=auto\n"
+
+    # HelixSR 1.8.0 and later, as the Scaler needs it.
+    BUILT = {"network": (), "helixsr_dll": b"helixsr-built-in-network" * 400_000,
+             "helixsr_ini": "; HelixSR settings.\n\n[Sharpening]\nSharpener = off\n"}
+
+    def scaler_zip(self, work, ini=None):
+        # The core of HelixSR Scaler's release: its OptiScaler.dll and ini plus
+        # the licence texts.
+        path = work / "scaler.zip"
+        with zipfile.ZipFile(path, "w") as archive_zip:
+            archive_zip.writestr("HelixSR-Scaler-1.0.1/OptiScaler.dll", self.SCALER_DLL)
+            archive_zip.writestr("HelixSR-Scaler-1.0.1/OptiScaler.ini", ini or self.SCALER_INI)
+            archive_zip.writestr("HelixSR-Scaler-1.0.1/Licenses/OptiScaler_LICENSE.txt", b"gpl")
+        return path
+
     def build_payload(self, default_name, helixsr=False,
                       network=("helixsr_weights.bin", "helixsr_kernels.pak"),
-                      helixsr_dll=None, helixsr_ini=None):
+                      helixsr_dll=None, helixsr_ini=None, scaler=False, scaler_ini=None):
         with tempfile.TemporaryDirectory(prefix="payload-default-") as temporary:
             work = Path(temporary)
             archive, fork, fakenvapi, signed, provider, licenses, preset = \
@@ -1220,7 +1240,11 @@ class PresetTests(unittest.TestCase):
             if helixsr:
                 command += ["--helixsr", str(self.helixsr_zip(work, network, helixsr_dll, helixsr_ini)),
                             "https://example/helixsr"]
+            if scaler:
+                command += ["--helixsr-scaler", str(self.scaler_zip(work, scaler_ini)),
+                            "https://example/scaler"]
             result = subprocess.run(command, capture_output=True, text=True)
+            self.last_result = result
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             config = json.loads((output / "cfg.json").read_text())
             manifest = json.loads((output / "upscaler-manifest.json").read_text())
@@ -1259,7 +1283,7 @@ class PresetTests(unittest.TestCase):
 
     def test_helixsr_is_an_opt_in_variant_with_its_log_switched_off(self):
         config, bridges = self.build_payload("fsr411f", helixsr=True)
-        version = config["optiscaler_aliases"]["helixsr"]
+        version = config["optiscaler_aliases"]["helixsr-ffx"]
         # Never the default.
         self.assertNotEqual(version, config["optiscaler_version"])
         self.assertEqual(bridges[config["optiscaler_version"]], self.FORK_BRIDGE)
@@ -1295,12 +1319,12 @@ class PresetTests(unittest.TestCase):
             {"Libraries.FfxDx12Path", "Libraries.FfxDx12SRPath"})
 
     def test_helixsr_can_be_the_default_and_the_bridges_stay_reachable(self):
-        config, bridges = self.build_payload("helixsr", helixsr=True)
+        config, bridges = self.build_payload("helixsr-ffx", helixsr=True)
         default = config["optiscaler_version"]
         aliases = config["optiscaler_aliases"]
         # It takes the plain version, so "1" and an unset variable reach it,
         # and its library paths apply without naming it.
-        self.assertEqual(aliases["helixsr"], default)
+        self.assertEqual(aliases["helixsr-ffx"], default)
         self.assertEqual(bridges[default], self.HELIXSR_DLL)
         self.assertIn("OptiScaler/helixsr_weights.bin", self.trees[default])
         self.assertEqual(set(config["optiscaler_variant_preset"]), {default})
@@ -1315,7 +1339,7 @@ class PresetTests(unittest.TestCase):
 
     def test_helixsr_as_default_needs_its_archive(self):
         with self.assertRaises(AssertionError):
-            self.build_payload("helixsr", helixsr=False)
+            self.build_payload("helixsr-ffx", helixsr=False)
 
     def test_helixsr_without_its_network_files_fails_the_build(self):
         # Without them HelixSR only does a plain upscale: refuse rather than
@@ -1332,7 +1356,7 @@ class PresetTests(unittest.TestCase):
         config, _ = self.build_payload(
             "fsr411f", helixsr=True, network=(),
             helixsr_dll=self.HELIXSR_BUILT_DLL, helixsr_ini=self.HELIXSR_INI_NO_LOG)
-        tree = self.trees[config["optiscaler_aliases"]["helixsr"]]
+        tree = self.trees[config["optiscaler_aliases"]["helixsr-ffx"]]
         self.assertEqual(tree["OptiScaler/amd_fidelityfx_dx12.dll"], self.HELIXSR_BUILT_DLL)
         self.assertEqual(tree["OptiScaler/amd_fidelityfx_upscaler_dx12.dll"], self.HELIXSR_BUILT_DLL)
         self.assertNotIn("OptiScaler/helixsr_weights.bin", tree)
@@ -1348,6 +1372,61 @@ class PresetTests(unittest.TestCase):
         with self.assertRaises(Exception):
             self.build_payload("fsr411f", helixsr=True, network=(),
                                helixsr_ini=self.HELIXSR_INI_NO_LOG)
+
+    def test_helixsr_scaler_can_be_the_default_with_its_own_files(self):
+        config, bridges = self.build_payload("helixsr", helixsr=True, scaler=True, **self.BUILT)
+        default = config["optiscaler_version"]
+        aliases = config["optiscaler_aliases"]
+        tree = self.trees[default]
+        self.assertEqual(aliases["helixsr"], default)
+        # Its own OptiScaler as the proxy and its own ini, not the nightly's.
+        self.assertEqual(tree["winmm.dll"], self.SCALER_DLL)
+        self.assertEqual(tree["OptiScaler.ini"], self.SCALER_INI)
+        # HelixSR and its frame generation folder, where the Scaler looks.
+        self.assertEqual(tree["HelixSR/helixsr.dll"], self.HELIXSR_BUILT_DLL)
+        self.assertIn("HelixSR/helixsr-fg/nvngx_dlssg.dll", tree)
+        self.assertIn("HelixSR/helixsr-fg/_nvngx.dll", tree)
+        hashes = self.entries[default]["sha256_hash"]
+        self.assertIn("HelixSR/helixsr.dll", hashes)
+        self.assertIn("HelixSR/helixsr-fg/nvngx_dlssg.dll", hashes)
+        self.assertNotIn("OptiScaler.ini", hashes)
+        # FSR4 stays available for Direct3D 11 and Vulkan through the fork's
+        # bridge, and the Scaler's own backend choice (auto) is not overridden.
+        self.assertEqual(bridges[default], self.FORK_BRIDGE)
+        self.assertEqual(config["optiscaler_variant_preset"][default],
+                         {"Upscalers.Dx12Upscaler": "auto", "FrameGen.Enabled": "auto"})
+        # The stock nightly and every bridge stay reachable by name, and none
+        # of them carries the Scaler.
+        for name in ("optiscaler", "fsr411f", "signed"):
+            other = self.trees[aliases[name]]
+            self.assertNotEqual(aliases[name], default)
+            self.assertEqual(other["winmm.dll"], b"p" * 2048)
+            self.assertNotIn("HelixSR/helixsr.dll", other)
+        self.assertEqual(aliases["optiscaler"], aliases["fsr411f"])
+        self.assertEqual(bridges[aliases["optiscaler"]], self.FORK_BRIDGE)
+        self.assertEqual(bridges[aliases["signed"]], self.SIGNED_BRIDGE)
+        # Licences of everything it ships, GPL text included.
+        notices = {n for n in tree if n.startswith(f"Licenses/{default}/")}
+        self.assertIn(f"Licenses/{default}/OptiScaler_LICENSE.txt", notices)
+        self.assertIn(f"Licenses/{default}/HelixSR-LICENSE", notices)
+        self.assertIn("GPL-3.0", tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
+
+    def test_the_ffx_route_stays_a_separate_opt_in_beside_the_scaler(self):
+        config, _ = self.build_payload("helixsr", helixsr=True, scaler=True, **self.BUILT)
+        aliases = config["optiscaler_aliases"]
+        ffx = aliases["helixsr-ffx"]
+        self.assertNotEqual(ffx, config["optiscaler_version"])
+        self.assertIn("OptiScaler/helixsr.ini", self.trees[ffx])
+        self.assertNotIn("HelixSR/helixsr.dll", self.trees[ffx])
+        self.assertEqual(set(config["optiscaler_variant_preset"][ffx]),
+                         {"Libraries.FfxDx12Path", "Libraries.FfxDx12SRPath"})
+
+    def test_the_scaler_needs_frame_generation_and_a_scaler_ini_that_takes_the_preset(self):
+        with self.assertRaises(AssertionError):
+            # An ini without the Upscalers section cannot take the variant preset.
+            self.build_payload("helixsr", helixsr=True, scaler=True, **self.BUILT,
+                               scaler_ini=b"[FSR]\nFsr4ForceModel=auto\n")
+        self.assertIn("Unknown OptiScaler preset option", self.last_result.stderr)
 
     def test_a_default_naming_no_variant_fails_the_build(self):
         with self.assertRaises(AssertionError):

@@ -618,16 +618,20 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   [4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b)
   rebuild aimed at RDNA2 ghosting. Neither 4.1.1r11 nor 4.1.1b is a provider
   bump: each carries its own embedded model, and both are unsigned.
-- **Changed: HelixSR is the default** ([1.9.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0)
-  by lonewolf0622, marked experimental by its author), replacing the FSR4 fork's bridge. It is an FSR 3.1 upscaler that runs NVIDIA's DLSS network (Model E) as D3D12 compute,
-  so DLSS-quality reconstruction without an NVIDIA GPU. Direct3D 12 games only.
-  1.9.0 is up to about 8% faster than 1.8.1 on the BC-250 by its author's measurements
-  (1080p Quality 1.14 to 1.06 ms), and since 1.7.0 it behaves like DLSS: no sharpening unless
-  \`helixsr.ini\` asks for it (\`Sharpener = nvidia\` or \`rcas\`), DLSS's jitter and render sizes.
-  Its network now lives inside the DLL (one file) instead of two extra files.
-  It replaces FSR4 for the game; its log is switched off. Per its author, the
-  DLSS weights and kernels it runs remain NVIDIA's property. If a game looks
-  wrong or crashes, \`PROTON_USE_OPTISCALER=fsr411f %command%\` goes back to the old default.
+- **Changed: HelixSR Scaler is the default** ([HelixSR 1.9.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0)
+  with Scaler 1.0.1, by lonewolf0622; the author calls 1.9.0 experimental). The Scaler is OptiScaler
+  (GPL-3.0) with HelixSR built in, which runs NVIDIA's DLSS network (Model E) as D3D12 compute,
+  so DLSS-quality reconstruction without an NVIDIA GPU. Direct3D 12 games only. Pick DLSS, XeSS or
+  FSR in the game; the OptiScaler menu (Insert) shows ONLINE when HelixSR runs. It also runs
+  HelixSR's DLSS frame generation for games that have DLSS Frame Generation (experimental; it needs
+  32-lane waves, which the BC-250 has). 1.9.0 is up to about 8% faster than 1.8.1 by its
+  author's measurements, and the network now lives inside the DLL.
+  \`PROTON_USE_OPTISCALER=optiscaler\` selects the stock OptiScaler nightly (20261015) with the
+  FSR4 fork's bridge, \`helixsr-ffx\` the nightly with HelixSR as its FidelityFX library, and
+  \`fsr411f\`, \`signed\`, \`fsr411b\`, \`fsr411rc9\`, \`fsr411rc10\` the other bridge DLLs. The Scaler
+  does not mix with them. Per its author, the DLSS weights and kernels it runs remain NVIDIA's
+  property. If a game looks wrong or crashes, \`PROTON_USE_OPTISCALER=optiscaler %command%\`
+  goes back to plain OptiScaler.
 
 \`\`\`bash
 sudo pacman -S protonge-latest-bc250
