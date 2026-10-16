@@ -39,6 +39,7 @@ case "$COMPONENT" in
     bc250-dual-audio) ;;
     bc250-cec) ;;
     bc250-paccache-cleanup) ;;
+    bc250-fixes) ;;
     bc250-ch7218-fw) ;;
     bc250-vcn-fw) ;;
     linux-cachyos-bc250-meta) ;;
@@ -158,6 +159,21 @@ case "$COMPONENT" in
         {
             hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-paccache-cleanup.hook"
             hash_files "$ROOT_DIR/scripts/build-bc250-paccache-cleanup-package.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    bc250-fixes)
+        # A pacman hook, the script it runs and the PKGBUILD, all our own and
+        # sitting in the package directory; hash them and the build script.
+        pkg_dir="$ROOT_DIR/packages/bc250-fixes"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        {
+            hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-fixes.hook" "$pkg_dir/bc250-fixes.sh"
+            hash_files "$ROOT_DIR/scripts/build-bc250-fixes-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

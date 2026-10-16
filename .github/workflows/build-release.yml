@@ -147,6 +147,7 @@ jobs:
           bc250_dual_audio="$(./scripts/source-fingerprint.sh bc250-dual-audio)"
           bc250_cec="$(./scripts/source-fingerprint.sh bc250-cec)"
           bc250_paccache_cleanup="$(./scripts/source-fingerprint.sh bc250-paccache-cleanup)"
+          bc250_fixes="$(./scripts/source-fingerprint.sh bc250-fixes)"
           bc250_ch7218_fw="$(./scripts/source-fingerprint.sh bc250-ch7218-fw)"
           bc250_vcn_fw="$(./scripts/source-fingerprint.sh bc250-vcn-fw)"
           linux_cachyos_bc250_meta="$(./scripts/source-fingerprint.sh linux-cachyos-bc250-meta)"
@@ -156,7 +157,7 @@ jobs:
           aggregate="$(printf '%s\n' \
             "$kernel_stable" "$kernel_rc" "$kernel_bore" \
             "$mesa" "$lib32_mesa" "$mesa_git" \
-            "$bc250_dual_audio" "$bc250_cec" "$bc250_paccache_cleanup" "$bc250_ch7218_fw" "$bc250_vcn_fw" \
+            "$bc250_dual_audio" "$bc250_cec" "$bc250_paccache_cleanup" "$bc250_fixes" "$bc250_ch7218_fw" "$bc250_vcn_fw" \
             "$linux_cachyos_bc250_meta" "$protonge_latest_bc250" \
             "$proton_cachyos_native_bc250" | sha256sum | awk '{print $1}')"
 
@@ -169,6 +170,7 @@ jobs:
           echo "bc250_dual_audio=$bc250_dual_audio" >> "$GITHUB_OUTPUT"
           echo "bc250_cec=$bc250_cec" >> "$GITHUB_OUTPUT"
           echo "bc250_paccache_cleanup=$bc250_paccache_cleanup" >> "$GITHUB_OUTPUT"
+          echo "bc250_fixes=$bc250_fixes" >> "$GITHUB_OUTPUT"
           echo "bc250_ch7218_fw=$bc250_ch7218_fw" >> "$GITHUB_OUTPUT"
           echo "bc250_vcn_fw=$bc250_vcn_fw" >> "$GITHUB_OUTPUT"
           echo "linux_cachyos_bc250_meta=$linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
@@ -186,6 +188,7 @@ jobs:
           printf 'bc250-dual-audio fp:       %s\n' "$bc250_dual_audio"
           printf 'bc250-cec fp:              %s\n' "$bc250_cec"
           printf 'bc250-paccache-cleanup fp: %s\n' "$bc250_paccache_cleanup"
+          printf 'bc250-fixes fp: %s\n' "$bc250_fixes"
           printf 'bc250-ch7218-fw fp: %s\n' "$bc250_ch7218_fw"
           printf 'bc250-vcn-fw fp: %s\n' "$bc250_vcn_fw"
           printf 'linux-cachyos-bc250-meta fp: %s\n' "$linux_cachyos_bc250_meta"
@@ -206,6 +209,7 @@ jobs:
           BC250_DUAL_AUDIO_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_dual_audio }}
           BC250_CEC_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_cec }}
           BC250_PACCACHE_CLEANUP_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_paccache_cleanup }}
+          BC250_FIXES_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_fixes }}
           BC250_CH7218_FW_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_ch7218_fw }}
           BC250_VCN_FW_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_vcn_fw }}
           LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
@@ -312,6 +316,7 @@ jobs:
           build_bc250_dual_audio=false
           build_bc250_cec=false
           build_bc250_paccache_cleanup=false
+          build_bc250_fixes=false
           build_bc250_ch7218_fw=false
           build_bc250_vcn_fw=false
           build_linux_cachyos_bc250_meta=false
@@ -328,6 +333,7 @@ jobs:
           [[ "$(previous_value bc250-dual-audio-info.env BC250_DUAL_AUDIO_FINGERPRINT BC250_DUAL_AUDIO_FINGERPRINT)" == "$BC250_DUAL_AUDIO_FINGERPRINT" ]] || build_bc250_dual_audio=true
           [[ "$(previous_value bc250-cec-info.env BC250_CEC_FINGERPRINT BC250_CEC_FINGERPRINT)" == "$BC250_CEC_FINGERPRINT" ]] || build_bc250_cec=true
           [[ "$(previous_value bc250-paccache-cleanup-info.env BC250_PACCACHE_CLEANUP_FINGERPRINT BC250_PACCACHE_CLEANUP_FINGERPRINT)" == "$BC250_PACCACHE_CLEANUP_FINGERPRINT" ]] || build_bc250_paccache_cleanup=true
+          [[ "$(previous_value bc250-fixes-info.env BC250_FIXES_FINGERPRINT BC250_FIXES_FINGERPRINT)" == "$BC250_FIXES_FINGERPRINT" ]] || build_bc250_fixes=true
           [[ "$(previous_value bc250-ch7218-fw-info.env BC250_CH7218_FW_FINGERPRINT BC250_CH7218_FW_FINGERPRINT)" == "$BC250_CH7218_FW_FINGERPRINT" ]] || build_bc250_ch7218_fw=true
           [[ "$(previous_value bc250-vcn-fw-info.env BC250_VCN_FW_FINGERPRINT BC250_VCN_FW_FINGERPRINT)" == "$BC250_VCN_FW_FINGERPRINT" ]] || build_bc250_vcn_fw=true
           [[ "$(previous_value linux-cachyos-bc250-meta-info.env LINUX_CACHYOS_BC250_META_FINGERPRINT LINUX_CACHYOS_BC250_META_FINGERPRINT)" == "$LINUX_CACHYOS_BC250_META_FINGERPRINT" ]] || build_linux_cachyos_bc250_meta=true
@@ -345,6 +351,7 @@ jobs:
             build_bc250_dual_audio=true
             build_bc250_cec=true
             build_bc250_paccache_cleanup=true
+            build_bc250_fixes=true
             build_bc250_ch7218_fw=true
             build_bc250_vcn_fw=true
             build_linux_cachyos_bc250_meta=true
@@ -365,7 +372,7 @@ jobs:
           if [[ "$build_kernel_stable" == true || "$build_kernel_rc" == true || \
                 "$build_kernel_bore" == true || "$build_mesa" == true || \
                 "$build_lib32_mesa" == true || "$build_mesa_git" == true || \
-                "$build_bc250_dual_audio" == true || "$build_bc250_cec" == true || "$build_bc250_paccache_cleanup" == true || "$build_bc250_ch7218_fw" == true || "$build_bc250_vcn_fw" == true || "$build_linux_cachyos_bc250_meta" == true || \
+                "$build_bc250_dual_audio" == true || "$build_bc250_cec" == true || "$build_bc250_paccache_cleanup" == true || "$build_bc250_fixes" == true || "$build_bc250_ch7218_fw" == true || "$build_bc250_vcn_fw" == true || "$build_linux_cachyos_bc250_meta" == true || \
                 "$build_protonge_latest_bc250" == true || \
                 "$build_proton_cachyos_native_bc250" == true || \
                 "$build_proton_cachyos_slr_bc250" == true ]]; then
@@ -381,6 +388,7 @@ jobs:
           echo "bc250_dual_audio=$build_bc250_dual_audio" >> "$GITHUB_OUTPUT"
           echo "bc250_cec=$build_bc250_cec" >> "$GITHUB_OUTPUT"
           echo "bc250_paccache_cleanup=$build_bc250_paccache_cleanup" >> "$GITHUB_OUTPUT"
+          echo "bc250_fixes=$build_bc250_fixes" >> "$GITHUB_OUTPUT"
           echo "bc250_ch7218_fw=$build_bc250_ch7218_fw" >> "$GITHUB_OUTPUT"
           echo "bc250_vcn_fw=$build_bc250_vcn_fw" >> "$GITHUB_OUTPUT"
           echo "linux_cachyos_bc250_meta=$build_linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
@@ -398,6 +406,7 @@ jobs:
           echo "Build bc250-dual-audio:   $build_bc250_dual_audio"
           echo "Build bc250-cec:          $build_bc250_cec"
           echo "Build bc250-paccache-cleanup: $build_bc250_paccache_cleanup"
+          echo "Build bc250-fixes: $build_bc250_fixes"
           echo "Build bc250-ch7218-fw: $build_bc250_ch7218_fw"
           echo "Build bc250-vcn-fw: $build_bc250_vcn_fw"
           echo "Build linux-cachyos-bc250-meta: $build_linux_cachyos_bc250_meta"
@@ -518,6 +527,7 @@ jobs:
           BC250_DUAL_AUDIO_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_dual_audio }}
           BC250_CEC_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_cec }}
           BC250_PACCACHE_CLEANUP_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_paccache_cleanup }}
+          BC250_FIXES_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_fixes }}
           BC250_CH7218_FW_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_ch7218_fw }}
           BC250_VCN_FW_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_vcn_fw }}
           LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
@@ -540,6 +550,7 @@ jobs:
           BUILD_BC250_DUAL_AUDIO: ${{ steps.build.outputs.bc250_dual_audio }}
           BUILD_BC250_CEC: ${{ steps.build.outputs.bc250_cec }}
           BUILD_BC250_PACCACHE_CLEANUP: ${{ steps.build.outputs.bc250_paccache_cleanup }}
+          BUILD_BC250_FIXES: ${{ steps.build.outputs.bc250_fixes }}
           BUILD_BC250_CH7218_FW: ${{ steps.build.outputs.bc250_ch7218_fw }}
           BUILD_BC250_VCN_FW: ${{ steps.build.outputs.bc250_vcn_fw }}
           BUILD_LINUX_CACHYOS_BC250_META: ${{ steps.build.outputs.linux_cachyos_bc250_meta }}
@@ -589,6 +600,7 @@ jobs:
             -e BUILD_BC250_DUAL_AUDIO \
             -e BUILD_BC250_CEC \
             -e BUILD_BC250_PACCACHE_CLEANUP \
+            -e BUILD_BC250_FIXES \
             -e BUILD_BC250_CH7218_FW \
             -e BUILD_BC250_VCN_FW \
             -e BUILD_LINUX_CACHYOS_BC250_META \
@@ -606,6 +618,7 @@ jobs:
             -e BC250_DUAL_AUDIO_FINGERPRINT \
             -e BC250_CEC_FINGERPRINT \
             -e BC250_PACCACHE_CLEANUP_FINGERPRINT \
+            -e BC250_FIXES_FINGERPRINT \
             -e BC250_CH7218_FW_FINGERPRINT \
             -e BC250_VCN_FW_FINGERPRINT \
             -e LINUX_CACHYOS_BC250_META_FINGERPRINT \
@@ -669,6 +682,7 @@ jobs:
             "bc250-dual-audio:$BUILD_BC250_DUAL_AUDIO"
             "bc250-cec:$BUILD_BC250_CEC"
             "bc250-paccache-cleanup:$BUILD_BC250_PACCACHE_CLEANUP"
+            "bc250-fixes:$BUILD_BC250_FIXES"
             "bc250-ch7218-fw:$BUILD_BC250_CH7218_FW"
             "bc250-vcn-fw:$BUILD_BC250_VCN_FW"
             "kernel-stable:$BUILD_KERNEL_STABLE"
@@ -780,6 +794,7 @@ jobs:
             bc250-dual-audio-info.env
             bc250-cec-info.env
             bc250-paccache-cleanup-info.env
+            bc250-fixes-info.env
             bc250-ch7218-fw-info.env
             bc250-vcn-fw-info.env
             protonge-latest-bc250-info.env

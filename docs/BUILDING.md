@@ -76,6 +76,7 @@ mesa-git
 bc250-dual-audio
 bc250-cec
 bc250-paccache-cleanup
+bc250-fixes
 bc250-ch7218-fw
 bc250-vcn-fw
 linux-cachyos-bc250-meta
@@ -135,6 +136,7 @@ A complete fixed release contains at least:
 - `bc250-dual-audio` + its PKGBUILD, `.SRCINFO` and `bc250-dual-audio-info.env`;
 - `bc250-cec` + its PKGBUILD, `.SRCINFO` and `bc250-cec-info.env`;
 - `bc250-paccache-cleanup` + its PKGBUILD, `.SRCINFO` and `bc250-paccache-cleanup-info.env`;
+- `bc250-fixes` + its PKGBUILD, `.SRCINFO` and `bc250-fixes-info.env`;
 - `bc250-ch7218-fw` + its PKGBUILD, `.SRCINFO` and `bc250-ch7218-fw-info.env`;
 - `bc250-vcn-fw` + its PKGBUILD, `.SRCINFO` and `bc250-vcn-fw-info.env`;
 - `linux-cachyos-bc250-meta` + its PKGBUILD, `.SRCINFO` and `linux-cachyos-bc250-meta-info.env`;

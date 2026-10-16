@@ -1,0 +1,19 @@
+# Runs the small BC-250 corrections in bc250-fixes.sh (bc250-fixes).
+#
+# Triggered when this package or a package it corrects is installed or
+# upgraded, so a fix that an upgrade undoes is applied again right away. Each
+# fix only acts while its problem is still there. Currently:
+#   cachyos-handheld  "Return to Gaming Mode" shortcut points at steamosctl,
+#                     which fails on a BC-250; repointed at steamos-session-select
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = cachyos-handheld
+Target = bc250-fixes
+
+[Action]
+Description = Applying BC-250 fixes (bc250-fixes)...
+When = PostTransaction
+Exec = /usr/lib/bc250-fixes/bc250-fixes.sh

@@ -10,7 +10,7 @@
 # and update independently through their own versions as always.
 pkgname=linux-cachyos-bc250-meta
 pkgver=1
-pkgrel=5
+pkgrel=6
 pkgdesc="Metapackage for the recommended BC-250 CachyOS software set (kernel + headers + BC-250 extras)"
 arch=('any')
 url="https://github.com/MastaG/linux-cachyos-bc250"
@@ -19,6 +19,10 @@ depends=(
     'linux-cachyos-bc250'
     'linux-cachyos-bc250-headers'
     'bc250-dual-audio'
+    # Small corrections for other packages, run by a pacman hook; today it
+    # repairs the Return to Gaming Mode shortcut that cachyos-handheld 1.4.1
+    # breaks on a BC-250.
+    'bc250-fixes'
     # Enabled by its own install script. Without a CEC-capable link -- most
     # DP-to-HDMI adapters do not tunnel CEC -- it just waits for an adapter.
     'bc250-cec'

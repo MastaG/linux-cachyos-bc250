@@ -293,6 +293,7 @@ runuser -u builder -- env \
                 bc250-dual-audio)            /workspace/scripts/build-bc250-dual-audio-package.sh ;;
                 bc250-cec)                   /workspace/scripts/build-bc250-cec-package.sh ;;
                 bc250-paccache-cleanup)      /workspace/scripts/build-bc250-paccache-cleanup-package.sh ;;
+                bc250-fixes)      /workspace/scripts/build-bc250-fixes-package.sh ;;
                 bc250-ch7218-fw)             /workspace/scripts/build-bc250-ch7218-fw-package.sh ;;
                 bc250-vcn-fw)             /workspace/scripts/build-bc250-vcn-fw-package.sh ;;
                 linux-cachyos-bc250-meta)    /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh ;;

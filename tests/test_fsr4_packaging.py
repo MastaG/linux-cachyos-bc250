@@ -1272,6 +1272,71 @@ class PaccacheCleanupPackageTests(unittest.TestCase):
                 self.assertIn(needle, (ROOT / path).read_text())
 
 
+class Bc250FixesPackageTests(unittest.TestCase):
+    """bc250-fixes: a pacman hook running a script of small corrections."""
+
+    PKG = ROOT / "packages/bc250-fixes"
+    BROKEN = "Exec=/usr/bin/steamosctl switch-to-game-mode\n"
+    FIXED = "Exec=/usr/bin/steamos-session-select gamescope\n"
+
+    def run_script(self, desktop_text):
+        """Run the script against a copy of the shortcut; return the resulting text."""
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "steamos-gamemode.desktop"
+            if desktop_text is not None:
+                target.write_text(desktop_text)
+            script = (self.PKG / "bc250-fixes.sh").read_text().replace(
+                "/usr/share/applications/steamos-gamemode.desktop", str(target))
+            result = subprocess.run(["sh", "-c", script], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return target.read_text() if target.exists() else None
+
+    def test_the_hook_runs_for_cachyos_handheld_and_for_itself(self):
+        hook = (self.PKG / "bc250-fixes.hook").read_text()
+        for line in ("Operation = Install", "Operation = Upgrade", "Target = cachyos-handheld",
+                     "Target = bc250-fixes", "When = PostTransaction",
+                     "Exec = /usr/lib/bc250-fixes/bc250-fixes.sh"):
+            with self.subTest(line=line):
+                self.assertIn(line, hook)
+
+    def test_the_package_installs_the_hook_and_the_script(self):
+        pkgbuild = (self.PKG / "PKGBUILD").read_text()
+        self.assertIn("/usr/share/libalpm/hooks/bc250-fixes.hook", pkgbuild)
+        self.assertIn("/usr/lib/bc250-fixes/bc250-fixes.sh", pkgbuild)
+
+    def test_the_broken_shortcut_is_repointed(self):
+        fixed = self.run_script("[Desktop Entry]\nName=Return to Gaming Mode\n" + self.BROKEN)
+        self.assertIn(self.FIXED, fixed)
+        self.assertNotIn("steamosctl", fixed)
+        self.assertIn("Name=Return to Gaming Mode", fixed)
+
+    def test_running_it_twice_changes_nothing_more(self):
+        once = self.run_script(self.BROKEN)
+        self.assertEqual(self.run_script(once), once)
+
+    def test_a_shortcut_cachyos_fixed_themselves_is_left_alone(self):
+        other = "Exec=/usr/bin/something-else --switch\n"
+        self.assertEqual(self.run_script(other), other)
+
+    def test_a_missing_shortcut_is_not_an_error(self):
+        self.assertIsNone(self.run_script(None))
+
+    def test_the_metapackage_depends_on_it(self):
+        pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()
+        self.assertIn("'bc250-fixes'", pkgbuild)
+
+    def test_the_component_is_wired_into_ci(self):
+        for path, needle in (
+            ("scripts/ci-build.sh", "build-bc250-fixes-package.sh"),
+            ("scripts/source-fingerprint.sh", "bc250-fixes)"),
+            ("scripts/finalize-repository.sh", "bc250-fixes-info.env"),
+            (".github/workflows/build-release.yml", "BUILD_BC250_FIXES"),
+            (".github/workflows/build-release.yml", '"bc250-fixes:$BUILD_BC250_FIXES"'),
+        ):
+            with self.subTest(path=path):
+                self.assertIn(needle, (ROOT / path).read_text())
+
+
 class PackageArchiveTests(unittest.TestCase):
     """Older builds stay on the release for downgrades, outside the database."""
 

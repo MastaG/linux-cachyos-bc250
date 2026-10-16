@@ -25,6 +25,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
 | `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; retrains the link when the display powers on or switches to the board |
+| `bc250-fixes` | Small corrections for other packages, applied by a pacman hook (currently the broken Return to Gaming Mode shortcut from `cachyos-handheld`) |
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `bc250-ch7218-fw` | Optional: UGREEN's updater and five firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
 | `bc250-vcn-fw` | Parked: the firmware file for the BC-250 VCN video-block experiment. No shipped kernel uses it (see [Hardware video (VCN)](#hardware-video-vcn-parked)) |
@@ -130,7 +131,7 @@ The stable kernel is the recommended default:
 sudo pacman -Syu linux-cachyos-bc250 linux-cachyos-bc250-headers
 ```
 
-Or install [`linux-cachyos-bc250-meta`](#linux-cachyos-bc250-meta) instead, which pulls in the stable kernel, its headers, and the other BC-250 extras (currently `bc250-dual-audio`, `bc250-cec`, and all three FSR4 Proton packages) together, and picks up any new ones added to it in the future on a normal `pacman -Syu`.
+Or install [`linux-cachyos-bc250-meta`](#linux-cachyos-bc250-meta) instead, which pulls in the stable kernel, its headers, and the other BC-250 extras (currently `bc250-dual-audio`, `bc250-cec`, `bc250-fixes`, and all three FSR4 Proton packages) together, and picks up any new ones added to it in the future on a normal `pacman -Syu`.
 
 Optional RC/testing kernel:
 
@@ -1107,6 +1108,7 @@ A pure metapackage — it installs no files of its own, it just depends on the r
 - `linux-cachyos-bc250-headers`
 - `bc250-dual-audio`
 - `bc250-cec`
+- `bc250-fixes`
 - `proton-cachyos-native-bc250`
 - `proton-cachyos-slr-bc250`
 - `protonge-latest-bc250`
