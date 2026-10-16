@@ -1304,6 +1304,11 @@ class Bc250FixesPackageTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertIn(line, hook)
 
+    def test_the_package_is_standalone(self):
+        # It is pulled in by the metapackage, but pulls in nothing itself.
+        pkgbuild = (self.PKG / "PKGBUILD").read_text()
+        self.assertIn("\ndepends=()\n", pkgbuild)
+
     def test_the_package_installs_the_hook_and_the_script(self):
         pkgbuild = (self.PKG / "PKGBUILD").read_text()
         self.assertIn("/usr/share/libalpm/hooks/bc250-fixes.hook", pkgbuild)
