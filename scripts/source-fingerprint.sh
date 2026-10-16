@@ -172,7 +172,8 @@ case "$COMPONENT" in
             exit 1
         }
         {
-            hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-fixes.hook" "$pkg_dir/bc250-fixes.sh"
+            hash_files "$pkg_dir/PKGBUILD" "$pkg_dir/bc250-fixes.hook" "$pkg_dir/bc250-fixes.sh" \
+                "$pkg_dir/bc250-fixes.tmpfiles" "$pkg_dir/bc250-fixes.install"
             hash_files "$ROOT_DIR/scripts/build-bc250-fixes-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'

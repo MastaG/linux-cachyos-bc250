@@ -12,7 +12,7 @@ OUT_DIR="${ROOT_DIR}/out/repo"
 # build-linux-cachyos-bc250-meta-package.sh and build-bc250-dual-audio-package.sh.
 rm -rf -- "$BUILD_DIR"
 mkdir -p -- "$BUILD_DIR"
-cp -- "$PKG_DIR/PKGBUILD" "$PKG_DIR/bc250-fixes.sh" "$PKG_DIR/bc250-fixes.hook" "$BUILD_DIR/"
+cp -- "$PKG_DIR/PKGBUILD" "$PKG_DIR/bc250-fixes.sh" "$PKG_DIR/bc250-fixes.hook" "$PKG_DIR/bc250-fixes.tmpfiles" "$PKG_DIR/bc250-fixes.install" "$BUILD_DIR/"
 
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/scripts/repo-package-helpers.sh"

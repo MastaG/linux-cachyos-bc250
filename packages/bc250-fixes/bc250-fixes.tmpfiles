@@ -1,0 +1,8 @@
+# Steam's newer client builds the path of a tool installed under
+# /usr/share/steam/compatibilitytools.d as /run/host/usr/share/steam/... (the
+# path it has inside its container) but starts the game on the host, where
+# /run/host does not exist. The launch then fails at once with "No such file or
+# directory" and no log. Pointing /run/host at / makes that path valid on the
+# host. Only created when /run/host is absent, so a real container mount is left
+# alone. Remove this file once Steam builds the path correctly.
+L /run/host - - - - /

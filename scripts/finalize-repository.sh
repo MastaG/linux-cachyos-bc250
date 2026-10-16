@@ -555,6 +555,11 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   \`cachyos-handheld\` 1.4.1 sends to \`steamosctl\` (that does nothing on a
   BC-250), at \`steamos-session-select\`. Each fix only acts while its problem
   is still there.
+- It also links \`/run/host\` to \`/\` (a tmpfiles rule, only when \`/run/host\`
+  is absent). The Steam beta client builds the path of tools installed under
+  \`/usr/share/steam/compatibilitytools.d\` as \`/run/host/usr/share/steam/...\`
+  but starts the game on the host, so those tools (the BC-250 Proton packages
+  included) failed to launch with no log.
 - Part of \`linux-cachyos-bc250-meta\`.
 
 ## BC-250 pacman cache cleanup (opt-in)

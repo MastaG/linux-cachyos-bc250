@@ -1,0 +1,13 @@
+# Create /run/host now instead of waiting for the next boot.
+apply_tmpfiles() {
+    command -v systemd-tmpfiles >/dev/null 2>&1 \
+        && systemd-tmpfiles --create /usr/lib/tmpfiles.d/bc250-fixes.conf >/dev/null 2>&1 || true
+}
+
+post_install() {
+    apply_tmpfiles
+}
+
+post_upgrade() {
+    apply_tmpfiles
+}

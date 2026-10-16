@@ -8,15 +8,18 @@
 # systems pick it up on the next update.
 pkgname=bc250-fixes
 pkgver=1
-pkgrel=1
-pkgdesc="Small BC-250 corrections for other packages, applied by a pacman hook (Return to Gaming Mode shortcut)"
+pkgrel=2
+pkgdesc="Small BC-250 corrections for other packages, applied by a pacman hook (Return to Gaming Mode shortcut, Steam beta tool path)"
 arch=('any')
 url="https://github.com/MastaG/linux-cachyos-bc250"
 license=('GPL-2.0-only')
 depends=()
+install=bc250-fixes.install
 source=('bc250-fixes.sh'
-        'bc250-fixes.hook')
+        'bc250-fixes.hook'
+        'bc250-fixes.tmpfiles')
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP')
 
 package() {
@@ -24,4 +27,6 @@ package() {
         "$pkgdir/usr/lib/bc250-fixes/bc250-fixes.sh"
     install -Dm644 "$srcdir/bc250-fixes.hook" \
         "$pkgdir/usr/share/libalpm/hooks/bc250-fixes.hook"
+    install -Dm644 "$srcdir/bc250-fixes.tmpfiles" \
+        "$pkgdir/usr/lib/tmpfiles.d/bc250-fixes.conf"
 }

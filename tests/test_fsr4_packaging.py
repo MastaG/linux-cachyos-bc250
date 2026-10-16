@@ -1334,6 +1334,23 @@ class Bc250FixesPackageTests(unittest.TestCase):
     def test_a_missing_shortcut_is_not_an_error(self):
         self.assertIsNone(self.run_script(None))
 
+    def test_run_host_is_linked_to_root_only_when_absent(self):
+        # "L" creates the symlink if /run/host is missing and leaves an existing
+        # (container) mount alone.
+        rule = [l for l in (self.PKG / "bc250-fixes.tmpfiles").read_text().splitlines()
+                if l and not l.startswith("#")]
+        self.assertEqual(rule, ["L /run/host - - - - /"])
+        pkgbuild = (self.PKG / "PKGBUILD").read_text()
+        self.assertIn("/usr/lib/tmpfiles.d/bc250-fixes.conf", pkgbuild)
+        self.assertIn("install=bc250-fixes.install", pkgbuild)
+        self.assertIn("systemd-tmpfiles --create", (self.PKG / "bc250-fixes.install").read_text())
+
+    def test_the_build_script_copies_every_source_file(self):
+        build = (ROOT / "scripts/build-bc250-fixes-package.sh").read_text()
+        for name in ("bc250-fixes.sh", "bc250-fixes.hook", "bc250-fixes.tmpfiles", "bc250-fixes.install"):
+            with self.subTest(name=name):
+                self.assertIn(name, build)
+
     def test_the_metapackage_depends_on_it(self):
         pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()
         self.assertIn("'bc250-fixes'", pkgbuild)
