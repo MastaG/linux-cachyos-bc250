@@ -10,9 +10,12 @@
 # nothing. steamos-session-select (also from cachyos-handheld) does the same
 # switch and works. Rewrite only that exact command. The file is not in the
 # package's backup list, so pacman overwrites it silently (no .pacnew) on the
-# next cachyos-handheld upgrade, and this hook then runs again.
+# next cachyos-handheld upgrade, and this hook then runs again. Only done when
+# the replacement command is really installed, so a shortcut is never swapped
+# for one that cannot work either.
 F=/usr/share/applications/steamos-gamemode.desktop
-if [ -f "$F" ] && grep -q '^Exec=/usr/bin/steamosctl switch-to-game-mode$' "$F"; then
+SELECT=/usr/bin/steamos-session-select
+if [ -x "$SELECT" ] && [ -f "$F" ] && grep -q '^Exec=/usr/bin/steamosctl switch-to-game-mode$' "$F"; then
     sed -i 's|^Exec=/usr/bin/steamosctl switch-to-game-mode$|Exec=/usr/bin/steamos-session-select gamescope|' "$F"
 fi
 

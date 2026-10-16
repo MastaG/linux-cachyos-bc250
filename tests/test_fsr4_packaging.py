@@ -1279,14 +1279,19 @@ class Bc250FixesPackageTests(unittest.TestCase):
     BROKEN = "Exec=/usr/bin/steamosctl switch-to-game-mode\n"
     FIXED = "Exec=/usr/bin/steamos-session-select gamescope\n"
 
-    def run_script(self, desktop_text):
+    def run_script(self, desktop_text, select_installed=True):
         """Run the script against a copy of the shortcut; return the resulting text."""
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "steamos-gamemode.desktop"
             if desktop_text is not None:
                 target.write_text(desktop_text)
+            select = Path(tmp) / "steamos-session-select"
+            if select_installed:
+                select.write_text("#!/bin/sh\n")
+                select.chmod(0o755)
             script = (self.PKG / "bc250-fixes.sh").read_text().replace(
-                "/usr/share/applications/steamos-gamemode.desktop", str(target))
+                "/usr/share/applications/steamos-gamemode.desktop", str(target)).replace(
+                "SELECT=/usr/bin/steamos-session-select", f"SELECT={select}")
             result = subprocess.run(["sh", "-c", script], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             return target.read_text() if target.exists() else None
@@ -1317,6 +1322,9 @@ class Bc250FixesPackageTests(unittest.TestCase):
     def test_a_shortcut_cachyos_fixed_themselves_is_left_alone(self):
         other = "Exec=/usr/bin/something-else --switch\n"
         self.assertEqual(self.run_script(other), other)
+
+    def test_nothing_is_changed_when_the_replacement_command_is_missing(self):
+        self.assertEqual(self.run_script(self.BROKEN, select_installed=False), self.BROKEN)
 
     def test_a_missing_shortcut_is_not_an_error(self):
         self.assertIsNone(self.run_script(None))
