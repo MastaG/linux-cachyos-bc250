@@ -328,8 +328,12 @@ fi
             --container-engine=none \
             --proton-sdk-image='' \
             --build-name='$NAME'
+        # wine-mono comes from WineHQ's own server, not GitHub's release
+        # download, which answered 502 and cost a three-hour build (run
+        # 39260454898). Same file: the SHA256 matches the release asset.
         make CONTAINER=1 -j'$JOBS' ENABLE_CCACHE=1 \
             BASE_SOURCE_DATE_EPOCH='$EPOCH' \
+            'MONO_TARBALL_URL=https://dl.winehq.org/wine/wine-mono/\$(WINEMONO_VER)/\$(WINEMONO_TARBALL)' \
             dist
     "
 

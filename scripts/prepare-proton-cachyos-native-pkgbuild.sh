@@ -189,6 +189,10 @@ sub("    for rustlib in gst-plugins-rs; do\n",
     "        grep -q '^UNZIP_BASE_URL := https://snapshot.debian.org/' protonfixes/Makefile || return 1\n"
     "    fi\n"
     "\n"
+    "    # BC-250: fetch wine-mono from WineHQ's own server; GitHub's release\n"
+    "    # download answered 502 mid-build. Identical file, same SHA256.\n"
+    "    sed -i 's|^MONO_TARBALL_URL := https://github.com/madewokherd/wine-mono/releases/download/wine-mono-\\$(WINEMONO_VER)/|MONO_TARBALL_URL := https://dl.winehq.org/wine/wine-mono/\\$(WINEMONO_VER)/|' Makefile.in\n"
+    "\n"
     "    for rustlib in gst-plugins-rs; do\n",
     "the rustlib loop at the end of prepare() (unzip URL)")
 
