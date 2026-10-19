@@ -647,6 +647,12 @@ jobs:
           # workspace belongs to `builder` inside the container and to the
           # runner outside it, and the two cannot both write there: handing it
           # back and forth broke the metapackage one run and this step the next.
+          # GitHub drops the middle of a log this long, and the error that ends a
+          # build is exactly the part that goes missing. Every build's complete
+          # output is therefore also kept in a file and uploaded as an artifact.
+          build_logs="${RUNNER_TEMP}/bc250-logs"
+          mkdir -p "$build_logs"
+
           if [[ "$BUILD_PROTON_CACHYOS_SLR_BC250" == true ]]; then
             echo "::group::compile the Steam Linux Runtime Proton tree"
             eval "$(./scripts/resolve-proton-cachyos-slr.sh)"
@@ -660,7 +666,8 @@ jobs:
                  --tag "$SLR_TAG" \
                  --name proton-cachyos-slr-bc250 \
                  --src "${slr_work}/src" \
-                 --out "$slr_tarball"; then
+                 --out "$slr_tarball" > >(tee "$build_logs/proton-cachyos-slr-bc250-compile.log") 2>&1; then
+              wait || true
               docker exec "$container" install -d -o builder -g builder /workspace/out/dist
               docker cp "$slr_tarball" "$container:/workspace/out/dist/"
               docker exec "$container" chown -R builder:builder /workspace/out/dist
@@ -706,7 +713,9 @@ jobs:
             echo "::group::build $name"
             pin=()
             [[ "$BC250_BUILD_CPUS" == all ]] || pin=(taskset -c "$BC250_BUILD_CPUS")
-            if docker exec "$container" "${pin[@]}" bash /workspace/scripts/ci-build.sh component "$name"; then
+            if docker exec "$container" "${pin[@]}" bash /workspace/scripts/ci-build.sh component "$name" \
+                 > >(tee "$build_logs/$name.log") 2>&1; then
+              wait || true
               echo "==> component $name: built"
               echo "::endgroup::"
               # Publish immediately. Fail-soft: the final publish is still
@@ -732,6 +741,15 @@ jobs:
             echo "==> failed components (previous packages retained): $failed"
             exit 1
           fi
+
+      - name: Keep the full build logs
+        if: always() && steps.build.outputs.any == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bc250-build-logs-${{ github.run_number }}
+          path: ${{ runner.temp }}/bc250-logs/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Restore workspace ownership
         # Always runs, even if the build above failed, so a container-root-owned
