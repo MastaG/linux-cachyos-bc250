@@ -673,8 +673,8 @@ sudo pacman -S protonge-latest-bc250
 
 All three can be installed at once — `linux-cachyos-bc250-meta` pulls in all of
 them — and all sit alongside the distro's own Proton packages. Restart Steam,
-then pick **proton-cachyos-… (native, BC-250 FSR4)**, **proton-cachyos-…
-(BC-250 FSR4)** or **GE-Proton <version> (BC-250 FSR4)** under a game's Properties →
+then pick **proton-cachyos-… (native, BC-250)**, **proton-cachyos-…
+(BC-250)** or **GE-Proton <version> (BC-250)** under a game's Properties →
 Compatibility.
 
 **Anti-cheat, and why it needs saying.** These packages inject DLLs into the

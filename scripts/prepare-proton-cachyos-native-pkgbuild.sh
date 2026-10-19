@@ -159,7 +159,7 @@ sub('    local march="nocona"\n    local mtune="core-avx2"\n',
     "the march/mtune pair")
 
 sub('-e "s|##DISPLAY_NAME##|proton-cachyos-${_srctag} (native)|" \\\n',
-    '-e "s|##DISPLAY_NAME##|proton-cachyos-${_srctag} (native, BC-250 FSR4)|" \\\n',
+    '-e "s|##DISPLAY_NAME##|proton-cachyos-${_srctag} (native, BC-250)|" \\\n',
     "the display-name substitution")
 
 # Teach protonfixes to read our pinned manifest. The Makefile globs

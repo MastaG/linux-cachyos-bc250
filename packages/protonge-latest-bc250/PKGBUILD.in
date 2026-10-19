@@ -257,7 +257,7 @@ package() {
     "$pkgname"
     {
       "install_path" "."
-      "display_name" "GE-Proton ${_getag#GE-Proton} (BC-250 FSR4)"
+      "display_name" "GE-Proton ${_getag#GE-Proton} (BC-250)"
       "from_oslist"  "windows"
       "to_oslist"    "linux"
     }

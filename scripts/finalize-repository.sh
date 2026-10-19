@@ -416,7 +416,7 @@ if [[ "$proton_slr_present" == true ]]; then
   \`${proton_slr_optiscaler}\`, OptiPatcher, fakenvapi \`${proton_slr_fakenvapi}\`
   and the shared preset, all verified by SHA256 before they reach a prefix.
 - Installs **alongside** the official \`proton-cachyos-slr\`, not over it. Both
-  appear in Steam; this one as **proton-cachyos-… (BC-250 FSR4)**.
+  appear in Steam; this one as **proton-cachyos-… (BC-250)**.
 - Same launch options as the other two. Note that FSR4 and OptiScaler disable
   themselves when a game is detected as using EasyAntiCheat or BattlEye —
   injecting into those games risks a ban. That detection is a safety net rather
@@ -631,7 +631,7 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   that would otherwise require NVIDIA Reflex. It is tracked live rather than
   pinned, so a new upstream release rebuilds this package.
 - Installs alongside the distro's own Proton packages rather than replacing them.
-  It appears in Steam as **GE-Proton ${protonge_ge_tag#GE-Proton} (BC-250 FSR4)**;
+  It appears in Steam as **GE-Proton ${protonge_ge_tag#GE-Proton} (BC-250)**;
   pick it per game under Properties -> Compatibility, or as the global default.
 - Needs the \`vulkan-radeon\` package from this repository: the FSR4 support the
   provider calls into lives in our patched RADV, not in stock Mesa.
@@ -684,7 +684,7 @@ sudo pacman -S protonge-latest-bc250
 - Installs **alongside** the official \`proton-cachyos-native\`, not over it:
   \`provides\` and \`replaces\` are cleared, and every installed path plus the
   Steam-internal tool name is derived from the package name. Both appear in
-  Steam; this one as **proton-cachyos-… (native, BC-250 FSR4)**.
+  Steam; this one as **proton-cachyos-… (native, BC-250)**.
 - Needs the \`vulkan-radeon\` package from this repository.
 - Same launch options as the GE package: \`PROTON_FSR4_UPGRADE=0 %command%\` to
   turn FSR4 off for one game, \`BC250_FSR4_DEBUG=1 %command%\` for the watermark
