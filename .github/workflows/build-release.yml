@@ -659,12 +659,8 @@ jobs:
             slr_work="${RUNNER_TEMP}/bc250-proton"
             slr_tarball="${slr_work}/proton-cachyos-slr-bc250-${SLR_VERSION}-dist.tar.xz"
             mkdir -p "$slr_work"
-            # Six jobs, whatever the memory cap allows: at 13 the libpcap
-            # autoreconf and its compile overlap and the build dies with a shell
-            # syntax error in grammar.h (run 39268136102). Six built cleanly.
             if BC250_CONTAINER_ENGINE=docker \
                  BC250_CONTAINER_MEMORY="$BC250_BUILD_MEMORY" \
-                 BC250_PROTON_JOBS="${BC250_PROTON_JOBS:-6}" \
                  ./scripts/build-proton-runtime-dist.sh \
                  --repo https://github.com/CachyOS/proton-cachyos.git \
                  --tag "$SLR_TAG" \

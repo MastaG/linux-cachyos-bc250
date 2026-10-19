@@ -292,6 +292,18 @@ if [[ "$CCACHE_VOLUME" == */* ]]; then
     CCACHE_VOLUME="$(cd -- "$CCACHE_VOLUME" && pwd)"
 fi
 
+# wine-mono comes from WineHQ's own server, not GitHub's release download, which
+# answered 502 and cost a three-hour build (run 39260454898). Same file: the
+# SHA256 matches the release asset. The Makefile line is edited rather than the
+# variable overridden on make's command line: libpcap's Makefile hands
+# $(MAKEFLAGS) to a sub-make through the shell, and a "$(WINEMONO_VER)" in it is
+# run as a command substitution ("Syntax error: ( unexpected", run 39282820983).
+# Only while the line is still the GitHub one; a reformatted line is left alone.
+if grep -q '^MONO_TARBALL_URL := https://github.com/madewokherd/wine-mono/releases/download/wine-mono-\$(WINEMONO_VER)/' "$SRC/Makefile.in"; then
+    sed -i 's|^MONO_TARBALL_URL := https://github.com/madewokherd/wine-mono/releases/download/wine-mono-\$(WINEMONO_VER)/|MONO_TARBALL_URL := https://dl.winehq.org/wine/wine-mono/\$(WINEMONO_VER)/|' "$SRC/Makefile.in"
+    grep -q '^MONO_TARBALL_URL := https://dl.winehq.org/' "$SRC/Makefile.in"
+fi
+
 "${ENGINE[@]}" run --rm \
     "${userns[@]}" \
     "${memory[@]}" \
@@ -328,12 +340,8 @@ fi
             --container-engine=none \
             --proton-sdk-image='' \
             --build-name='$NAME'
-        # wine-mono comes from WineHQ's own server, not GitHub's release
-        # download, which answered 502 and cost a three-hour build (run
-        # 39260454898). Same file: the SHA256 matches the release asset.
         make CONTAINER=1 -j'$JOBS' ENABLE_CCACHE=1 \
             BASE_SOURCE_DATE_EPOCH='$EPOCH' \
-            'MONO_TARBALL_URL=https://dl.winehq.org/wine/wine-mono/\$(WINEMONO_VER)/\$(WINEMONO_TARBALL)' \
             dist
     "
 
