@@ -292,16 +292,18 @@ if [[ "$CCACHE_VOLUME" == */* ]]; then
     CCACHE_VOLUME="$(cd -- "$CCACHE_VOLUME" && pwd)"
 fi
 
-# wine-mono comes from WineHQ's own server, not GitHub's release download, which
-# answered 502 and cost a three-hour build (run 39260454898). Same file: the
-# SHA256 matches the release asset. The Makefile line is edited rather than the
-# variable overridden on make's command line: libpcap's Makefile hands
-# $(MAKEFLAGS) to a sub-make through the shell, and a "$(WINEMONO_VER)" in it is
-# run as a command substitution ("Syntax error: ( unexpected", run 39282820983).
-# Only while the line is still the GitHub one; a reformatted line is left alone.
-if grep -q '^MONO_TARBALL_URL := https://github.com/madewokherd/wine-mono/releases/download/wine-mono-\$(WINEMONO_VER)/' "$SRC/Makefile.in"; then
-    sed -i 's|^MONO_TARBALL_URL := https://github.com/madewokherd/wine-mono/releases/download/wine-mono-\$(WINEMONO_VER)/|MONO_TARBALL_URL := https://dl.winehq.org/wine/wine-mono/\$(WINEMONO_VER)/|' "$SRC/Makefile.in"
-    grep -q '^MONO_TARBALL_URL := https://dl.winehq.org/' "$SRC/Makefile.in"
+# wine-mono: try WineHQ's own server first, GitHub's release download second,
+# then test the archive is whole. GitHub alone answered 502 and cost a
+# three-hour build (run 39260454898); the two files are identical (SHA256 match).
+# The recipe line in Makefile.in is edited rather than MONO_TARBALL_URL
+# overridden on make's command line: libpcap's Makefile hands $(MAKEFLAGS) to a
+# sub-make through the shell, and a "$(WINEMONO_VER)" in it is run as a command
+# substitution ("Syntax error: ( unexpected", run 39282820983). Not tied to a
+# version, and a reformatted recipe is left alone.
+mono_old='^[[:space:]]wget --no-use-server-timestamps -O \$@ \$(MONO_TARBALL_URL) || (rm \$@; false)$'
+if grep -q "$mono_old" "$SRC/Makefile.in"; then
+    sed -i 's#'"$mono_old"'#\t(wget --no-use-server-timestamps -O $@ https://dl.winehq.org/wine/wine-mono/$(WINEMONO_VER)/$(WINEMONO_TARBALL) || wget --no-use-server-timestamps -O $@ $(MONO_TARBALL_URL)) \&\& xz -t $@ || (rm $@; false)#' "$SRC/Makefile.in"
+    grep -q 'dl.winehq.org/wine/wine-mono' "$SRC/Makefile.in"
 fi
 
 "${ENGINE[@]}" run --rm \

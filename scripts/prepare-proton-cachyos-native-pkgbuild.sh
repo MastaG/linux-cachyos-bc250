@@ -189,9 +189,15 @@ sub("    for rustlib in gst-plugins-rs; do\n",
     "        grep -q '^UNZIP_BASE_URL := https://snapshot.debian.org/' protonfixes/Makefile || return 1\n"
     "    fi\n"
     "\n"
-    "    # BC-250: fetch wine-mono from WineHQ's own server; GitHub's release\n"
-    "    # download answered 502 mid-build. Identical file, same SHA256.\n"
-    "    sed -i 's|^MONO_TARBALL_URL := https://github.com/madewokherd/wine-mono/releases/download/wine-mono-\\$(WINEMONO_VER)/|MONO_TARBALL_URL := https://dl.winehq.org/wine/wine-mono/\\$(WINEMONO_VER)/|' Makefile.in\n"
+    "    # BC-250: wine-mono from WineHQ's own server first, GitHub's release download\n"
+    "    # second, then test the archive is whole. GitHub alone answered 502 mid-build.\n"
+    "    # Same file on both. The recipe in Makefile.in is edited, never the variable\n"
+    "    # overridden on make's command line (libpcap re-runs $(MAKEFLAGS) in a shell).\n"
+    "    mono_old='^[[:space:]]wget --no-use-server-timestamps -O \\$@ \\$(MONO_TARBALL_URL) || (rm \\$@; false)$'\n"
+    "    if grep -q \"$mono_old\" Makefile.in; then\n"
+    "        sed -i 's#'\"$mono_old\"'#\\t(wget --no-use-server-timestamps -O $@ https://dl.winehq.org/wine/wine-mono/$(WINEMONO_VER)/$(WINEMONO_TARBALL) || wget --no-use-server-timestamps -O $@ $(MONO_TARBALL_URL)) \\&\\& xz -t $@ || (rm $@; false)#' Makefile.in\n"
+    "        grep -q 'dl.winehq.org/wine/wine-mono' Makefile.in || return 1\n"
+    "    fi\n"
     "\n"
     "    for rustlib in gst-plugins-rs; do\n",
     "the rustlib loop at the end of prepare() (unzip URL)")
@@ -276,6 +282,11 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     "    fi\n"
     "    sed -i 's|\"commandline\" \"/proton |\"commandline\" \"/bc250-fsr4-proton |' \\\n"
     "        toolmanifest.vdf\n"
+    "\n"
+    "    # CachyOS 11.0-20261014 added \"unlisted\" to the native manifest, which keeps the\n"
+    "    # tool out of Steam's compatibility dropdown. It has to be selectable.\n"
+    "    sed -i '/\"unlisted\"/d' toolmanifest.vdf\n"
+    "    if grep -q unlisted toolmanifest.vdf; then return 1; fi\n"
     "}\n",
     "the end of build()")
 

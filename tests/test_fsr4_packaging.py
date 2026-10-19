@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -372,6 +373,105 @@ class PackageGateTests(unittest.TestCase):
         )
         with self.assertRaises(subprocess.CalledProcessError):
             driver_check.verify_packages([package], {"vulkan-radeon"})
+
+
+class NativeToolManifestAndMonoTests(unittest.TestCase):
+    """The wine-mono download fallback (both Proton builds) and the native tool's
+    visibility in Steam, each lifted verbatim out of the shipped script."""
+
+    RECIPE = (
+        "$(SRC)/contrib/$(WINEMONO_TARBALL):\n"
+        "\tmkdir -p $(dir $@)\n"
+        "\twget --no-use-server-timestamps -O $@ $(MONO_TARBALL_URL) || (rm $@; false)\n"
+    )
+
+    def native_pkgbuild(self):
+        generated = tempfile.TemporaryDirectory(prefix="fsr4 native pkgbuild ")
+        self.addCleanup(generated.cleanup)
+        subprocess.run(
+            ["bash", str(ROOT / "scripts/prepare-proton-cachyos-native-pkgbuild.sh")],
+            env=dict(
+                os.environ,
+                PROTON_CACHYOS_NATIVE_BUILD_DIR=str(Path(generated.name) / "native"),
+                BC250_SKIP_MESA_PREFETCH="1",
+            ),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return (Path(generated.name) / "native/PKGBUILD").read_text()
+
+    @staticmethod
+    def mono_block(text):
+        start = text.rindex("\n", 0, text.index("mono_old=")) + 1
+        end = re.compile(r"^[ ]*fi$", re.M).search(text, start).end()
+        # The PKGBUILD indents it inside prepare(); the script does not.
+        return textwrap.dedent(text[start:end]) + "\n"
+
+    def run_block(self, block, makefile, name="Makefile.in"):
+        work = tempfile.TemporaryDirectory(prefix="fsr4 mono ")
+        self.addCleanup(work.cleanup)
+        (Path(work.name) / name).write_text(makefile)
+        result = subprocess.run(
+            ["bash", "-euo", "pipefail", "-c", 'SRC="$PWD"\n' + block],
+            cwd=work.name,
+            capture_output=True,
+            text=True,
+        )
+        return result, (Path(work.name) / name).read_text()
+
+    def check_mono(self, block):
+        result, edited = self.run_block(block, self.RECIPE)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # WineHQ first, GitHub's own URL second, then the archive must be whole.
+        self.assertIn("https://dl.winehq.org/wine/wine-mono/$(WINEMONO_VER)/$(WINEMONO_TARBALL)", edited)
+        self.assertLess(edited.index("dl.winehq.org"), edited.index("$(MONO_TARBALL_URL))"))
+        self.assertIn("xz -t $@ || (rm $@; false)", edited)
+        # Nothing here is tied to a wine-mono version.
+        self.assertNotRegex(edited, r"wine-mono/\d")
+        # A second pass finds nothing to do and changes nothing.
+        again, twice = self.run_block(block, edited)
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertEqual(twice, edited)
+        # A recipe CachyOS has reformatted is left exactly as it was.
+        other = self.RECIPE.replace("-O $@", "-qO $@")
+        untouched, same = self.run_block(block, other)
+        self.assertEqual(untouched.returncode, 0, untouched.stderr)
+        self.assertEqual(same, other)
+
+    def test_native_package_gets_the_wine_mono_fallback(self):
+        self.check_mono(self.mono_block(self.native_pkgbuild()))
+
+    def test_slr_build_gets_the_wine_mono_fallback(self):
+        self.check_mono(self.mono_block(
+            (ROOT / "scripts/build-proton-runtime-dist.sh").read_text()
+        ))
+
+    def test_wine_mono_is_never_overridden_on_make_s_command_line(self):
+        # libpcap's Makefile re-runs $(MAKEFLAGS) through the shell, so a
+        # variable holding "$(...)" given on the command line is executed
+        # (run 39282820983: "Syntax error: ( unexpected" in grammar.h).
+        script = (ROOT / "scripts/build-proton-runtime-dist.sh").read_text()
+        self.assertNotRegex(script, r"make[^\n]*MONO_TARBALL_URL=")
+        self.assertNotRegex(script, r"'MONO_TARBALL_URL=")
+
+    def test_native_manifest_is_not_left_unlisted(self):
+        text = self.native_pkgbuild()
+        start = text.index("sed -i '/\"unlisted\"/d' toolmanifest.vdf")
+        end = text.index("return 1; fi\n", start) + len("return 1; fi\n")
+        block = "\n".join(line.strip() for line in text[start:end].splitlines())
+        manifest = (
+            '"manifest"\n{\n  "version" "2"\n'
+            '  "commandline" "/bc250-fsr4-proton %verb%"\n'
+            '  "unlisted" "1"\n  "use_sessions" "1"\n}\n'
+        )
+        result, edited = self.run_block(
+            "f() {\n" + block + "\n}\nf", manifest, name="toolmanifest.vdf"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("unlisted", edited)
+        self.assertIn('"commandline" "/bc250-fsr4-proton %verb%"', edited)
+        self.assertIn('"use_sessions" "1"', edited)
 
 
 if __name__ == "__main__":
