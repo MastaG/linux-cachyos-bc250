@@ -1,5 +1,7 @@
 # FSR4 package integration review — 2026-09-08
 
+*A dated record. Everything below describes the packages as they were on 2026-09-08: the hashes, the 11 tests and the probe results are from that day. The suite has since grown (194 tests on 2026-10-19), and the default upscaler is now HelixSR Scaler, not what these probes loaded.*
+
 This review compared source `738417af25c6e12cb141989ed262966459408f4c` and its
 published packages with the BC250 FSR4 RC6 implementation at
 `ff195cfdf7796815533ee4e408b98406e3974ed4`.

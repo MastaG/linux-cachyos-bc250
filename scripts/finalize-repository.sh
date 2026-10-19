@@ -685,6 +685,9 @@ sudo pacman -S protonge-latest-bc250
   \`provides\` and \`replaces\` are cleared, and every installed path plus the
   Steam-internal tool name is derived from the package name. Both appear in
   Steam; this one as **proton-cachyos-… (native, BC-250)**.
+- **Fixed: it is listed in Steam again.** CachyOS's 11.0-20261014 native build marks
+  the tool \`unlisted\`, which hides it from Steam's compatibility list; this package
+  removes that line. Per-game choices are keyed on the tool name, which did not change.
 - Needs the \`vulkan-radeon\` package from this repository.
 - Same launch options as the GE package: \`PROTON_FSR4_UPGRADE=0 %command%\` to
   turn FSR4 off for one game, \`BC250_FSR4_DEBUG=1 %command%\` for the watermark

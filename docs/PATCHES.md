@@ -33,7 +33,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twenty BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same twenty patches plus its own three series-specific carries, twenty-three in total:
+The stable and BORE kernels carry these twenty BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same twenty patches plus its own two series-specific carries, twenty-two in total:
 
 ```text
 0001-bc250-8core-metrics.patch
@@ -144,7 +144,7 @@ There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That
 
 This patch set contains:
 
-> The telemetry/activity and tunable activity/metrics cache logic is consolidated in `bc250-8core-telemetry-gpu-activity.patch`.  
+> The telemetry logic is split across `0001`-`0004` (8-core metrics layout, GPU load, full telemetry, activity/metrics caches).  
 > Both cache windows default to 25 ms and can still be changed at runtime or disabled with `0`.
 
 - automatic 6-core / 8-core Cyan Skillfish SMU metrics layout detection — **8-core boards must run the patched SMU firmware; see the warning in [BC-250 APU telemetry](#bc-250-apu-telemetry)**;
@@ -186,8 +186,8 @@ higher-bandwidth path than anything this patch touched.
 
 ## 4K120 4:4:4 through an HDMI 2.1 PCON
 
-Two patches, `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` — `0009`
-and `0010` in the stable/BORE set and in the RC set.
+Two patches, `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` — `0012`
+and `0013` in both sets.
 Called "the PCON patch" and "the DSC patch" below. Together they make 3840x2160@120Hz at full 4:4:4
 chroma reachable on a BC-250 through a DisplayPort 1.4 → HDMI 2.1 FRL protocol
 converter. **Both are on by default**, behind one parameter that exists as an
@@ -335,7 +335,7 @@ back to what fits — 4K120 4:2:0 or 4K60 4:4:4 — rather than failing visibly.
 
 ### Adapters that misreport themselves: the CH7218 quirk
 
-`ch7218-pcon-quirk.patch` (`0012` stable, `0013` RC). **Opt-in, default off**,
+`ch7218-pcon-quirk.patch` (`0015` in both sets). **Opt-in, default off**,
 behind `amdgpu.bc250_ch7218_quirk=1`.
 
 Some DP→HDMI 2.1 adapters built on a **Chrontel CH7218** ship firmware that
@@ -441,8 +441,8 @@ afterwards shows the shape the quirk's restore heuristic was written for —
 `0x060` = `00 21 00 07 3b 04 01 c0 …`, a fully populated DSC 1.2 decoder block
 with only `DSC_SUPPORT` clear.
 
-That is why the restore is **`ch7218-dsc-restore.patch` (`0013` stable, `0014`
-RC), always on when a CH7218 is present** — no parameter, nothing to enable.
+That is why the restore is **`ch7218-dsc-restore.patch` (`0016` in both
+sets), always on when a CH7218 is present** — no parameter, nothing to enable.
 It was part of the opt-in quirk until 2026-09-23 and was split out because the
 two do very different things. The identity quirk *overrides* what the adapter
 says about its downstream port, which a healthy adapter reports correctly, so
@@ -468,7 +468,7 @@ userspace matter rather than something that belongs in this kernel.
 
 ### Adapters that hide their DSC decoder: the force-DSC experiment
 
-`pcon-force-dsc.patch` (`0014` stable, `0016` RC). **Experimental, opt-in,
+`pcon-force-dsc.patch` (`0017` stable, `0018` RC). **Experimental, opt-in,
 default off**, behind `amdgpu.bc250_pcon_force_dsc=1`.
 
 A Cable Matters 102101 (Synaptics VMM7100, DPCD branch OUI `90:CC:24`, name
@@ -514,7 +514,7 @@ whenever the quirk patch changes.
 > operative mechanism anyway.**
 >
 > **Mode 2 — the converter dropping its HDMI side — is fixed** by
-> `cs-relink-after-long-blank.patch` (`0011` stable, `0012` RC). It times how
+> `cs-relink-after-long-blank.patch` (`0014` in both sets). It times how
 > long the display stream has been off, and if it returns after more than
 > `amdgpu.cs_relink_ms` (default 3000) it runs the `trigger_hotplug` sequence
 > a quarter second after the commit, instead of letting DC bring the stream
@@ -819,7 +819,7 @@ commit is actually deferred because of it.
 
 ## The BC-250 secure processor (ccp)
 
-`bc250-psp-ccp.patch` (`0015` stable, `0018` RC) carries a three-patch series by
+`bc250-psp-ccp.patch` (`0018` stable, `0020` RC) carries a three-patch series by
 **Mattia Tadini** posted to linux-crypto/LKML on 2026-09-19
 ([cover letter](https://lore.kernel.org/lkml/178984289056.12336.17662860552012704364@mtsistemi.it/)),
 unmerged at the time of carrying. The BC-250's AMD Secure Processor sits at PCI
@@ -849,7 +849,7 @@ Drop it when the series lands upstream.
 
 The BC-250 is a salvaged PS5 APU and ships with **24 of its 40 RDNA2 compute units enabled**. The remaining 16 were fused off by firmware policy rather than because they are defective: they still have power, clocks and matching CGTS configuration, and no power gating is active on them.
 
-`bc250-40cu-unlock.patch` (`0008` in both sets) re-enables them by writing two hardware registers during CU enumeration, based on the research and testing in [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
+`bc250-40cu-unlock.patch` (`0011` in both sets) re-enables them by writing two hardware registers during CU enumeration, based on the research and testing in [duggasco/bc250-40cu-unlock](https://github.com/duggasco/bc250-40cu-unlock).
 
 Both registers are required, and this is the part that took the original author a controlled experiment to establish — neither one alone does anything:
 
@@ -887,7 +887,7 @@ RADV_DEBUG=info vulkaninfo --summary 2>&1 | grep num_cu   # expect: num_cu = 40
 
 The extra CUs cost power. The upstream measurements, on a Vulkan LLM inference workload, were roughly **1.6x throughput for about +30 W and +4 °C** when clocks are held at 1500 MHz. Left at the governor's 2 GHz default the same board drew around 181 W and reached **96 °C**, which is not a sustainable operating point.
 
-If you enable this, cap the clocks. With [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu), the widened SCLK range from `cyan-skillfish-sclk-range.patch` (`0007` in both sets) makes 1500 MHz / 900 mV reachable as a safe point, and that is the combination the author recommends. Watch temperatures on the first few runs rather than assuming your board behaves like theirs.
+If you enable this, cap the clocks. With [cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu), the widened SCLK range from `cyan-skillfish-sclk-range.patch` (`0010` in both sets) makes 1500 MHz / 900 mV reachable as a safe point, and that is the combination the author recommends. Watch temperatures on the first few runs rather than assuming your board behaves like theirs.
 
 ### Not every board may be healthy at 40 CUs
 

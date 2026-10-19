@@ -17,7 +17,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 
 | Package | What it is |
 |---|---|
-| `linux-cachyos-bc250` | Stable BC-250 kernel (`-rc` and `-bore` variants also built), with the `nct6687` fan and temperature driver built in, plus VRM and (opt-in) GDDR6 temperature drivers |
+| `linux-cachyos-bc250` | Stable BC-250 kernel (`-rc` and `-bore` variants also built), with the `nct6687` fan and temperature driver built as a module (step 2 loads it at boot), plus VRM and (opt-in) GDDR6 temperature drivers |
 | `mesa` / `lib32-mesa` | Patched Mesa: GFX1013 async compute on by default, mesh/task shaders (on by default with a BC-250, `RADV_DIRECTMESH=0` turns them off), FSR4 support |
 | `mesa-git` / `lib32-mesa-git` | Same patches on Mesa main, optional |
 | `proton-cachyos-native-bc250` | CachyOS Proton with FSR4, built for Zen 2 |
@@ -25,7 +25,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
 | `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; retrains the link when the display powers on or switches to the board |
-| `bc250-fixes` | Small corrections for other packages, applied by a pacman hook (currently the broken Return to Gaming Mode shortcut from `cachyos-handheld`) |
+| `bc250-fixes` | Small corrections for other packages: a pacman hook that repairs the broken Return to Gaming Mode shortcut from `cachyos-handheld`, and a tmpfiles rule that makes the Steam beta's `/run/host/...` tool paths resolve |
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `bc250-ch7218-fw` | Optional: UGREEN's updater and five firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
 | `bc250-vcn-fw` | Parked: the firmware file for the BC-250 VCN video-block experiment. No shipped kernel uses it (see [Hardware video (VCN)](#hardware-video-vcn-parked)) |
@@ -1020,6 +1020,8 @@ Runs as root — the debugfs write it needs (`/sys/kernel/debug/dri/*/DP-1/link_
 | `BC250_CEC_SWITCH_INPUT_DELAY_S` | `3` | Seconds after a power-on relink to wait before switching the input |
 | `BC250_CEC_ON_POWER_ON_COMMAND` | (none) | Full path to a script to run (as root, in the background) on a genuine display power-on |
 | `BC250_CEC_ON_POWER_OFF_COMMAND` | (none) | Same, on a genuine display power-off |
+| `BC250_CEC_REMOTE_KEYS` | `1` | Remap the TV remote's OK to Enter and Back/Exit to Esc so they work in Steam's UI; `0` keeps the kernel's stock keymap |
+| `BC250_CEC_REMOTE_KEYMAP` | `0x00=KEY_ENTER,0x0d=KEY_ESC,0x4c=KEY_ESC` | The map applied when the above is on: comma-separated CEC-code=KEY_NAME pairs |
 
 `BC250_CEC_ON_POWER_ON_COMMAND`/`BC250_CEC_ON_POWER_OFF_COMMAND` always come from this file, never from anything received over CEC — the CEC bus only ever supplies the trigger (a boolean "the display just turned on/off"), never the payload, so nothing on the bus can influence what runs, only whether it does. The script itself still runs as root, same as the rest of this service.
 

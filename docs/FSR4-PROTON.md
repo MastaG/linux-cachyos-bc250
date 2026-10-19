@@ -91,7 +91,7 @@ because `.ini` files are excluded from the payload's per-file checksums.
 
 `proton-cachyos-native-bc250` follows CachyOS's `proton-cachyos-native` PKGBUILD, pinned to the same `CachyOS-PKGBUILDS` commit as the Mesa packages. Rather than carrying a diff of that PKGBUILD, the prepare step rewrites it and asserts on every anchor it touches, so an upstream change fails the build naming what moved instead of a patch applying at an offset and quietly meaning something else.
 
-The OptiScaler build is pinned rather than tracked. Nightlies publish most days, and following them would rebuild a ~700 MB package daily for a payload nobody asked to move. Moving it forward requires updating `FALLBACK_TAG`, `FALLBACK_ASSET` and `FALLBACK_SHA256` together in `scripts/select-optiscaler.py`, which changes the component fingerprint. `BC250_FSR4_TRACK_OPTISCALER=1` checks the newest nightly instead. Payload assembly validates the preset against the actual extracted INI on every route, including the mirrored fallback.
+The OptiScaler build is pinned rather than tracked. Nightlies publish most days, and following them would rebuild a ~1.1 GB package daily for a payload nobody asked to move. Moving it forward requires updating `FALLBACK_TAG`, `FALLBACK_ASSET` and `FALLBACK_SHA256` together in `scripts/select-optiscaler.py`, which changes the component fingerprint. `BC250_FSR4_TRACK_OPTISCALER=1` checks the newest nightly instead. Payload assembly validates the preset against the actual extracted INI on every route, including the mirrored fallback.
 
 Run the packaging and launch regression checks with
 `python3 -B -m unittest discover -s tests -v`. They exercise both real upstream

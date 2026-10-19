@@ -37,11 +37,11 @@ written. A local-mode failure stops the launch rather than falling back to the
 network. Absent the variable, stock behaviour is unchanged.
 
 **There are two copies, because there are two different `upscalers.py` files.**
-GE-Proton ships umu-protonfixes as released; proton-cachyos applies eight
-patches of its own to that same file first. A patch rebased onto one does not
-apply to the other — three of sixteen hunks fail — so each package uses the copy
-matching its base (both proton-cachyos packages share one), and `stage_fsr4_payload_sources` takes the base as an
-argument rather than guessing.
+GE-Proton ships umu-protonfixes as released with GE-Proton11-6; proton-cachyos
+builds its own, much later revision of that module from its protonfixes
+submodule. A patch rebased onto one does not apply to the other, so each package
+uses the copy matching its base (both proton-cachyos packages share one), and
+`stage_fsr4_payload_sources` takes the base as an argument rather than guessing.
 
 ### `patches/ge-proton/`
 
@@ -54,15 +54,30 @@ applies it itself, from the extracted tarball root.
 
 ### `patches/proton-cachyos/`
 
-For `proton-cachyos-native-bc250`. Rebased onto the `upscalers.py` that results
-*after* proton-cachyos's own eight `patches/protonfixes/0002-upscalers/` patches
-apply. Thirteen of fifteen hunks applied unchanged; two were resolved by hand:
+For `proton-cachyos-native-bc250` and `proton-cachyos-slr-bc250`. Applies, with
+no fuzz, to the unmodified `upscalers.py` of proton-cachyos's protonfixes
+submodule (umu-protonfixes `8dadc914`, 2026-10-17; the test fixture
+`tests/fixtures/cachyos-native-upscalers.py` is that file). CachyOS used to
+carry eight patches of its own on top of the module (`patches/protonfixes/0002-upscalers/`);
+they are part of the submodule now, and on 2026-10-17 it also reorganised the
+module: `check_optiscaler`/`download_optiscaler` became `check_component`/
+`download_component`, `clean_upscaler` became `clean_tracked_files`, and
+`__get_upscaler_items` became `_get_items`. The patch was rewritten by hand for
+that (the old one still applied to fourteen of sixteen hunks, with fuzz, to code
+that no longer matched what the hunks described, and the build failed on the
+other two). What differs from the GE copy:
 
-- the OptiScaler config loop, whose context differs (`log.debug(e)`)
-- the upscalers tuple, where proton-cachyos always stages the FSR4 provider.
-  That upstream behavior remains when no local manifest is selected. In the
-  package's local mode, the `fsr4` compatibility setting controls staging, so
-  explicit opt-outs and utility calls do not request a provider.
+- manifest entries get a `file_description`, which the new download path logs;
+- in local mode Streamline is neither fetched nor cleaned (it is not in a pinned
+  manifest, and nothing unpinned is fetched);
+- the manifest lookup cache is cleared when the manifest changes;
+- the upscalers tuple: proton-cachyos always stages the FSR4 provider. That
+  upstream behavior remains when no local manifest is selected. In the package's
+  local mode, the `fsr4` compatibility setting controls staging, so explicit
+  opt-outs and utility calls do not request a provider.
+
+When the submodule moves and the patch stops applying, the build log lists the
+failed hunks (see `tests/fixtures/README.md` for replacing the test base).
 
 Rooted for `patch -d <protonfixes> -Np1`, which is exactly how proton-cachyos's
 `Makefile.in` applies everything under `patches/protonfixes/`:

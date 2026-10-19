@@ -3,8 +3,9 @@
 The firmware file `amdgpu/ps5_vcn.bin` for the BC-250's Video Core Next (VCN 2.0)
 block. It is parked: see below.
 
-It installs one file, `/usr/lib/firmware/amdgpu/ps5_vcn.bin`, plus AMD's licence
-text. Nothing runs and nothing is configured.
+It installs one firmware file, `/usr/lib/firmware/amdgpu/ps5_vcn.bin`, plus AMD's
+licence text and its own README and SHA256SUMS under `/usr/share/doc`. Nothing
+runs and nothing is configured.
 
 ## Do you need it
 

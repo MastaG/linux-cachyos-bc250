@@ -181,6 +181,40 @@ scripts/build-mesa-git-package.sh
 
 For reproducible full repository builds, CI remains the recommended path because it configures multilib, ccache, the clean build user, source fingerprints and previous-release preservation.
 
+## Reading a failed Proton or kernel build
+
+GitHub truncates the middle of very long step logs, and the error that ends a
+build is usually in the part that goes missing: three runs in a row showed
+nothing after "configuring wine" although the step ran for hours more. So the
+workflow also writes the complete output of every component build, and of the
+Steam Linux Runtime compile, to files and uploads them as the artifact
+`bc250-build-logs-<run number>` (kept for 7 days, uploaded even when the build
+fails):
+
+```bash
+gh run download <run id> -n bc250-build-logs-<run number> -D logs
+```
+
+The runner's own work directory and build containers are removed after a run, so
+this artifact is the only place the real error survives.
+
+Two things in the Proton builds that were found this way and are worth knowing:
+
+- `proton-cachyos-native-bc250` and `proton-cachyos-slr-bc250` apply
+  `packages/bc250-fsr4-common/patches/proton-cachyos/0001-pinned-upscaler-manifest.patch`
+  to CachyOS's protonfixes. When CachyOS moves that submodule the patch can stop
+  applying (`Hunk #N FAILED` / `.protonfixes-post-source ... Error 1`); rebase it
+  as described in `packages/bc250-fsr4-common/README.md` and replace the test
+  fixture.
+- wine-mono is fetched from WineHQ's server first and from GitHub's release
+  download second, then checked with `xz -t`. This is done by rewriting the
+  download recipe in `Makefile.in` (`scripts/prepare-proton-cachyos-native-pkgbuild.sh`
+  for the native package, `scripts/build-proton-runtime-dist.sh` for the SLR
+  compile). Do not set `MONO_TARBALL_URL` (or any variable containing `$(...)`)
+  on make's command line instead: libpcap's Makefile hands `$(MAKEFLAGS)` to a
+  shell, which runs it, and the build dies in `grammar.h` with
+  `Syntax error: "(" unexpected`.
+
 ## Local Proton builds for private distribution
 
 `scripts/build-proton-tarball.sh` builds `proton-cachyos-native-bc250` the way CI builds
@@ -220,6 +254,14 @@ Options and environment:
 --suffix NAME               appended to the tool name; [A-Za-z0-9._-], default none
 --out DIR                   where the tarballs go (default: dist/)
 --image REF                 base image (default: docker.io/library/archlinux:base-devel)
+--optiscaler-proxy NAME.dll bake the OptiScaler proxy name into the payload (default
+                            winmm.dll; dxgi.dll is the usual alternative). A real build
+                            only. The same can be chosen per game at launch with
+                            PROTON_OPTISCALER_NAME, without rebuilding
+--repack-only               skip the container and re-wrap the package the last build
+                            left in out/repo. It repacks that package as it is, so a fix
+                            made to the scripts since then is not picked up
+native                      accepted and ignored: native is the only local build
 BC250_CONTAINER_ENGINE      default podman; split on whitespace, so "sudo podman"
                             and "flatpak-spawn --host podman" both work
 BC250_PKGREL                pkgrel for the build (default 1)
@@ -239,6 +281,12 @@ to a CPU list with `taskset` (repository variable `BC250_BUILD_CPUS`, default
 limit). `nproc`, ninja, meson and cargo all follow CPU affinity, so every
 `-j$(nproc)` and every default job count shrinks together. A cgroup `cpuset`
 would be cleaner but rootless podman has no `cpuset` controller here.
+
+The Steam Linux Runtime compile (`proton-cachyos-slr-bc250`, see below) runs
+before that loop and is not pinned: its job count is the smaller of `nproc` and
+a third of the memory cap in gigabytes, so `BC250_BUILD_MEMORY` is what sizes it.
+Both variables are repository variables, not workflow constants; check
+`gh variable list` before assuming the defaults above are in force.
 
 The build runs in an Arch container, but the repacking at the end runs on the
 host, so the host needs `bsdtar` — or GNU `tar` plus a `zstd` binary, which is
