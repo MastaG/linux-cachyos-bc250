@@ -175,20 +175,27 @@ picks one:
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
 - **`helixsr` (the Scaler)** — built with `--helixsr-scaler` on top of
-  `--helixsr` (it needs HelixSR 1.8.0 or later with its `helixsr-fg/` folder).
-  [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler) 1.0.3 is
+  `--helixsr` (it needs HelixSR 2.0.0 with its built `helixsr-fg/` folder).
+  [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler) 1.1.0 is
   OptiScaler v10 (same generation as the nightly: every other library is
   byte-identical, only `OptiScaler.dll` and `OptiScaler.ini` differ) with
   HelixSR built in. The tree is the nightly's with those two files replaced, the
-  `fsr411f` bridge as its FidelityFX library (`--scaler-bridge`), and
-  `HelixSR/helixsr.dll` plus `HelixSR/helixsr-fg/`, which the Scaler finds next
-  to its proxy (`umu/`). Its variant preset sets `Upscalers.Dx12Upscaler = auto`
-  (the Scaler then picks HelixSR) and `FrameGen.Enabled = auto` (the game's own
-  DLSS frame generation drives HelixSR's); both are validated against the
-  Scaler's ini. The Scaler writes `HelixSR/helixsr.ini` and its log at run time,
-  so those are not pinned.
+  `fsr411f` bridge as its FidelityFX library (`--scaler-bridge`), and a
+  `HelixSR-fsrfg/` folder next to its proxy (`umu/`): HelixSR's
+  `amd_fidelityfx_dx12.dll` (since 2.0.0 one DLL for upscaling and frame
+  generation; no more `helixsr.dll`), its `helixsr.ini` with `[Log]` switched
+  off, and `helixsr-fg/` with everything the setup built there, sub-folders
+  included (the light mode, the default, is in `helixsr-fg/310.9.16/`; logs
+  are left out). The Scaler is OptiScaler first: its variant preset sets
+  `Upscalers.Dx12Upscaler = ffx`, `Libraries.FfxDx12SRPath` to that DLL and,
+  for HelixSR's frame generation, `FrameGen.FGInput = nvngxfg` with
+  `FGNvngxReplacement = HelixSR` and `FrameGen.Enabled = auto` (the game's own
+  DLSS frame generation drives it); all of it is validated against the
+  Scaler's ini. The Scaler writes `helixsr.ini` and its log at run time, so
+  those are not pinned. A built DLL is recognised by the setup's `HXSRNET1`
+  trailer (2.0.0's unbuilt DLL is 7.6 MB, too close to a size test).
 - **`helixsr-ffx`** — the earlier route, now opt-in, not a FidelityFX build at all:
-  [HelixSR](https://github.com/lonewolf0622/HelixSR) 1.9.0, one FSR 3.1 DLL that
+  [HelixSR](https://github.com/lonewolf0622/HelixSR) 2.0.0, one FSR 3.1 DLL that
   runs NVIDIA's DLSS Model E network as D3D12 compute. Built with `--helixsr`
   rather than `--ffx-sdk-alt` (and `--ffx-sdk-default` accepts its name only when
   `--helixsr` is given), because it differs in four ways. Its release zip holds
@@ -196,14 +203,14 @@ picks one:
   that was two files, `helixsr_weights.bin` and `helixsr_kernels.pak`, installed
   beside the DLL and pinned; since 1.8.0 the setup writes the network into the
   DLL itself (13 MB instead of 5 MB). We run the setup once and mirror the
-  result as `HelixSR-1.9.0-network-fg.zip`, and the builder refuses an archive
+  result as `HelixSR-2.0.0-network-fg.zip`, and the builder refuses an archive
   without the network (two files, or a DLL under 8 MiB) rather than ship a plain
   upscale. The same DLL
   goes in as both `amd_fidelityfx_dx12.dll` and
   `amd_fidelityfx_upscaler_dx12.dll`. Its `helixsr.ini` ships beside it with
   only `[Log] Enabled` switched off (section-aware: `[ModelE]` had an `Enabled`
-  of its own; the 1.9.0 ini has no `[Log]` section at all, so the builder adds
-  one, as the DLL still reads it). And the variant carries two OptiScaler settings of its own,
+  of its own; the 1.9.0 ini had no `[Log]` section at all, so the builder adds
+  one when it is missing, as the DLL still reads it). And the variant carries two OptiScaler settings of its own,
   `Libraries.FfxDx12Path` and `FfxDx12SRPath` pointing at those two files, as
   HelixSR's README asks. The builder validates them against the pinned
   `OptiScaler.ini` like the preset, and the launcher applies them only when

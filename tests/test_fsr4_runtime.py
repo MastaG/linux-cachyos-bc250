@@ -49,7 +49,7 @@ STUB_INI = (
     b"[FSR]\nFsr4ForceModel=auto\n"
     b"[Spoofing]\nDxgi=auto\nVulkanExtensionSpoofing=auto\n"
     b"[Libraries]\nFfxDx12Path=auto\nFfxDx12SRPath=auto\n"
-    b"[Upscalers]\nDx12Upscaler=auto\n[FrameGen]\nEnabled=auto\n"
+    b"[Upscalers]\nDx12Upscaler=auto\n[FrameGen]\nEnabled=auto\nFGInput=auto\nFGNvngxReplacement=auto\n"
 )
 
 
@@ -1178,17 +1178,21 @@ class PresetTests(unittest.TestCase):
                     dll=None, ini=None):
         # HelixSR's release folder after its setup script has run: the network
         # files beside the DLL (up to 1.7.0), or inside the DLL (1.8.0 and later).
-        path = work / "HelixSR-1.9.0.zip"
+        path = work / "HelixSR-2.0.0.zip"
+        # 2.0.0 keeps DLL, ini and frame generation in a HelixSR-fsrfg folder
+        # below the release folder, which holds the notices.
         files = {
-            "HelixSR-1.9.0/amd_fidelityfx_dx12.dll": dll or self.HELIXSR_DLL,
-            "HelixSR-1.9.0/helixsr.ini": (ini or self.HELIXSR_INI).encode(),
-            "HelixSR-1.9.0/LICENSE": b"apache",
-            "HelixSR-1.9.0/THIRD_PARTY_NOTICES.md": b"nvidia property",
-            "HelixSR-1.9.0/README.md": b"readme",
-            "HelixSR-1.9.0/helixsr_weights.bin": self.HELIXSR_WEIGHTS,
-            "HelixSR-1.9.0/helixsr_kernels.pak": self.HELIXSR_KERNELS,
-            "HelixSR-1.9.0/helixsr-fg/nvngx_dlssg.dll": b"dlssg" * 64,
-            "HelixSR-1.9.0/helixsr-fg/_nvngx.dll": b"ngx" * 64,
+            "HelixSR-2.0.0/HelixSR-fsrfg/amd_fidelityfx_dx12.dll": dll or self.HELIXSR_DLL,
+            "HelixSR-2.0.0/HelixSR-fsrfg/helixsr.ini": (ini or self.HELIXSR_INI).encode(),
+            "HelixSR-2.0.0/LICENSE": b"apache",
+            "HelixSR-2.0.0/THIRD_PARTY_NOTICES.md": b"nvidia property",
+            "HelixSR-2.0.0/README.md": b"readme",
+            "HelixSR-2.0.0/HelixSR-fsrfg/helixsr_weights.bin": self.HELIXSR_WEIGHTS,
+            "HelixSR-2.0.0/HelixSR-fsrfg/helixsr_kernels.pak": self.HELIXSR_KERNELS,
+            "HelixSR-2.0.0/HelixSR-fsrfg/helixsr-fg/nvngx_dlssg.dll": b"dlssg" * 64,
+            "HelixSR-2.0.0/HelixSR-fsrfg/helixsr-fg/_nvngx.dll": b"ngx" * 64,
+            "HelixSR-2.0.0/HelixSR-fsrfg/helixsr-fg/310.9.16/nvngx_dlssg.dll": b"light" * 64,
+            "HelixSR-2.0.0/HelixSR-fsrfg/helixsr-fg/hxfg.log": b"log",
         }
         with zipfile.ZipFile(path, "w") as archive_zip:
             for name, data in files.items():
@@ -1199,7 +1203,7 @@ class PresetTests(unittest.TestCase):
         return path
 
     SCALER_DLL = b"helixsr-scaler-optiscaler" * 64
-    SCALER_INI = STUB_INI + b"[HelixSR]\nWaveSize=auto\nFrameGeneration=auto\n"
+    SCALER_INI = STUB_INI + b"[HelixSR]\nWaveSize=auto\nFGPreset=auto\n"
 
     # HelixSR 1.8.0 and later, as the Scaler needs it.
     BUILT = {"network": (), "helixsr_dll": b"helixsr-built-in-network" * 400_000,
@@ -1210,9 +1214,9 @@ class PresetTests(unittest.TestCase):
         # the licence texts.
         path = work / "scaler.zip"
         with zipfile.ZipFile(path, "w") as archive_zip:
-            archive_zip.writestr("HelixSR-Scaler-1.0.1/OptiScaler.dll", self.SCALER_DLL)
-            archive_zip.writestr("HelixSR-Scaler-1.0.1/OptiScaler.ini", ini or self.SCALER_INI)
-            archive_zip.writestr("HelixSR-Scaler-1.0.1/Licenses/OptiScaler_LICENSE.txt", b"gpl")
+            archive_zip.writestr("HelixSR-Scaler-1.1.0/OptiScaler.dll", self.SCALER_DLL)
+            archive_zip.writestr("HelixSR-Scaler-1.1.0/OptiScaler.ini", ini or self.SCALER_INI)
+            archive_zip.writestr("HelixSR-Scaler-1.1.0/Licenses/OptiScaler_LICENSE.txt", b"gpl")
         return path
 
     def build_payload(self, default_name, helixsr=False,
@@ -1366,6 +1370,15 @@ class PresetTests(unittest.TestCase):
         self.assertTrue(ini.startswith(self.HELIXSR_INI_NO_LOG))
         self.assertEqual(ini[ini.index("[Log]"):].split(), ["[Log]", "Enabled", "=", "false"])
 
+    def test_a_dll_the_setup_marked_as_built_passes_whatever_its_size(self):
+        # 2.0.0's unbuilt DLL is 7.6 MB, so size alone cannot tell; the setup
+        # appends a 32-byte trailer starting HXSRNET1 to the DLL it built.
+        marked = b"x" * 4096 + b"HXSRNET1" + b"\0" * 24
+        config, _ = self.build_payload("fsr411f", helixsr=True, network=(),
+                                       helixsr_dll=marked, helixsr_ini=self.HELIXSR_INI_NO_LOG)
+        tree = self.trees[config["optiscaler_aliases"]["helixsr-ffx"]]
+        self.assertEqual(tree["OptiScaler/amd_fidelityfx_dx12.dll"], marked)
+
     def test_an_unbuilt_helixsr_dll_fails_the_build(self):
         # The release DLL without the network is small and runs as a plain
         # upscale with a red frame: refuse it rather than ship it.
@@ -1383,25 +1396,37 @@ class PresetTests(unittest.TestCase):
         self.assertEqual(tree["winmm.dll"], self.SCALER_DLL)
         self.assertEqual(tree["OptiScaler.ini"], self.SCALER_INI)
         # HelixSR and its frame generation folder, where the Scaler looks.
-        self.assertEqual(tree["HelixSR/helixsr.dll"], self.HELIXSR_BUILT_DLL)
-        self.assertIn("HelixSR/helixsr-fg/nvngx_dlssg.dll", tree)
-        self.assertIn("HelixSR/helixsr-fg/_nvngx.dll", tree)
+        self.assertEqual(tree["HelixSR-fsrfg/amd_fidelityfx_dx12.dll"], self.HELIXSR_BUILT_DLL)
+        self.assertIn("HelixSR-fsrfg/helixsr.ini", tree)
+        self.assertIn("HelixSR-fsrfg/helixsr-fg/nvngx_dlssg.dll", tree)
+        self.assertIn("HelixSR-fsrfg/helixsr-fg/_nvngx.dll", tree)
+        # The light mode (the default) lives in a sub-folder; logs stay out.
+        self.assertEqual(tree["HelixSR-fsrfg/helixsr-fg/310.9.16/nvngx_dlssg.dll"], b"light" * 64)
+        self.assertNotIn("HelixSR-fsrfg/helixsr-fg/hxfg.log", tree)
+        self.assertNotIn("HelixSR/helixsr.dll", tree)
         hashes = self.entries[default]["sha256_hash"]
-        self.assertIn("HelixSR/helixsr.dll", hashes)
-        self.assertIn("HelixSR/helixsr-fg/nvngx_dlssg.dll", hashes)
+        self.assertIn("HelixSR-fsrfg/amd_fidelityfx_dx12.dll", hashes)
+        self.assertIn("HelixSR-fsrfg/helixsr-fg/nvngx_dlssg.dll", hashes)
         self.assertNotIn("OptiScaler.ini", hashes)
         # FSR4 stays available for Direct3D 11 and Vulkan through the fork's
-        # bridge, and the Scaler's own backend choice (auto) is not overridden.
+        # bridge. HelixSR is the Dx12 upscaler through the library path into
+        # HelixSR-fsrfg, and its frame generation is the nvngxfg provider.
         self.assertEqual(bridges[default], self.FORK_BRIDGE)
-        self.assertEqual(config["optiscaler_variant_preset"][default],
-                         {"Upscalers.Dx12Upscaler": "auto", "FrameGen.Enabled": "auto"})
+        self.assertEqual(config["optiscaler_variant_preset"][default], {
+            "Upscalers.Dx12Upscaler": "ffx",
+            "Libraries.FfxDx12SRPath":
+                "C:\\windows\\system32\\umu\\HelixSR-fsrfg\\amd_fidelityfx_dx12.dll",
+            "FrameGen.Enabled": "auto",
+            "FrameGen.FGInput": "nvngxfg",
+            "FrameGen.FGNvngxReplacement": "HelixSR",
+        })
         # The stock nightly and every bridge stay reachable by name, and none
         # of them carries the Scaler.
         for name in ("optiscaler", "fsr411f", "signed"):
             other = self.trees[aliases[name]]
             self.assertNotEqual(aliases[name], default)
             self.assertEqual(other["winmm.dll"], b"p" * 2048)
-            self.assertNotIn("HelixSR/helixsr.dll", other)
+            self.assertNotIn("HelixSR-fsrfg/amd_fidelityfx_dx12.dll", other)
         self.assertEqual(aliases["optiscaler"], aliases["fsr411f"])
         self.assertEqual(bridges[aliases["optiscaler"]], self.FORK_BRIDGE)
         self.assertEqual(bridges[aliases["signed"]], self.SIGNED_BRIDGE)
@@ -1417,7 +1442,7 @@ class PresetTests(unittest.TestCase):
         ffx = aliases["helixsr-ffx"]
         self.assertNotEqual(ffx, config["optiscaler_version"])
         self.assertIn("OptiScaler/helixsr.ini", self.trees[ffx])
-        self.assertNotIn("HelixSR/helixsr.dll", self.trees[ffx])
+        self.assertNotIn("HelixSR-fsrfg/amd_fidelityfx_dx12.dll", self.trees[ffx])
         self.assertEqual(set(config["optiscaler_variant_preset"][ffx]),
                          {"Libraries.FfxDx12Path", "Libraries.FfxDx12SRPath"})
 

@@ -246,10 +246,10 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --ffx-sdk-alt fsr411rc10 \\\n'
     '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc10.zip" \\\n'
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \\\n'
-    '        --helixsr "${srcdir}/HelixSR-1.9.0-network-fg.zip" \\\n'
-    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0" \\\n'
-    '        --helixsr-scaler "${srcdir}/HelixSR-Scaler-1.0.3-core.zip" \\\n'
-    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0" \\\n'
+    '        --helixsr "${srcdir}/HelixSR-2.0.0-network-fg.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \\\n'
+    '        --helixsr-scaler "${srcdir}/HelixSR-Scaler-1.1.0-core.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -306,14 +306,14 @@ payload_sources = [
      "e7b53b1f1aa7aa4b767c3f73e72a33a9a3c5563eefd1edf48bf165fcb0feac89", True),
     ("bc250-fsr4-dll-4.0.0-rc10.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc10.zip",
      "eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98", True),
-    # HelixSR 1.9.0 (lonewolf0622): runs NVIDIA's DLSS Model E network on D3D12
+    # HelixSR 2.0.0 (lonewolf0622): runs NVIDIA's DLSS Model E network on D3D12
     # (and, with helixsr-fg/, NVIDIA's DLSS frame generation). Per its author, the
     # NVIDIA components inside it remain NVIDIA's property.
-    ("HelixSR-1.9.0-network-fg.zip", f"{payload_base}/HelixSR-1.9.0-network-fg.zip",
-     "31fb880936343a2b4919ffcb542f282648ab517691569f3478404d43c88745b2", True),
-    # HelixSR Scaler 1.0.3 (OptiScaler with HelixSR built in, GPL-3.0): the default.
-    ("HelixSR-Scaler-1.0.3-core.zip", f"{payload_base}/HelixSR-Scaler-1.0.3-core.zip",
-     "dfc866755c7a1b4de0e76f77850c4e9f19c16a3cb1f4dfe73f68688ed0d0d716", True),
+    ("HelixSR-2.0.0-network-fg.zip", f"{payload_base}/HelixSR-2.0.0-network-fg.zip",
+     "833050356f12215da35096750e9856aa56b0e8eb746e218c5ee01be5bd9fa96f", True),
+    # HelixSR Scaler 1.1.0 (OptiScaler with HelixSR built in, GPL-3.0): the default.
+    ("HelixSR-Scaler-1.1.0-core.zip", f"{payload_base}/HelixSR-Scaler-1.1.0-core.zip",
+     "c798b51b3802031627cd118f7e9aee5b98de552fb45f4fe7e28d0e688d1646df", True),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),

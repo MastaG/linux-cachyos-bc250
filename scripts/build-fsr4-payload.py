@@ -135,13 +135,25 @@ def bridge_from(source: Path, staging: Path, name: str) -> tuple[Path, Path | No
 # "helixsr-ffx".
 HELIXSR_NAME = "helixsr"
 HELIXSR_FFX_NAME = "helixsr-ffx"
-# The Scaler finds HelixSR in a HelixSR folder next to its own DLL (the proxy,
-# here umu/winmm.dll) or the game's .exe: HelixSR/helixsr.dll, and
-# HelixSR/helixsr-fg/ for frame generation. Its own backend choice (auto) picks
-# HelixSR when that folder is there, so the preset's "ffx" must not override it.
+# Since HelixSR Scaler 1.1.0 (HelixSR 2.0) HelixSR is one FidelityFX DLL that
+# the Scaler finds in a HelixSR-fsrfg folder next to its own DLL (the proxy,
+# here umu/winmm.dll) or the game's .exe: HelixSR-fsrfg/amd_fidelityfx_dx12.dll,
+# and HelixSR-fsrfg/helixsr-fg/ for frame generation. With that folder there,
+# the Scaler's auto picks HelixSR as the Dx12 upscaler (ffx), the library path
+# is spelled out below all the same, because the ffx route needs it to be right.
 # FrameGen.Enabled is "false" in the shared preset; "auto" lets the game's own
-# DLSS frame generation setting (on/off and multiplier) drive HelixSR's.
-SCALER_PRESET = {"Upscalers.Dx12Upscaler": "auto", "FrameGen.Enabled": "auto"}
+# DLSS frame generation setting (on/off and multiplier) drive HelixSR's, which
+# the Scaler only serves when FGInput is nvngxfg and FGNvngxReplacement HelixSR
+# (its README; the older [HelixSR] FrameGeneration key is gone).
+SCALER_FOLDER = "HelixSR-fsrfg"
+SCALER_PRESET = {
+    "Upscalers.Dx12Upscaler": "ffx",
+    "Libraries.FfxDx12SRPath":
+        "C:\\windows\\system32\\umu\\" + SCALER_FOLDER + "\\amd_fidelityfx_dx12.dll",
+    "FrameGen.Enabled": "auto",
+    "FrameGen.FGInput": "nvngxfg",
+    "FrameGen.FGNvngxReplacement": "HelixSR",
+}
 # Where OptiScaler finds the HelixSR DLL in the prefix: the payload folder
 # (Libraries.OptiDllPath), under both FidelityFX names. HelixSR's README has
 # both library paths point at it explicitly, or OptiScaler may pick another
@@ -157,6 +169,20 @@ HELIXSR_NETWORK_FILES = ("helixsr_weights.bin", "helixsr_kernels.pak")
 # is about 5 MB without it and 13 MB with it (90 shaders), so anything below
 # this is an unbuilt release and would run as a plain bilinear upscale.
 HELIXSR_BUILT_DLL_MIN = 8 * 1024 * 1024
+# 2.0.0's unbuilt DLL is 7.6 MB, just under that, so the setup's own marker
+# decides first: a built DLL ends with a 32-byte trailer starting HXSRNET1.
+HELIXSR_NETWORK_TRAILER = b"HXSRNET1"
+
+
+def helixsr_dll_is_built(dll: Path) -> bool:
+    size = dll.stat().st_size
+    if size < 32:
+        return False
+    with dll.open("rb") as handle:
+        handle.seek(size - 32)
+        if handle.read(8) == HELIXSR_NETWORK_TRAILER:
+            return True
+    return size >= HELIXSR_BUILT_DLL_MIN
 
 
 def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str, Path], dict[str, Path]]:
@@ -195,7 +221,7 @@ def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str
             network[name] = root / name
     if network and len(network) != len(HELIXSR_NETWORK_FILES):
         raise RuntimeError("HelixSR archive has only one of its two network files")
-    if not network and dlls[0].stat().st_size < HELIXSR_BUILT_DLL_MIN:
+    if not network and not helixsr_dll_is_built(dlls[0]):
         raise RuntimeError(
             "HelixSR archive has no network: run its setup script on the "
             "release and archive the folder it produced")
@@ -224,16 +250,24 @@ def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str
     notices = staging / "helixsr-notices"
     notices.mkdir()
     for name in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
-        if not (root / name).is_file():
+        # 2.0.0 keeps the DLL in a HelixSR-fsrfg folder below the release folder
+        # that holds the notices; earlier releases had all of it in one folder.
+        found = next((d / name for d in (root, root.parent) if (d / name).is_file()), None)
+        if found is None:
             raise RuntimeError("HelixSR archive has no " + name)
-        shutil.copy2(root / name, notices / name)
+        shutil.copy2(found, notices / name)
     # Frame generation (helixsr-fg/, built by the same setup): the Scaler runs
     # the game's DLSS frame generation on it. Absent when the setup ran with
     # --no-fg, which is fine for the FFX route and refused for the Scaler.
     fg = {}
     if (root / "helixsr-fg").is_dir():
-        fg = {f"helixsr-fg/{p.name}": p for p in sorted((root / "helixsr-fg").iterdir())
-              if p.is_file()}
+        # Sub-folders too: 2.0.0 builds the light mode (the default) into
+        # helixsr-fg/310.9.16/ beside the full mode's files. Logs and half-written
+        # files are not part of it, as in HelixSR's own installer.
+        fg = {f"helixsr-fg/{p.relative_to(root / 'helixsr-fg').as_posix()}": p
+              for p in sorted((root / "helixsr-fg").rglob("*"))
+              if p.is_file() and not p.name.lower().endswith((".log", ".tmp"))
+              and ".log." not in p.name.lower()}
     return dlls[0], "".join(lines), notices, network, fg
 
 
@@ -647,7 +681,7 @@ def main() -> int:
         if args.helixsr_scaler:
             scaler_dll, scaler_ini, scaler_notices = scaler_from(
                 Path(args.helixsr_scaler[0]), staging)
-            dll, _ini, helix_notices, network, fg = helixsr
+            dll, ini, helix_notices, network, fg = helixsr
             if network:
                 raise SystemExit("ERROR: the Scaler needs HelixSR 1.8.0 or later "
                                  "(network inside the DLL)")
@@ -678,10 +712,10 @@ def main() -> int:
                 "NOT the stock OptiScaler nightly.\n\n"
                 f"Origin: {args.helixsr_scaler[1]}\n"
                 f"SHA256: {digest(scaler_dll)}\n\n"
-                "HelixSR/helixsr.dll is HelixSR, which runs NVIDIA's DLSS Model E network "
-                f"as DirectX 12 compute.\nOrigin: {args.helixsr[1]}\n"
+                f"{SCALER_FOLDER}/amd_fidelityfx_dx12.dll is HelixSR, which runs NVIDIA's DLSS "
+                f"Model E network as DirectX 12 compute.\nOrigin: {args.helixsr[1]}\n"
                 f"SHA256: {digest(dll)}\n\n"
-                "HelixSR/helixsr-fg/ holds the files its frame generation runs on "
+                f"{SCALER_FOLDER}/helixsr-fg/ holds the files its frame generation runs on "
                 "(NVIDIA's DLSS frame generation network and NGX core, Intel's XeLL), "
                 "built or fetched by HelixSR's own setup script. Per its author, "
                 "the NVIDIA components remain the property of NVIDIA Corporation and "
@@ -698,8 +732,9 @@ def main() -> int:
             extra = {
                 args.proxy: scaler_dll,
                 "OptiScaler.ini": scaler_ini,
-                "HelixSR/helixsr.dll": dll,
-                **{f"HelixSR/{name}": path for name, path in fg.items()},
+                f"{SCALER_FOLDER}/amd_fidelityfx_dx12.dll": dll,
+                f"{SCALER_FOLDER}/helixsr.ini": ini,
+                **{f"{SCALER_FOLDER}/{name}": path for name, path in fg.items()},
             }
             variants.append((bridge, version, provenance, merged, extra))
 

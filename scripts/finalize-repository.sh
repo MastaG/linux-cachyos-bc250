@@ -648,14 +648,17 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   [4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b)
   rebuild aimed at RDNA2 ghosting. Neither 4.1.1r11 nor 4.1.1b is a provider
   bump: each carries its own embedded model, and both are unsigned.
-- **Changed: HelixSR Scaler is the default** ([HelixSR 1.9.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v1.9.0)
-  with Scaler 1.0.3, by lonewolf0622; the author calls 1.9.0 experimental). The Scaler is OptiScaler
+- **Changed: HelixSR Scaler is the default** ([HelixSR 2.0.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0)
+  with Scaler 1.1.0, by lonewolf0622). The Scaler is OptiScaler
   (GPL-3.0) with HelixSR built in, which runs NVIDIA's DLSS network (Model E) as D3D12 compute,
-  so DLSS-quality reconstruction without an NVIDIA GPU. Direct3D 12 games only. Pick DLSS, XeSS or
-  FSR in the game; the OptiScaler menu (Insert) shows ONLINE when HelixSR runs. It also runs
-  HelixSR's DLSS frame generation for games that have DLSS Frame Generation (experimental; it needs
-  32-lane waves, which the BC-250 has). 1.9.0 is up to about 8% faster than 1.8.1 by its
-  author's measurements, and the network now lives inside the DLL.
+  so DLSS-quality reconstruction without an NVIDIA GPU. Pick DLSS, XeSS or
+  FSR in the game; the OptiScaler menu (Insert) shows ONLINE when HelixSR runs. HelixSR 2.0 is
+  one DLL for upscaling and DLSS frame generation, and the Scaler now behaves like OptiScaler
+  (HelixSR is its FidelityFX upscaler, also for Direct3D 11 and Vulkan games, with AMD FSR and XeSS
+  still in the list). Frame generation uses NVIDIA's light mode by default (about 20% cheaper than
+  before; \`[DlssFrameGeneration] Preset = full\` in helixsr.ini for the full mode) and runs in
+  games that have DLSS Frame Generation (it needs 32-lane waves, which the BC-250 has). Upscaling is
+  15 to 18% faster at high render resolutions by its author's measurements.
   \`PROTON_USE_OPTISCALER=optiscaler\` selects the stock OptiScaler nightly (20261015) with the
   FSR4 fork's bridge, \`helixsr-ffx\` the nightly with HelixSR as its FidelityFX library, and
   \`fsr411f\`, \`signed\`, \`fsr411b\`, \`fsr411rc9\`, \`fsr411rc10\` the other bridge DLLs. The Scaler
