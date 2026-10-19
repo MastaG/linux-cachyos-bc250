@@ -4,13 +4,15 @@
 [GE-Proton11-6](https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-6).
 Its SHA256 is `4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645`.
 
-Applying `ge-to-cachyos-native.patch` reconstructs the complete native base
-with SHA256 `0092ff11bb041e9dd82ab76ca8a315400f413e2f59395525b8fd260c3b1fcdf1`:
-the `upscalers.py` of [CachyOS's 11.0-20261005-native source](https://github.com/CachyOS/proton-cachyos/tree/cachyos-11.0-20261005-native)
-(proton-cachyos `a80d8d1`, protonfixes submodule `f84287168e3e`) after
-CachyOS's own `patches/protonfixes/0001-fixes` and `0002-upscalers` are
-applied, which is the file this repository's pinned-manifest patch applies to.
-Rebuild it the same way when CachyOS moves to a new Proton release.
+`cachyos-native-upscalers.py` is the complete unmodified `upscalers.py` of
+CachyOS's protonfixes submodule at `8dadc914d8f1` (umu-protonfixes by
+loathingKernel, commit 65433bb, 2026-10-17), the file `proton-cachyos-native`
+and the Steam Linux Runtime package build. Its SHA256 is
+`c73c4827035f3db58088f66fb17b89f7b775616da8fb643d3b06474daa7ca911`.
+CachyOS no longer carries its own `patches/protonfixes` upscaler set, so this
+is the file the repository's pinned-manifest patch applies to. Replace it, and
+its hash in `tests/test_fsr4_runtime.py`, when the submodule moves and the patch
+stops applying (the build log names the failed hunks).
 Tests verify both base hashes before applying the package patches.
 
 Only the logger and cache-directory imports are stubbed. The modules' actual

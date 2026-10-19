@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMON = ROOT / "packages/bc250-fsr4-common"
 BASES = {
     "ge-proton": "4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645",
-    "proton-cachyos": "0092ff11bb041e9dd82ab76ca8a315400f413e2f59395525b8fd260c3b1fcdf1",
+    "proton-cachyos": "c73c4827035f3db58088f66fb17b89f7b775616da8fb643d3b06474daa7ca911",
 }
 
 
@@ -57,9 +57,13 @@ class RuntimeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.sources = {}
-        original = (ROOT / "tests/fixtures/ge-proton11-6-upscalers.py").read_bytes()
-        assert sha256(original) == BASES["ge-proton"]
+        fixtures = {
+            "ge-proton": ROOT / "tests/fixtures/ge-proton11-6-upscalers.py",
+            "proton-cachyos": ROOT / "tests/fixtures/cachyos-native-upscalers.py",
+        }
         for base, expected_hash in BASES.items():
+            original = fixtures[base].read_bytes()
+            assert sha256(original) == expected_hash
             with tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 source = root / (
@@ -69,20 +73,6 @@ class RuntimeTests(unittest.TestCase):
                 )
                 source.parent.mkdir(exist_ok=True)
                 source.write_bytes(original)
-                if base == "proton-cachyos":
-                    subprocess.run(
-                        [
-                            "patch",
-                            "--batch",
-                            "--fuzz=0",
-                            "-p1",
-                            "-i",
-                            str(ROOT / "tests/fixtures/ge-to-cachyos-native.patch"),
-                        ],
-                        cwd=root,
-                        check=True,
-                        capture_output=True,
-                    )
                 assert sha256(source.read_bytes()) == expected_hash
                 subprocess.run(
                     [

@@ -1,5 +1,0 @@
---- a/upscalers.py
-+++ b/upscalers.py
-@@ -643 +643 @@
--        ('fsr4', fsr4_version, 'fsr4' in compat_config),
-+        ('fsr4', fsr4_version, 'fsr4' in compat_config or 'optiscaler' in compat_config),
