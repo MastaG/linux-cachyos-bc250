@@ -40,10 +40,10 @@ upgrade-from-previous/0003-resolution-over-composed.patch
  2 files changed, 96 insertions(+)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 40818ced40c..d7856b8933c 100644
+index 32f437d88a4..da7f930a0ea 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -380,7 +380,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -385,7 +385,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
     unsigned bc250_imageprep_mode = debug_get_num_option("BC250_FSR4_IMAGEPREP", 0);
     _mesa_blake3_update(&ctx, bc250_imageprep_version, strlen(bc250_imageprep_version));
     _mesa_blake3_update(&ctx, &bc250_imageprep_mode, sizeof(bc250_imageprep_mode));
@@ -64,7 +64,7 @@ index 40818ced40c..d7856b8933c 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 2e5cd08285f..d201ad0a0b8 100644
+index af7d845a2df..c136032d9b8 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8523,6 +8523,30 @@ bc250_fsr4_profile(const void *bytes, size_t size)
@@ -109,7 +109,7 @@ index 2e5cd08285f..d201ad0a0b8 100644
           if (size == 125784 && hash == 0x60169c44f557ae55ull &&
               debug_get_num_option("BC250_FSR4_TEXTURE", 0) == 1)
              flags |= 524304; /* Existing pointwise schedule, eight outputs. */
-@@ -15009,6 +15037,57 @@ bc250_imageprep_spirv(const struct radv_compiler_info *compiler_info,
+@@ -15011,6 +15039,57 @@ bc250_imageprep_spirv(const struct radv_compiler_info *compiler_info,
     return bc250_imageprep_candidate;
  }
  
@@ -167,7 +167,7 @@ index 2e5cd08285f..d201ad0a0b8 100644
  nir_shader *
  radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct radv_shader_stage *stage,
                           const struct radv_spirv_to_nir_options *options, bool is_internal)
-@@ -15032,6 +15111,10 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -15034,6 +15113,10 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
     } else {
        size_t spirv_size;
        const uint32_t *spirv = bc250_imageprep_spirv(compiler_info, stage, is_internal, &spirv_size);
@@ -178,7 +178,7 @@ index 2e5cd08285f..d201ad0a0b8 100644
        assert(stage->spirv.size % 4 == 0);
  
        const bool dump_spirv = compiler_info->debug.dump_spirv &&
-@@ -15204,6 +15287,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -15209,6 +15292,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        NIR_PASS(_, nir, nir_lower_doubles, NULL, nir->options->lower_doubles_options);
  
        NIR_PASS(_, nir, nir_normalize_sin_cos);
@@ -187,5 +187,5 @@ index 2e5cd08285f..d201ad0a0b8 100644
  
     if (nir->info.uses_abort) {
 -- 
-2.55.0
+2.56.0
 
