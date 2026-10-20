@@ -163,7 +163,7 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
-### The variants: `helixsr` (default), `optiscaler`, `helixsr-ffx`, `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
+### The variants: `helixsr` (default), `optiscaler`, `helixsr-ffx`, `freefg`, `freefg-helixsr`, `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
 
 OptiScaler loads two separate things: `amdxcffx64.dll`, the FSR4 provider our
 patched RADV drives, and `amd_fidelityfx_upscaler_dx12.dll`, the FidelityFX
@@ -198,8 +198,8 @@ picks one:
   `fsr411f` bridge as its FidelityFX library (`--scaler-bridge`), and a
   `HelixSR-fsrfg/` folder next to its proxy (`umu/`): HelixSR's
   `amd_fidelityfx_dx12.dll` (since 2.0.0 one DLL for upscaling and frame
-  generation; no more `helixsr.dll`), its `helixsr.ini` with `[Log]` switched
-  off, and `helixsr-fg/` with everything the setup built there, sub-folders
+  generation; no more `helixsr.dll`), its `helixsr.ini` exactly as released
+  (log on, as its author asks for `helixsr.log` with problem reports), and `helixsr-fg/` with everything the setup built there, sub-folders
   included (the light mode, the default, is in `helixsr-fg/310.9.16/`; logs
   are left out). The Scaler is OptiScaler first: its variant preset sets
   `Upscalers.Dx12Upscaler = ffx`, `Libraries.FfxDx12SRPath` to that DLL and,
@@ -222,10 +222,10 @@ picks one:
   without the network (two files, or a DLL under 8 MiB) rather than ship a plain
   upscale. The same DLL
   goes in as both `amd_fidelityfx_dx12.dll` and
-  `amd_fidelityfx_upscaler_dx12.dll`. Its `helixsr.ini` ships beside it with
-  only `[Log] Enabled` switched off (section-aware: `[ModelE]` had an `Enabled`
-  of its own; the 1.9.0 ini had no `[Log]` section at all, so the builder adds
-  one when it is missing, as the DLL still reads it). And the variant carries two OptiScaler settings of its own,
+  `amd_fidelityfx_upscaler_dx12.dll`. Its `helixsr.ini` ships beside it
+  unchanged. (Until 2026-10-20 the builder switched `[Log] Enabled` off; that
+  left players with performance problems no `helixsr.log` to give HelixSR's
+  author, so the ini is no longer touched.) And the variant carries two OptiScaler settings of its own,
   `Libraries.FfxDx12Path` and `FfxDx12SRPath` pointing at those two files, as
   HelixSR's README asks. The builder validates them against the pinned
   `OptiScaler.ini` like the preset, and the launcher applies them only when
@@ -235,6 +235,61 @@ picks one:
   `LICENSE` and `THIRD_PARTY_NOTICES.md` go to `Licenses/<version>/`; the
   latter says the DLSS weights and kernels remain NVIDIA's property and are
   not covered by HelixSR's licence.
+- **`freefg`** — opt-in, built with `--freefg` from FreeFG's release zip
+  (mirrored unchanged as `freefg-1.0.1.zip`, its GPL source zip beside it).
+  [FreeFG](https://github.com/daniel-h-0/freefg) speeds up Intel's XeSS frame
+  generation on the BC-250. The tree is the nightly's with FreeFG's OptiScaler
+  build as the proxy, the `fsr411f` bridge (`--freefg-bridge`; RC11 is also
+  what FreeFG ships), and FreeFG's own layout for XeFG on the OptiScaler route,
+  with `umu/` in the role of the game folder: OptiScaler loads `libxess_fg.dll`
+  from its library folder (`Libraries.OptiDllPath`, `umu/OptiScaler`), so
+  FreeFG's wrapper goes in under that name and Intel's runtime beside it as
+  `bc250_xefg_original.dll`, where the wrapper looks for it; its shaders and
+  Vulkan layer go in `OptiScaler/BC250-XeFG/`, also beside the wrapper. Intel's
+  runtime is the nightly's own `libxess_fg.dll`, and the builder checks it
+  against the hash in FreeFG's `dependencies.json`: the wrapper checks it too,
+  at load, and leaves XeFG unavailable on a mismatch, which a player would only
+  see as no frame generation. `BC250-XeFG/settings.ini` is left out, because
+  the wrapper reads it beside the game's `.exe`. The variant preset is what
+  FreeFG's installer writes for its OptiScaler route at 2× (`FrameGen.Enabled =
+  true`, `FGInput = upscaler`, `FGOutput = xefg`, `XeFG.InterpolationCount = 1`,
+  `XeFG.ForceBorderless = true`, `fakenvapi.ForceReflex = 2`); `XeFGPath` and
+  `XeLLPath` are left alone, because this OptiScaler reads `XeFGPath` into its
+  XeSS library path. The config's `freefg` map, keyed by version, tells the
+  launcher where the layer is, and the launcher then sets what FreeFG's
+  installer puts in a game's launch options: `VK_LAYER_PATH` and
+  `VK_INSTANCE_LAYERS` (prepended, pointing into the prefix, which
+  pressure-vessel maps at the same path), `XEFG_WAVE_CONFIG`, and
+  `no_staggered_submit` added to `VKD3D_CONFIG` unless
+  `BC250_XEFG_NO_STAGGERED_SUBMIT=0`. It also prepends
+  `C:\windows\system32\umu\OptiScaler` to `WINEPATH`: 49 of the wrapper's 57
+  exports are forwarders to the module `bc250_xefg_original`, which the loader
+  looks up by name on the DLL search path. FreeFG's own layout has it beside
+  the game's `.exe`; in OptiScaler's library folder nothing finds it, OptiScaler
+  gets NULL for every forwarded export, and Spider-Man 2 crashed calling
+  `xefgSwapChainSetLoggingCallback` while creating its swapchain.
+- **`freefg-helixsr`** — the same FreeFG tree with HelixSR 2.0.0 as the
+  FidelityFX upscaler instead of RC11, built whenever `--freefg` and `--helixsr`
+  are both given (FreeFG's Setup offers the same choice). It is laid out like
+  `helixsr-ffx`: the DLL under both FidelityFX names, its `helixsr.ini` as
+  released, both library paths in the preset, and no `helixsr-fg/`, so
+  HelixSR's own frame generation cannot load and XeFG stays the only one.
+  Both HelixSR-as-FidelityFX variants (`freefg-helixsr`, `helixsr-ffx`) also set
+  `FSR.UpscalerIndex = 1`: HelixSR lists the providers it can run, AMD's FSR
+  4.1.1 from the package's `amdxcffx64.dll` first and itself second, so the
+  shared preset's 0 ran FSR4 with HelixSR left unused in the dropdown
+  (Spider-Man 2 at 1512×856 → 1440p: 5.35 ms on 4.1.1, 1.72 ms on HelixSR).
+  FreeFG relies on 0 because plain GE-Proton has no provider there.
+
+Switching variants cleans up after the previous one. protonfixes replaces the
+payload when the version changes, but it only removes the files it checksums:
+`.ini` files and anything written at run time stay. So on every game launch the
+launcher (`clean_other_variants`) removes each file the manifest lists for some
+variant but not the selected one, every folder only other variants use (with
+whatever was written into it, such as `HelixSR-fsrfg/` and its logs), and
+FreeFG's logs when FreeFG is not selected. Files the selected variant shares are
+left to protonfixes, nothing outside `system32/umu` is touched, and nothing at
+all while OptiScaler is off.
 
 None of the unsigned builds is a provider bump: each carries its own embedded model
 — 4.1.1b has 768 model passes against 4.0.2's 216, plus `FSR4_Int8` provider

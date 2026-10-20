@@ -43,6 +43,9 @@ def validate_preset(preset_path: Path, ini_path: Path, extra: dict | None = None
     if not isinstance(preset, dict) or not preset:
         raise RuntimeError("OptiScaler preset must be a non-empty object")
     preset = {**preset, **(extra or {})}
+    # A variant drops a shared key with None (JSON null): FreeFG's OptiScaler
+    # renamed FSR.Fsr4ForceModel and writes its ini without it.
+    preset = {key: value for key, value in preset.items() if value is not None}
     parser = configparser.ConfigParser()
     # Use the same strict parser and encoding as protonfixes, including option
     # case folding. A candidate selector is not sufficient: the normal build
@@ -161,7 +164,125 @@ SCALER_PRESET = {
 HELIXSR_PRESET = {
     "Libraries.FfxDx12Path": "C:\\windows\\system32\\umu\\OptiScaler\\amd_fidelityfx_dx12.dll",
     "Libraries.FfxDx12SRPath": "C:\\windows\\system32\\umu\\OptiScaler\\amd_fidelityfx_upscaler_dx12.dll",
+    # UpscalerIndex picks from the providers that DLL lists. With the package's
+    # FSR4 provider (amdxcffx64.dll) in the prefix, HelixSR lists AMD's FSR 4.1.1
+    # first and itself second, so the shared preset's 0 selected FSR4 and
+    # HelixSR sat unused in the dropdown (Spider-Man 2: 5.35 ms on 4.1.1, 1.72 ms
+    # on HelixSR at 1512x856 -> 1440p). FreeFG relies on 0 because its plain
+    # GE-Proton has no provider there.
+    "FSR.UpscalerIndex": "1",
 }
+
+
+# FreeFG (daniel-h-0/freefg) speeds up Intel's XeSS frame generation (XeFG) on
+# the BC-250. Its OptiScaler build is the proxy; OptiScaler loads XeFG as
+# libxess_fg.dll from its library folder (Libraries.OptiDllPath, umu\OptiScaler),
+# so FreeFG's wrapper DLL takes that name there, with Intel's unmodified runtime
+# beside it as bc250_xefg_original.dll and FreeFG's shaders and Vulkan pacing
+# layer in BC250-XeFG/ (the wrapper looks for both beside itself). This is
+# FreeFG's own "xefg on the OptiScaler route" layout, with umu\ as the game
+# folder.
+FREEFG_NAME = "freefg"
+# FreeFG with HelixSR as its upscaler, as FreeFG's Setup also offers.
+FREEFG_HELIXSR_NAME = "freefg-helixsr"
+FREEFG_FOLDER = "OptiScaler/BC250-XeFG"
+FREEFG_LAYER = "VK_LAYER_BC250_xefg_wave"
+# What FreeFG's installer writes for its OptiScaler route at 2x (install.py
+# CHANGES plus the route's own keys); the shared preset already has
+# Dx12Upscaler=ffx, UpscalerIndex=0, Fsr4ForceModel=2 and LoadAsiPlugins=true.
+# FGInput: FreeFG picks it per game from its recipes and falls back to OptiFG
+# (upscaler), which works in any game whose upscaler OptiScaler sees, so that
+# fallback is the default here. XeLL then needs Reflex forced on (FreeFG does
+# the same for that input). XeFGPath/XeLLPath are left alone: this OptiScaler
+# reads XeFGPath into its XeSS library path, and the library folder already
+# finds both.
+FREEFG_PRESET = {
+    "FrameGen.Enabled": "true",
+    "FrameGen.FGInput": "upscaler",
+    "FrameGen.FGOutput": "xefg",
+    "XeFG.InterpolationCount": "1",
+    # XeFG does not interpolate in exclusive fullscreen.
+    "XeFG.ForceBorderless": "true",
+    "fakenvapi.ForceReflex": "2",
+    # FreeFG's OptiScaler (master of 19 October) renamed Fsr4ForceModel to
+    # Fsr4GpuSupport and writes its ini without the old name, so the shared key
+    # would stop the next launch once the player changed anything in the menu.
+    "FSR.Fsr4ForceModel": None,
+    "FSR.Fsr4GpuSupport": "2",
+}
+
+
+def freefg_from(source: Path, nightly: Path, staging: Path) -> tuple[dict[str, Path], Path]:
+    """Unpack a FreeFG release into the files its variant adds, and its notices.
+
+    The wrapper accepts only the Intel runtime FreeFG pins (it checks size and
+    hash at load and otherwise leaves XeFG unavailable, which a player would
+    only see as "no frame generation"). That runtime is the libxess_fg.dll of
+    the pinned OptiScaler nightly, so it is taken from there and checked
+    against FreeFG's own pin here: a nightly bump that changes it fails the
+    build instead.
+    """
+    unpacked = staging / "freefg"
+    unpacked.mkdir()
+    subprocess.run(
+        ["bsdtar", "-xf", str(source), "--no-same-owner",
+         "--no-same-permissions", "-C", str(unpacked)],
+        check=True,
+    )
+    if any(p.is_symlink() or not (p.is_dir() or p.is_file())
+           for p in unpacked.rglob("*")):
+        raise RuntimeError("FreeFG archive contains a link or special file")
+    manifests = sorted(unpacked.rglob("dependencies.json"))
+    if len(manifests) != 1:
+        raise RuntimeError("FreeFG archive must contain exactly one dependencies.json")
+    root = manifests[0].parent
+    for name in ("opti/OptiScaler.dll", "payload/libxess_fg.dll",
+                 "payload/BC250-XeFG/layer/layer.json"):
+        if not (root / name).is_file():
+            raise RuntimeError("FreeFG archive has no " + name)
+    layer = json.loads((root / "payload/BC250-XeFG/layer/layer.json").read_text())
+    if layer.get("layer", {}).get("name") != FREEFG_LAYER:
+        raise RuntimeError("FreeFG's Vulkan layer is not " + FREEFG_LAYER)
+    if not (root / "payload/BC250-XeFG/shaders").is_dir():
+        raise RuntimeError("FreeFG archive has no shader profile")
+
+    pins = json.loads(manifests[0].read_text())
+    wanted = pins["runtime"]["Files"]["OptiScaler/libxess_fg.dll"]
+    runtime_dir = staging / "freefg-runtime"
+    runtime_dir.mkdir()
+    subprocess.run(
+        ["bsdtar", "-xf", str(nightly), "--no-same-owner", "--no-same-permissions",
+         "-C", str(runtime_dir), "OptiScaler/libxess_fg.dll"],
+        check=True,
+    )
+    runtime = runtime_dir / "OptiScaler/libxess_fg.dll"
+    if not runtime.is_file() or digest(runtime) != wanted:
+        raise RuntimeError(
+            "the OptiScaler nightly's libxess_fg.dll is not the Intel XeFG runtime "
+            f"FreeFG pins ({wanted}); FreeFG would refuse it")
+
+    files = {
+        "OptiScaler/libxess_fg.dll": root / "payload/libxess_fg.dll",
+        "OptiScaler/bc250_xefg_original.dll": runtime,
+    }
+    # settings.ini is not shipped: the wrapper reads it beside the game's .exe,
+    # never from here, and its defaults are what that file holds anyway.
+    for path in sorted((root / "payload/BC250-XeFG").rglob("*")):
+        relative = path.relative_to(root / "payload/BC250-XeFG").as_posix()
+        if path.is_file() and relative != "settings.ini":
+            files[f"{FREEFG_FOLDER}/{relative}"] = path
+
+    notices = staging / "freefg-notices"
+    notices.mkdir()
+    for path in sorted((root / "licenses").rglob("*")):
+        if path.is_file():
+            target = notices / path.relative_to(root / "licenses").as_posix().replace("/", "-")
+            shutil.copy2(path, target)
+    for name in ("NOTICE.md", "SOURCE.md"):
+        if not (root / name).is_file():
+            raise RuntimeError("FreeFG archive has no " + name)
+        shutil.copy2(root / name, notices / ("FreeFG-" + name))
+    return {"opti": root / "opti/OptiScaler.dll", **files}, notices
 
 
 HELIXSR_NETWORK_FILES = ("helixsr_weights.bin", "helixsr_kernels.pak")
@@ -185,8 +306,8 @@ def helixsr_dll_is_built(dll: Path) -> bool:
     return size >= HELIXSR_BUILT_DLL_MIN
 
 
-def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str, Path], dict[str, Path]]:
-    """Unpack a HelixSR release: its DLL, its helixsr.ini with logging off, its notices.
+def helixsr_from(source: Path, staging: Path) -> tuple[Path, Path, Path, dict[str, Path], dict[str, Path]]:
+    """Unpack a HelixSR release: its DLL, its helixsr.ini, its notices.
 
     The upstream zip carries no network: its setup script builds it from
     NVIDIA's DLSS DLL. Up to 1.7.0 that produced two files,
@@ -197,9 +318,8 @@ def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str
 
     HelixSR is one FSR 3.1 DLL (amd_fidelityfx_dx12.dll) that runs NVIDIA's
     DLSS Model E network. Its release zip has everything under a versioned
-    top-level folder. The ini is shipped with only [Log] Enabled switched off:
-    HelixSR otherwise writes helixsr.log beside the DLL on every launch, and
-    every other default is the author's.
+    top-level folder. The ini is shipped as released, so every default is the
+    author's, helixsr.log beside the DLL included.
     """
     unpacked = staging / "helixsr"
     unpacked.mkdir()
@@ -225,26 +345,12 @@ def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str
         raise RuntimeError(
             "HelixSR archive has no network: run its setup script on the "
             "release and archive the folder it produced")
-    ini = (root / "helixsr.ini").read_text(encoding="utf-8")
-    # Section-aware: [ModelE] has an "Enabled = true" of its own.
-    lines = ini.splitlines(keepends=True)
-    section, switched, has_log = "", 0, False
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            section = stripped[1:-1].strip().lower()
-            has_log = has_log or section == "log"
-        elif section == "log" and stripped.replace(" ", "").lower() == "enabled=true":
-            lines[i] = line[: len(line) - len(line.lstrip())] + "Enabled = false\n"
-            switched += 1
-    if has_log and switched != 1:
-        raise RuntimeError("HelixSR helixsr.ini has no single [Log] Enabled = true to switch off")
-    if not has_log:
-        # 1.9.0 ships an ini without a [Log] section although the DLL still
-        # reads one; without it the log would stay on.
-        if lines and not lines[-1].endswith("\n"):
-            lines[-1] += "\n"
-        lines += ["\n", "[Log]\n", "Enabled = false\n"]
+    # Shipped byte for byte, log included: helixsr.log is what HelixSR's author
+    # asks for with a problem report, and players could not give it to him
+    # while this package switched it off.
+    ini = root / "helixsr.ini"
+    if not ini.is_file():
+        raise RuntimeError("HelixSR archive has no helixsr.ini beside its DLL")
     # Only the licence texts go to Licenses/, not the release folder itself
     # (which holds the DLL and README too).
     notices = staging / "helixsr-notices"
@@ -268,7 +374,7 @@ def helixsr_from(source: Path, staging: Path) -> tuple[Path, str, Path, dict[str
               for p in sorted((root / "helixsr-fg").rglob("*"))
               if p.is_file() and not p.name.lower().endswith((".log", ".tmp"))
               and ".log." not in p.name.lower()}
-    return dlls[0], "".join(lines), notices, network, fg
+    return dlls[0], ini, notices, network, fg
 
 
 def scaler_from(source: Path, staging: Path) -> tuple[Path, Path, Path]:
@@ -369,7 +475,9 @@ def optiscaler_artifact(
     if any(p.is_symlink() or not (p.is_dir() or p.is_file()) for p in extracted.rglob("*")):
         raise RuntimeError("OptiScaler archive contains a link or special file")
 
-    validate_preset(args.preset, extracted / "OptiScaler.ini", variant_preset)
+    if not (extra and "OptiScaler.ini" in extra):
+        # A variant with its own ini is checked against that one, below.
+        validate_preset(args.preset, extracted / "OptiScaler.ini", variant_preset)
 
     dll = extracted / "OptiScaler.dll"
     # WINMM is imported by Vulkan games that never touch DXGI, so it is the one
@@ -556,6 +664,18 @@ def main() -> int:
                     help="name of the --ffx-sdk-alt bridge the HelixSR Scaler "
                          "variant ships as its FidelityFX library (what OptiScaler "
                          "offers as FSR4 and uses for Direct3D 11 and Vulkan)")
+    ap.add_argument("--freefg", nargs=2, metavar=("ARCHIVE", "ORIGIN"),
+                    help="FreeFG release zip and the URL recorded in the prefix; adds "
+                         "the opt-in 'freefg' variant (Intel XeFG frame generation "
+                         "with FreeFG's BC-250 shaders and VRR pacing layer), and "
+                         "'freefg-helixsr' with HelixSR as its upscaler when "
+                         "--helixsr is given")
+    ap.add_argument("--freefg-ini", type=Path,
+                    help="OptiScaler.ini of FreeFG's OptiScaler build (its fork's tree at "
+                         "the tagged commit); the nightly's is older than that build")
+    ap.add_argument("--freefg-bridge", default="fsr411f",
+                    help="name of the --ffx-sdk-alt bridge the FreeFG variant ships "
+                         "as its FidelityFX upscaler (FreeFG's own is RC11, fsr411f)")
     ap.add_argument("--dlss", type=Path, required=True, help="NVIDIA nvngx_dlss.dll surrogate")
     ap.add_argument("--licenses", type=Path, required=True, help="directory of license notices")
     ap.add_argument("--preset", type=Path, required=True, help="optiscaler-preset.json")
@@ -579,6 +699,9 @@ def main() -> int:
     variants = []
     # Preset entries that apply only when that pinned version is selected.
     variant_presets = {}
+    # FreeFG's Vulkan layer, by pinned version: the launcher points the loader
+    # at it in the prefix when that version is selected.
+    freefg_layers = {}
 
     # SIGNED_NAME is what the AMD-signed bridge is called once something else is
     # the default. It has to be reachable by name either way: a player comparing
@@ -624,7 +747,7 @@ def main() -> int:
 
         for name, path, origin in args.ffx_sdk_alt:
             if name in ("", "default", "1", "0", SIGNED_NAME, HELIXSR_NAME,
-                        HELIXSR_FFX_NAME, "optiscaler") or name in aliases:
+                        HELIXSR_FFX_NAME, FREEFG_NAME, FREEFG_HELIXSR_NAME, "optiscaler") or name in aliases:
                 raise SystemExit(f"ERROR: unusable variant name: {name!r}")
             source = Path(path)
             dll, notices = bridge_from(source, staging, name)
@@ -670,7 +793,7 @@ def main() -> int:
                    "fsr411f, ...). "
                    if is_default else
                    f"Selected explicitly by PROTON_USE_OPTISCALER={HELIXSR_FFX_NAME}. ")
-                + "helixsr.ini is shipped with logging switched off.\n"
+                + "helixsr.ini is HelixSR's own, unchanged.\n"
             )
             variants.append((
                 dll, version, provenance, notices,
@@ -738,6 +861,83 @@ def main() -> int:
             }
             variants.append((bridge, version, provenance, merged, extra))
 
+        if args.freefg:
+            # Opt-in only: FreeFG 1.0.x has been qualified in menus and
+            # benchmarks, not in play.
+            freefg, freefg_notices = freefg_from(
+                Path(args.freefg[0]), args.optiscaler, staging)
+            if not args.freefg_ini:
+                raise SystemExit("ERROR: --freefg needs --freefg-ini (the OptiScaler.ini "
+                                 "of FreeFG's OptiScaler build)")
+            if args.freefg_bridge not in bridges:
+                raise SystemExit(f"ERROR: --freefg-bridge names no --ffx-sdk-alt: "
+                                 f"{args.freefg_bridge!r}")
+            bridge, bridge_notices, bridge_origin = bridges[args.freefg_bridge]
+            # Two upscalers, as FreeFG's own Setup offers: the RC11 bridge it
+            # ships (freefg), and HelixSR in its place (freefg-helixsr), laid
+            # out like helixsr-ffx. HelixSR's frame generation cannot load there
+            # (no helixsr-fg/), so frame generation stays XeFG and its ini can
+            # ship as released.
+            upscalers = [(FREEFG_NAME, bridge, {}, {}, bridge_notices, args.freefg_bridge,
+                          f"the {args.freefg_bridge} FSR4 bridge (origin: {bridge_origin}), "
+                          "the same RC11 build FreeFG ships")]
+            if helixsr:
+                dll, ini, helix_notices, network, fg = helixsr
+                upscalers.append((
+                    FREEFG_HELIXSR_NAME, dll,
+                    {"OptiScaler/amd_fidelityfx_dx12.dll": dll, "OptiScaler/helixsr.ini": ini,
+                     **{f"OptiScaler/{name}": path for name, path in network.items()}},
+                    HELIXSR_PRESET, helix_notices, "HelixSR",
+                    f"HelixSR (origin: {args.helixsr[1]}, SHA256 {digest(dll)}), which runs "
+                    "NVIDIA's DLSS Model E network as DirectX 12 compute; it is also "
+                    "OptiScaler/amd_fidelityfx_dx12.dll. Per its author, that network remains "
+                    "the property of NVIDIA Corporation and is not covered by HelixSR's licence"))
+            for name, ffx_sdk, upscaler_files, upscaler_preset, upscaler_notices, \
+                    notice_prefix, upscaler_text in upscalers:
+                version = args.optiscaler_version + "-" + name
+                aliases[name] = version
+                variant_presets[version] = {**FREEFG_PRESET, **upscaler_preset}
+                freefg_layers[version] = {
+                    "layer": FREEFG_LAYER,
+                    "layer_dir": f"{FREEFG_FOLDER}/layer",
+                    "wave_config": f"{FREEFG_FOLDER}/shaders/waves.txt",
+                    # 49 of the wrapper's 57 exports are forwarders to the module
+                    # "bc250_xefg_original", which the loader looks up by name on
+                    # the DLL search path. FreeFG puts it beside the game's .exe;
+                    # here it is in OptiScaler's library folder, so that folder has
+                    # to be on the path, or OptiScaler gets NULL for every forwarded
+                    # export and calls it (Spider-Man 2, xefgSwapChainSetLoggingCallback).
+                    "dll_path": "C:\\windows\\system32\\umu\\OptiScaler",
+                }
+                merged = staging / (name + "-all-notices")
+                merged.mkdir()
+                for path in sorted(freefg_notices.iterdir()):
+                    shutil.copy2(path, merged / path.name)
+                for path in sorted(upscaler_notices.rglob("*")) if upscaler_notices else []:
+                    if path.is_file():
+                        shutil.copy2(path, merged / (notice_prefix + "-" + path.name))
+                provenance = (
+                    f"{args.proxy} in this directory is FreeFG's build of OptiScaler (GPL-3.0; "
+                    "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-f971ed1 "
+                    "and freefg-1.0.1-source.zip beside FreeFG's release), NOT the stock "
+                    "OptiScaler nightly.\n\n"
+                    f"Origin: {args.freefg[1]}\n"
+                    f"SHA256: {digest(freefg['opti'])}\n\n"
+                    "OptiScaler/libxess_fg.dll is FreeFG's wrapper (MIT), which runs part of "
+                    "the work of Intel's XeFG runtime with FreeFG's own shaders "
+                    f"({FREEFG_FOLDER}/shaders/). OptiScaler/bc250_xefg_original.dll is Intel's "
+                    "XeFG runtime, unmodified (the nightly's libxess_fg.dll, renamed).\n"
+                    f"SHA256 of the wrapper: {digest(freefg['OptiScaler/libxess_fg.dll'])}\n\n"
+                    f"{FREEFG_FOLDER}/layer/ is FreeFG's Linux Vulkan layer that paces "
+                    "generated frames for VRR displays.\n\n"
+                    f"OptiScaler/amd_fidelityfx_upscaler_dx12.dll is {upscaler_text}.\n"
+                    f"Selected explicitly by PROTON_USE_OPTISCALER={name}.\n"
+                )
+                extra = {args.proxy: freefg["opti"], "OptiScaler.ini": args.freefg_ini,
+                         **{n: path for n, path in freefg.items() if n != "opti"},
+                         **upscaler_files}
+                variants.append((ffx_sdk, version, provenance, merged, extra))
+
         # The stock OptiScaler nightly, selected with one name whichever variant
         # is the default: the FSR4 fork's bridge, like the packages shipped
         # before HelixSR became the default. Other bridges are their own names.
@@ -780,6 +980,8 @@ def main() -> int:
                 # Merged over the preset only when that version is the one
                 # asked for (keyed by pinned version, like the manifest).
                 "optiscaler_variant_preset": variant_presets,
+                # Paths below the payload folder (system32/umu in the prefix).
+                "freefg": freefg_layers,
                 # Enforced into a fresh prefix and then left to the user, so the
                 # OptiScaler overlay can own them from that point on.
                 "seed_once": seed_once,

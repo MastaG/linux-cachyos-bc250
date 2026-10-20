@@ -260,6 +260,9 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \\\n'
     '        --helixsr-scaler "${srcdir}/HelixSR-Scaler-1.1.0-core.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \\\n'
+    '        --freefg "${srcdir}/freefg-1.0.1.zip" \\\n'
+    '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.0.1" \\\n'
+    '        --freefg-ini "${srcdir}/OptiScaler-bc250-f971ed1.ini" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -329,6 +332,17 @@ payload_sources = [
     # HelixSR Scaler 1.1.0 (OptiScaler with HelixSR built in, GPL-3.0): the default.
     ("HelixSR-Scaler-1.1.0-core.zip", f"{payload_base}/HelixSR-Scaler-1.1.0-core.zip",
      "c798b51b3802031627cd118f7e9aee5b98de552fb45f4fe7e28d0e688d1646df", True),
+    # FreeFG 1.0.1 (daniel-h-0): Intel XeSS frame generation with its own BC-250
+    # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
+    # Mirrored release zip; its OptiScaler build is GPL-3.0, and the matching
+    # freefg-1.0.1-source.zip is mirrored beside it.
+    ("freefg-1.0.1.zip", f"{payload_base}/freefg-1.0.1.zip",
+     "0828855b6a08b9f9f256aa64245ce15fc51f4809c7ea3fe474d6ea3af6427389", True),
+    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-f971ed1),
+    # pinned by commit: that build is newer than the nightly and renamed keys.
+    ("OptiScaler-bc250-f971ed1.ini",
+     "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/d3decb62af2e3b495e330ad16a55507aac0fa48d/OptiScaler.ini",
+     "fb798d1f49e28c78457c0d17248c45e565b7dc70df5a75ad41c53d6768b3d139", False),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),

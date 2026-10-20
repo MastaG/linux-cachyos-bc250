@@ -85,6 +85,19 @@ shipped ini sets `enable_logs=0` and `enable_trace_logs=0`, is only written when
 fakenvapi did not bring settings of its own, and stays editable in the prefix
 because `.ini` files are excluded from the payload's per-file checksums.
 
+HelixSR is the deliberate exception: its `helixsr.ini` ships as released, so it
+writes `helixsr.log` beside its DLL (`system32/umu/HelixSR-fsrfg` with the
+Scaler) on every launch. That log is what its author asks for with a problem
+report, and a package that switched it off left players unable to send one.
+
+`PROTON_USE_OPTISCALER=freefg` is the one variant that also sets variables
+outside OptiScaler's own: FreeFG's Vulkan pacing layer runs in the game
+process, so the launcher prepends its folder in the prefix to `VK_LAYER_PATH`
+and its name to `VK_INSTANCE_LAYERS`, and sets `XEFG_WAVE_CONFIG` and vkd3d's
+`no_staggered_submit`, as FreeFG's own installer does. Switching variants
+removes the previous variant's leftovers from the prefix first (details in
+[packages/bc250-fsr4-common/README.md](../packages/bc250-fsr4-common/README.md)).
+
 ### Which Proton, and which OptiScaler
 
 `protonge-latest-bc250` tracks the newest GE-Proton release automatically; `pkgver` follows it (`GE-Proton11-6` → `11.6`). The Steam-internal tool name stays `protonge-latest-bc250` across upgrades on purpose — Steam stores that name per game, so a name carrying the version would reset everyone's per-game choice on every update.

@@ -688,6 +688,18 @@ will not be caught, and VAC leaves nothing to find at all. **If you play a game
 with anti-cheat, set `PROTON_FSR4_UPGRADE=0 %command%` yourself rather than
 relying on the detection**, or use a Proton without this payload in it.
 
+If you accept the ban risk and want the upscaler in an anti-cheat game anyway,
+switch the guard off: `BC250_FSR4_IGNORE_ANTICHEAT=1 %command%` for one game, or
+for every game:
+
+```bash
+mkdir -p ~/.config/bc250-fsr4 && touch ~/.config/bc250-fsr4/ignore-anticheat
+```
+
+Delete that file to turn the guard back on. The launcher says in Steam's log
+when it skipped the guard and why. Besides bans, anti-cheat may simply refuse
+to start a game with OptiScaler loaded, so it will not work in every title.
+
 **That is the whole setup.** FSR4 and OptiScaler are on by default — no launch
 options, no DLLs to copy into game folders, no environment variables.
 
@@ -915,14 +927,22 @@ DLLs are separate choices, one launch option away:
 PROTON_USE_OPTISCALER=optiscaler %command%   # the stock OptiScaler nightly with the FSR4 fork's bridge
 PROTON_USE_OPTISCALER=helixsr-ffx %command%  # the nightly with HelixSR 2.0.0 as its FidelityFX library
 PROTON_USE_OPTISCALER=fsr411f %command%      # (and signed, fsr411b, fsr411rc9, fsr411rc10) other bridge DLLs
+PROTON_USE_OPTISCALER=freefg %command%       # FreeFG: Intel XeSS frame generation, sped up for the BC-250 (below)
+PROTON_USE_OPTISCALER=freefg-helixsr %command%  # FreeFG's frame generation with HelixSR as the upscaler
 ```
+
+Switching between them is safe: on a game launch the wrapper removes every
+file and folder another variant left in the prefix (its `.ini` files and logs
+included, which Proton's own replacement keeps), so a game never runs with
+pieces of two variants.
 
 Since HelixSR 2.0 and Scaler 1.1.0 the Scaler is OptiScaler first: HelixSR is its
 FidelityFX upscaler for Direct3D 12, and also for Direct3D 11 and Vulkan games
 (through OptiScaler's `ffx_12` route; FSR3, FSR4 and XeSS stay in its menu).
 The Direct3D 11 and Vulkan routes are new and not yet field-tested here; the FSR4
 fork's bridge stays the FidelityFX upscaler of the other variants. Its
-`helixsr.log` is HelixSR's own, in `system32/umu/HelixSR-fsrfg` of the prefix; sharpening
+`helixsr.log` is HelixSR's own, in `system32/umu/HelixSR-fsrfg` of the prefix
+(on by default; attach it when reporting a HelixSR problem); sharpening
 is OptiScaler's. Its author measures 1.06 ms per frame for 1080p Quality and
 3.3 ms for 4K Performance on a BC-250 at 2000 MHz.
 
@@ -940,6 +960,49 @@ SHA256 and its origin is written into the prefix
 
 Design and packaging details are in [docs/FSR4-PROTON.md](docs/FSR4-PROTON.md)
 and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md).
+
+### FreeFG: XeSS frame generation for the BC-250 (opt-in)
+
+`PROTON_USE_OPTISCALER=freefg %command%` selects
+[FreeFG](https://github.com/daniel-h-0/freefg) 1.0.1 by daniel-h-0. Frame
+generation is Intel's XeSS FG (XeFG): Intel's unmodified runtime generates the
+frames, and FreeFG's wrapper runs part of its GPU work with FreeFG's own
+shaders, which are faster on the BC-250 (its author measured +21% in Cyberpunk
+2077 at 2×) and gave the same pixels where compared. FreeFG's Vulkan layer paces
+the frames for VRR displays (under gamescope only). Upscaling is FSR4 with the
+BC-250 fork's RC11, the bridge FreeFG ships itself. `freefg-helixsr` is the
+same with HelixSR 2.0.0 as the upscaler instead, as FreeFG's own Setup offers:
+cheaper per frame than RC11 on the BC-250 (in Spider-Man 2 RC11 took about
+4.8 ms from 1512×856 to 1440p), with frame generation still XeFG. HelixSR's own
+DLSS frame generation is not part of it; that is the default HelixSR Scaler's.
+
+What the variant sets, as FreeFG's installer would for its OptiScaler route:
+frame generation on with XeFG output at 2×, borderless instead of exclusive
+fullscreen (XeFG does not interpolate in exclusive fullscreen), Reflex forced on
+for XeLL, and OptiFG as the input (`FrameGen.FGInput=upscaler`, which works in
+any game whose upscaler OptiScaler sees). FreeFG's own installer picks the input
+per game from its recipes; here a game that has DLSS or FSR frame generation can
+ask for it instead:
+
+```text
+BC250_OPTISCALER_EXTRA="FrameGen.FGInput=dlssg" PROTON_USE_OPTISCALER=freefg %command%
+```
+
+Choose the upscaler in the game as usual, and leave the game's own frame
+generation off with the OptiFG input. It is DirectX 12 only, and only the
+first XeFG context of a game is sped up.
+
+Status: opt-in and experimental. FreeFG 1.0.1's runtime files are
+byte-identical to 1.0.0's, which was qualified in menus and benchmarks on one
+BC-250, not in play; here it was tried in Spider-Man 2. Its logs, `BC250-MFG.log` and
+`BC250-XeFG-fast.log`, are in `system32/umu/OptiScaler` of the prefix; report
+FreeFG problems [to FreeFG](https://github.com/daniel-h-0/freefg/issues). The
+package ships FreeFG's release files unchanged, pinned by SHA256: its
+OptiScaler build (GPL-3.0; source at
+[daniel-h-0/OptiScaler](https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-f971ed1),
+and `freefg-1.0.1-source.zip` is mirrored beside the package inputs), its
+wrapper, shaders and layer (MIT). Intel's XeFG and XeLL runtimes are the ones in
+the pinned OptiScaler nightly, byte-identical to what FreeFG pins.
 
 ---
 

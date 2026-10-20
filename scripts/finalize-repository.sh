@@ -422,6 +422,9 @@ if [[ "$proton_slr_present" == true ]]; then
   injecting into those games risks a ban. That detection is a safety net rather
   than a guarantee: set \`PROTON_FSR4_UPGRADE=0 %command%\` yourself when in
   doubt.
+- **New: the anti-cheat guard can be switched off** by players who accept the ban risk:
+  \`BC250_FSR4_IGNORE_ANTICHEAT=1 %command%\` for one game, or the file
+  \`~/.config/bc250-fsr4/ignore-anticheat\` for every game (all three packages).
 
 \`\`\`bash
 sudo pacman -S proton-cachyos-slr-bc250
@@ -664,7 +667,19 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   \`fsr411f\`, \`signed\`, \`fsr411b\`, \`fsr411rc9\`, \`fsr411rc10\` the other bridge DLLs. The Scaler
   does not mix with them. Per its author, the DLSS weights and kernels it runs remain NVIDIA's
   property. If a game looks wrong or crashes, \`PROTON_USE_OPTISCALER=optiscaler %command%\`
-  goes back to plain OptiScaler.
+  goes back to plain OptiScaler. HelixSR's own log, \`helixsr.log\` in \`system32/umu/HelixSR-fsrfg\`
+  of the prefix, is on again: attach it when you report a HelixSR problem.
+- **New, opt-in: FreeFG** ([1.0.1](https://github.com/daniel-h-0/freefg/releases/tag/v1.0.1), by
+  daniel-h-0) with \`PROTON_USE_OPTISCALER=freefg %command%\`. Intel's XeSS frame generation at 2×,
+  with part of its GPU work run by FreeFG's own shaders (faster on the BC-250, same pixels where
+  compared) and a Vulkan layer that paces the frames for VRR under gamescope. Upscaling is FSR4
+  (RC11). Frame generation is on with OptiFG as its input; a game with DLSS or FSR frame generation
+  can use that instead with \`BC250_OPTISCALER_EXTRA="FrameGen.FGInput=dlssg"\`. DirectX 12 only,
+  experimental (FreeFG's files were qualified in menus and benchmarks, not in play); report FreeFG
+  problems to FreeFG. \`PROTON_USE_OPTISCALER=freefg-helixsr\` is the same with HelixSR 2.0.0 as the
+  upscaler instead of FSR4, which costs less GPU time per frame on the BC-250.
+- Switching \`PROTON_USE_OPTISCALER\` now removes the previous choice's leftover files from the
+  prefix (its settings files and logs included), so two variants never mix.
 
 \`\`\`bash
 sudo pacman -S protonge-latest-bc250

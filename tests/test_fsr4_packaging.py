@@ -993,6 +993,12 @@ class SlrPackageTests(unittest.TestCase):
                 # fsr411f, and the default is only valid with --helixsr given.
                 self.assertIn('helixsr', text.split("--ffx-sdk-default", 1)[1][:16])
                 self.assertIn("--helixsr", text)
+                # FreeFG, opt-in, from its mirrored release zip.
+                self.assertIn("--freefg", text)
+                self.assertIn("freefg-1.0.1.zip", text)
+                self.assertIn("--freefg-ini", text)
+                self.assertIn("fb798d1f49e28c78457c0d17248c45e565b7dc70df5a75ad41c53d6768b3d139", text)
+                self.assertIn("0828855b6a08b9f9f256aa64245ce15fc51f4809c7ea3fe474d6ea3af6427389", text)
 
     def test_the_metapackage_pulls_in_all_three(self):
         pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()

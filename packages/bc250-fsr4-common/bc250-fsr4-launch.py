@@ -20,6 +20,7 @@ import configparser
 import json
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -162,6 +163,30 @@ def anticheat_reason(inherited):
     return None
 
 
+def anticheat_ignored(inherited):
+    """Say why the anti-cheat guard is switched off, or None if it is not.
+
+    Players who accept the ban risk asked for a switch that is not a second
+    meaning of PROTON_FSR4_UPGRADE=1: BC250_FSR4_IGNORE_ANTICHEAT=1 for one
+    game, or the file ~/.config/bc250-fsr4/ignore-anticheat for every game.
+    A file because Steam has no global environment setting; it is read inside
+    the Steam Linux Runtime too, where $HOME is the same.
+    """
+    if inherited.get("BC250_FSR4_IGNORE_ANTICHEAT", "").strip() == "1":
+        return "BC250_FSR4_IGNORE_ANTICHEAT=1"
+    config = inherited.get("XDG_CONFIG_HOME", "").strip()
+    if not config and inherited.get("HOME", "").strip():
+        config = str(Path(inherited["HOME"]) / ".config")
+    if config:
+        switch = Path(config) / "bc250-fsr4" / "ignore-anticheat"
+        try:
+            if switch.exists():
+                return str(switch)
+        except OSError:
+            pass
+    return None
+
+
 def defaulted(env, name, value):
     """Set `name` unless the caller chose something. Empty counts as unset."""
     env[name] = env.get(name, "").strip() or value
@@ -217,13 +242,13 @@ def proxy_name(requested, default):
     return name
 
 
-def prefix_ini(inherited):
-    """Where protonfixes keeps this game's OptiScaler.ini, if it can be located.
+def payload_dir(inherited):
+    """Where protonfixes installs the OptiScaler payload, if it can be located.
 
-    protonfixes writes it beside the payload it installs, at the fixed path it
-    uses for every upscaler it manages. Proton has not run yet when this is
-    called, so the prefix comes from the environment: umu and Heroic export
-    WINEPREFIX, Steam exports the compat data path with the prefix below it.
+    It is the fixed path protonfixes uses for every upscaler it manages. Proton
+    has not run yet when this is called, so the prefix comes from the
+    environment: umu and Heroic export WINEPREFIX, Steam exports the compat
+    data path with the prefix below it.
     """
     prefix = inherited.get("WINEPREFIX", "").strip()
     if not prefix:
@@ -231,7 +256,121 @@ def prefix_ini(inherited):
         prefix = str(Path(data) / "pfx") if data else ""
     if not prefix:
         return None
-    return Path(prefix) / "drive_c/windows/system32/umu/OptiScaler.ini"
+    return Path(prefix) / "drive_c/windows/system32/umu"
+
+
+def prefix_ini(inherited):
+    """Where protonfixes keeps this game's OptiScaler.ini, if it can be located."""
+    payload = payload_dir(inherited)
+    return payload / "OptiScaler.ini" if payload else None
+
+
+def prepend(env, name, value, separator):
+    """Put `value` first in a list-valued variable, keeping what was there."""
+    parts = [part for part in env.get(name, "").split(separator) if part and part != value]
+    env[name] = separator.join([value, *parts])
+
+
+def freefg_environment(env, layer, inherited):
+    """Enable FreeFG's Vulkan pacing layer, which runs in the game process.
+
+    The layer ships in the payload, so the loader is pointed at the prefix;
+    pressure-vessel maps the prefix at the same path, so this holds inside the
+    Steam Linux Runtime too. The rest is what FreeFG's own installer writes
+    into a game's launch options: the wave-size table, and vkd3d-proton's
+    no_staggered_submit, which FreeFG's BC250_XEFG_NO_STAGGERED_SUBMIT=0 turns
+    off.
+
+    The wrapper forwards most of Intel's exports to bc250_xefg_original.dll by
+    module name, and the loader finds that only on the DLL search path.
+    FreeFG puts it beside the game's .exe; here it is in OptiScaler's library
+    folder, which WINEPATH puts on the Windows PATH, the last place the loader
+    looks. Without it OptiScaler gets NULL for each forwarded export and calls
+    one while the game creates its swapchain.
+    """
+    if layer.get("dll_path"):
+        prepend(env, "WINEPATH", layer["dll_path"], ";")
+    payload = payload_dir(inherited)
+    if payload is None:
+        sys.stderr.write(
+            "bc250-fsr4: no Wine prefix in the environment; FreeFG runs without\n"
+            "bc250-fsr4: its frame pacing layer.\n")
+        return
+    prepend(env, "VK_LAYER_PATH", str(payload / layer["layer_dir"]), ":")
+    prepend(env, "VK_INSTANCE_LAYERS", layer["layer"], ":")
+    defaulted(env, "XEFG_WAVE_CONFIG", str(payload / layer["wave_config"]))
+    if inherited.get("BC250_XEFG_NO_STAGGERED_SUBMIT") != "0":
+        parts = [part for part in env.get("VKD3D_CONFIG", "").split(",") if part]
+        if "no_staggered_submit" not in parts:
+            parts.append("no_staggered_submit")
+        env["VKD3D_CONFIG"] = ",".join(parts)
+
+
+# Written at run time beside files the variants share, so no folder of their
+# own takes them along. Removed whenever FreeFG is not the selected variant.
+FREEFG_LOGS = ("OptiScaler/BC250-MFG.log", "OptiScaler/BC250-XeFG-fast.log")
+
+
+def clean_other_variants(config, env, inherited):
+    """Remove what another OptiScaler variant left in this prefix.
+
+    Switching PROTON_USE_OPTISCALER makes protonfixes replace the payload, but
+    it only removes the files it checksums: .ini files stay (HelixSR Scaler's
+    HelixSR-fsrfg/helixsr.ini, for one), as does anything written at run time
+    (helixsr.log, FreeFG's logs). A leftover HelixSR-fsrfg folder is not inert
+    either: HelixSR Scaler looks for it beside its proxy.
+
+    So every file the manifest lists for some variant but not for the selected
+    one is removed, and so is every folder that only other variants use, with
+    whatever was written into it. Files the selected variant also has are left
+    to protonfixes, which replaces them. Nothing outside the payload folder is
+    touched, and nothing at all when OptiScaler is off.
+    """
+    version = env.get("PROTON_USE_OPTISCALER", "0")
+    payload = payload_dir(inherited)
+    if version == "0" or payload is None or not payload.is_dir():
+        return []
+    manifest = json.loads((TOOL / config["manifest"]).read_text())
+    entries = manifest.get("optiscaler", [])
+    selected = next((e for e in entries if e.get("version") == version), None)
+    if selected is None:
+        # protonfixes refuses the launch and names the version; nothing to do.
+        return []
+
+    def folders(names):
+        return {str(parent) for name in names
+                for parent in Path(name).parents if str(parent) != "."}
+
+    keep = set(selected["md5_hash"])
+    stale = set().union(*(set(e["md5_hash"]) for e in entries)) - keep
+    if version not in config.get("freefg", {}):
+        stale |= set(FREEFG_LOGS)
+    stale_folders = folders(stale) - folders(keep)
+
+    root = payload.resolve()
+
+    def inside(path):
+        # The names come from our own manifest, but a link planted in a prefix
+        # must not send a removal anywhere else.
+        parent = path.parent.resolve()
+        return parent == root or root in parent.parents
+
+    removed = []
+    # Shallowest first: a folder inside one already removed is simply gone.
+    for name in sorted(stale_folders, key=lambda n: (n.count("/"), n)):
+        path = payload / name
+        if path.is_dir() and not path.is_symlink() and inside(path):
+            shutil.rmtree(path)
+            removed.append(name + "/")
+    for name in sorted(stale):
+        path = payload / name
+        if (path.is_file() or path.is_symlink()) and inside(path):
+            path.unlink()
+            removed.append(name)
+    if removed:
+        sys.stderr.write("bc250-fsr4: removed " + str(len(removed))
+                         + " leftover file(s) of another OptiScaler variant\n")
+    return removed
 
 
 def seed_once(preset, config, inherited):
@@ -346,13 +485,22 @@ def environment(config, inherited, *, game):
     # An anti-cheat game gets the documented opt-out as its default instead:
     # both payload steps off, still overridable by anyone who insists.
     guard = anticheat_reason(inherited)
+    ignored = anticheat_ignored(inherited) if guard else None
+    if ignored:
+        sys.stderr.write(
+            "bc250-fsr4: anti-cheat detected (" + guard + "), but the guard is\n"
+            "bc250-fsr4: switched off by " + ignored + ": FSR4 and OptiScaler\n"
+            "bc250-fsr4: stay on. This risks a ban, and anti-cheat may refuse to start.\n")
+        guard = None
     defaulted(env, "PROTON_FSR4_UPGRADE",
               "0" if guard else config["provider_version"])
     if guard and env["PROTON_FSR4_UPGRADE"] == "0":
         sys.stderr.write(
             "bc250-fsr4: anti-cheat detected (" + guard + "); FSR4 and OptiScaler\n"
             "bc250-fsr4: are off for this game. Injecting into a protected game\n"
-            "bc250-fsr4: risks a ban. PROTON_FSR4_UPGRADE=1 overrides this.\n")
+            "bc250-fsr4: risks a ban. To accept that: BC250_FSR4_IGNORE_ANTICHEAT=1\n"
+            "bc250-fsr4: for this game, or touch ~/.config/bc250-fsr4/ignore-anticheat\n"
+            "bc250-fsr4: for every game.\n")
     # The documented opt-out disables the package's default proxy as well.
     # Otherwise OptiScaler can still discover a provider retained in a prefix.
     defaulted(env, "PROTON_USE_OPTISCALER",
@@ -375,6 +523,13 @@ def environment(config, inherited, *, game):
     # version is the one being launched. Debug and BC250_OPTISCALER_EXTRA still
     # go on top.
     preset.update(config.get("optiscaler_variant_preset", {}).get(env["PROTON_USE_OPTISCALER"], {}))
+    # null drops a shared key the variant's OptiScaler does not have: protonfixes
+    # refuses a launch on a key missing from the ini, and FreeFG's OptiScaler
+    # writes its ini without the old FSR.Fsr4ForceModel.
+    preset = {key: value for key, value in preset.items() if value is not None}
+    layer = config.get("freefg", {}).get(env["PROTON_USE_OPTISCALER"])
+    if layer:
+        freefg_environment(env, layer, inherited)
     if inherited.get("BC250_FSR4_DEBUG") == "1":
         preset.update({"Log.LogToFile": "true", "FSR.Fsr4EnableWatermark": "true"})
         env["PROTON_LOG"] = "1"
@@ -400,6 +555,10 @@ def main():
     config = json.loads((TOOL / "bc250-fsr4-config.json").read_text())
     game = game_launch(sys.argv[1:], os.environ)
     env = environment(config, os.environ, game=game)
+    if game:
+        # Before Proton runs protonfixes, which then installs the selected
+        # variant over a folder with no other variant's files in it.
+        clean_other_variants(config, env, os.environ)
     # Replace this process so Steam keeps the pid it started and every inherited
     # descriptor, exactly as if it had run Proton directly.
     proton = str(TOOL / config["proton"])
