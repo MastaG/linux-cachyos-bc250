@@ -202,12 +202,14 @@ picks one:
   (log on, as its author asks for `helixsr.log` with problem reports), and `helixsr-fg/` with everything the setup built there, sub-folders
   included (the light mode, the default, is in `helixsr-fg/310.9.16/`; logs
   are left out). The Scaler is OptiScaler first: its variant preset sets
-  `Upscalers.Dx12Upscaler = ffx`, `Libraries.FfxDx12SRPath` to that DLL and,
-  for HelixSR's frame generation, `FrameGen.FGInput = nvngxfg` with
-  `FGNvngxReplacement = HelixSR` and `FrameGen.Enabled = auto` (the game's own
-  DLSS frame generation drives it); all of it is validated against the
-  Scaler's ini. The Scaler writes `helixsr.ini` and its log at run time, so
-  those are not pinned. A built DLL is recognised by the setup's `HXSRNET1`
+  `Upscalers.Dx12Upscaler = ffx` and `Libraries.FfxDx12SRPath` to that DLL,
+  validated against the Scaler's ini. It does not name the FrameGen keys any
+  more (since 2026-10-22), so a fresh prefix keeps `auto` there and a game's own
+  DLSS frame generation setting no longer routes to HelixSR on its own — the
+  Scaler only serves it when `FGInput = nvngxfg` is paired with
+  `FGNvngxReplacement = HelixSR`, and `BC250_OPTISCALER_EXTRA` is how a game asks
+  for that. The Scaler writes `helixsr.ini` and its log at run time, so those are
+  not pinned. A built DLL is recognised by the setup's `HXSRNET1`
   trailer (2.0.0's unbuilt DLL is 7.6 MB, too close to a size test).
 - **`helixsr-ffx`** — the earlier route, now opt-in, not a FidelityFX build at all:
   [HelixSR](https://github.com/lonewolf0622/HelixSR) 2.0.0, one FSR 3.1 DLL that
@@ -333,7 +335,12 @@ filename and its manifest entry.
 
 ## `optiscaler-preset.json`
 
-The 24-key OptiScaler configuration, applied via `PROTON_OPTISCALER_CONFIG`.
+The 24-key OptiScaler configuration, applied via `PROTON_OPTISCALER_CONFIG` to a
+prefix that has no answer of its own: OptiScaler ships every key as `auto`, a key
+still at `auto` counts as nobody's answer, and anything else the prefix wrote —
+from the overlay's *Save Settings* or from this preset on the launch before —
+stands. Only the variant presets below, the debug keys and
+`BC250_OPTISCALER_EXTRA` are applied on every launch.
 
 **This file is coupled to the OptiScaler build.** The patch above makes an
 unknown key *fatal* in pinned mode, so a build that renames or drops an option

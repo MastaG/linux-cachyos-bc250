@@ -61,13 +61,9 @@ def validate_preset(preset_path: Path, ini_path: Path, extra: dict | None = None
             raise RuntimeError("Unknown OptiScaler preset option: " + key)
         parser[section][option] = value
 
-    # seed_once names preset keys the launcher stops enforcing once the prefix
-    # has a value of its own. A name that is not in the preset would silently
-    # do nothing, so it fails the build instead.
-    document = json.loads(preset_path.read_text())
-    for key in document.get("seed_once", []) if isinstance(document, dict) else []:
-        if key not in preset:
-            raise RuntimeError("seed_once names a key the preset does not set: " + key)
+    # Every preset key is seed-once now: the launcher only writes the ones the
+    # prefix has not answered, so a key this check passes must exist in the ini
+    # for protonfixes to accept it at all.
     return preset
 
 
@@ -142,20 +138,19 @@ HELIXSR_FFX_NAME = "helixsr-ffx"
 # the Scaler finds in a HelixSR-fsrfg folder next to its own DLL (the proxy,
 # here umu/winmm.dll) or the game's .exe: HelixSR-fsrfg/amd_fidelityfx_dx12.dll,
 # and HelixSR-fsrfg/helixsr-fg/ for frame generation. With that folder there,
-# the Scaler's auto picks HelixSR as the Dx12 upscaler (ffx), the library path
-# is spelled out below all the same, because the ffx route needs it to be right.
-# FrameGen.Enabled is "false" in the shared preset; "auto" lets the game's own
-# DLSS frame generation setting (on/off and multiplier) drive HelixSR's, which
-# the Scaler only serves when FGInput is nvngxfg and FGNvngxReplacement HelixSR
-# (its README; the older [HelixSR] FrameGeneration key is gone).
+# the Scaler's auto picks HelixSR as the Dx12 upscaler (ffx), and the library
+# path is spelled out below all the same, because the ffx route needs it to be
+# right. The FrameGen keys are not spelled out any more: a fresh prefix now
+# keeps the ini's own "auto", which means a game's DLSS frame generation
+# setting no longer routes to HelixSR by default (the Scaler only serves it
+# when FGInput is nvngxfg and FGNvngxReplacement HelixSR, per its README; the
+# older [HelixSR] FrameGeneration key is gone). Anyone who wants it asks per
+# game: BC250_OPTISCALER_EXTRA="FrameGen.FGInput=nvngxfg;FrameGen.FGNvngxReplacement=HelixSR".
 SCALER_FOLDER = "HelixSR-fsrfg"
 SCALER_PRESET = {
     "Upscalers.Dx12Upscaler": "ffx",
     "Libraries.FfxDx12SRPath":
         "C:\\windows\\system32\\umu\\" + SCALER_FOLDER + "\\amd_fidelityfx_dx12.dll",
-    "FrameGen.Enabled": "auto",
-    "FrameGen.FGInput": "nvngxfg",
-    "FrameGen.FGNvngxReplacement": "HelixSR",
 }
 # Where OptiScaler finds the HelixSR DLL in the prefix: the payload folder
 # (Libraries.OptiDllPath), under both FidelityFX names. HelixSR's README has
@@ -959,7 +954,6 @@ def main() -> int:
 
     document = json.loads(args.preset.read_text())
     preset = document["preset"] if "preset" in document else document
-    seed_once = document.get("seed_once", []) if isinstance(document, dict) else []
     # The wrapper asks protonfixes for these versions by name, and the manifest
     # answers with exactly one entry each. Writing both from here is what keeps
     # them from drifting apart.
@@ -982,9 +976,6 @@ def main() -> int:
                 "optiscaler_variant_preset": variant_presets,
                 # Paths below the payload folder (system32/umu in the prefix).
                 "freefg": freefg_layers,
-                # Enforced into a fresh prefix and then left to the user, so the
-                # OptiScaler overlay can own them from that point on.
-                "seed_once": seed_once,
             },
             indent=2,
         )

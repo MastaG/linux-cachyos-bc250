@@ -373,29 +373,34 @@ def clean_other_variants(config, env, inherited):
     return removed
 
 
-def seed_once(preset, config, inherited):
-    """Drop the seeded keys once this prefix has an answer of its own.
+def seed_once(preset, inherited):
+    """Drop the shared preset keys this prefix already has an answer for.
 
-    Most of the preset is enforced on every launch on purpose: it is what makes
-    a launch reproducible from its launch options, with no invisible state in a
-    prefix deciding what you get. The spoofing keys are the exception, because
-    they are the ones a player legitimately wants to toggle for one game -- and
-    toggling them in the OptiScaler overlay used to do nothing, since the next
-    launch wrote the preset back over the top.
+    The shared preset seeds a prefix; it does not govern one. OptiScaler ships
+    every key as "auto", so a value that is not "auto" means somebody decided:
+    us on the first launch into a fresh prefix, or the player from the OptiScaler
+    overlay afterwards. Either way it is left alone from then on, which is what
+    lets the overlay's Save Settings survive a restart -- it used to be written
+    back over on the next launch. A prefix keeps whatever it has now, and a
+    changed default only reaches a fresh install.
 
-    OptiScaler ships every one of them as "auto", so a value that is not "auto"
-    means somebody decided: us on the first launch into a fresh prefix, or the
-    player afterwards. Either way it is left alone from then on. A new packaged
-    OptiScaler re-extracts the ini, which resets it to "auto" and re-seeds.
+    A key that is still "auto", or missing from the prefix's ini, is nobody's
+    answer and gets the packaged value. A new packaged OptiScaler re-extracts
+    the ini, which resets it to "auto" and re-seeds. Anything unreadable keeps
+    the whole preset: being wrong in that direction is a launch that behaves
+    like the package says it does.
 
-    Anything unreadable keeps the enforced value. Being wrong in that direction
-    is a launch that behaves like the package says it does.
+    What the caller merges after this -- a variant's own entries, the debug keys
+    and BC250_OPTISCALER_EXTRA -- is enforced on every launch. A variant switch
+    reuses the prefix's ini, which protonfixes does not re-copy, so that wiring
+    has to be re-applied here; and a launch option is how a player overrules a
+    seed on purpose.
     """
-    # A copy in every case: the caller merges debug and BC250_OPTISCALER_EXTRA
-    # over the result, and that must not reach back into the loaded config.
+    # A copy in every case: the caller merges the variant layer, the debug keys
+    # and BC250_OPTISCALER_EXTRA over the result, and that must not reach back
+    # into the loaded config.
     kept = dict(preset)
-    keys = config.get("seed_once", [])
-    ini = prefix_ini(inherited) if keys else None
+    ini = prefix_ini(inherited)
     if not ini or not ini.is_file():
         return kept
     parser = configparser.ConfigParser()
@@ -404,11 +409,11 @@ def seed_once(preset, config, inherited):
             parser.read_file(stream)
     except (OSError, UnicodeDecodeError, configparser.Error):
         return kept
-    for key in keys:
+    for key in list(kept):
         section, _, option = key.partition(".")
         value = parser.get(section, option, fallback="auto").strip().lower()
         if value and value != "auto":
-            kept.pop(key, None)
+            kept.pop(key)
     return kept
 
 
@@ -518,10 +523,11 @@ def environment(config, inherited, *, game):
     if env["PROTON_USE_OPTISCALER"] != "0":
         load_native(env, proxy)
 
-    preset = seed_once(config["preset"], config, inherited)
+    preset = seed_once(config["preset"], inherited)
     # A variant's own entries (HelixSR's library paths), only when that pinned
-    # version is the one being launched. Debug and BC250_OPTISCALER_EXTRA still
-    # go on top.
+    # version is the one being launched -- and enforced every launch, not seeded
+    # (see seed_once: a variant switch reuses the prefix's ini). Debug and
+    # BC250_OPTISCALER_EXTRA go on top.
     preset.update(config.get("optiscaler_variant_preset", {}).get(env["PROTON_USE_OPTISCALER"], {}))
     # null drops a shared key the variant's OptiScaler does not have: protonfixes
     # refuses a launch on a key missing from the ini, and FreeFG's OptiScaler
@@ -530,6 +536,8 @@ def environment(config, inherited, *, game):
     layer = config.get("freefg", {}).get(env["PROTON_USE_OPTISCALER"])
     if layer:
         freefg_environment(env, layer, inherited)
+    # Merged after the seed filter on purpose: a launch option is an
+    # explicit decision for this game, so it wins over whatever the prefix holds.
     if inherited.get("BC250_FSR4_DEBUG") == "1":
         preset.update({"Log.LogToFile": "true", "FSR.Fsr4EnableWatermark": "true"})
         env["PROTON_LOG"] = "1"

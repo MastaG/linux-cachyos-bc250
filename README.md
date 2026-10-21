@@ -760,10 +760,11 @@ proxy name decides which import the loader resolves to OptiScaler; `Spoofing.Dxg
 decides whether OptiScaler reports a spoofed GPU to the game once it is running.
 This package sets that one to `false`.
 
-`BC250_OPTISCALER_EXTRA` exists because the packaged OptiScaler configuration is
-rewritten into the prefix on every launch — editing `OptiScaler.ini` by hand does
-nothing. It takes `Section.Option=value` pairs separated by `;` and merges them
-over the shipped preset for that game only:
+`BC250_OPTISCALER_EXTRA` is the per-game switch that is still enforced on every
+launch. The shipped preset only seeds a prefix that has no answer of its own (see
+below), so what the overlay wrote stays put; this is how you pin a value for one
+game without touching the file. It takes `Section.Option=value` pairs separated
+by `;` and merges them over everything else for that game only:
 
 ```text
 BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=auto;FrameGen.Enabled=true" %command%
@@ -803,13 +804,13 @@ upscaler graphs are what settle whether it helped — same save, same spot, both
 ways — and we would like to hear the numbers, because if this behaves it is a
 candidate for the default.
 
-The spoofing keys are also the two the OptiScaler overlay is allowed to own.
-Everything else in the preset is written into `OptiScaler.ini` on every launch —
-so editing it, or using the overlay's *Save Settings*, does nothing for the rest
-— but `Spoofing.Dxgi` and `Spoofing.VulkanExtensionSpoofing` are written only
-into a prefix that has no answer yet. Change either in the overlay, save, and it
-sticks from then on. A package update that ships a new OptiScaler build resets
-the file and seeds them again. A launch option still beats both.
+The OptiScaler overlay owns the whole preset now. OptiScaler ships every key as
+`auto`, a key that still says `auto` is nobody's answer, and the preset writes
+only those: change one in the overlay, save, and it sticks from then on. A
+package update that ships a new OptiScaler build resets the file and seeds it
+again, and a launch option still beats both. A variant's own library paths and
+the debug keys are what stays enforced on every launch — those are the things
+*Save Settings* cannot win, because a variant switch reuses the prefix's ini.
 
 Two follow-ups, both seen on a BC-250 in The Last of Us Part II:
 
@@ -916,11 +917,17 @@ and tested on the BC-250. It is what you get without any launch option; pick
 DLSS, XeSS or FSR in the game as usual and it reaches HelixSR, and the Insert
 menu shows ONLINE at the top when HelixSR runs.
 
-The Scaler also runs HelixSR's DLSS frame generation: when a game has DLSS Frame
-Generation, turning it on in the game runs NVIDIA's frame generation network on
-the GPU (experimental; its author measures about 4.6 ms per generated frame at
-1080p on a BC-250, and HelixSR's log reports whether the GPU can run it). It
-needs 32-lane waves, which every RDNA GPU has, the BC-250 included.
+The Scaler can also run HelixSR's DLSS frame generation — NVIDIA's frame
+generation network on the GPU (experimental; its author measures about 4.6 ms per
+generated frame at 1080p on a BC-250, and HelixSR's log reports whether the GPU
+can run it). It needs 32-lane waves, which every RDNA GPU has, the BC-250
+included. Since 2026-10-22 that is not wired up on its own any more: turning on
+DLSS Frame Generation in a game no longer routes to HelixSR unless the launch
+option says so, which is also how you put it back per game:
+
+```text
+BC250_OPTISCALER_EXTRA="FrameGen.FGInput=nvngxfg;FrameGen.FGNvngxReplacement=HelixSR" %command%
+```
 
 The Scaler brings its own OptiScaler build, so the stock nightly and the other
 DLLs are separate choices, one launch option away:

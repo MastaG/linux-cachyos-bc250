@@ -42,9 +42,9 @@ wrapper = load_script("wrapper", COMMON / "bc250-fsr4-launch.py")
 builder = load_script("builder", ROOT / "scripts/build-fsr4-payload.py")
 
 
-# Shaped like the real OptiScaler.ini in the part that matters here: every
-# spoofing key ships as "auto", which is what marks a prefix as having no
-# opinion of its own yet.
+# Shaped like the real OptiScaler.ini in the part that matters here: every key
+# ships as "auto", which is what marks a prefix as having no opinion of its own
+# yet -- for the shared preset, which seeds a prefix and then leaves it alone.
 STUB_INI = (
     b"[FSR]\nFsr4ForceModel=auto\nUpscalerIndex=auto\n"
     b"[Spoofing]\nDxgi=auto\nVulkanExtensionSpoofing=auto\n"
@@ -206,7 +206,6 @@ class RuntimeTests(unittest.TestCase):
                 "Spoofing.Dxgi": "false",
                 "Spoofing.VulkanExtensionSpoofing": "false",
             },
-            "seed_once": ["Spoofing.Dxgi", "Spoofing.VulkanExtensionSpoofing"],
         }
 
     def upscalers_module(self, base):
@@ -586,8 +585,10 @@ class RuntimeTests(unittest.TestCase):
                 parser.read(ini)
                 self.assertEqual(parser["Spoofing"]["dxgi"], "false")
 
-                # What the overlay's "Save Settings" does.
+                # What the overlay's "Save Settings" does, for a spoofing key and
+                # for one the preset used to enforce on every launch.
                 parser["Spoofing"]["dxgi"] = "true"
+                parser["FSR"]["fsr4forcemodel"] = "3"
                 with ini.open("w") as stream:
                     parser.write(stream)
 
@@ -595,8 +596,10 @@ class RuntimeTests(unittest.TestCase):
                 parser = configparser.ConfigParser()
                 parser.read(ini)
                 self.assertEqual(parser["Spoofing"]["dxgi"], "true")
-                # Everything else is still enforced on that same launch.
-                self.assertEqual(parser["FSR"]["fsr4forcemodel"], "2")
+                self.assertEqual(parser["FSR"]["fsr4forcemodel"], "3")
+                # Nobody ever touched this one, so the first launch's seed stands.
+                self.assertEqual(
+                    parser["Spoofing"]["vulkanextensionspoofing"], "false")
 
     def test_documented_opt_out_stops_hooks_without_erasing_retained_files(self):
         for base in BASES:
@@ -889,6 +892,7 @@ class RuntimeTests(unittest.TestCase):
             {"SteamAppId": "999999998", "WINEPREFIX": str(self.prefix)})
         self.assertEqual(applied["Spoofing.Dxgi"], "false")
         self.assertEqual(applied["Spoofing.VulkanExtensionSpoofing"], "false")
+        self.assertEqual(applied["FSR.Fsr4ForceModel"], "2")
 
         # Freshly extracted, so still "auto" -- also nobody's opinion.
         self.write_prefix_ini(STUB_INI.decode())
@@ -898,17 +902,18 @@ class RuntimeTests(unittest.TestCase):
 
     def test_a_value_the_player_chose_is_not_written_over(self):
         self.write_prefix_ini(
-            "[FSR]\nFsr4ForceModel=auto\n"
+            "[FSR]\nFsr4ForceModel=3\n"
             "[Spoofing]\nDxgi=true\nVulkanExtensionSpoofing=auto\n"
         )
         applied = self.applied_preset(
             {"SteamAppId": "999999998", "WINEPREFIX": str(self.prefix)})
-        # Left out entirely, so protonfixes keeps whatever the file says.
+        # Left out entirely, so protonfixes keeps whatever the file says: every
+        # key of the shared preset is seeded once, not enforced on top of a
+        # prefix that has an answer, whatever wrote that answer.
         self.assertNotIn("Spoofing.Dxgi", applied)
-        # The key they did not touch is still seeded, and so is the rest of the
-        # preset -- this loosens two keys, not the whole configuration.
+        self.assertNotIn("FSR.Fsr4ForceModel", applied)
+        # Still "auto", so nobody has decided and the packaged value seeds it.
         self.assertEqual(applied["Spoofing.VulkanExtensionSpoofing"], "false")
-        self.assertEqual(applied["FSR.Fsr4ForceModel"], "2")
 
     def test_a_launch_option_still_wins_over_the_prefix(self):
         self.write_prefix_ini(
@@ -1780,9 +1785,6 @@ class PresetTests(unittest.TestCase):
             "Upscalers.Dx12Upscaler": "ffx",
             "Libraries.FfxDx12SRPath":
                 "C:\\windows\\system32\\umu\\HelixSR-fsrfg\\amd_fidelityfx_dx12.dll",
-            "FrameGen.Enabled": "auto",
-            "FrameGen.FGInput": "nvngxfg",
-            "FrameGen.FGNvngxReplacement": "HelixSR",
         })
         # The stock nightly and every bridge stay reachable by name, and none
         # of them carries the Scaler.
@@ -1810,7 +1812,7 @@ class PresetTests(unittest.TestCase):
         self.assertEqual(set(config["optiscaler_variant_preset"][ffx]),
                          {"Libraries.FfxDx12Path", "Libraries.FfxDx12SRPath", "FSR.UpscalerIndex"})
 
-    def test_the_scaler_needs_frame_generation_and_a_scaler_ini_that_takes_the_preset(self):
+    def test_the_scaler_ini_has_to_take_the_variant_preset_it_ships_with(self):
         with self.assertRaises(AssertionError):
             # An ini without the Upscalers section cannot take the variant preset.
             self.build_payload("helixsr", helixsr=True, scaler=True, **self.BUILT,
@@ -1857,27 +1859,24 @@ class PresetTests(unittest.TestCase):
             self.assertIsNone(builder.seed_fakenvapi_settings(extracted))
             self.assertFalse((extracted / "OptiScaler/fakenvapi.ini").exists())
 
-    def test_a_seed_once_key_the_preset_does_not_set_fails_the_build(self):
-        # The launcher looks these up in the preset it was handed. A name that
-        # is not there would quietly seed nothing, and the packaged spoofing
-        # default would silently become OptiScaler's instead of ours.
+    def test_a_preset_key_the_shipped_ini_lacks_fails_the_build(self):
+        # Nothing is exempt any more: every preset key is validated against the
+        # ini it ships with, because protonfixes refuses a launch on a key the
+        # build does not define, and a shared key the variant ini lacks has to
+        # come out of what the launcher is given (see the null in its preset).
         with tempfile.TemporaryDirectory() as temporary:
             work = Path(temporary)
             ini = work / "OptiScaler.ini"
             ini.write_text("[Spoofing]\nDxgi=auto\n")
             preset = work / "preset.json"
-            preset.write_text(json.dumps({
-                "preset": {"Spoofing.Dxgi": "false"},
-                "seed_once": ["Spoofing.Dxgi"],
-            }))
+            preset.write_text(json.dumps({"preset": {"Spoofing.Dxgi": "false"}}))
             self.assertEqual(
                 builder.validate_preset(preset, ini), {"Spoofing.Dxgi": "false"}
             )
             preset.write_text(json.dumps({
-                "preset": {"Spoofing.Dxgi": "false"},
-                "seed_once": ["Spoofing.Vulkan"],
+                "preset": {"Spoofing.Dxgi": "false", "Spoofing.Vulkan": "false"},
             }))
-            with self.assertRaisesRegex(RuntimeError, "seed_once names a key"):
+            with self.assertRaisesRegex(RuntimeError, "Unknown OptiScaler preset option"):
                 builder.validate_preset(preset, ini)
 
 

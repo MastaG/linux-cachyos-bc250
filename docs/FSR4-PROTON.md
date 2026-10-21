@@ -26,20 +26,25 @@ from a prior launch. Explicit `PROTON_USE_OPTISCALER` choices remain available;
 prefix payloads and saves are preserved. Steam utility calls use the local
 manifest with both upgrades disabled, including when game settings are inherited.
 
-The preset is rewritten into `OptiScaler.ini` on every launch, which is what
-makes a launch reproducible from its launch options alone, with no invisible
-state in a prefix deciding what you get. `Spoofing.Dxgi` and
-`Spoofing.VulkanExtensionSpoofing` are the exception, declared as `seed_once` in
-`optiscaler-preset.json`: they are written into a prefix that has no answer of
-its own, and left alone afterwards, so a player can own them from the OptiScaler
-overlay. OptiScaler ships every spoofing key as `auto`, so "not auto" is what
-marks a prefix as having been decided — by this package on the first launch, or
-by the player after that. A packaged OptiScaler bump re-extracts the ini, which
-resets it to `auto` and re-seeds. Anything unreadable keeps the enforced value,
-because the safe way to be wrong is a launch that behaves as documented.
-`BC250_OPTISCALER_EXTRA` is merged last and so still wins over both. The
-`seed_once` list is checked against the preset at build time: a name the preset
-does not set would quietly hand the default to OptiScaler instead of us.
+The shared preset seeds a prefix and then leaves it alone. OptiScaler ships every
+key as `auto`; a key that still says `auto` is nobody's answer, so the preset
+writes those and only those, and a value that is not `auto` — ours from the first
+launch into a fresh prefix, or the player's from the OptiScaler overlay after that
+— stands. That is what lets *Save Settings* survive a restart, which it did not:
+every preset key used to be written back over on the next launch. A packaged
+OptiScaler bump re-extracts the ini, which resets it to `auto` and re-seeds, so a
+changed default reaches a fresh install and never a prefix that has decided.
+Anything unreadable keeps the whole preset, because the safe way to be wrong is a
+launch that behaves as documented.
+
+Enforced on every launch is what a prefix must not be left to decide: a variant's
+own entries — the library paths that make `PROTON_USE_OPTISCALER=helixsr-ffx`
+mean something, since a variant switch reuses the prefix's ini and protonfixes
+does not re-copy it — the debug keys under `BC250_FSR4_DEBUG=1`, and
+`BC250_OPTISCALER_EXTRA`, merged last so it beats both. Every preset key is still
+checked against the ini it ships with at build time: protonfixes refuses a launch
+on a key the build does not define, so a preset that names one fails the build
+instead of a customer's game.
 
 `PROTON_OPTISCALER_NAME` is the one variable in the owned set a caller may still
 supply. Everything else there addresses the pinned payload by path or by name, so
