@@ -25,10 +25,10 @@ this patch.
 ---
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index b4df7d5..6a042e2 100644
+index abb6ca1..a2ff710 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-@@ -261,6 +261,7 @@ extern int amdgpu_vcnfw_log;
+@@ -257,6 +257,7 @@ extern int amdgpu_vcnfw_log;
  extern int amdgpu_sg_display;
  extern int amdgpu_bc250_hdmi21;
  extern int amdgpu_bc250_ch7218_quirk;
@@ -37,10 +37,10 @@ index b4df7d5..6a042e2 100644
  extern int amdgpu_umsch_mm;
  extern int amdgpu_seamless;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-index 5cb3017..177a423 100644
+index 14f9123..ad63022 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-@@ -238,6 +238,7 @@ int amdgpu_vcnfw_log;
+@@ -237,6 +237,7 @@ int amdgpu_vcnfw_log;
  int amdgpu_sg_display = -1; /* auto */
  int amdgpu_bc250_hdmi21 = 1;
  int amdgpu_bc250_ch7218_quirk;
@@ -48,7 +48,7 @@ index 5cb3017..177a423 100644
  int amdgpu_bc250_pcon_force_dsc;
  int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
  int amdgpu_umsch_mm;
-@@ -1018,6 +1019,27 @@ module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
+@@ -1008,6 +1009,27 @@ module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
  MODULE_PARM_DESC(bc250_ch7218_quirk, "BC-250: opt-in CH7218 DP-to-HDMI 2.1 adapter quirk (0 = disabled (default), 1 = enabled)");
  module_param_named(bc250_ch7218_quirk, amdgpu_bc250_ch7218_quirk, int, 0444);
  
@@ -77,10 +77,10 @@ index 5cb3017..177a423 100644
   * DOC: bc250_pcon_force_dsc (int)
   * BC-250 (Cyan Skillfish, DCN 2.0.1) only. Experimental, opt-in. Some DP to
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-index c1672c5..9ee4222 100644
+index 87f4f4a..0579509 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -2545,6 +2545,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
+@@ -963,6 +963,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
  
  	init_data.flags.bc250_hdmi21 = (amdgpu_bc250_hdmi21 != 0);
  	init_data.flags.bc250_ch7218_quirk = (amdgpu_bc250_ch7218_quirk != 0);
@@ -89,22 +89,22 @@ index c1672c5..9ee4222 100644
  
  	init_data.flags.seamless_boot_edp_requested = false;
 diff --git a/drivers/gpu/drm/amd/display/dc/dc.h b/drivers/gpu/drm/amd/display/dc/dc.h
-index acf8a66..e1277d0 100644
+index 6df6bcf..a64abd6 100644
 --- a/drivers/gpu/drm/amd/display/dc/dc.h
 +++ b/drivers/gpu/drm/amd/display/dc/dc.h
-@@ -592,6 +592,7 @@ struct dc_config {
+@@ -604,6 +604,7 @@ struct dc_config {
  	bool enable_frl;
  	bool bc250_hdmi21;
  	bool bc250_ch7218_quirk;
 +	bool bc250_ch7218_vrr;
  	bool bc250_pcon_force_dsc;
  	bool force_hdmi21_frl_enc_enable;
- 	bool skip_frl_pretraining;
+ 	bool use_default_clock_table;
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-index 4877ebb..9a926ee 100644
+index 3bcec12..06890d4 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-@@ -1203,6 +1203,29 @@ static bool bc250_ch7218_quirk_wanted(const struct dc_link *link)
+@@ -1209,6 +1209,29 @@ static bool bc250_ch7218_quirk_wanted(const struct dc_link *link)
  	       link->dc->config.bc250_ch7218_quirk;
  }
  
@@ -134,7 +134,7 @@ index 4877ebb..9a926ee 100644
  /*
   * Declare the adapter to be what it physically is, and restore the ceilings
   * its firmware failed to report. Safe to call from anywhere in converter
-@@ -2100,6 +2123,9 @@ static bool retrieve_link_cap(struct dc_link *link)
+@@ -2106,6 +2129,9 @@ static bool retrieve_link_cap(struct dc_link *link)
  	link->dpcd_caps.allow_invalid_MSA_timing_param =
  		down_strm_port_count.bits.IGNORE_MSA_TIMING_PARAM;
  

@@ -56,15 +56,16 @@ class FirmwareFileTests(unittest.TestCase):
 
 
 class KernelPatchTests(unittest.TestCase):
-    # The kernel patch is parked in disabled/: on the BC-250 the first register
-    # read of the VCN block freezes the machine, so no kernel ships it.
+    # The kernel patch is parked in disabled/ in both sets: on the BC-250 the
+    # first register read of the VCN block freezes the machine, so no kernel
+    # ships it.
     patch = RC / "disabled" / "bc250-vcn.patch"
 
     def test_patch_is_parked_and_not_applied(self):
         self.assertTrue(self.patch.is_file())
+        self.assertTrue((STABLE / "disabled" / "bc250-vcn.patch").is_file())
         self.assertEqual(list(RC.glob("*-bc250-vcn.patch")), [])
         self.assertEqual(list(STABLE.glob("*-bc250-vcn.patch")), [])
-        self.assertEqual(list(STABLE.glob("disabled/*bc250-vcn.patch")), [])
 
     def test_patch_asks_for_the_file_the_package_ships(self):
         self.assertIn(f"amdgpu/{FW_NAME}", self.patch.read_text())

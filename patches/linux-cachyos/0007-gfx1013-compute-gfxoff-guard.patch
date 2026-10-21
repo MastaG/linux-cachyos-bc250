@@ -1,8 +1,8 @@
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c
-index da325863ad76..631c64641c8e 100644
+index 816d8817f0b2..e851f003bf20 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd.c
-@@ -745,10 +745,19 @@ int amdgpu_amdkfd_submit_ib(struct amdgpu_device *adev,
+@@ -747,10 +747,19 @@ int amdgpu_amdkfd_submit_ib(struct amdgpu_device *adev,
  void amdgpu_amdkfd_set_compute_idle(struct amdgpu_device *adev, bool idle)
  {
  	enum amd_powergating_state state = idle ? AMD_PG_STATE_GATE : AMD_PG_STATE_UNGATE;

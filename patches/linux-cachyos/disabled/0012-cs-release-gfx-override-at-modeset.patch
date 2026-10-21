@@ -370,9 +370,9 @@ every frame so it never fires, locking the governor out of the GPU.
  	.get_enabled_mask = cyan_skillfish_get_enabled_mask,
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -109,6 +109,13 @@
- 
- static_assert(AMDGPU_DMUB_NOTIFICATION_MAX == DMUB_NOTIFICATION_MAX, "AMDGPU_DMUB_NOTIFICATION_MAX mismatch");
+@@ -113,6 +113,13 @@
+ #include "modules/inc/mod_power.h"
+ #include "modules/power/power_helpers.h"
  
 +/*
 + * Releases a held GFX clock/voltage override across a display modeset. Defined
@@ -381,10 +381,10 @@ every frame so it never fires, locking the governor out of the GPU.
 + */
 +extern void cs_od_force_suspend(void);
 +
- #define FIRMWARE_RENOIR_DMUB "amdgpu/renoir_dmcub.bin"
- MODULE_FIRMWARE(FIRMWARE_RENOIR_DMUB);
- #define FIRMWARE_SIENNA_CICHLID_DMUB "amdgpu/sienna_cichlid_dmcub.bin"
-@@ -11615,6 +11622,26 @@
+ MODULE_FIRMWARE(FIRMWARE_RAVEN_DMCU);
+ MODULE_FIRMWARE(FIRMWARE_NAVI12_DMCU);
+ 
+@@ -5030,6 +5037,26 @@
  
  	trace_amdgpu_dm_atomic_commit_tail_begin(state);
  

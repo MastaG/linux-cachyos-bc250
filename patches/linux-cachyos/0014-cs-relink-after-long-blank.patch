@@ -92,8 +92,8 @@ Parameters (all runtime-writable under /sys/module/amdgpu/parameters/):
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -97,6 +97,402 @@
- #include <drm/drm_audio_component.h>
+@@ -103,6 +103,402 @@
+ #include <drm/drm_vblank.h>
  #include <drm/drm_colorop.h>
  #include <drm/drm_gem_atomic_helper.h>
 +#include <drm/drm_probe_helper.h>
@@ -495,7 +495,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  
  #include <media/cec-notifier.h>
  #include <acpi/video.h>
-@@ -2430,6 +2826,11 @@
+@@ -852,6 +1248,11 @@
  {
  	int i;
  
@@ -507,7 +507,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  	if (adev->dm.vblank_control_workqueue) {
  		destroy_workqueue(adev->dm.vblank_control_workqueue);
  		adev->dm.vblank_control_workqueue = NULL;
-@@ -11177,6 +11578,8 @@
+@@ -4501,6 +4902,8 @@
  		    (!new_crtc_state->active ||
  		     drm_atomic_crtc_needs_modeset(new_crtc_state))) {
  			manage_dm_interrupts(adev, acrtc, NULL);
@@ -516,7 +516,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  			dc_stream_release(dm_old_crtc_state->stream);
  		}
  	}
-@@ -11277,6 +11680,11 @@
+@@ -4601,6 +5004,11 @@
  			flush_workqueue(dm->vblank_control_workqueue);
  	}
  
@@ -528,7 +528,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  	dm_enable_per_frame_crtc_master_sync(dc_state);
  	mutex_lock(&dm->dc_lock);
  	dc_exit_ips_for_hw_access(dm->dc);
-@@ -11870,6 +12278,9 @@
+@@ -5285,6 +5693,9 @@
  	/* Signal HW programming completion */
  	drm_atomic_helper_commit_hw_done(state);
  

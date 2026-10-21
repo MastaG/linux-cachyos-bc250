@@ -16,24 +16,23 @@ patches/linux-cachyos-rc/
 ```
 
 `patches/linux-cachyos` is applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`, since `linux-cachyos` and `linux-cachyos-bore` are built from the same upstream source series.  
-`patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`, and the two sets are now anchored to different kernels: `patches/linux-cachyos` targets the **Linux 7.2** series, `patches/linux-cachyos-rc` targets **Linux 7.3-rc**. That is exactly why the directory was split.
+`patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`. Since Linux 7.3 became stable both sets target the same series — the stable and BORE PKGBUILDs build `cachyos-7.3.0-2`, the RC one `cachyos-7.3-rc6-1` — so `patches/linux-cachyos` is today a copy of `patches/linux-cachyos-rc`. The directories stay separate because each kernel family is still prepared from its own upstream PKGBUILD and its own tag, and either tag can move on its own.
 
-The two sets carry the same BC-250 patches with the same content — but not
-always at the same file number, and not always the same *count*. Each set
-regenerates its shared patches against its own kernel base, and each also
-carries a small number of series-specific patches the other does not need (see
-[patches that exist in one set only](#patches-that-exist-in-one-set-only)
-below), which shifts everything after them in whichever set has more of them.
+The two sets carry the same BC-250 patches with the same content — today the
+same count and the same file names. When a series absorbs one of our carries (or
+stops providing something the other series still needs) the patch belongs in one
+directory only, and the allow-list in the test below is where that gets written
+down.
 Two tests keep this from drifting apart silently: `KernelPatchSetTests`
 compares the two directories by patch *content name* (ignoring the `NNNN-`
 number) and asserts the shared ones are byte-identical in substance — the
 files touched and the lines changed — and that any patch existing in only one
-set is on an explicit, reasoned allow-list. A patch added to one set and
+set is on an explicit, reasoned allow-list (empty since the 7.3 bump). A patch added to one set and
 forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twenty BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (7.2). The RC kernel carries the same twenty patches plus its own two series-specific carries, twenty-two in total:
+The stable and BORE kernels carry these twenty-two BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3, `cachyos-7.3.0-2`). The RC kernel carries the same twenty-two patches (`cachyos-7.3-rc6-1`):
 
 ```text
 0001-bc250-8core-metrics.patch
@@ -52,13 +51,17 @@ The stable and BORE kernels carry these twenty BC-250 patches in `patches/linux-
 0014-cs-relink-after-long-blank.patch
 0015-ch7218-pcon-quirk.patch
 0016-ch7218-dsc-restore.patch
-0017-pcon-force-dsc.patch
-0018-bc250-psp-ccp.patch
-0019-bc250-vrm-memory-hwmon.patch
-0020-ch7218-vrr-assert.patch
+0017-ch7218-vrr-allowlist.patch
+0018-pcon-force-dsc.patch
+0019-pcon-vrr-hf-vsdb.patch
+0020-bc250-psp-ccp.patch
+0021-bc250-vrm-memory-hwmon.patch
+0022-ch7218-vrr-assert.patch
 ```
 
-`patches/linux-cachyos-rc` carries the same twenty patches (content-identical) plus the RC-only entries below (the VCN patch is not among them: it freezes the BC-250 and is parked in `patches/linux-cachyos-rc/disabled/bc250-vcn.patch`):
+`patches/linux-cachyos-rc` is the same list, spelled out here as well because the
+two directories are free to diverge again (the VCN patch is in neither: it
+freezes the BC-250 and is parked in `disabled/bc250-vcn.patch` in both sets):
 
 ```text
 0001-bc250-8core-metrics.patch
@@ -100,28 +103,35 @@ upstream change, so regenerate both whenever either changes.
 That is cheap and needs no container round trip: applying the new relink patch
 to the saved pre-relink `amdgpu_dm.c` reproduces exactly the tree the quirk
 sees, so the quirk can be regenerated against it locally. A full build then
-confirms the result, and **our patches applying silently is the pass condition**
-— any `Hunk #N succeeded ... (offset ...)` line naming one of them means they
-have drifted apart again.
+confirms the result, and **our patches applying without fuzz is the pass
+condition** — an offset on its own is normal now (see the note below), fuzz
+means the context really moved.
 
 `ch7218-dsc-restore.patch` sits between the quirk and `pcon-force-dsc.patch`:
 it adds `bc250_ch7218_restore_dsc_support()` next to the quirk's helpers and
 uses the quirk's `bc250_ch7218_detected()`, and `pcon-force-dsc.patch` is in
 turn anchored on the lines it adds. So the chain is **relink → quirk →
 dsc-restore → force-dsc**, and a change anywhere in it means regenerating
-everything downstream of the change. All four applying silently is the pass
+everything downstream of the change. All four applying without fuzz is the pass
 condition.
 
-`ch7218-vrr-allowlist.patch` (RC only) touches `amdgpu_dm_helpers.c` and
+`ch7218-vrr-allowlist.patch` (both sets) touches `amdgpu_dm_helpers.c` and
 `ddc_service_types.h`, which no other patch in either set touches, so it
 cannot drift against the others.
 
-Known pre-existing noise that is *not* a regression: `cyan-skillfish-sclk-range`
-applies with `offset 1` on stable, and upstream's own `dkms-clang.patch` with `offset -5` on both.
+Known pre-existing noise that is *not* a regression: upstream's own `dkms-clang.patch`
+applies with `offset -5` on both.
+
+Since the 2026-10-21 bump to Linux 7.3 one set serves two tags, and neither tree
+is exactly where it was generated: on `cachyos-7.3.0-2` eleven of the
+twenty-two land with an offset, on `cachyos-7.3-rc6-1` eight do — **no fuzz on
+either**, and every patched C file compiles against CachyOS's real config at
+`-O3` (checked on `cachyos-7.3.0-2`, 2026-10-21). Regenerate a patch when it
+starts needing fuzz, not merely when it moves.
 
 #### Disabled patches
 
-`patches/linux-cachyos/disabled/` and `patches/linux-cachyos-rc/disabled/` hold six `cs-*` patches that are **not applied**. The build only globs `*.patch` at the top level of a patch set, so a patch in `disabled/` ships to nobody; they are kept in-tree because the analysis behind them is sound and they will be needed again.
+`patches/linux-cachyos/disabled/` and `patches/linux-cachyos-rc/disabled/` hold six `cs-*` patches (plus the parked `bc250-vcn.patch`) that are **not applied**. The build only globs `*.patch` at the top level of a patch set, so a patch in `disabled/` ships to nobody; they are kept in-tree because the analysis behind them is sound and they will be needed again.
 
 ```text
 cs-defer-od-during-frl-link-training.patch
@@ -136,11 +146,11 @@ One of them, `cs-release-gfx-override-at-modeset.patch`, was shipped and then wi
 
 There is intentionally no `0002-bc250-audio.patch` (by that old name) here. That Cyan Skillfish DP spread-spectrum fix (disabling `ignore_dpref_ss`) was required on the older Linux 7.1 series this repository previously built, but it has been upstream since Linux 7.2, so applying it again would fail to patch cleanly.
 
-#### Patches that exist in one set only
+#### The two 7.3-series carries
 
-- `ch7218-vrr-allowlist.patch` — RC only. One line: the Chrontel CH7218 (DPCD branch OUI `2B:02:F0`) added to `dm_freesync_pcon_whitelist`, plus its `DP_BRANCH_DEVICE_ID_2B02F0` define. CachyOS's 7.2 kernel already has this through its `7.2/hdmi` branch, which is why VRR through a CH7218 works on `linux-cachyos-bc250`; its `7.3/hdmi` branch was rebuilt on a different VRR series (HF-VSDB / ALLM / passive VRR, Aug 2026) and dropped the entry, so on 7.3-rc the same adapter fails the allowlist and DC refuses to pass FreeSync through — VRR silently absent on `linux-cachyos-rc-bc250`, identical hardware. Unconditional on purpose: a static table cannot be gated, and the entry only states that this converter may carry FreeSync-over-HDMI, which the chip does. Unrelated to the opt-in `ch7218-pcon-quirk.patch`, which is about capability *misreporting*. **Drop it when the RC source carries the ID itself** — the duplicate define then fails the build, which is the intended signal.
+- `ch7218-vrr-allowlist.patch` — every kernel here, since Linux 7.3. One line: the Chrontel CH7218 (DPCD branch OUI `2B:02:F0`) added to `dm_freesync_pcon_whitelist`, plus its `DP_BRANCH_DEVICE_ID_2B02F0` define. CachyOS's old 7.2 kernel already had this through its `7.2/hdmi` branch, which is why VRR through a CH7218 worked on `linux-cachyos-bc250`; the 7.3 line was rebuilt on a different VRR series (HF-VSDB / ALLM / passive VRR, Aug 2026) and dropped the entry, so on 7.3 the same adapter fails the allowlist and DC refuses to pass FreeSync through — VRR silently absent, identical hardware. Re-checked on `cachyos-7.3.0-2` on 2026-10-21: the entry and the define are still absent, so the carry is still needed by every kernel here. Unconditional on purpose: a static table cannot be gated, and the entry only states that this converter may carry FreeSync-over-HDMI, which the chip does. Unrelated to the opt-in `ch7218-pcon-quirk.patch`, which is about capability *misreporting*. **Drop it when the source carries the ID itself** — the duplicate define then fails the build, which is the intended signal.
 
-- `pcon-vrr-hf-vsdb.patch` — RC only. The allowlist entry above turned out to be necessary but not sufficient: with it in place a CH7218 still reported `vrr_capable=0` and a `0/0` `vrr_range` on 7.3-rc, on a TV that advertises both HDMI Forum VRR and AMD FreeSync. The three DPCD gates (`0x2214` bit 0 Adaptive-Sync SDP, `0x007` bit 6 Ignore-MSA, allowlist) all pass on this adapter — read back as `0x15`, `0xc1`, OUI `2B02F0` — so the connector reaches the `FREESYNC_TYPE_PCON_IN_WHITELIST` block. That block takes its range **only from the AMD VSDB, parsed by DMUB or DMCU firmware**. DCN201 has neither (`dm_dmub_sw_init()` has no case for it; `dcn201_resource` sets `disable_dmcu`), so `dc_edid_parser_send_cea()` returns false, the parse fails with `-ENODEV` on every Cyan Skillfish, and no range is ever set. 7.2 works because CachyOS's `7.2/hdmi` branch prefers the HDMI 2.1 VRR range the DRM core parses in software from the HF-VSDB; the 7.3 branch does that only on the native HDMI path. This patch adds the same fallback to the PCON block: no range from the AMD VSDB and the sink advertises HF-VSDB VRR → take `vrr_min`/`vrr_max` from there (VRRMAX = 0 resolved to the base refresh rate the way the HDMI branch does), set `pack_sdp_v1_3` and the adaptive-sync type, publish the range. DPCD gates untouched; a sink with a usable AMD VSDB still takes that path first; also covers TVs with no AMD VSDB at all (an LG G5 carries only the HDMI and HF-VSDB blocks). `drm.debug=0x2` shows the decision as `VRR: PCON HF-VSDB fallback: …` next to the tag's own `VRR:` lines. Regenerate whenever the RC tag moves — CachyOS's `7.3/hdmi` HEAD already reworks the MCCS clause in this function.
+- `pcon-vrr-hf-vsdb.patch` — every kernel here, since Linux 7.3. The allowlist entry above turned out to be necessary but not sufficient: with it in place a CH7218 still reported `vrr_capable=0` and a `0/0` `vrr_range` on 7.3, on a TV that advertises both HDMI Forum VRR and AMD FreeSync. The three DPCD gates (`0x2214` bit 0 Adaptive-Sync SDP, `0x007` bit 6 Ignore-MSA, allowlist) all pass on this adapter — read back as `0x15`, `0xc1`, OUI `2B02F0` — so the connector reaches the `FREESYNC_TYPE_PCON_IN_WHITELIST` block. That block takes its range **only from the AMD VSDB, parsed by DMUB or DMCU firmware**. DCN201 has neither (`dm_dmub_sw_init()` has no case for it; `dcn201_resource` sets `disable_dmcu`), so `dc_edid_parser_send_cea()` returns false, the parse fails with `-ENODEV` on every Cyan Skillfish, and no range is ever set. 7.2 works because CachyOS's `7.2/hdmi` branch prefers the HDMI 2.1 VRR range the DRM core parses in software from the HF-VSDB; the 7.3 branch does that only on the native HDMI path. This patch adds the same fallback to the PCON block: no range from the AMD VSDB and the sink advertises HF-VSDB VRR → take `vrr_min`/`vrr_max` from there (VRRMAX = 0 resolved to the base refresh rate the way the HDMI branch does), set `pack_sdp_v1_3` and the adaptive-sync type, publish the range. DPCD gates untouched; a sink with a usable AMD VSDB still takes that path first; also covers TVs with no AMD VSDB at all (an LG G5 carries only the HDMI and HF-VSDB blocks). `drm.debug=0x2` shows the decision as `VRR: PCON HF-VSDB fallback: …` next to the tag's own `VRR:` lines. Regenerate whenever a tag moves — CachyOS's `7.3/hdmi` HEAD already reworks the MCCS clause in this function.
 
 This patch set contains:
 
@@ -416,16 +426,18 @@ The version this was adapted from also added `DP_BRANCH_DEVICE_ID_2B02F0` to
 `ddc_service_types.h` and an entry to the FreeSync PCON allowlist. Neither
 ships here:
 
-- **The branch-ID define**: 7.2 **already defines it**, 7.3-rc does not.
-  Touching that header would either duplicate a define on one series or make
-  the two patch sets diverge. A file-local constant in `link_dp_capability.c`
-  avoids both.
+- **The branch-ID define**: it belongs to `ch7218-vrr-allowlist.patch`, which
+  every kernel here now carries; neither `cachyos-7.3.0-2` nor
+  `cachyos-7.3-rc6-1` defines it (checked 2026-10-21). Adding it a second time
+  in the gated quirk would duplicate it, so the quirk uses a file-local
+  constant in `link_dp_capability.c` instead.
 - **The FreeSync allowlist entry**: not in this patch, because a static
-  table cannot be gated. 7.2 already lists the ID (CachyOS `7.2/hdmi`); 7.3-rc
-  does not, and that turned out to be exactly why VRR worked on 7.2 and not on
-  7.3-rc with the same adapter — so the RC set carries it as its own
-  unconditional one-liner, `ch7218-vrr-allowlist.patch` (see [Patches that
-  exist in one set only](#patches-that-exist-in-one-set-only)).
+  table cannot be gated. CachyOS's old 7.2 kernel already listed the ID
+  (through its `7.2/hdmi` branch); 7.3 does not, and that turned out to be
+  exactly why VRR worked on 7.2 and not on 7.3 with the same adapter — so both
+  sets carry it as their own unconditional one-liner,
+  `ch7218-vrr-allowlist.patch` (see [The two 7.3-series
+  carries](#the-two-73-series-carries)).
 
 #### The DSC bit also vanishes on healthy units after a re-detect
 
@@ -842,7 +854,7 @@ PSP platform mailbox answers, `bootloader_version` in sysfs reads `00.1c.01.02`,
 dynamic boost control is probed and cleanly rejected, HSTI reports nothing.
 Nothing user-facing depends on it today; it is carried so the board is fully
 enumerated and so the two generic fixes are in. The two `ccp` files it touches
-are byte-identical on the 7.2 and 7.3-rc trees, so one patch serves both sets.
+are byte-identical on `cachyos-7.3.0-2` and `cachyos-7.3-rc6-1`, so one patch serves both sets.
 Drop it when the series lands upstream.
 
 ## Optional 40 CU unlock

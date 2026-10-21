@@ -1,0 +1,98 @@
+drm/amd/display: give a DP-to-HDMI PCON its VRR range from the HF-VSDB
+
+RC-only carry, generated against cachyos-7.3-rc3-4.
+
+A CH7218 adapter that gets VRR on linux-cachyos-bc250 (7.2) still shows
+vrr_capable=0 and a 0/0 vrr_range on linux-cachyos-rc-bc250 with the
+allowlist entry in place, on a TV whose EDID carries both HDMI Forum VRR
+48-120 and AMD FreeSync 48-120. The three DPCD gates in
+dm_get_adaptive_sync_support_type() -- Adaptive-Sync SDP support
+(0x2214 bit 0), Ignore-MSA (0x007 bit 6) and the allowlist -- all pass
+on this adapter (read back: 0x15, 0xc1, OUI 2B02F0), so the connector
+does reach the FREESYNC_TYPE_PCON_IN_WHITELIST block.
+
+That block takes its range only from the AMD VSDB, and only through
+parse_hdmi_amd_vsdb(), which hands the CEA block to DMUB or DMCU
+firmware. DCN201 has neither: dm_dmub_sw_init() has no case for it and
+dcn201_resource sets disable_dmcu, so dc_edid_parser_send_cea() returns
+false and the parse fails with -ENODEV on every Cyan Skillfish. Nothing
+sets a range, freesync_capable stays false. The 7.2 series works because
+CachyOS's 7.2/hdmi branch prefers the HDMI 2.1 VRR range the DRM core
+parses in software from the HF-VSDB; the 7.3 branch only does that on
+the native HDMI path, not for a PCON.
+
+So do the same in the PCON block: when the AMD VSDB path produced no
+range and the sink advertises HF-VSDB VRR, take vrr_min/vrr_max from
+there (VRRMAX = 0 meaning "up to the base refresh rate", resolved the
+way the HDMI branch does), set pack_sdp_v1_3 and the adaptive-sync
+type, and publish the range. The DPCD gates are untouched, and a sink
+with a usable AMD VSDB still takes that path first. Also covers TVs with
+no AMD VSDB at all -- an LG G5 has only the HDMI and HF-VSDB blocks.
+
+Logs "VRR: PCON HF-VSDB fallback: ..." at drm_dbg_driver level next to
+the existing "VRR:" lines, so drm.debug=0x2 shows the decision.
+
+---
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+index 955c70e..7b16f60 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+@@ -4020,6 +4020,57 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
+ 				connector->display_info.monitor_range.max_vfreq = vsdb_info.max_refresh_rate_hz;
+ 			}
+ 		}
++
++		/*
++		 * The AMD VSDB above is parsed by DMUB or DMCU firmware. DCN201
++		 * (Cyan Skillfish) has neither -- no dmub_srv, disable_dmcu --
++		 * so parse_hdmi_amd_vsdb() always fails there and a DP-to-HDMI
++		 * PCON never gets a VRR range, even though the DPCD gates
++		 * (Adaptive-Sync SDP, Ignore-MSA, allowlist) all passed. Many TVs
++		 * also carry no AMD VSDB at all. In both cases the HDMI 2.1 VRR
++		 * range from the HF-VSDB, parsed in software by the DRM core, is
++		 * the right answer -- it is what the HDMI branch above already
++		 * falls back to, and what makes the same adapter work on 7.2.
++		 */
++		if (!freesync_capable && connector->display_info.hdmi.vrr_cap.supported) {
++			struct drm_hdmi_vrr_cap *vrr_cap =
++				&connector->display_info.hdmi.vrr_cap;
++
++			if (vrr_cap->vrr_min > 0) {
++				amdgpu_dm_connector->min_vfreq = vrr_cap->vrr_min;
++				amdgpu_dm_connector->max_vfreq = vrr_cap->vrr_max ?
++					vrr_cap->vrr_max :
++					connector->display_info.monitor_range.max_vfreq;
++
++				/* VRRMAX = 0 means "up to the Base Refresh Rate" */
++				if (!amdgpu_dm_connector->max_vfreq) {
++					struct drm_display_mode *brr_mode =
++						amdgpu_dm_get_highest_refresh_rate_mode(amdgpu_dm_connector, true);
++
++					if (brr_mode)
++						amdgpu_dm_connector->max_vfreq =
++							drm_mode_vrefresh(brr_mode);
++				}
++
++				if (amdgpu_dm_connector->max_vfreq -
++				    amdgpu_dm_connector->min_vfreq > 10) {
++					freesync_capable = true;
++					amdgpu_dm_connector->pack_sdp_v1_3 = true;
++					amdgpu_dm_connector->as_type = as_type;
++
++					connector->display_info.monitor_range.min_vfreq =
++						amdgpu_dm_connector->min_vfreq;
++					connector->display_info.monitor_range.max_vfreq =
++						amdgpu_dm_connector->max_vfreq;
++				}
++			}
++
++			drm_dbg_driver(adev_to_drm(adev),
++				       "VRR: PCON HF-VSDB fallback: vrr_cap[min=%d max=%d] -> min=%d max=%d fs_capable=%d\n",
++				       vrr_cap->vrr_min, vrr_cap->vrr_max,
++				       amdgpu_dm_connector->min_vfreq,
++				       amdgpu_dm_connector->max_vfreq, freesync_capable);
++		}
+ 	}
+ 
+ 	/* Handle MCCS */

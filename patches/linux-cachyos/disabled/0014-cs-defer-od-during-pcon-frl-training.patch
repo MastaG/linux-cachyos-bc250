@@ -128,9 +128,9 @@ window; INITIAL_JIFFIES is the value jiffies itself starts at.
  #define RETIMER_REDRIVER_INFO(...) \
  	DC_LOG_RETIMER_REDRIVER(  \
  		__VA_ARGS__)
-@@ -2697,6 +2769,8 @@
- 	dc->hwss.unblank_stream(pipe_ctx,
- 		&pipe_ctx->stream->link->cur_link_settings);
+@@ -2758,6 +2830,8 @@
+ 	hwss->unblank_stream(pipe_ctx,
+ 		&link->cur_link_settings);
  
 +	cs_defer_od_for_dp_hdmi21_pcon(link);
 +

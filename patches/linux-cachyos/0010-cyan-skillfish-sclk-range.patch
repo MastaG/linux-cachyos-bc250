@@ -2,7 +2,7 @@ diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/g
 index 7cf104e91395..f9cd1f33e204 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-@@ -52,8 +52,8 @@
+@@ -53,8 +53,8 @@
  #undef pr_debug
  
  /* unit: MHz */

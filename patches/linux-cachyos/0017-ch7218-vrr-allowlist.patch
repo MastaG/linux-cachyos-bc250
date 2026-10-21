@@ -1,0 +1,48 @@
+drm/amd/display: allow FreeSync passthrough on the Chrontel CH7218 PCON
+
+RC-only carry. CachyOS's 7.2 kernel lists the Chrontel CH7218 DP-to-HDMI
+2.1 converter (DPCD branch OUI 2B:02:F0) in the FreeSync PCON allowlist,
+via its 7.2/hdmi branch. Its 7.3 HDMI branch was rebuilt on a different
+VRR series and does not carry that entry, so on 7.3-rc the same adapter
+fails dm_is_freesync_pcon_whitelist() and DC refuses to pass FreeSync
+through to the TV: VRR works on linux-cachyos-bc250 and is silently absent
+on linux-cachyos-rc-bc250 with identical hardware.
+
+This adds the one entry, exactly as upstream's "drm/amd/display: Add
+CH7218 PCON ID" (Tomasz Pakula, v4 11/27, Feb 2026) and CachyOS 7.2/hdmi
+do. It says only that this converter may carry FreeSync-over-HDMI, which
+the chip does; it does not touch the adapter's capability reporting (that
+is the separate, opt-in ch7218-pcon-quirk.patch). Unconditional on
+purpose: a static table cannot be gated, and there is no adapter for
+which passing VRR through is worse than dropping it.
+
+Drop this the moment 7.3 or a later CachyOS HDMI branch carries the ID;
+the define below then collides and the build fails loudly, which is the
+intended signal.
+
+---
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
+index 298de7b..849897a 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
+@@ -1649,6 +1649,7 @@ STATIC_IFN_KUNIT const uint32_t dm_freesync_pcon_whitelist[] = {
+ 	DP_BRANCH_DEVICE_ID_90CC24,
+ 	DP_BRANCH_DEVICE_ID_001CF8,
+ 	DP_BRANCH_DEVICE_ID_001FF2,
++	DP_BRANCH_DEVICE_ID_2B02F0,
+ };
+ EXPORT_IF_KUNIT(dm_freesync_pcon_whitelist);
+ 
+diff --git a/drivers/gpu/drm/amd/display/include/ddc_service_types.h b/drivers/gpu/drm/amd/display/include/ddc_service_types.h
+index 827e9bd..d2a8e71 100644
+--- a/drivers/gpu/drm/amd/display/include/ddc_service_types.h
++++ b/drivers/gpu/drm/amd/display/include/ddc_service_types.h
+@@ -37,6 +37,7 @@
+ #define DP_BRANCH_DEVICE_ID_001CF8 0x001CF8
+ #define DP_BRANCH_DEVICE_ID_0060AD 0x0060AD
+ #define DP_BRANCH_DEVICE_ID_001FF2 0x001FF2
++#define DP_BRANCH_DEVICE_ID_2B02F0 0x2B02F0 /* Chrontel CH7218 */
+ #define DP_BRANCH_HW_REV_10 0x10
+ #define DP_BRANCH_HW_REV_20 0x20
+ 

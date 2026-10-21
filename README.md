@@ -438,17 +438,19 @@ and no kernel option can conjure a mode the display never offered. That one is
 fixed by injecting a corrected EDID, which is outside what this repository
 does.
 
-### VRR through a CH7218 on the RC kernel
+### VRR through a CH7218
 
-Separate from the quirk: the RC kernel (`linux-cachyos-rc-bc250`) carries two
-small patches so that VRR through a CH7218 works on 7.3-rc the way it already
-does on 7.2. One is the allowlist entry for the chip; the other makes the
+Separate from the quirk: every kernel here carries the two small patches so that
+VRR through a CH7218 works on Linux 7.3 the way it did on 7.2 — CachyOS's own
+`7.2/hdmi` branch used to provide them and 7.3 does not, so they are ours to
+carry now. One is the allowlist entry for the chip; the other makes the
 driver take the VRR range from the TV's HDMI Forum VRR block, because the
 upstream 7.3 code only reads it from the AMD FreeSync block **through display
 firmware the BC-250 does not have** — so on this board that path can never
 produce a range, whatever the TV advertises. Nothing to enable. If VRR works on
-the stable kernel but not on the RC one with the same adapter, you are on an RC
-build from before build 201. To see the decision:
+one of our kernels but not on another with the same adapter, you are on a build
+from before the Linux 7.3 bump (stable and BORE) or before build 201 (RC). To
+see the decision:
 
 ```bash
 sudo dmesg | grep 'VRR:'          # needs drm.debug=0x2 on the kernel command line
@@ -1106,7 +1108,7 @@ With it installed there are no older package versions left on your disk to downg
 
 The BC-250 reports a Video Core Next block (VCN 2.0.3) in its IP discovery table, and mainline Linux skips it. We ported the PS5's VCN patch from the ps5-linux project ([ps5-linux-patches PR #38](https://github.com/ps5-linux/ps5-linux-patches/pull/38)) and tested it on two boards. **It does not work: the machine freezes.**
 
-What we found: the BC-250's security processor refuses the VCN firmware, so the patch loads it directly the way the PS5 does. With that, every other part of the GPU initialises, and then the first register read of the VCN block never returns. The block's addresses are right (the same as the PS5's), and nothing in the driver powers it up. People who tried harder, down to wiring things to the board, report that the block appears to be disabled on purpose in hardware. So **no kernel we ship carries the patch**: it is kept, unapplied, in `patches/linux-cachyos-rc/disabled/bc250-vcn.patch` together with a note on how it was tested, and the optional `bc250-vcn-fw` package (the firmware file) stays in the repository for anyone who wants to continue. You do not need either for anything.
+What we found: the BC-250's security processor refuses the VCN firmware, so the patch loads it directly the way the PS5 does. With that, every other part of the GPU initialises, and then the first register read of the VCN block never returns. The block's addresses are right (the same as the PS5's), and nothing in the driver powers it up. People who tried harder, down to wiring things to the board, report that the block appears to be disabled on purpose in hardware. So **no kernel we ship carries the patch**: it is kept, unapplied, in `patches/linux-cachyos/disabled/bc250-vcn.patch` (and in the RC set's `disabled/`, which is the same list) together with a note on how it was tested, and the optional `bc250-vcn-fw` package (the firmware file) stays in the repository for anyone who wants to continue. You do not need either for anything.
 
 ## UGREEN DP-to-HDMI 2.1 adapter firmware (optional)
 

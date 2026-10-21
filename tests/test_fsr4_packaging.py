@@ -481,33 +481,30 @@ if __name__ == "__main__":
 class KernelPatchSetTests(unittest.TestCase):
     """The two kernel patch sets must not drift apart silently.
 
-    They are anchored to different kernel series, so they are separate
-    directories -- but everything except the series-specific carries is meant to
-    be in both. When 7.2.5 backported the drm/gud change, the stable kernel
+    They stay separate directories because each kernel family is prepared from
+    its own upstream PKGBUILD and pulled from its own CachyOS tag, and any of
+    those can move independently. Since Linux 7.3 became stable -- the stable
+    and BORE PKGBUILDs build `cachyos-7.3.0-2`, the RC one `cachyos-7.3-rc6-1`
+    -- the two sets are the same twenty-two patches, so both allow-lists below
+    are empty. When 7.2.5 backported the drm/gud change, the stable kernel
     stopped building because its set was missing a patch the RC set had had for
     weeks, and nothing said so until CI went red.
 
-    The two sets can legitimately have different *lengths* now: each carries
-    its own series-specific patches (e.g. the RC-first VCN bring-up), so the same logical patch does not always sit
-    at the same number prefix in both directories. Comparison is therefore by content name (the part after the
-    `NNNN-`), not by full filename or position.
+    A set can still legitimately gain length of its own once a carry becomes
+    series-specific again, so the same logical patch does not always sit at the
+    same number prefix in both directories. Comparison is therefore by content
+    name (the part after the `NNNN-`), not by full filename or position.
     """
 
     STABLE = ROOT / "patches/linux-cachyos"
     RC = ROOT / "patches/linux-cachyos-rc"
 
     # Patches that legitimately exist in one set only, with the reason.
+    # Empty since the 7.3 bump: the CH7218 allowlist and the HF-VSDB fallback
+    # used to be RC-only because CachyOS's 7.2/hdmi branch already did that on
+    # the stable side, and 7.3 does not -- so all three kernels need them now.
     STABLE_ONLY = {}
-    RC_ONLY = {
-        "ch7218-vrr-allowlist.patch": (
-            "CachyOS 7.2/hdmi already lists the CH7218 in the FreeSync PCON "
-            "allowlist; its 7.3 HDMI branch does not, so the RC set adds it"
-        ),
-        "pcon-vrr-hf-vsdb.patch": (
-            "7.3 reads a PCON's VRR range only from the AMD VSDB via DMUB/DMCU "
-            "firmware DCN201 lacks; 7.2/hdmi already falls back to the HF-VSDB"
-        ),
-    }
+    RC_ONLY = {}
 
     @staticmethod
     def content_name(patch_name):
@@ -716,7 +713,7 @@ class KernelPatchSetTests(unittest.TestCase):
                 self.assertNotIn("dm_freesync_pcon_whitelist", body)
                 self.assertNotIn("dm_helpers_is_vrr_pcon_allowlist", body)
                 self.assertNotIn("DP_BRANCH_DEVICE_ID_2B02F0", body,
-                                 "7.2 already defines this and 7.3-rc does not; "
+                                 "the define belongs to ch7218-vrr-allowlist.patch; "
                                  "use the file-local constant instead")
 
     def test_ch7218_dsc_restore_is_unconditional_but_cannot_lie(self):
@@ -828,12 +825,13 @@ class KernelPatchSetTests(unittest.TestCase):
         self.assertNotIn("as_type = FREESYNC_TYPE", body)
 
     def test_rc_vrr_allowlist_patch_adds_exactly_one_entry(self):
-        """The RC-only allowlist patch is one table entry and its define.
+        """The allowlist patch is one table entry and its define.
 
         It exists because CachyOS's 7.3 HDMI branch dropped the CH7218 from
-        dm_freesync_pcon_whitelist that its 7.2 branch carries. It must stay
-        that small: anything else belongs in the gated quirk, and when the RC
-        source gains the ID itself the duplicate define must make the build
+        dm_freesync_pcon_whitelist that its 7.2 branch carries -- re-checked
+        against `cachyos-7.3.0-2` on 2026-10-21, so both sets carry it. It must
+        stay that small: anything else belongs in the gated quirk, and when
+        upstream gains the ID itself the duplicate define must make the build
         fail rather than be papered over.
         """
         text = self.rc_by_content()["ch7218-vrr-allowlist.patch"].read_text()
@@ -855,7 +853,9 @@ class KernelPatchSetTests(unittest.TestCase):
         words = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve",
                  13: "thirteen", 14: "fourteen", 15: "fifteen",
                  16: "sixteen", 17: "seventeen", 18: "eighteen",
-                 19: "nineteen", 20: "twenty"}
+                 19: "nineteen", 20: "twenty",
+                 21: "twenty-one", 22: "twenty-two", 23: "twenty-three",
+                 24: "twenty-four"}
         return words[n]
 
 

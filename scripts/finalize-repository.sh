@@ -445,16 +445,17 @@ cat > RELEASE_NOTES.md <<EOF_NOTES
 - Version: \`${stable_pkgver}-${stable_pkgrel}\`
 - Patch set: \`${stable_patch_set}\`
 - The Cyan Skillfish DP-audio spread-spectrum fix is omitted: it has been upstream since Linux 7.2.
+- Now built on Linux 7.3 (\`cachyos-7.3.0-2\`), so this kernel carries the same twenty-two patches as the RC one -- including the \`ch7218-vrr-allowlist\` and \`pcon-vrr-hf-vsdb\` carries described under the RC section below. CachyOS's \`7.2/hdmi\` branch used to provide that behaviour on the stable side and 7.3 does not, so VRR through a CH7218 needs the patches here now.
 
 ### Release candidate: \`${rc_pkgbase}\`
 
 - Upstream source: \`${rc_source}\`
 - Version: \`${rc_pkgver}-${rc_pkgrel}\`
 - Patch set: \`${rc_patch_set}\`
-- Built from the \`patches/linux-cachyos-rc\` set, which is maintained against the Linux 7.3-rc series independently of the 7.2 stable set.
+- Built from the \`patches/linux-cachyos-rc\` set, which since Linux 7.3 became stable is an identical copy of the stable set; the two directories stay separate because each is regenerated against its own CachyOS tag.
 - The \`hdmi21-vtem-on-tmds.patch\` carry ("Emit VTEM for HF-VSDB VRR on TMDS links", upstream \`640fd039dc8b\`) has been **dropped**. It is queued for Linux 7.4 -- it landed in \`drm-next\` on 2026-09-02, one day after 7.3-rc1 was tagged -- so it arrives on its own with the next series. It also only ever applied through a passive DP++ adapter; through an active DP->HDMI converter the GPU speaks DisplayPort and the code never ran. The other seven patches of the original backport arrived in \`cachyos-7.3-rc2-1\` via CachyOS's \`7.3/hdmi\` merge and were dropped earlier.
-- **\`ch7218-vrr-allowlist.patch\` (RC only)** -- FreeSync passthrough on a Chrontel CH7218 DP-to-HDMI 2.1 adapter (DPCD branch OUI \`2B:02:F0\`, UGREEN DP134 and most compact "8K" plugs). CachyOS's 7.2 kernel lists this converter in the FreeSync PCON allowlist; its 7.3 HDMI branch was rebuilt on a different VRR series and does not, so with the same adapter VRR worked on \`linux-cachyos-bc250\` and was silently absent on \`linux-cachyos-rc-bc250\`. One static table entry, unconditional (it cannot be gated and only states the chip may carry VRR, which it does). Unrelated to the opt-in CH7218 quirk above.
-- **\`pcon-vrr-hf-vsdb.patch\` (RC only)** -- the allowlist entry above was necessary but not sufficient. On 7.3 a DP-to-HDMI PCON gets its VRR range only from the AMD FreeSync EDID block, parsed by DMUB/DMCU firmware that DCN201 does not have, so the parse always fails on a BC-250 and the range stays 0/0 even when every DPCD gate passes. This adds what 7.2 already does: fall back to the HDMI Forum VRR range the DRM core parses in software. Covers TVs without an AMD block too. \`drm.debug=0x2\` logs the decision as \`VRR: PCON HF-VSDB fallback\`.
+- **\`ch7218-vrr-allowlist.patch\` (both sets)** -- FreeSync passthrough on a Chrontel CH7218 DP-to-HDMI 2.1 adapter (DPCD branch OUI \`2B:02:F0\`, UGREEN DP134 and most compact "8K" plugs). CachyOS's 7.2 kernel listed this converter in the FreeSync PCON allowlist; its 7.3 line was rebuilt on a different VRR series and does not -- checked against \`cachyos-7.3.0-2\` on 2026-10-21 -- so on 7.3 the same adapter fails the allowlist and VRR is silently absent, identical hardware. One static table entry, unconditional (it cannot be gated and only states the chip may carry VRR, which it does). Unrelated to the opt-in CH7218 quirk above.
+- **\`pcon-vrr-hf-vsdb.patch\` (both sets)** -- the allowlist entry above was necessary but not sufficient. On 7.3 a DP-to-HDMI PCON gets its VRR range only from the AMD FreeSync EDID block, parsed by DMUB/DMCU firmware that DCN201 does not have, so the parse always fails on a BC-250 and the range stays 0/0 even when every DPCD gate passes. This adds what \`7.2/hdmi\` already did: fall back to the HDMI Forum VRR range the DRM core parses in software. Covers TVs without an AMD block too. \`drm.debug=0x2\` logs the decision as \`VRR: PCON HF-VSDB fallback\`.
 
 ### BORE: \`${bore_pkgbase}\`
 

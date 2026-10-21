@@ -46,3 +46,23 @@ Move the files back up one directory and renumber them to follow the last active
 patch. Check `docs/PATCHES.md` (the fenced patch lists and the patch
 counts) and `tests/test_fsr4_packaging.py::KernelPatchSetTests` — both assert the
 shipped set, and both will fail until updated.
+
+
+## bc250-vcn.patch (parked 2026-10-09)
+
+Port of the PS5 VCN 2.0 patch (ps5-linux-patches PR #38) to the BC-250
+(device 0x13fe), behind `amdgpu.bc250_vcn=1`. **On the BC-250 it freezes the
+machine**: with the VCN firmware loaded directly (the BC-250's PSP refuses
+`ps5_vcn.bin`, status 0xFFFF0008) every IP block initialises, and the first
+register read of the VCN block (`UVD_POWER_STATUS`) never returns. The IP
+discovery bases (0x7800, 0x7E00, 0x02403000) are the same as the PS5's
+hard-coded ones, so the addresses are right; the block does not answer, and
+nothing in the driver powers it up. Others who tried more drastic hardware
+means report it appears to be disabled on purpose. The patch carries
+`bc250-vcn:` breadcrumbs that name the last step reached. It is kept, with the
+`bc250-vcn-fw` firmware package, for anyone who wants to continue.
+
+Test loop that found this: amdgpu.ko built alone against the CI kernel's
+config (clang 23, no MODVERSIONS) in an Arch container, copied to a board and
+loaded by hand with netconsole on, `modprobe.blacklist=amdgpu` on the command
+line so a freeze comes back to a reachable system after a power cycle.

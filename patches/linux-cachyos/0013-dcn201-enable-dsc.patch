@@ -37,7 +37,7 @@ kernel starts gating them, this patch goes dark rather than crashing.
 
 Carried here until it lands upstream.
 diff --git a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
-index e2819852a40a..7bfd8bc0f7f5 100644
+index 0eeb21a1bcaa..b50937054e56 100644
 --- a/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
 +++ b/drivers/gpu/drm/amd/display/dc/resource/dcn201/dcn201_resource.c
 @@ -572,6 +572,19 @@ static const struct resource_caps res_cap_dnc201 = {
@@ -84,7 +84,7 @@ index e2819852a40a..7bfd8bc0f7f5 100644
  	pool->base.funcs = &dcn201_res_pool_funcs;
  
  	/*************************************************
-@@ -1229,6 +1252,7 @@ static bool dcn201_resource_construct(
+@@ -1230,6 +1253,7 @@ static bool dcn201_resource_construct(
  
  	dcn201_ip.max_num_otg = pool->base.res_cap->num_timing_generator;
  	dcn201_ip.max_num_dpp = pool->base.pipe_count;
@@ -92,7 +92,7 @@ index e2819852a40a..7bfd8bc0f7f5 100644
  	dml_init_instance(&dc->dml, &dcn201_soc, &dcn201_ip, DML_PROJECT_DCN201);
  	{
  		struct irq_service_init_data init_data;
-@@ -1318,6 +1342,16 @@ static bool dcn201_resource_construct(
+@@ -1319,6 +1343,16 @@ static bool dcn201_resource_construct(
  		goto create_fail;
  	}
  
