@@ -41,7 +41,7 @@ unchanged, so existing BC-250 shader caches stay valid.
  2 files changed, 29 insertions(+), 29 deletions(-)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index da7f930a0ea..6aca5fb3e92 100644
+index be1c4746771..eaf3b5792b3 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -373,30 +373,30 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -100,7 +100,7 @@ index da7f930a0ea..6aca5fb3e92 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index c136032d9b8..4c459f60c61 100644
+index 3182c686b6d..bb2a429a8af 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8557,11 +8557,11 @@ bc250_fsr4_profile(const void *bytes, size_t size)
@@ -138,5 +138,5 @@ index c136032d9b8..4c459f60c61 100644
     static const struct { size_t size; uint64_t hash; unsigned word; } guards[] = {
        {108840, 0xfdf595207adeaa9bull, 3993u}, /* pass 1 */
 -- 
-2.56.0
+2.55.0
 

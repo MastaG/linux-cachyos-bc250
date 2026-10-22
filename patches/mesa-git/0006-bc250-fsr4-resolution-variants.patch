@@ -40,7 +40,7 @@ upgrade-from-previous/0003-resolution-over-composed.patch
  2 files changed, 96 insertions(+)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 32f437d88a4..da7f930a0ea 100644
+index aa79f3d7fcf..be1c4746771 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -385,7 +385,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -64,7 +64,7 @@ index 32f437d88a4..da7f930a0ea 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index af7d845a2df..c136032d9b8 100644
+index 090e0aa0eda..3182c686b6d 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8523,6 +8523,30 @@ bc250_fsr4_profile(const void *bytes, size_t size)
@@ -187,5 +187,5 @@ index af7d845a2df..c136032d9b8 100644
  
     if (nir->info.uses_abort) {
 -- 
-2.56.0
+2.55.0
 

@@ -31,7 +31,7 @@ Origin: bc250-fsr4-20260906 research kit, source/composed-over-2.84.patch
  2 files changed, 4176 insertions(+), 5 deletions(-)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index c9f63ead603..32f437d88a4 100644
+index 0daf856c65b..aa79f3d7fcf 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -377,6 +377,14 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -50,7 +50,7 @@ index c9f63ead603..32f437d88a4 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index b00097208f1..af7d845a2df 100644
+index 3b43baddc5c..090e0aa0eda 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8497,7 +8497,7 @@ bc250_fsr4_dynamic_columns(nir_shader *nir, unsigned profile)
@@ -4269,5 +4269,5 @@ index b00097208f1..af7d845a2df 100644
  
        progress = false;
 -- 
-2.56.0
+2.55.0
 

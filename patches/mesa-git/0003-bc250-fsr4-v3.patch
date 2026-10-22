@@ -99,7 +99,7 @@ index 3802730edce..83b1d18d3e5 100644
        if (dst.regClass() == s1) {
           Operand op1(get_alu_src(ctx, instr->src[0]));
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 3cd01801006..91ae9f0e9d5 100644
+index feb98848639..6da686008bf 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -60,6 +60,8 @@ get_nir_options_for_stage(struct radv_compiler_info *compiler_info, mesa_shader_
@@ -259,7 +259,7 @@ index 3cd01801006..91ae9f0e9d5 100644
        NIR_PASS(_, nir, nir_opt_scalar_array_vars_to_vec, nir_var_function_temp | nir_var_mem_shared);
  
 diff --git a/src/compiler/nir/nir_opt_algebraic.py b/src/compiler/nir/nir_opt_algebraic.py
-index 8242a77f2ec..205143e34ba 100644
+index d144618a1aa..4f137175a4f 100644
 --- a/src/compiler/nir/nir_opt_algebraic.py
 +++ b/src/compiler/nir/nir_opt_algebraic.py
 @@ -444,10 +444,47 @@ for sz in (16, 32, 64):
@@ -349,5 +349,5 @@ index 0b5a961ad8f..ad32401a011 100644
     bool has_udot_4x8;
  
 -- 
-2.56.0
+2.55.0
 
