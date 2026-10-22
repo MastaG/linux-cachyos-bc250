@@ -32,15 +32,21 @@ fi
 #
 # A nested pacman cannot run here: a PostTransaction hook still holds the database
 # lock, so "pacman -R" from this script fails with "unable to lock database" (verified
-# on a board with a test hook). Hand it to systemd-run a few seconds later instead.
-# Both commands are overridable so the test suite can drive this branch.
+# on a board with a test hook). Hand it to systemd-run instead -- and let that unit
+# retry, because on the 2026-10-22 smoke test the first deferred attempt landed while
+# the parent transaction was still running its snapper hooks and did nothing, and only
+# a later run completed it. -Rns rather than -Rn so the dependencies it drags in leave
+# with it; on a default install none of those three packages are present (verified
+# against the freshly flashed board and the live cachyos-handheld depends), so this
+# branch never runs there at all. Both commands are overridable for the tests.
 PACMAN="${BC250_PACMAN:-/usr/bin/pacman}"
 RUNNER="${BC250_SYSTEMD_RUN:-/usr/bin/systemd-run}"
 if [ -x "$PACMAN" ] && [ -x "$RUNNER" ] && "$PACMAN" -Qq steamos-manager >/dev/null 2>&1; then
     printf '==> bc250-fixes: removing steamos-manager (it breaks Switch to Desktop on this image)\n'
     "$RUNNER" --quiet --on-active=15 --unit=bc250-fixes-steamos-manager \
-        "$PACMAN" -Rn --noconfirm steamos-manager \
-        || printf 'WARNING: bc250-fixes could not schedule the removal; run: pacman -Rn steamos-manager\n' >&2
+        --property=Restart=on-failure --property=RestartSec=60 --property=StartLimitBurst=5 \
+        "$PACMAN" -Rns --noconfirm steamos-manager \
+        || printf 'WARNING: bc250-fixes could not schedule the removal; run: pacman -Rns steamos-manager\n' >&2
 fi
 
 exit 0

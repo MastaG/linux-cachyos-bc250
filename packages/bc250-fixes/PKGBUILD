@@ -8,7 +8,7 @@
 # systems pick it up on the next update.
 pkgname=bc250-fixes
 pkgver=1
-pkgrel=3
+pkgrel=4
 pkgdesc="Small BC-250 corrections for other packages, applied by a pacman hook (Return to Gaming Mode shortcut, Steam beta tool path, steamos-manager removal)"
 arch=('any')
 url="https://github.com/MastaG/linux-cachyos-bc250"

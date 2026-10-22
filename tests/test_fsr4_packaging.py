@@ -1446,6 +1446,8 @@ class Bc250FixesPackageTests(unittest.TestCase):
         calls = self.run_removal_branch(present=True)
         self.assertIn("deferred", calls)
         self.assertIn("steamos-manager", calls)
+        self.assertIn("-Rns --noconfirm steamos-manager", calls)   # take its orphaned deps too
+        self.assertIn("Restart=on-failure", calls)                  # one shot is not enough
         self.assertNotIn("inline", calls)
 
     def test_no_removal_is_scheduled_when_the_package_is_absent(self):
