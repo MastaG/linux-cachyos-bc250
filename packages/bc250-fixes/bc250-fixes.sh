@@ -19,4 +19,28 @@ if [ -x "$SELECT" ] && [ -f "$F" ] && grep -q '^Exec=/usr/bin/steamosctl switch-
     sed -i 's|^Exec=/usr/bin/steamosctl switch-to-game-mode$|Exec=/usr/bin/steamos-session-select gamescope|' "$F"
 fi
 
+# steamos-manager is Valve's "SteamOS Manager daemon"; CachyOS builds it from
+# their own fork and it used to be pulled in by cachyos-handheld. Its session
+# plumbing does not work on this image: it writes the holo-named one-shot conf.d
+# file, which plasmalogin never reads, so Steam's "Switch to Desktop" costs you a
+# session restart and lands straight back in Steam. Measured on two matched boards
+# (same plasma-login-manager, same gamescope-session-cachyos, same kernel, same
+# conf.d): with the package present the button does nothing, without it the request
+# falls back to steam-set-session writing the steamos-named file, which is honoured,
+# and Plasma comes up. CachyOS dropped the dependency on 2026-10-19, so systems that
+# installed cachyos-handheld during that window are still carrying it as an orphan.
+#
+# A nested pacman cannot run here: a PostTransaction hook still holds the database
+# lock, so "pacman -R" from this script fails with "unable to lock database" (verified
+# on a board with a test hook). Hand it to systemd-run a few seconds later instead.
+# Both commands are overridable so the test suite can drive this branch.
+PACMAN="${BC250_PACMAN:-/usr/bin/pacman}"
+RUNNER="${BC250_SYSTEMD_RUN:-/usr/bin/systemd-run}"
+if [ -x "$PACMAN" ] && [ -x "$RUNNER" ] && "$PACMAN" -Qq steamos-manager >/dev/null 2>&1; then
+    printf '==> bc250-fixes: removing steamos-manager (it breaks Switch to Desktop on this image)\n'
+    "$RUNNER" --quiet --on-active=15 --unit=bc250-fixes-steamos-manager \
+        "$PACMAN" -Rn --noconfirm steamos-manager \
+        || printf 'WARNING: bc250-fixes could not schedule the removal; run: pacman -Rn steamos-manager\n' >&2
+fi
+
 exit 0

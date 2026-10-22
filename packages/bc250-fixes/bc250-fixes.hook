@@ -5,6 +5,10 @@
 # fix only acts while its problem is still there. Currently:
 #   cachyos-handheld  "Return to Gaming Mode" shortcut points at steamosctl,
 #                     which fails on a BC-250; repointed at steamos-session-select
+#   steamos-manager   removed: its session switch writes a conf.d file plasmalogin
+#                     never reads, so "Switch to Desktop" bounces back to Steam
+#                     (matched two-board test, 2026-10-22). Deferred through
+#                     systemd-run, because a hook cannot run pacman itself
 
 [Trigger]
 Operation = Install

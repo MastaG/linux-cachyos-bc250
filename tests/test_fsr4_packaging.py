@@ -1440,6 +1440,37 @@ class Bc250FixesPackageTests(unittest.TestCase):
     def test_a_missing_shortcut_is_not_an_error(self):
         self.assertIsNone(self.run_script(None))
 
+    def test_steamos_manager_removal_is_deferred_not_inline(self):
+        # A PostTransaction hook still holds the alpm database lock, so the script
+        # must hand the removal to systemd-run rather than calling pacman itself.
+        calls = self.run_removal_branch(present=True)
+        self.assertIn("deferred", calls)
+        self.assertIn("steamos-manager", calls)
+        self.assertNotIn("inline", calls)
+
+    def test_no_removal_is_scheduled_when_the_package_is_absent(self):
+        # The branch retires itself once the package is gone, like every other fix.
+        self.assertEqual(self.run_removal_branch(present=False).strip(), "")
+
+    def run_removal_branch(self, present):
+        """Run the script with fake pacman/systemd-run; return what each was asked."""
+        with tempfile.TemporaryDirectory() as tmp:
+            record = Path(tmp) / "calls"
+            record.touch()
+            pacman = Path(tmp) / "pacman"
+            runner = Path(tmp) / "systemd-run"
+            pacman.write_text('#!/bin/sh\n'
+                              'if [ "$1" = "-Qq" ]; then exit %s; fi\n'
+                              'echo "inline $*" >> "$REC"\nexit 0\n' % ("0" if present else "1"))
+            runner.write_text('#!/bin/sh\necho "deferred $*" >> "$REC"\nexit 0\n')
+            for tool in (pacman, runner):
+                tool.chmod(0o755)
+            env = {**os.environ, "BC250_PACMAN": str(pacman),
+                   "BC250_SYSTEMD_RUN": str(runner), "REC": str(record)}
+            subprocess.run(["sh", "-c", (self.PKG / "bc250-fixes.sh").read_text()],
+                           capture_output=True, text=True, env=env, check=True)
+            return record.read_text()
+
     def test_run_host_is_linked_to_root_only_when_absent(self):
         # "L" creates the symlink if /run/host is missing and leaves an existing
         # (container) mount alone.

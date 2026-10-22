@@ -25,7 +25,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `protonge-latest-bc250` | GE-Proton with FSR4 ready to go |
 | `bc250-dual-audio` | Dolby Digital 5.1 output over DisplayPort |
 | `bc250-cec` | Identifies as `SteamOS` over HDMI CEC; retrains the link when the display powers on or switches to the board |
-| `bc250-fixes` | Small corrections for other packages: a pacman hook that repairs the broken Return to Gaming Mode shortcut from `cachyos-handheld`, and a tmpfiles rule that makes the Steam beta's `/run/host/...` tool paths resolve |
+| `bc250-fixes` | Small corrections for other packages: a pacman hook that repairs the broken Return to Gaming Mode shortcut from `cachyos-handheld`, makes the Steam beta's `/run/host/...` tool paths resolve, and removes `steamos-manager` -- whose session-switch half does not work against this image's display manager, so *Switch to Desktop* bounces back to Steam |
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `bc250-ch7218-fw` | Optional: UGREEN's updater and five firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
 | `bc250-vcn-fw` | Parked: the firmware file for the BC-250 VCN video-block experiment. No shipped kernel uses it (see [Hardware video (VCN)](#hardware-video-vcn-parked)) |
