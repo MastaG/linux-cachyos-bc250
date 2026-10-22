@@ -58,10 +58,10 @@ which RADV sets only for ACO on GFX1013; every other driver keeps
 upstream's sdot_4x8_iadd lowering unchanged.
 ---
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-index e17da25945e..b29f1471df5 100644
+index c58a491e2f0..caef3534adf 100644
 --- a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-@@ -1769,6 +1769,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1776,6 +1776,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
@@ -69,7 +69,7 @@ index e17da25945e..b29f1471df5 100644
     case nir_op_imul24_relaxed: {
        if (dst.regClass() == s1) {
           emit_sop2_instruction(ctx, instr, aco_opcode::s_mul_i32, dst, false, 0x3);
-@@ -1779,6 +1780,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1786,6 +1787,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
@@ -93,7 +93,7 @@ index e17da25945e..b29f1471df5 100644
        if (dst.regClass() == s1) {
           Operand op1(get_alu_src(ctx, instr->src[0]));
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 8ba6f45c0d1..3cc00675073 100644
+index c86688fd82d..96f4e5a9186 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -60,6 +60,8 @@ get_nir_options_for_stage(struct radv_compiler_info *compiler_info, mesa_shader_
@@ -227,7 +227,7 @@ index 8ba6f45c0d1..3cc00675073 100644
  void
  radv_optimize_nir(struct nir_shader *shader, bool optimize_conservatively)
  {
-@@ -792,7 +909,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -793,7 +910,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        NIR_PASS(_, nir, nir_opt_find_array_copies);
        NIR_PASS(_, nir, nir_lower_vars_to_ssa);
  
@@ -253,7 +253,7 @@ index 8ba6f45c0d1..3cc00675073 100644
        NIR_PASS(_, nir, nir_opt_memcpy);
        NIR_PASS(_, nir, nir_opt_deref);
 diff --git a/src/compiler/nir/nir_opt_algebraic.py b/src/compiler/nir/nir_opt_algebraic.py
-index fd5c6bf00a4..44e30815782 100644
+index b82a73a6525..a3b4e325a06 100644
 --- a/src/compiler/nir/nir_opt_algebraic.py
 +++ b/src/compiler/nir/nir_opt_algebraic.py
 @@ -444,10 +444,47 @@ for sz in (16, 32, 64):
@@ -342,3 +342,6 @@ index 8f0e9a7c0e1..8fe5962bf8d 100644
     /** Backend supports udot_4x8_uadd. */
     bool has_udot_4x8;
  
+-- 
+2.55.0
+

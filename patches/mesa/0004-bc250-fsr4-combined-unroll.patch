@@ -40,7 +40,7 @@ index 2d091a7d7cb..13790ab4adc 100644
 +   return nir_shader_intrinsics_pass(nir, fixup_smem_loads_null_prt, nir_metadata_control_flow, &s);
  }
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 80b35df4e03..74fbe804552 100644
+index d3279003a96..5f3ee6fb488 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -380,6 +380,11 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -56,7 +56,7 @@ index 80b35df4e03..74fbe804552 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 3cc00675073..1ccc4840ae9 100644
+index 96f4e5a9186..3d34601bc1c 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -182,6 +182,10260 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
@@ -10350,7 +10350,7 @@ index 3cc00675073..1ccc4840ae9 100644
     } else {
        uint32_t *spirv = (uint32_t *)stage->spirv.data;
        assert(stage->spirv.size % 4 == 0);
-@@ -708,7 +10967,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -709,7 +10968,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
         */
        NIR_PASS(_, nir, nir_lower_variable_initializers, ~0);
  
@@ -10360,7 +10360,7 @@ index 3cc00675073..1ccc4840ae9 100644
  
        progress = false;
        NIR_PASS(progress, nir, nir_lower_cooperative_matrix_flexible_dimensions, 16, 16, 16);
-@@ -921,7 +11181,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -922,7 +11182,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
           deferred_options.has_sdot_4x8 = true;
           nir->options = &deferred_options;
           radv_optimize_nir(nir, false);
@@ -10383,3 +10383,6 @@ index 3cc00675073..1ccc4840ae9 100644
           radv_optimize_nir(nir, false);
        } else {
           radv_optimize_nir(nir, false);
+-- 
+2.55.0
+

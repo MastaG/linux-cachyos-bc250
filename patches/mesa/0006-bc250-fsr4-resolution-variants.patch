@@ -35,7 +35,7 @@ Origin: bc250-fsr4-discord-20260907 bundle,
 upgrade-from-previous/0003-resolution-over-composed.patch
 ---
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 8f08970af13..55cac9bf20d 100644
+index 44786386e26..f2dba4d1b2d 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -392,7 +392,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -59,7 +59,7 @@ index 8f08970af13..55cac9bf20d 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index bdd9313f75e..11d030dde78 100644
+index 331d86b3a09..8966f41a33a 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8523,6 +8523,30 @@ bc250_fsr4_profile(const void *bytes, size_t size)
@@ -173,7 +173,7 @@ index bdd9313f75e..11d030dde78 100644
        assert(stage->spirv.size % 4 == 0);
  
        const bool dump_spirv = compiler_info->debug.dump_spirv &&
-@@ -15194,6 +15277,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -15195,6 +15278,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        NIR_PASS(_, nir, nir_lower_doubles, NULL, nir->options->lower_doubles_options);
  
        NIR_PASS(_, nir, nir_normalize_sin_cos);
@@ -181,3 +181,6 @@ index bdd9313f75e..11d030dde78 100644
     }
  
     if (nir->info.uses_abort) {
+-- 
+2.55.0
+
