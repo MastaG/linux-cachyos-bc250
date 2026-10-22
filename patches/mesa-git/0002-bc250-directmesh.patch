@@ -1,4 +1,4 @@
-From 8bea8f5ec0d7101fa4c33e8ede2b54729d2e47a2 Mon Sep 17 00:00:00 2001
+From 49d9da2a4a79610b6792be09f906f47d82450e3c Mon Sep 17 00:00:00 2001
 From: lonewolf0622 <hoseinxmusic@gmail.com>
 Date: Tue, 29 Sep 2026 21:25:10 -0400
 Subject: [PATCH] radv/bc250: DirectMesh v1.3.1 mesh and task shaders for
@@ -24269,10 +24269,10 @@ index a1713cf5bb3..04dcebc9edc 100644
 +
  #endif /* RADV_SHADER_OBJECT_H */
 diff --git a/src/amd/vulkan/radv_video.c b/src/amd/vulkan/radv_video.c
-index 3eb2fc183d7..b12d3c170b0 100644
+index 68fa03c8523..5f6d88b3670 100644
 --- a/src/amd/vulkan/radv_video.c
 +++ b/src/amd/vulkan/radv_video.c
-@@ -1259,7 +1259,7 @@ radv_CmdControlVideoCodingKHR(VkCommandBuffer commandBuffer, const VkVideoCoding
+@@ -1249,7 +1249,7 @@ radv_CmdControlVideoCodingKHR(VkCommandBuffer commandBuffer, const VkVideoCoding
     if (vid->dec->embedded_size) {
        uint32_t offset;
        radv_vid_buffer_upload_alloc(cmd_buffer, vid->dec->embedded_size, &offset, &cmd.embedded_ptr);
@@ -24281,7 +24281,7 @@ index 3eb2fc183d7..b12d3c170b0 100644
     }
  
     ASSERTED int ret = vid->dec->build_create_cmd(vid->dec, &cmd);
-@@ -1994,7 +1994,7 @@ radv_CmdDecodeVideoKHR(VkCommandBuffer commandBuffer, const VkVideoDecodeInfoKHR
+@@ -1974,7 +1974,7 @@ radv_CmdDecodeVideoKHR(VkCommandBuffer commandBuffer, const VkVideoDecodeInfoKHR
     if (vid->dec->embedded_size) {
        uint32_t offset;
        radv_vid_buffer_upload_alloc(cmd_buffer, vid->dec->embedded_size, &offset, &cmd.embedded_ptr);
@@ -24746,18 +24746,18 @@ index 23e754e18ae..7f8b8f4b3b7 100644
            'tests/opt_peephole_select.cpp',
            'tests/opt_shrink_vectors_tests.cpp',
 diff --git a/src/compiler/nir/nir_divergence_analysis.c b/src/compiler/nir/nir_divergence_analysis.c
-index e9a772e965f..ad2543f26e5 100644
+index 1238b355a23..ddfc07231be 100644
 --- a/src/compiler/nir/nir_divergence_analysis.c
 +++ b/src/compiler/nir/nir_divergence_analysis.c
-@@ -248,6 +248,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
-    case nir_intrinsic_load_raw_vertex_offset:
+@@ -249,6 +249,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
     case nir_intrinsic_load_first_vertex:
     case nir_intrinsic_load_draw_id:
+    case nir_intrinsic_load_draw_id_offset_ir3:
 +   case nir_intrinsic_load_ngg_safe_stats_buf_va_amd:
     case nir_intrinsic_load_is_indexed_draw:
     case nir_intrinsic_load_viewport_scale:
     case nir_intrinsic_load_user_clip_plane:
-@@ -335,6 +336,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
+@@ -336,6 +337,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
     case nir_intrinsic_load_ordered_id_amd:
     case nir_intrinsic_load_gs_wave_id_amd:
     case nir_intrinsic_load_provoking_vtx_in_prim_amd:
@@ -24766,7 +24766,7 @@ index e9a772e965f..ad2543f26e5 100644
     case nir_intrinsic_load_btd_shader_type_intel:
     case nir_intrinsic_load_base_global_invocation_id:
 diff --git a/src/compiler/nir/nir_intrinsics.py b/src/compiler/nir/nir_intrinsics.py
-index 45236ee0fc6..b13dd659e1c 100644
+index 2ec44d39703..a35c8084140 100644
 --- a/src/compiler/nir/nir_intrinsics.py
 +++ b/src/compiler/nir/nir_intrinsics.py
 @@ -987,6 +987,9 @@ intrinsic("global_atomic_agx",  src_comp=[1, 1, 0], dest_comp=0, indices=[ACCESS
