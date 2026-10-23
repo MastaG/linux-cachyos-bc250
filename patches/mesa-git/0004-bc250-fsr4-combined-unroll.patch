@@ -45,7 +45,7 @@ index 1f57984b58c..8682e6042ea 100644
 +   return nir_shader_intrinsics_pass(nir, fixup_smem_loads_null_prt, nir_metadata_control_flow, &s);
  }
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 00e3488a708..0daf856c65b 100644
+index fb6f6d0d30b..69397087901 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -373,6 +373,11 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -61,10 +61,10 @@ index 00e3488a708..0daf856c65b 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 6da686008bf..3b43baddc5c 100644
+index d710572181c..7cf744b73f6 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
-@@ -182,6 +182,10260 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
+@@ -184,6 +184,10260 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
   * signed dot instructions are eligible. This leaves ED7 (2048), 0d64 (512)
   * and the short 20-dot kernels on the B2 path.
   */
@@ -10325,7 +10325,7 @@ index 6da686008bf..3b43baddc5c 100644
  struct bc250_dot_density {
     unsigned sdot;
     unsigned iadd;
-@@ -484,7 +10738,7 @@ radv_spirv_nir_debug(void *private_data, enum nir_spirv_debug_level level, size_
+@@ -486,7 +10740,7 @@ radv_spirv_nir_debug(void *private_data, enum nir_spirv_debug_level level, size_
  
  static void
  radv_shader_choose_subgroup_size(const struct radv_compiler_info *compiler_info, nir_shader *nir,
@@ -10334,7 +10334,7 @@ index 6da686008bf..3b43baddc5c 100644
  {
     VkPipelineShaderStageRequiredSubgroupSizeCreateInfo rss_info = {
        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
-@@ -518,6 +10772,11 @@ radv_shader_choose_subgroup_size(const struct radv_compiler_info *compiler_info,
+@@ -520,6 +10774,11 @@ radv_shader_choose_subgroup_size(const struct radv_compiler_info *compiler_info,
        else
           default_wave_size = compiler_info->key.cs_wave_size;
  
@@ -10346,7 +10346,7 @@ index 6da686008bf..3b43baddc5c 100644
        /* Games don't always request full subgroups when they should, which can cause bugs if cswave32
         * is enabled. Furthermore, if cooperative matrices or subgroup info are used, we can't transparently change
         * the subgroup size.
-@@ -609,7 +10868,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -611,7 +10870,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        nir_validate_shader(nir, "in internal shader");
  
        assert(exec_list_length(&nir->functions) == 1);
@@ -10355,7 +10355,7 @@ index 6da686008bf..3b43baddc5c 100644
     } else {
        uint32_t *spirv = (uint32_t *)stage->spirv.data;
        assert(stage->spirv.size % 4 == 0);
-@@ -718,7 +10977,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -720,7 +10979,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
         */
        NIR_PASS(_, nir, nir_lower_variable_initializers, ~0);
  
@@ -10365,7 +10365,7 @@ index 6da686008bf..3b43baddc5c 100644
  
        progress = false;
        struct nir_lower_coopmat_args coopmat_args = {
-@@ -935,7 +11195,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -937,7 +11197,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
           deferred_options.has_sdot_4x8 = true;
           nir->options = &deferred_options;
           radv_optimize_nir(nir, false);
