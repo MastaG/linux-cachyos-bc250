@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: Rebuild all kernels and Mesa components even when fingerprints are unchanged
+        description: Rebuild all kernels and Mesa components even when fingerprints are unchanged (linux-cachyos-rc is parked, see the decision step)
         required: true
         default: false
         type: boolean
@@ -358,6 +358,26 @@ jobs:
             build_protonge_latest_bc250=true
             build_proton_cachyos_native_bc250=true
             build_proton_cachyos_slr_bc250=true
+          fi
+
+          # PARKED (2026-10-24): do not build linux-cachyos-rc at all until CachyOS
+          # re-pins its rc tree to a Linux 7.4 rc1 (memory bc250_kernel_rc_parked.md,
+          # expected around late November 2026). The tree it would build from is the
+          # 7.3-rc6 tag -- older than stable, so an rc of it carries no value for
+          # anyone -- and upstream's own pins there drift: the resolver has failed on a
+          # `config` sha256 that does not match upstream's own config file. Flip the ONE
+          # line below when 7.4-rc1 is tagged and the component rejoins the run by
+          # itself; nothing else needs to change.
+          #
+          # The kernel-rc packages published from the last good 7.3-rc6 build stay in
+          # the repo untouched: out/repo is seeded from the previous release, a
+          # component that does not build publishes nothing, and there is deliberately
+          # no removal logic here.
+          parked_kernel_rc=true
+          # Applied after the fingerprint comparison AND after `force`, so a
+          # "rebuild everything" run cannot resurrect a parked component.
+          if [[ "$parked_kernel_rc" == true ]]; then
+            build_kernel_rc=false
           fi
 
           # Restoring means the release did not match our known-good state --

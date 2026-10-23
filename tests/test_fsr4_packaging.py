@@ -1793,3 +1793,96 @@ class LocalPatchGateTests(unittest.TestCase):
             if re.search(r"BC250_LOCAL_PATCHES(?:_DIR)?\s*(?:=|:(?!-))", path.read_text()):
                 setters.append(str(path.relative_to(ROOT)))
         self.assertEqual(setters, [])
+
+
+class ParkedComponentTests(unittest.TestCase):
+    """linux-cachyos-rc is parked in CI until CachyOS re-pins its rc tree to a
+    Linux 7.4 rc1 (memory bc250_kernel_rc_parked.md), so the pipeline can be
+    green again: the tree it would build from is the 7.3-rc6 tag -- older than
+    stable -- and upstream's own pins there drift.
+
+    The park is ONE assignment in the decision step, and it has to survive both
+    paths that can turn a component on: the fingerprint comparison and the
+    `force` input. The already-published kernel-rc packages are kept by the usual
+    seeding (a component that does not build publishes nothing), so the park must
+    not grow any removal logic -- and must not put kernel-rc in RETIRED_PACKAGES,
+    which is the thing that deletes packages from the database.
+
+    Every assertion is anchored to a live, correctly indented line, and the flag
+    and the guard are then executed with the file's own text.
+    """
+
+    WF = (ROOT / ".github/workflows/build-release.yml").read_text()
+    STEP_INDENT = "          "          # shell lines inside a `run: |` block
+
+    def live(self, pattern):
+        return re.findall(rf"(?m)^{re.escape(self.STEP_INDENT)}({pattern})$", self.WF)
+
+    def test_the_flag_is_one_live_assignment_and_can_be_flipped(self):
+        self.assertEqual(self.live(r'parked_kernel_rc=true'), ["parked_kernel_rc=true"],
+                         "the park must be exactly one live line in the decision step")
+        guard = self.live(
+            r'if \[\[ "\$parked_kernel_rc" == true \]\]; then\n'
+            r'            build_kernel_rc=false\n'
+            r'          fi'
+        )
+        self.assertEqual(len(guard), 1, "the guard must be the live three-line block")
+
+    def test_the_park_beats_both_the_fingerprint_and_force(self):
+        guard_at = self.WF.index(self.live(
+            r'if \[\[ "\$parked_kernel_rc" == true \]\]; then\n'
+            r'            build_kernel_rc=false\n'
+            r'          fi')[0])
+        fingerprint = self.WF.index(
+            '[[ "$(previous_value kernel-rc-info.env KERNEL_FINGERPRINT '
+            'KERNEL_RC_FINGERPRINT)" == "$KERNEL_RC_FINGERPRINT" ]] || build_kernel_rc=true'
+        )
+        force_at = self.WF.index(
+            "if [[ '${{ github.event_name }}' == workflow_dispatch && "
+            "'${{ inputs.force }}' == true ]]; then"
+        )
+        force_true_at = self.WF.index(f"{self.STEP_INDENT}  build_kernel_rc=true")
+        self.assertLess(fingerprint, guard_at, "the park must come after the comparison")
+        self.assertLess(force_at, guard_at, "the park must come after the force block")
+        self.assertLess(force_true_at, guard_at, "...and after what force sets")
+        # The input itself says so, for the human who clicks it.
+        self.assertIn("linux-cachyos-rc is parked",
+                      self.WF[self.WF.index("description: Rebuild all kernels"):])
+
+    def _decide(self, flag_line, on_before):
+        """Run the file's own flag line and guard, with the component turned on
+        beforehand (as the fingerprint comparison or `force` would do)."""
+        guard = self.live(
+            r'if \[\[ "\$parked_kernel_rc" == true \]\]; then\n'
+            r'            build_kernel_rc=false\n'
+            r'          fi'
+        )[0]
+        script = (
+            "set -euo pipefail\n"
+            f"{self.STEP_INDENT}{flag_line}\n"
+            f"{self.STEP_INDENT}{on_before}\n"
+            f"{self.STEP_INDENT}{guard}\n"
+            f'{self.STEP_INDENT}printf %s "$build_kernel_rc"\n'
+        )
+        return subprocess.run(["bash", "-c", script], capture_output=True,
+                              text=True).stdout.strip()
+
+    def test_parked_stays_off_even_when_both_paths_say_build_it(self):
+        flag = self.live(r"parked_kernel_rc=true")[0]
+        self.assertEqual(self._decide(flag, "build_kernel_rc=true"), "false")
+
+    def test_flipping_the_one_line_brings_it_back(self):
+        flag = "parked_kernel_rc=false"
+        self.assertEqual(self._decide(flag, "build_kernel_rc=true"), "true")
+
+    def test_a_parked_component_is_skipped_not_removed(self):
+        # ci-build.sh and the workflow both gate on the per-component flag, and
+        # the loop simply moves on; the package stays from the previous seeding.
+        self.assertIn('"kernel-rc:$BUILD_KERNEL_RC"', self.WF)
+        self.assertIn('[[ "$wanted" == true ]] || continue', self.WF)
+        self.assertIn('BUILD_KERNEL_RC="${BUILD_KERNEL_RC:-false}"',
+                      (ROOT / "scripts/ci-build.sh").read_text())
+        retired = (ROOT / "scripts/retired-packages.sh").read_text()
+        array = retired[retired.index("RETIRED_PACKAGES=("):]
+        array = array[:array.index(")")]
+        self.assertNotIn("kernel", array, "parking is not retiring: no removal logic")
