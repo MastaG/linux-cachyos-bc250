@@ -125,8 +125,11 @@ PY
 python3 "$ROOT_DIR/scripts/pin-llvm-depends.py" "$MESA_BUILD_DIR/PKGBUILD"
 
 # Fetch the release tarball ourselves; archive.mesa3d.org is unreliable and
-# makepkg's own retry budget is too small to ride out its outages.
-"${ROOT_DIR}/scripts/fetch-mesa-tarball.sh" "$MESA_BUILD_DIR"
+# makepkg's own retry budget is too small to ride out its outages. The script
+# also adjudicates the declared sha256 against Mesa's own release notes, so a
+# wrong number in the upstream PKGBUILD (commit c442588745 for 26.2.5) is
+# reported with both digests instead of failing in makepkg after the download.
+"${ROOT_DIR}/scripts/fetch-mesa-tarball.sh" "$MESA_BUILD_DIR" "$CACHYOS_MESA_COMMIT"
 
 applied_patches="$(IFS=,; printf '%s' "${patch_names[*]}")"
 cat > "$MESA_BUILD_DIR/bc250-mesa-build.env" <<EOF_META
@@ -138,8 +141,18 @@ MESA_MARCH=${MESA_MARCH}
 MESA_MTUNE=${MESA_MTUNE}
 EOF_META
 
+# What the tarball check accepted, and on whose authority (see the fetch script).
+if [[ -f "$MESA_BUILD_DIR/bc250-mesa-tarball.env" ]]; then
+    cat "$MESA_BUILD_DIR/bc250-mesa-tarball.env" \
+        >> "$MESA_BUILD_DIR/bc250-mesa-build.env"
+fi
+
 printf '==> Prepared Mesa build in %s\n' "$MESA_BUILD_DIR"
 printf '    CachyOS Mesa commit: %s\n' "$CACHYOS_MESA_COMMIT"
 printf '    applied patches:     %s\n' "$applied_patches"
 printf '    pkgrel suffix:       %s\n' "$MESA_PKGREL"
 printf '    Mesa CPU target:     -march=%s -mtune=%s\n' "$MESA_MARCH" "$MESA_MTUNE"
+tarball_sha="$(sed -n 's/^MESA_TARBALL_SHA256=//p' "$MESA_BUILD_DIR/bc250-mesa-tarball.env" 2>/dev/null || true)"
+if [[ -n "$tarball_sha" ]]; then
+    printf '    tarball sha256:      %s\n' "$tarball_sha"
+fi

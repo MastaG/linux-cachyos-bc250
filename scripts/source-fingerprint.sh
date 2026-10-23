@@ -411,8 +411,13 @@ case "$COMPONENT" in
             {
                 (cd "$TMP" && sha256sum *)
                 hash_files "$ROOT_DIR"/patches/mesa/*.patch
+                # The prefetcher verifies -- and can correct -- the tarball sum,
+                # and can stop the build, so its content is an input to this
+                # component just like the PKGBUILD preparation is.
                 hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
                     "$ROOT_DIR"/scripts/prepare-mesa-pkgbuild.sh \
+                    "$ROOT_DIR"/scripts/fetch-mesa-tarball.sh \
+                    "$ROOT_DIR"/scripts/check-mesa-source-sums.py \
                     "$ROOT_DIR"/scripts/pin-llvm-depends.py \
                     "$ROOT_DIR"/scripts/build-mesa-package.sh \
                     "$ROOT_DIR"/scripts/check-fsr4-driver.py \
@@ -426,8 +431,11 @@ case "$COMPONENT" in
             {
                 (cd "$TMP" && sha256sum *)
                 hash_files "$ROOT_DIR"/patches/mesa/*.patch
+                # Same reason as the 64-bit branch above.
                 hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
                     "$ROOT_DIR"/scripts/prepare-lib32-mesa-pkgbuild.sh \
+                    "$ROOT_DIR"/scripts/fetch-mesa-tarball.sh \
+                    "$ROOT_DIR"/scripts/check-mesa-source-sums.py \
                     "$ROOT_DIR"/scripts/pin-llvm-depends.py \
                     "$ROOT_DIR"/scripts/build-lib32-mesa-package.sh \
                     "$ROOT_DIR"/scripts/check-fsr4-driver.py \
