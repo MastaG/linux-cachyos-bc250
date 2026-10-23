@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pre-fetch the upstream Mesa release tarball into a prepared build directory,
-# and make sure the PKGBUILD's declared sha256 actually describes that file.
+# and make sure the PKGBUILD's declared checksums actually describe that file.
 #
 # archive.mesa3d.org (annarchy.freedesktop.org) has been intermittently
 # unreachable, answering roughly one request in five while port 443 hangs on
@@ -21,14 +21,24 @@
 # "One or more files did not pass the validity check!", which is how a wrong
 # number in a PKGBUILD came to look like a bad mirror.
 #
-# So: the declared sum is trusted first (cheap, and it is right most of the
-# time). On a mismatch the download is checked against MESA ITSELF -- the
-# SHA256 line in https://docs.mesa3d.org/relnotes/<pkgver>.html -- and only if
-# the file matches what Mesa published is the PKGBUILD rewritten. A sibling
-# PKGBUILD's sum is deliberately NOT an authority: both files were wrong-ish in
-# different ways before, and only upstream's release notes say what the tarball
-# is. If Mesa's own sum does not match either, the build fails here, loudly,
-# with expected and observed digests, rather than after a 40-minute compile.
+# The same commit also wrote a wrong *b2sums* entry in lib32-mesa
+# (347f1e11... where the file is cfcc4d72...), and that is what killed the first
+# run after the sha256 fix: the rewritten sha256 validated, makepkg then went on
+# to "Validating source files with b2sums" and failed there. So the rule is now
+# the general one -- once Mesa's release notes confirm the file, THE FILE IS THE
+# AUTHORITY FOR EVERY CHECKSUM ARRAY the PKGBUILD declares for that source
+# entry, and each of them is recomputed from the verified file.
+#
+# So: the declared sums are trusted first (cheap, and they are right most of the
+# time). On a mismatch in any array the download is checked against MESA ITSELF
+# -- the SHA256 line in https://docs.mesa3d.org/relnotes/<pkgver>.html, plus its
+# SHA512 line when the page has one, which is the second opinion that makes
+# rewriting safe -- and only if the file matches what Mesa published is the
+# PKGBUILD rewritten. A sibling PKGBUILD's sum is deliberately NOT an authority:
+# both files were wrong-ish in different ways before, and only upstream's release
+# notes say what the tarball is. If Mesa's own sums do not match either, the build
+# fails here, loudly, with every digest in hand, rather than after a 40-minute
+# compile.
 #
 # Usage: fetch-mesa-tarball.sh <build-dir> [<cachyos-pkgbuild-commit>]
 # The PKGBUILD in <build-dir> supplies the version; nothing is hardcoded here.
@@ -127,16 +137,38 @@ MESA_TARBALL_SUM_SOURCE=${1}
 MESA_TARBALL_RELNOTES_URL=${relnotes_url}
 MESA_TARBALL_UPSTREAM_COMMIT=${UPSTREAM_COMMIT}
 EOF_TARBALL
+    shift
+    # Whatever the caller passes as extra arguments lands in the file too, one
+    # KEY=value per line: which arrays were replaced, with what they disagreed,
+    # and the second digest Mesa's page gave us.
+    for kv in "$@"; do
+        printf '%s\n' "$kv" >> "$envfile"
+    done
 }
 
-if [[ "$actual" == "$declared" ]]; then
+# Every checksum array this PKGBUILD declares for this source, compared with the
+# file. An empty answer means the PKGBUILD describes the file exactly, which is
+# the normal case and needs no authority but its own.
+mismatch_out="$(python3 -B "$CHECKER" mismatch "$PKGBUILD" archive.mesa3d.org "$dest")" || {
+    printf 'ERROR: cannot read the declared checksums of %s\n' "$PKGBUILD" >&2
+    printf '%s\n' "$mismatch_out" >&2
+    exit 1
+}
+
+if [[ -z "$mismatch_out" ]]; then
     write_env pkgbuild-declared
     printf '==> Checksum matches the PKGBUILD (%s)\n' "$actual"
     exit 0
 fi
 
-printf '==> PKGBUILD declares %s for %s, the file is %s; asking Mesa\n' \
-    "$declared" "$tarball" "$actual" >&2
+# MISMATCH <array> <index> <declared> <measured>, one per disagreeing array.
+mapfile -t mismatches <<<"$mismatch_out"
+for line in "${mismatches[@]}"; do
+    [[ -n "$line" ]] || continue
+    read -r _tag _array _index want got <<<"$line"
+    printf '==> PKGBUILD declares %s for %s, the file is %s; asking Mesa\n' \
+        "$want" "$tarball" "$got" >&2
+done
 
 page="${BC250_MESA_RELNOTES_HTML:-}"
 if [[ -z "$page" ]]; then
@@ -151,7 +183,9 @@ if [[ -z "$page" ]]; then
     fi
 fi
 
-published="$(python3 -B "$CHECKER" published "$page" "$tarball" 2>/dev/null || true)"
+published_lines="$(python3 -B "$CHECKER" published "$page" "$tarball" 2>/dev/null || true)"
+published="$(sed -n 's/^sha256=//p' <<<"$published_lines")"
+published_sha512="$(sed -n 's/^sha512=//p' <<<"$published_lines")"
 if [[ ! "$published" =~ ^[0-9a-f]{64}$ ]]; then
     printf 'ERROR: %s lists no SHA256 for %s, so the mismatch cannot be adjudicated\n' \
         "$relnotes_url" "$tarball" >&2
@@ -170,23 +204,72 @@ if [[ "$actual" != "$published" ]]; then
     exit 1
 fi
 
-# The file is what Mesa released; the PKGBUILD's number is wrong. Rewrite it and
-# shout, because this is an upstream packaging bug that will bite every builder
-# of that PKGBUILD until it is fixed.
-if ! python3 -B "$CHECKER" set "$PKGBUILD" archive.mesa3d.org "$actual"; then
-    printf 'ERROR: could not rewrite the declared sum in %s\n' "$PKGBUILD" >&2
-    exit 1
+if [[ -n "$published_sha512" ]]; then
+    measured_sha512="$(sha512sum "$dest" | awk '{print $1}')"
+    if [[ "$measured_sha512" != "$published_sha512" ]]; then
+        # The page gives a second digest and it disagrees: the file is not Mesa's
+        # release, so it is not an authority for rewriting anything either.
+        printf 'ERROR: %s matches Mesa'\''s SHA256 but not the SHA512 Mesa publishes\n' \
+            "$tarball" >&2
+        printf '       Mesa publishes   sha256 %s, sha512 %s (%s)\n' \
+            "$published" "$published_sha512" "$relnotes_url" >&2
+        printf '       download is      sha256 %s, sha512 %s (%s bytes)\n' \
+            "$actual" "$measured_sha512" "$bytes" >&2
+        exit 1
+    fi
 fi
-write_env mesa-relnotes
-# Keep the rejected value in the record too; the summary line is the one a human
-# reads, the env file is the one a later agent greps.
-printf 'MESA_TARBALL_REJECTED_SUM=%s\n' "$declared" >> "$envfile"
+
+# The file is what Mesa released, so every array that disagrees with it is the
+# wrong side. Rewrite them all and shout once, naming each, because this is an
+# upstream packaging bug that will bite every builder of that PKGBUILD until it
+# is fixed.
+sync_out="$(python3 -B "$CHECKER" sync "$PKGBUILD" archive.mesa3d.org "$dest")" || {
+    printf 'ERROR: could not rewrite the declared sums in %s\n' "$PKGBUILD" >&2
+    printf '%s\n' "$sync_out" >&2
+    exit 1
+}
+mapfile -t sync_lines <<<"$sync_out"
+replaced=()
+for line in "${sync_lines[@]}"; do
+    if [[ "$line" == REPLACED\ * ]]; then
+        replaced+=( "$line" )
+    fi
+done
+[[ ${#replaced[@]} -gt 0 ]] || {
+    printf 'ERROR: the sums disagreed but nothing was rewritten in %s\n' "$PKGBUILD" >&2
+    exit 1
+}
+
+env_extra=(
+    "MESA_TARBALL_REPLACED_ARRAYS=$(printf '%s\n' "${replaced[@]}" |
+        awk '{print $2}' | paste -sd, -)"
+)
+for line in "${replaced[@]}"; do
+    read -r _tag array index old _new <<<"$line"
+    env_extra+=(
+        "MESA_TARBALL_REJECTED_SUM_$(tr '[:lower:]' '[:upper:]' <<<"${array}")=$old"
+    )
+    # The bare key stays the sha256 one: that is the key the 2026-10-23 incident
+    # is greped for, and the sha256 array is the one Mesa's page can vouch for.
+    if [[ "$array" == sha256sums ]]; then
+        env_extra+=("MESA_TARBALL_REJECTED_SUM=$old")
+    fi
+done
+if [[ -n "${measured_sha512:-}" ]]; then
+    env_extra+=("MESA_TARBALL_SHA512_MATCHES_MESA=Y")
+fi
+
+write_env mesa-relnotes "${env_extra[@]}"
 
 {
-    printf 'WARNING: the declared sha256 in %s does not describe %s and was replaced\n' \
-        "$PKGBUILD" "$tarball"
-    printf '         declared: %s\n' "$declared"
-    printf '         measured: %s  (= what Mesa publishes, %s)\n' "$actual" "$relnotes_url"
+    printf 'WARNING: %s does not describe %s in %d declared array(s) and all of them were replaced\n' \
+        "$PKGBUILD" "$tarball" "${#replaced[@]}"
+    for line in "${replaced[@]}"; do
+        read -r _tag array index old new <<<"$line"
+        printf '         %s[%s]: %s -> %s\n' "$array" "$index" "$old" "$new"
+    done
+    printf '         sha256 of the file: %s  (= what Mesa publishes, %s)\n' \
+        "$actual" "$relnotes_url"
     printf '         packaging commit: %s\n' "$UPSTREAM_COMMIT"
     printf '         Report it upstream so this warning goes away; makepkg would\n'
     printf '         otherwise fail with "did not pass the validity check!" after a\n'

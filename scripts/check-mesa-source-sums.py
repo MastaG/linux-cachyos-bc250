@@ -9,7 +9,7 @@ sha256sums for the same file, "https://archive.mesa3d.org/mesa-$_pkgver.tar.xz"
 "One or more files did not pass the validity check!" after a multi-minute
 download, and nothing in this repository noticed before a build failed.
 
-Three uses, sharing one parser so they cannot disagree:
+Six uses, sharing one parser so they cannot disagree:
 
   declared <PKGBUILD> <needle>            print the sum paired with the first
                                           source entry containing <needle>
@@ -17,6 +17,19 @@ Three uses, sharing one parser so they cannot disagree:
                                           newsum and that the old one is unique)
   check    <PKGBUILD> [<PKGBUILD>...]     exit 1 when the same source entry is
                                           declared with different sums
+  mismatch <PKGBUILD> <needle> <file>     print "MISMATCH <array> <index>
+                                          <declared> <measured>" for EVERY checksum
+                                          array the PKGBUILD declares for that entry
+  sync     <PKGBUILD> <needle> <file>     rewrite every one of those entries from
+                                          the file, printing "REPLACED <array>
+                                          <index> <old> <new>" for each
+  published <relnotes.html> <filename>    the digests Mesa publishes for a file
+
+The multi-array case is not hypothetical: the same c442588745 commit also wrote a
+wrong b2sums entry in lib32-mesa (347f1e11... where the file is cfcc4d72...), and
+makepkg validates the b2sums array too -- the 2026-10-23 run fixed the sha256, got
+past it, and then died in "Validating source files with b2sums".  Once the file is
+confirmed by Mesa's relnotes, the file is the authority for every array.
 
 Source and checksum arrays are paired by index, so `source=()` plus
 `source+=()` is read in order and matched against `sha256sums=()` plus
@@ -34,6 +47,7 @@ identically written source, which is the mistake that actually happened.
 
 from __future__ import annotations
 
+import hashlib
 import html
 import re
 import shlex
@@ -44,22 +58,32 @@ SHA256_LEN = 64
 SUMS_ARRAY = "sha256sums"
 SOURCE_ARRAY = "source"
 
+# Checksum arrays this tool can compute itself (makepkg's supported types, with
+# the digest length each one expects in a PKGBUILD).  b2sums is 512-bit BLAKE2b,
+# which is hashlib.blake2b's default digest size.  Anything else that shows up in
+# a PKGBUILD is refused rather than guessed at.
+SUPPORTED_ARRAYS = {
+    "md5sums": ("md5", 32),
+    "sha1sums": ("sha1", 40),
+    "sha224sums": ("sha224", 56),
+    "sha256sums": ("sha256", 64),
+    "sha384sums": ("sha384", 96),
+    "sha512sums": ("sha512", 128),
+    "b2sums": ("blake2b", 128),
+}
+
 
 class PkgbuildError(RuntimeError):
     """A PKGBUILD we cannot read confidently; never guess past this."""
 
 
-def _first_array(text: str, name: str) -> list[str]:
-    """The entries of the first plain `name=(...)`; `name+=(...)` is ignored.
-
-    Appends are deliberately left out: mesa builds part of its own `source` in a
-    top-level loop over `_crates`, so an appended entry does not sit at the index
-    its appended sum does, and pairing them would compare a patch against a
-    crate.  Only the initial arrays are safe to pair positionally.
-    """
+def _array_body_span(text: str, name: str, require: bool = True):
+    """(start, end) of the body of the first plain `name=(...)`, or None."""
     match = re.search(rf"^{re.escape(name)}=\(", text, flags=re.M)
     if not match:
-        raise PkgbuildError(f"{name}: no '{name}=(' array found")
+        if require:
+            raise PkgbuildError(f"{name}: no '{name}=(' array found")
+        return None
     open_at = match.end() - 1
     depth = 0
     for pos in range(open_at, len(text)):
@@ -68,13 +92,49 @@ def _first_array(text: str, name: str) -> list[str]:
         elif text[pos] == ")":
             depth -= 1
             if depth == 0:
-                break
-    else:
-        raise PkgbuildError(f"{name}: array never closed")
-    body = text[open_at + 1 : pos]
+                return (open_at + 1, pos)
+    raise PkgbuildError(f"{name}: array never closed")
+
+
+def _first_array(text: str, name: str, require: bool = True) -> list[str]:
+    """The entries of the first plain `name=(...)`; `name+=(...)` is ignored.
+
+    Appends are deliberately left out: mesa builds part of its own `source` in a
+    top-level loop over `_crates`, so an appended entry does not sit at the index
+    its appended sum does, and pairing them would compare a patch against a
+    crate.  Only the initial arrays are safe to pair positionally.
+    """
+    span = _array_body_span(text, name, require=require)
+    if span is None:
+        return []
+    body = text[span[0] : span[1]]
     # A trailing backslash-newline continues the entry, so join it first.
     body = re.sub(r"\\\r?\n", " ", body)
     return _tokenise(body, name)
+
+
+def _entries_with_offsets(text: str, name: str, require: bool = True) -> list[list[int | str]]:
+    """[value, start, end] per entry, offsets absolute in `text`, quotes excluded.
+
+    Values come from the same tokenizer as `_first_array`, and each one is located
+    by searching forward from the previous match, so duplicated entries ("SKIP")
+    still land on their own slot.  A quote-joining backslash shifts the offsets;
+    refuse rather than write to the wrong place.
+    """
+    span = _array_body_span(text, name, require=require)
+    if span is None:
+        return []
+    raw = text[span[0] : span[1]]
+    if re.search(r"\\\r?\n", raw):
+        raise PkgbuildError(f"{name}: a continued line; offsets would be wrong")
+    out, pos = [], span[0]
+    for value in _tokenise(raw, name):
+        idx = raw.find(value, pos - span[0])
+        if idx < 0:
+            raise PkgbuildError(f"{name}: cannot locate entry {value!r} to rewrite it")
+        out.append([value, span[0] + idx, span[0] + idx + len(value)])
+        pos = span[0] + idx + len(value)
+    return out
 
 
 def _tokenise(body: str, name: str) -> list[str]:
@@ -133,6 +193,23 @@ def source_sums(path: Path) -> list[tuple[str, str]]:
     return [(normalise(src, expansions), s) for src, s in zip(sources, sums)]
 
 
+def published_checksums(html_text: str, filename: str) -> dict[str, str]:
+    """Every digest Mesa publishes for `filename` on its release-notes page.
+
+    The page lists SHA256 and SHA512 lines for the tarball (see the plain-text
+    reading in `mesa_published`); both are returned, keyed as "sha256"/"sha512",
+    so a caller can cross-check the file on two digests instead of one.
+    """
+    plain = html.unescape(re.sub(r"<[^>]+>", " ", html_text))
+    found: dict[str, str] = {}
+    for match in re.finditer(r"(SHA256|SHA512):\s*([0-9a-f]{64,128})\s+(\S+)", plain, flags=re.I):
+        if match.group(3).strip() == filename:
+            found[match.group(1).lower()] = match.group(2).lower()
+    if not found:
+        raise PkgbuildError(f"relnotes page lists no checksum for {filename!r}")
+    return found
+
+
 def mesa_published(html_text: str, filename: str) -> str:
     """The sha256 Mesa publishes for `filename` on its release-notes page.
 
@@ -148,15 +225,14 @@ def mesa_published(html_text: str, filename: str) -> str:
     Raises if the file is not listed -- that is a reason to not override, never a
     reason to guess.
     """
-    plain = html.unescape(re.sub(r"<[^>]+>", " ", html_text))
-    for match in re.finditer(r"SHA256:\s*([0-9a-f]{64})\s+(\S+)", plain, flags=re.I):
-        if match.group(2).strip() == filename:
-            return match.group(1).lower()
-    raise PkgbuildError(f"relnotes page lists no SHA256 for {filename!r}")
+    found = published_checksums(html_text, filename)
+    if "sha256" not in found:
+        raise PkgbuildError(f"relnotes page lists no SHA256 for {filename!r}")
+    return found["sha256"]
 
 
 def declared(path: Path, needle: str) -> tuple[str, str]:
-    """The (source, sum) pair whose source entry contains `needle`."""
+    """The (source, sum) pair whose source entry contains `needle` (sha256 only)."""
     hits = [(src, s) for src, s in source_sums(path) if needle in src]
     if not hits:
         raise PkgbuildError(f"{path.name}: no source entry contains {needle!r}")
@@ -182,6 +258,86 @@ def set_declared(path: Path, needle: str, newsum: str) -> tuple[str, str]:
     return old, newsum
 
 
+def file_digests(path: Path) -> dict[str, str]:
+    """The digest of `path` for every array name in SUPPORTED_ARRAYS."""
+    data = Path(path).read_bytes()
+    return {
+        name: hashlib.new(algo, data).hexdigest()
+        for name, (algo, _hexlen) in SUPPORTED_ARRAYS.items()
+    }
+
+
+def source_index(text: str, needle: str) -> int:
+    """The index of the source entry containing `needle` in the initial array."""
+    expansions = _expansions(text)
+    hits = [
+        i
+        for i, entry in enumerate(_entries_with_offsets(text, SOURCE_ARRAY))
+        if needle in normalise(str(entry[0]), expansions)
+    ]
+    if not hits:
+        raise PkgbuildError(f"no source entry contains {needle!r}")
+    if len(hits) > 1:
+        raise PkgbuildError(f"{needle!r} matches {len(hits)} source entries; refusing")
+    return hits[0]
+
+
+def mismatches(pkgbuild: Path, file: Path, needle: str) -> list[tuple[str, int, str, str]]:
+    """(array, index, declared, measured) for every checksum array that disagrees.
+
+    Only arrays that actually carry an entry for that source index are considered;
+    an array with no entry there is makepkg's business, not ours.  An array this
+    tool cannot compute (b3sums, sha3sums, ...) is an error: rewriting one array
+    and leaving a wrong other one behind is how the 2026-10-23 run failed.
+    """
+    text = Path(pkgbuild).read_text(encoding="utf-8")
+    index = source_index(text, needle)
+    digests = file_digests(file)
+    unknown = [
+        name
+        for name in re.findall(r"^(\w+sums)=\(", text, flags=re.M)
+        if name not in SUPPORTED_ARRAYS
+    ]
+    if unknown:
+        raise PkgbuildError(
+            f"{pkgbuild.name}: cannot compute {' and '.join(sorted(unknown))}; "
+            "refusing to rewrite only part of the sums"
+        )
+    out = []
+    for name, (_algo, hexlen) in SUPPORTED_ARRAYS.items():
+        entries = _entries_with_offsets(text, name, require=False)
+        if not entries or index >= len(entries):
+            continue
+        declared = entries[index][0]
+        if not re.fullmatch(r"[0-9a-f]+", declared, flags=re.I) or len(declared) != hexlen:
+            raise PkgbuildError(
+                f"{pkgbuild.name}: {name} entry #{index} is {declared!r}, not a "
+                f"{hexlen}-hex digest; refusing to rewrite what it cannot read"
+            )
+        if declared.lower() != digests[name]:
+            out.append((name, index, declared, digests[name]))
+    return out
+
+
+def sync_rewrite(pkgbuild: Path, file: Path, needle: str) -> list[tuple[str, int, str, str]]:
+    """Point every checksum array of one source entry at the file itself."""
+    text = Path(pkgbuild).read_text(encoding="utf-8")
+    index = source_index(text, needle)
+    digests = file_digests(file)
+    changes = []
+    for name, (_algo, _hexlen) in SUPPORTED_ARRAYS.items():
+        entries = _entries_with_offsets(text, name, require=False)
+        if not entries or index >= len(entries):
+            continue
+        declared, start, end = entries[index]
+        if declared.lower() != digests[name]:
+            changes.append((name, index, declared, digests[name], start, end))
+    for name, _index, _old, _new, start, end in sorted(changes, key=lambda c: -c[4]):
+        text = text[:start] + _new + text[end:]
+    Path(pkgbuild).write_text(text, encoding="utf-8", newline="\n")
+    return [(name, index, old, new) for name, index, old, new, _s, _e in changes]
+
+
 def clashes(paths: list[Path]) -> list[tuple[str, list[tuple[str, str]]]]:
     """(source, [(file, sum), ...]) for shared initial-array sources."""
     seen: dict[str, list[tuple[str, str]]] = {}
@@ -200,6 +356,8 @@ def main(argv: list[str]) -> int:
         "usage: check-mesa-source-sums.py declared <PKGBUILD> <needle>\n"
         "       check-mesa-source-sums.py set <PKGBUILD> <needle> <newsum>\n"
         "       check-mesa-source-sums.py published <relnotes.html> <filename>\n"
+        "       check-mesa-source-sums.py mismatch <PKGBUILD> <needle> <file>\n"
+        "       check-mesa-source-sums.py sync <PKGBUILD> <needle> <file>\n"
         "       check-mesa-source-sums.py check <PKGBUILD> [<PKGBUILD>...]"
     )
     if len(argv) < 3:
@@ -221,7 +379,24 @@ def main(argv: list[str]) -> int:
         elif cmd == "published":
             if len(args) != 2:
                 raise PkgbuildError("published takes a relnotes HTML file and a filename")
-            print(mesa_published(Path(args[0]).read_text(encoding="utf-8"), args[1]))
+            for algo, value in sorted(published_checksums(
+                Path(args[0]).read_text(encoding="utf-8"), args[1]
+            ).items()):
+                print(f"{algo}={value}")
+        elif cmd == "mismatch":
+            if len(args) != 3:
+                raise PkgbuildError("mismatch takes a PKGBUILD, a needle and the file")
+            for name, index, want, got in mismatches(
+                Path(args[0]), Path(args[2]), args[1]
+            ):
+                print(f"MISMATCH {name} {index} {want} {got}")
+        elif cmd == "sync":
+            if len(args) != 3:
+                raise PkgbuildError("sync takes a PKGBUILD, a needle and the file")
+            for name, index, old, new in sync_rewrite(
+                Path(args[0]), Path(args[2]), args[1]
+            ):
+                print(f"REPLACED {name} {index} {old} {new}")
         elif cmd == "check":
             found = clashes([Path(a) for a in args])
             for src, hits in found:
