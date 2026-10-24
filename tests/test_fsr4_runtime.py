@@ -1879,6 +1879,69 @@ class PresetTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Unknown OptiScaler preset option"):
                 builder.validate_preset(preset, ini)
 
+    def test_a_newer_bridge_from_the_fork_becomes_its_own_variant(self):
+        """PROTON_USE_OPTISCALER=fsr412f: the RC12 zip added as one more
+        --ffx-sdk-alt. It has the same layout as RC11's, so the builder has to
+        give it its own version, its own DLL, its own origin on record and its
+        own notices, without touching the preset the other variants share."""
+        with tempfile.TemporaryDirectory(prefix="payload-rc12-") as temporary:
+            work = Path(temporary)
+            archive, fork, fakenvapi, signed, provider, licenses, preset = self.payload_inputs(work)
+            rc12 = work / "rc12.zip"
+            with zipfile.ZipFile(rc12, "w") as zf:
+                zf.writestr("amd_fidelityfx_upscaler_dx12.dll", b"bc250-fork-rc12" * 512)
+                zf.writestr("notices/PROVENANCE.md", b"rc12 notices")
+                zf.writestr("README.md", b"rc12 readme")
+                zf.writestr("SHA256SUMS", b"")
+                zf.writestr("linux/shared-cache.sh", b"#!/bin/sh\n")
+            out = work / "out"
+            out.mkdir()
+            result = subprocess.run([
+                sys.executable, str(ROOT / "scripts/build-fsr4-payload.py"),
+                "--optiscaler", str(archive), "--optiscaler-version", "test-opti",
+                "--optipatcher", str(signed), "--fakenvapi", str(fakenvapi),
+                "--provider", str(provider), "--ffx-sdk", str(signed),
+                "--ffx-sdk-alt", "fsr411f", str(fork), "https://example/rc11",
+                "--ffx-sdk-alt", "fsr412f", str(rc12), "https://example/rc12",
+                "--dlss", str(signed), "--licenses", str(licenses), "--preset", str(preset),
+                "--manifest-rel", "upscaler-manifest.json", "--proton-rel", "proton",
+                "--output", str(out), "--config", str(out / "cfg.json")],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            config = json.loads((out / "cfg.json").read_text())
+            manifest = json.loads((out / "upscaler-manifest.json").read_text())
+            entries = {e["version"]: e for e in manifest["optiscaler"]}
+            aliases = config["optiscaler_aliases"]
+            self.assertIn("fsr412f", aliases)
+            self.assertNotEqual(aliases["fsr412f"], aliases["fsr411f"])
+            trees = {}
+            for version, entry in entries.items():
+                artifact = out / "artifacts" / Path(entry["download_url"]).name
+                with tarfile.open(artifact) as tar:
+                    trees[version] = {
+                        m.name: tar.extractfile(m).read()
+                        for m in tar.getmembers() if m.isfile()
+                    }
+            new = trees[aliases["fsr412f"]]
+            old = trees[aliases["fsr411f"]]
+            self.assertEqual(new["OptiScaler/amd_fidelityfx_upscaler_dx12.dll"],
+                             b"bc250-fork-rc12" * 512)
+            self.assertEqual(old["OptiScaler/amd_fidelityfx_upscaler_dx12.dll"],
+                             self.FORK_BRIDGE)
+            # Its notices ship beside it, as that release asks, and its origin is
+            # on record with the other unsigned builds.
+            self.assertEqual(new[f"Licenses/{aliases['fsr412f']}/PROVENANCE.md"],
+                             b"rc12 notices")
+            self.assertTrue(any(b"https://example/rc12" in data
+                                for name, data in new.items()
+                                if name.startswith("Licenses/")))
+            # No ini of its own anywhere in the zip, so the shared preset applies
+            # to it unchanged and it adds no per-variant keys for anybody else.
+            document = json.loads(preset.read_text())
+            self.assertEqual(config["preset"],
+                             document["preset"] if "preset" in document else document)
+            self.assertEqual(config["optiscaler_variant_preset"].get(aliases["fsr412f"], {}), {})
+
 
 if __name__ == "__main__":
     unittest.main()

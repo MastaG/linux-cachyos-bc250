@@ -653,6 +653,17 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   [4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b)
   rebuild aimed at RDNA2 ghosting. Neither 4.1.1r11 nor 4.1.1b is a provider
   bump: each carries its own embedded model, and both are unsigned.
+- **New, opt-in: the same fork's RC12** ([v4.0.0-rc12](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12),
+  \`4.1.1r12\`, by daniel-h-0), selected with \`PROTON_USE_OPTISCALER=fsr412f
+  %command%\`. RC12 extends the RC8/RC9 shader work to the two context families
+  RC11 left alone, the ones a 1080p display and an 8K one pick: 34 new slots, 24
+  distinct programs, same output bits as RC11 per its author, 0.41-0.43 ms less
+  FSR4 GPU time at 1080p output, and the final pass keeps AMD's division in every
+  program where RC9-RC11 used a shift exact only for in-spec input. Its own
+  validation is client checks and install tests, no game testing. Its zip ships
+  no ini, so the preset is unchanged for it and for every other variant, and the
+  packages keep the 2026-10-15 nightly they already ship; the client build this
+  asset comes from pins an older one (20260904), and its app is not needed here.
 - **Changed: HelixSR Scaler is the default** ([HelixSR 2.0.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0)
   with Scaler 1.1.0, by lonewolf0622). The Scaler is OptiScaler
   (GPL-3.0) with HelixSR built in, which runs NVIDIA's DLSS network (Model E) as D3D12 compute,
@@ -669,7 +680,7 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   15 to 18% faster at high render resolutions by its author's measurements.
   \`PROTON_USE_OPTISCALER=optiscaler\` selects the stock OptiScaler nightly (20261015) with the
   FSR4 fork's bridge, \`helixsr-ffx\` the nightly with HelixSR as its FidelityFX library, and
-  \`fsr411f\`, \`signed\`, \`fsr411b\`, \`fsr411rc9\`, \`fsr411rc10\` the other bridge DLLs. The Scaler
+  \`fsr412f\`, \`fsr411f\`, \`signed\`, \`fsr411b\`, \`fsr411rc9\`, \`fsr411rc10\` the other bridge DLLs. The Scaler
   does not mix with them. Per its author, the DLSS weights and kernels it runs remain NVIDIA's
   property. If a game looks wrong or crashes, \`PROTON_USE_OPTISCALER=optiscaler %command%\`
   goes back to plain OptiScaler. HelixSR's own log, \`helixsr.log\` in \`system32/umu/HelixSR-fsrfg\`

@@ -996,6 +996,7 @@ class SlrPackageTests(unittest.TestCase):
             with self.subTest(package=name):
                 self.assertIn("--ffx-sdk-default helixsr", text)
                 self.assertIn("--ffx-sdk-alt fsr411b", text)
+                self.assertIn("--ffx-sdk-alt fsr412f", text)
                 self.assertIn("--ffx-sdk-alt fsr411f", text)
                 # Older bridges are kept selectable so their performance can be
                 # measured against the default. Every package must offer the
@@ -1004,7 +1005,8 @@ class SlrPackageTests(unittest.TestCase):
                 self.assertIn("--ffx-sdk-alt fsr411rc10", text)
                 for archive in ("bc250-fsr4-dll-4.0.0-rc9.tar.xz",
                                 "bc250-fsr4-dll-4.0.0-rc10.zip",
-                                "bc250-fsr4-dll-4.0.0-rc11.zip"):
+                                "bc250-fsr4-dll-4.0.0-rc11.zip",
+                                "bc250-fsr4-dll-4.0.0-rc12.zip"):
                     self.assertIn(archive, text)
                 # HelixSR is the default; the RC11 bridge stays reachable as
                 # fsr411f, and the default is only valid with --helixsr given.

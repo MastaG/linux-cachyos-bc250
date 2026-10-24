@@ -247,6 +247,9 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --ffx-sdk-alt fsr411b \\\n'
     '            "${srcdir}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \\\n'
     '            "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \\\n'
+    '        --ffx-sdk-alt fsr412f \\\n'
+    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc12.zip" \\\n'
+    '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12" \\\n'
     '        --ffx-sdk-alt fsr411f \\\n'
     '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc11.zip" \\\n'
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11" \\\n'
@@ -309,6 +312,16 @@ payload_sources = [
     # what a rebuild produces. Selected with PROTON_USE_OPTISCALER=fsr411b.
     ("amd_fidelityfx_upscaler_dx12_v4.1.1b.dll", f"{payload_base}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll",
      "0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75", False),
+    # Newest bridge from the same fork, opt-in with
+    # PROTON_USE_OPTISCALER=fsr412f (4.1.1r12): RC12 extends the RC8/RC9 shader
+    # work to the 1080p and 8K context families -- same output bits as RC11 per
+    # its notes, 0.41-0.43 ms less FSR4 GPU time at 1080p output, and the final
+    # pass keeps AMD's division in every program. Mirrored like the rest, so a
+    # deleted upstream release cannot change what a rebuild produces. Its zip
+    # carries no ini; the keys its README asks for are the ones
+    # optiscaler-preset.json already enforces.
+    ("bc250-fsr4-dll-4.0.0-rc12.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc12.zip",
+     "646778a0d06c42bf3cdcc99f9396680f5cc4a33658b90c0889fd15751bfb800d", True),
     # The default bridge: the BC-250 FSR4 fork's RC11, mirrored from its
     # release so a deleted upstream release cannot change what a rebuild
     # produces. Taken as the published archive rather than a bare DLL: it

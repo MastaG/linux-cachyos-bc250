@@ -850,6 +850,7 @@ pinned builds. Each package ships all of them and swaps only that file;
                                           # (unset) HelixSR Scaler, DLSS Model E network — the default
 PROTON_USE_OPTISCALER=optiscaler %command%  # stock OptiScaler nightly with the fsr411f bridge
 PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork RC11, 4.1.1r11 — the default until HelixSR
+PROTON_USE_OPTISCALER=fsr412f %command%   # the same fork's RC12, 4.1.1r12 — newest bridge, opt-in
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
 PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR Scaler, by name
@@ -863,13 +864,13 @@ against the default rather than being deleted when superseded. That is the
 standing policy: a new default replaces the old one, which stays reachable by
 name. All three Proton packages ship the same builds.
 
-| | `fsr411f` | `signed` | `fsr411b` |
-|---|---|---|---|
-| Source | [bc250-fsr4-fork v4.0.0-rc11](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11) | [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) |
-| Watermark shows | `4.1.1r11` | `4.1.1 / SOURCE: DRIVER` (the provider; the bridge file itself is 4.0.2) | `4.1.1b` |
-| Aimed at | the BC-250 specifically | the reference | ghosting on RDNA2 |
-| Tested on a BC-250 by its author | yes | — | no |
-| Signed | no | AMD | no |
+| | `fsr411f` | `fsr412f` | `signed` | `fsr411b` |
+|---|---|---|---|---|
+| Source | [bc250-fsr4-fork v4.0.0-rc11](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11) | [bc250-fsr4-fork v4.0.0-rc12](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12) | [FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) | [fsr4xyz 4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) |
+| Watermark shows | `4.1.1r11` | `4.1.1r12` | `4.1.1 / SOURCE: DRIVER` (the provider; the bridge file itself is 4.0.2) | `4.1.1b` |
+| Aimed at | the BC-250 specifically | the BC-250 specifically | the reference | ghosting on RDNA2 |
+| Tested on a BC-250 by its author | yes | no, install tests and client checks only | — | no |
+| Signed | no | no | AMD | no |
 
 **`fsr411f` is the BC-250 fork's build**, by daniel-h-0, the default before
 HelixSR, because it is the one made for and measured on this hardware. RC11 is a version-identification and
@@ -886,6 +887,27 @@ is setup time, not FPS. Every setting its README asks for —
 `FsrNonLinearSRGB=auto`, `FsrNonLinearPQ=auto`, `FrameGen.Enabled=false` — is
 already what this package enforces. To confirm which build is running, add
 `BC250_FSR4_DEBUG=1`; the watermark identifies `4.1.1r11`.
+
+**`fsr412f` is the same fork's newest bridge** ([v4.0.0-rc12](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12),
+`4.1.1r12`, by daniel-h-0), opt-in and selected by name only: the default stays
+HelixSR Scaler and every other variant keeps its own bridge. RC12 extends the
+RC8/RC9 shader work to the two context families RC11 left alone, the ones a
+1080p display and an 8K one pick: 34 new slots (24 distinct programs), generated
+from AMD's SDK 2.3.0 DXIL by the project's own lowering tools, giving the same
+output bits as RC11 per its notes for 0.41–0.43 ms less FSR4 GPU time at 1080p
+output, and the final pass keeps AMD's division in every program where RC9–RC11
+used a shift exact only for in-spec input. Its author lists client checks and
+install tests, no game testing. The zip carries no ini of its own — the keys its
+README asks for (`Dx12Upscaler=ffx`, `Dx11Upscaler=ffx_12`,
+`VulkanUpscaler=ffx_12`, `UpscalerIndex=0`, `Fsr4ForceModel=2`,
+`FsrNonLinearColorSpace=false`, `FrameGen.Enabled=false`) are the ones this
+package already enforces — and the desktop client it ships in (the BC250 build of
+[OptiScaler Client](https://github.com/Optiscaler-Client/Optiscaler-Client),
+GPL-3.0) is not part of the payload: we take the DLL zip, byte for byte the one
+the standalone RC12 release publishes (SHA256
+`646778a0d06c42bf3cdcc99f9396680f5cc4a33658b90c0889fd15751bfb800d`), and the
+packages keep the 2026-10-15 OptiScaler nightly they already ship, which the
+client's own pin (20260904) predates.
 
 Two things to know about the alternatives:
 
