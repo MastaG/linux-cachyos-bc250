@@ -57,10 +57,10 @@ They now also require the new nir_shader_compiler_options::bc250_sdot_mad24,
 which RADV sets only for ACO on GFX1013; every other driver keeps
 upstream's sdot_4x8_iadd lowering unchanged.
 ---
- .../aco_select_nir_alu.cpp                    |  17 +++
- src/amd/vulkan/radv_shader.c                  | 135 +++++++++++++++++-
- src/compiler/nir/nir_opt_algebraic.py         |  57 +++++++-
- .../nir/nir_shader_compiler_options.h         |   4 +
+ .../instruction_selection/aco_select_nir_alu.cpp   |  17 +++
+ src/amd/vulkan/radv_shader.c                       | 135 ++++++++++++++++++++-
+ src/compiler/nir/nir_opt_algebraic.py              |  57 ++++++++-
+ src/compiler/nir/nir_shader_compiler_options.h     |   4 +
  4 files changed, 207 insertions(+), 6 deletions(-)
 
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
@@ -99,7 +99,7 @@ index 3802730edce..83b1d18d3e5 100644
        if (dst.regClass() == s1) {
           Operand op1(get_alu_src(ctx, instr->src[0]));
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index a6e09b64b24..d710572181c 100644
+index 1eda4b4d158..ec693f331ea 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -62,6 +62,8 @@ get_nir_options_for_stage(struct radv_compiler_info *compiler_info, mesa_shader_

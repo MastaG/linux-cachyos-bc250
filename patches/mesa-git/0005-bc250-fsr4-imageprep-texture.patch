@@ -27,14 +27,14 @@ more launches on another board. Kept opt-in for that reason.
 Origin: bc250-fsr4-20260906 research kit, source/composed-over-2.84.patch
 ---
  src/amd/vulkan/radv_physical_device.c |    8 +
- src/amd/vulkan/radv_shader.c          | 4173 ++++++++++++++++++++++++-
+ src/amd/vulkan/radv_shader.c          | 4173 ++++++++++++++++++++++++++++++++-
  2 files changed, 4176 insertions(+), 5 deletions(-)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 69397087901..b14825338f4 100644
+index d08fda20a2a..8e8516c84f3 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -377,6 +377,14 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -378,6 +378,14 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
     const char *bc250_fsr4_cache = debug_get_bool_option("BC250_FSR4_DISABLE", false) ?
        "bc250-fsr4-integrated-v2-disabled" : "bc250-fsr4-integrated-v2";
     _mesa_blake3_update(&ctx, bc250_fsr4_cache, strlen(bc250_fsr4_cache));
@@ -50,7 +50,7 @@ index 69397087901..b14825338f4 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 7cf744b73f6..fc680e10d4a 100644
+index 41b7b3a7627..4c48c3a0e69 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8499,7 +8499,7 @@ bc250_fsr4_dynamic_columns(nir_shader *nir, unsigned profile)

@@ -35,15 +35,15 @@ here. Not measured by us on real hardware.
 Origin: bc250-fsr4-discord-20260907 bundle,
 upgrade-from-previous/0003-resolution-over-composed.patch
 ---
- src/amd/vulkan/radv_physical_device.c | 12 ++++
- src/amd/vulkan/radv_shader.c          | 84 +++++++++++++++++++++++++++
+ src/amd/vulkan/radv_physical_device.c | 12 +++++
+ src/amd/vulkan/radv_shader.c          | 84 +++++++++++++++++++++++++++++++++++
  2 files changed, 96 insertions(+)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index b14825338f4..f5744405f6e 100644
+index 8e8516c84f3..b2a3e16303b 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -385,7 +385,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -386,7 +386,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
     unsigned bc250_imageprep_mode = debug_get_num_option("BC250_FSR4_IMAGEPREP", 0);
     _mesa_blake3_update(&ctx, bc250_imageprep_version, strlen(bc250_imageprep_version));
     _mesa_blake3_update(&ctx, &bc250_imageprep_mode, sizeof(bc250_imageprep_mode));
@@ -64,7 +64,7 @@ index b14825338f4..f5744405f6e 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index fc680e10d4a..e1c18c893da 100644
+index 4c48c3a0e69..d05151f2759 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8525,6 +8525,30 @@ bc250_fsr4_profile(const void *bytes, size_t size)
