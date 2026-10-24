@@ -417,6 +417,43 @@ def seed_once(preset, inherited):
     return kept
 
 
+def leaving_variant_keys(config, inherited, selected):
+    """Hand back `auto` for the keys a variant that is leaving the prefix wrote.
+
+    seed_once treats anything in the prefix's ini that is not `auto` as somebody's
+    decision, and a variant's own layer is what writes those keys at seed time. So a
+    FreeFG run that set FrameGen.Enabled=true keeps governing the default path after
+    the switch, and Ghost of Tsushima pays for it: HelixSR frame generation there
+    costs 80-90 fps down to ~50 (confirmed by users, measured on board1 2026-10-24).
+    The per-variant files are already cleaned on a switch; the ini is shared, so its
+    keys need the same treatment. A player's answer for the variant they are on keeps
+    persisting -- only what the leaving variant's layer wrote goes back to `auto`, and
+    only keys this build's ini defines, since protonfixes refuses the others.
+    """
+    payload, ini = payload_dir(inherited), prefix_ini(inherited)
+    if selected == "0" or payload is None or not payload.is_dir():
+        return {}
+    if not ini or not ini.is_file():
+        return {}
+    entries = json.loads((TOOL / config["manifest"]).read_text()).get("optiscaler", [])
+    files = {e.get("version"): set(e.get("md5_hash", {})) for e in entries}
+    if selected not in files:
+        return {}
+    keys = {k.lower() for k in config.get("optiscaler_ini_keys", {}).get(selected, [])}
+    reset = {}
+    for version, layer in config.get("optiscaler_variant_preset", {}).items():
+        if version == selected or not layer or version not in files:
+            continue
+        # Files only that variant has, still in the prefix: that is what it wrote.
+        theirs = files[version] - files[selected]
+        if not any((payload / name).exists() for name in theirs):
+            continue
+        for key in layer:
+            if key.lower() in keys:
+                reset[key] = "auto"
+    return reset
+
+
 def optiscaler_version(config, requested):
     """Resolve what the caller asked for to a version the manifest pins.
 
@@ -524,6 +561,7 @@ def environment(config, inherited, *, game):
         load_native(env, proxy)
 
     preset = seed_once(config["preset"], inherited)
+    preset.update(leaving_variant_keys(config, inherited, env["PROTON_USE_OPTISCALER"]))
     # A variant's own entries (HelixSR's library paths), only when that pinned
     # version is the one being launched -- and enforced every launch, not seeded
     # (see seed_once: a variant switch reuses the prefix's ini). Debug and

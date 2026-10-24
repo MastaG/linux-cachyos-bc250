@@ -203,9 +203,23 @@ class RuntimeTests(unittest.TestCase):
             },
             "preset": {
                 "FSR.Fsr4ForceModel": "2",
+                "FrameGen.Enabled": "false",
                 "Spoofing.Dxgi": "false",
                 "Spoofing.VulkanExtensionSpoofing": "false",
             },
+            # Which keys each build's own ini defines, as the builder writes it:
+            # every fixture variant ships STUB_INI.
+            "optiscaler_ini_keys": {version: sorted(
+                f"{section}.{option}" for section, option in
+                [("FrameGen", o) for o in
+                 ("Enabled", "FGInput", "FGOutput", "FGNvngxReplacement")]
+                + [("FSR", o) for o in ("Fsr4ForceModel", "UpscalerIndex")]
+                + [("Spoofing", o) for o in ("Dxgi", "VulkanExtensionSpoofing")]
+                + [("Libraries", o) for o in ("FfxDx12Path", "FfxDx12SRPath")]
+                + [("Upscalers", "Dx12Upscaler")]
+                + [("XeFG", o) for o in ("InterpolationCount", "ForceBorderless")]
+                + [("fakenvapi", "ForceReflex")]
+            ) for version in ("test-opti", "test-opti-alt", "test-opti-alt2")},
         }
 
     def upscalers_module(self, base):
@@ -355,6 +369,99 @@ class RuntimeTests(unittest.TestCase):
                 self.launch(base, "scalerlike")
                 self.assertEqual(self.cleaned, [])
                 self.assertEqual(log.read_text(), "keep me")
+
+    def test_a_freefg_run_does_not_leave_frame_generation_on_for_the_default(self):
+        # Ghost of Tsushima: a freefg run answers FrameGen.Enabled/FGInput/FGOutput
+        # in the shared ini, seed_once then treats those as somebody's decision and
+        # the default path inherits frame generation on a switch. The launcher resets
+        # the leaving variant's keys to auto, and the next launch re-seeds the preset.
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                # FreeFG's own OptiScaler build: its ini carries the renamed
+                # Fsr4GpuSupport that the default's build does not have.
+                freefg_files = dict(self.files, **{
+                    "OptiScaler.ini": STUB_INI.replace(
+                        b"UpscalerIndex=auto\n",
+                        b"UpscalerIndex=auto\nFsr4GpuSupport=auto\n", 1),
+                    "OptiScaler/libxess_fg.dll": b"freefg-wrapper" * 512,
+                })
+                freefg_version = self.add_variant("freefglike", freefg_files)
+                self.config["optiscaler_variant_preset"] = {freefg_version: builder.FREEFG_PRESET}
+                expected = {**self.config["preset"], **builder.FREEFG_PRESET}
+                expected = {k: v for k, v in expected.items() if v is not None}
+                self.assertEqual(self.handed(self.launch(base, "freefglike")), expected)
+
+                switched = self.handed(self.launch(base))
+                self.assertEqual(switched["FrameGen.Enabled"], "auto")   # reset, was: true
+                self.assertEqual(switched["FrameGen.FGInput"], "auto")   # was: upscaler
+                self.assertEqual(switched["FrameGen.FGOutput"], "auto")
+                self.assertEqual(switched["XeFG.InterpolationCount"], "auto")
+                # A key the default's build does not define cannot be handed over:
+                # protonfixes refuses a launch on a key missing from the ini.
+                self.assertNotIn("FSR.Fsr4GpuSupport", switched)
+
+                self.assertEqual(self.handed(self.launch(base))["FrameGen.Enabled"], "false")
+
+    def test_a_player_answer_on_the_selected_variant_still_persists(self):
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                env = self.launch(base)
+                self.assertEqual(self.read_ini()["FrameGen"]["enabled"], "false")
+                # The overlay's Save Settings writes the prefix's own ini, and the
+                # handover this launch was what put the key in the file.
+                self.assertIn("FrameGen.Enabled=false", env["PROTON_OPTISCALER_CONFIG"])
+                ini = self.prefix / "drive_c/windows/system32/umu/OptiScaler.ini"
+                parser = self.read_ini()
+                parser["FrameGen"]["enabled"] = "true"
+                with ini.open("w") as stream:
+                    parser.write(stream)
+                env = self.launch(base)
+                self.assertNotIn("FrameGen.Enabled", env["PROTON_OPTISCALER_CONFIG"])
+                self.assertEqual(self.read_ini()["FrameGen"]["enabled"], "true")
+
+    def test_the_default_ships_every_frame_gen_key_at_auto(self):
+        # What keeps a fresh prefix frame-generation free on the default path: the
+        # shipped help says auto for Enabled is false and auto for FGInput is nofg.
+        # The variant layer for the default names no FrameGen key of its own.
+        for name, layer in sorted(builder.SCALER_PRESET.items()):
+            self.assertFalse(name.startswith("FrameGen."), name)
+        keys = self.config["preset"]
+        self.assertEqual(keys["FrameGen.Enabled"], "false")
+        ini = configparser.ConfigParser()
+        ini.read_string(STUB_INI.decode())
+        for option in ("enabled", "fginput", "fgoutput", "fgnvngxreplacement"):
+            self.assertEqual(ini["FrameGen"][option], "auto", option)
+
+    def test_no_preset_names_helixsrs_own_dlss_frame_generation_switch(self):
+        # helixsr.ini ships [DlssFrameGeneration] Enabled = true, which its own
+        # comment reads as "available when the game turns it on". We never write
+        # that file, so OptiScaler's Enabled=false is what has to keep the route
+        # closed -- and on board1 (2026-10-24) it does not: with FGInput set to
+        # nvngxfg and FGNvngxReplacement to HelixSR, HelixSR's FG core loads while
+        # Enabled stays false. Only the routing keys and helixsr.ini decide it.
+        for name in self.config["preset"]:
+            self.assertFalse(name.startswith("DlssFrameGeneration."), name)
+        for layer in self.config.get("optiscaler_variant_preset", {}).values():
+            for name in layer:
+                self.assertFalse(name.startswith("DlssFrameGeneration."), name)
+        for name in builder.SCALER_PRESET:
+            self.assertFalse(name.startswith("DlssFrameGeneration."), name)
+        for name in builder.HELIXSR_PRESET:
+            self.assertFalse(name.startswith("DlssFrameGeneration."), name)
+        for name in builder.FREEFG_PRESET:
+            self.assertFalse(name.startswith("DlssFrameGeneration."), name)
+
+    def read_ini(self):
+        parser = configparser.ConfigParser()
+        parser.read(self.prefix / "drive_c/windows/system32/umu/OptiScaler.ini")
+        return parser
+
+    def handed(self, env):
+        """What the launcher handed protonfixes for this launch."""
+        return dict(part.split("=", 1) for part in
+                    env["PROTON_OPTISCALER_CONFIG"].split(";") if part)
 
     def test_nothing_is_cleaned_while_optiscaler_is_off(self):
         for base in BASES:

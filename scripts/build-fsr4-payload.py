@@ -67,6 +67,19 @@ def validate_preset(preset_path: Path, ini_path: Path, extra: dict | None = None
     return preset
 
 
+def ini_keys_from_text(text: str) -> list:
+    """The options an OptiScaler.ini of this build defines, as "Section.option".
+
+    protonfixes refuses a key the ini it installs does not have, so the launcher
+    needs to know what each build defines before it hands one over -- that is what
+    `leaving_variant_keys` in bc250-fsr4-launch.py does with this list.
+    """
+    parser = configparser.ConfigParser()
+    parser.read_string(text)
+    return sorted(f"{section}.{option}" for section in parser.sections()
+                  for option in parser[section])
+
+
 def tar_tree(root: Path, output: Path) -> None:
     """Write a deterministic .tar.xz of `root`.
 
@@ -940,6 +953,7 @@ def main() -> int:
             aliases["optiscaler"] = aliases["fsr411f"]
 
         entries = []
+        ini_keys_map = {}
         for ffx_sdk, version, provenance, notices, extra in variants:
             archive, entry = optiscaler_artifact(
                 args, staging, ffx_sdk, version, provenance, notices, extra,
@@ -947,6 +961,11 @@ def main() -> int:
             )
             shutil.copy2(archive, artifacts / Path(entry["download_url"]).name)
             entries.append(entry)
+        # What this build's own ini defines, read back out of the archive the
+        # manifest points at: the launcher will not hand over a key outside it.
+        with tarfile.open(archive) as reader:
+            ini_keys_map[entry["version"]] = ini_keys_from_text(
+                reader.extractfile("OptiScaler.ini").read().decode())
     provider = provider_artifact(args, artifacts)
 
     manifest = {"optiscaler": entries, "fsr_40_drv": [provider]}
@@ -974,6 +993,9 @@ def main() -> int:
                 # Merged over the preset only when that version is the one
                 # asked for (keyed by pinned version, like the manifest).
                 "optiscaler_variant_preset": variant_presets,
+                # Per pinned version: the options that build's own OptiScaler.ini
+                # defines, so the launcher only hands over keys protonfixes accepts.
+                "optiscaler_ini_keys": ini_keys_map,
                 # Paths below the payload folder (system32/umu in the prefix).
                 "freefg": freefg_layers,
             },

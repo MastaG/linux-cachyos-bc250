@@ -1006,6 +1006,9 @@ same with HelixSR 2.0.0 as the upscaler instead, as FreeFG's own Setup offers:
 cheaper per frame than RC11 on the BC-250 (in Spider-Man 2 RC11 took about
 4.8 ms from 1512×856 to 1440p), with frame generation still XeFG. HelixSR's own
 DLSS frame generation is not part of it; that is the default HelixSR Scaler's.
+Ghost of Tsushima is the game users report it on: HelixSR frame generation there costs
+80-90 fps down to ~50, so keep frame generation off (a fresh prefix starts off) or use
+`freefg-helixsr`.
 
 What the variant sets, as FreeFG's installer would for its OptiScaler route:
 frame generation on with XeFG output at 2×, borderless instead of exclusive
