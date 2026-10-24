@@ -23,10 +23,10 @@ intended signal.
 ---
 
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
-index 298de7b..849897a 100644
+index ced8b3d2d762..8ce014104df0 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
-@@ -1649,6 +1649,7 @@ STATIC_IFN_KUNIT const uint32_t dm_freesync_pcon_whitelist[] = {
+@@ -1650,6 +1650,7 @@ STATIC_IFN_KUNIT const uint32_t dm_freesync_pcon_whitelist[] = {
  	DP_BRANCH_DEVICE_ID_90CC24,
  	DP_BRANCH_DEVICE_ID_001CF8,
  	DP_BRANCH_DEVICE_ID_001FF2,
@@ -35,7 +35,7 @@ index 298de7b..849897a 100644
  EXPORT_IF_KUNIT(dm_freesync_pcon_whitelist);
  
 diff --git a/drivers/gpu/drm/amd/display/include/ddc_service_types.h b/drivers/gpu/drm/amd/display/include/ddc_service_types.h
-index 827e9bd..d2a8e71 100644
+index 827e9bd7c5cf..d2a8e712d4a7 100644
 --- a/drivers/gpu/drm/amd/display/include/ddc_service_types.h
 +++ b/drivers/gpu/drm/amd/display/include/ddc_service_types.h
 @@ -37,6 +37,7 @@

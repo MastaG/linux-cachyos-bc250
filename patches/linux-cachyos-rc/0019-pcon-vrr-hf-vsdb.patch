@@ -35,10 +35,10 @@ the existing "VRR:" lines, so drm.debug=0x2 shows the decision.
 ---
 
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-index 955c70e..7b16f60 100644
+index e0be6c51eb8b..f1c4b0e069b7 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-@@ -4020,6 +4020,57 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
+@@ -4050,6 +4050,57 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
  				connector->display_info.monitor_range.max_vfreq = vsdb_info.max_refresh_rate_hz;
  			}
  		}

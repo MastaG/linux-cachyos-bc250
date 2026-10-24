@@ -8,7 +8,7 @@ Subject: [PATCH 3/4] amdgpu: expose full BC-250 telemetry
  1 file changed, 109 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-index 6cbcb227f..0fa34036f 100644
+index 6cbcb227fb25..0fa34036fdb2 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 @@ -66,6 +66,16 @@ static struct gfx_user_settings {
@@ -144,6 +144,3 @@ index 6cbcb227f..0fa34036f 100644
  	case SMU_VCLK:
  	case SMU_DCLK:
  		ret = cyan_skillfish_get_current_clk_freq(smu, clk_type, &cur_value);
--- 
-2.56.0
-

@@ -8,7 +8,7 @@ Subject: [PATCH 4/4] amdgpu: cache BC-250 telemetry samples
  1 file changed, 105 insertions(+), 3 deletions(-)
 
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-index 0fa34036f..1aa15a60d 100644
+index 0fa34036fdb2..1aa15a60deb2 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 @@ -26,7 +26,9 @@
@@ -198,6 +198,3 @@ index 0fa34036f..1aa15a60d 100644
  	if (ret)
  		return ret;
  
--- 
-2.56.0
-

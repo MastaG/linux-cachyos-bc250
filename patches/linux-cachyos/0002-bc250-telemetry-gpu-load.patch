@@ -8,7 +8,7 @@ Subject: [PATCH 2/4] amdgpu: report BC-250 GPU load
  1 file changed, 58 insertions(+)
 
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-index 258479dd0..6cbcb227f 100644
+index 258479dd053e..6cbcb227fb25 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 @@ -23,7 +23,9 @@
@@ -98,6 +98,3 @@ index 258479dd0..6cbcb227f 100644
  	gpu_metrics->temperature_gfx = cur.GfxTemperature;
  	gpu_metrics->temperature_soc = cur.SocTemperature;
  
--- 
-2.56.0
-

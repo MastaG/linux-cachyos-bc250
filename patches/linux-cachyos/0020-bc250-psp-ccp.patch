@@ -36,7 +36,7 @@ headers. Runtime tested by the author on a BC-250 on 7.2.6.
 ---
 
 diff --git a/drivers/crypto/ccp/psp-dev.c b/drivers/crypto/ccp/psp-dev.c
-index b14ce51..c9ab47c 100644
+index b14ce51065d5..c9ab47c08a00 100644
 --- a/drivers/crypto/ccp/psp-dev.c
 +++ b/drivers/crypto/ccp/psp-dev.c
 @@ -198,13 +198,17 @@ static int psp_init(struct psp_device *psp)
@@ -60,7 +60,7 @@ index b14ce51..c9ab47c 100644
  		if (ret)
  			return ret;
 diff --git a/drivers/crypto/ccp/sp-pci.c b/drivers/crypto/ccp/sp-pci.c
-index ede6ff9..bb64c6c 100644
+index ede6ff9ad0c2..bb64c6c1ac48 100644
 --- a/drivers/crypto/ccp/sp-pci.c
 +++ b/drivers/crypto/ccp/sp-pci.c
 @@ -80,7 +80,7 @@ static umode_t psp_firmware_is_visible(struct kobject *kobj, struct attribute *a

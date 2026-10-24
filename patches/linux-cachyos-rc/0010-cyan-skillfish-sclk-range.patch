@@ -1,5 +1,5 @@
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
-index 7cf104e91395..f9cd1f33e204 100644
+index 1aa15a60deb2..060be92bcd68 100644
 --- a/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
 @@ -53,8 +53,8 @@

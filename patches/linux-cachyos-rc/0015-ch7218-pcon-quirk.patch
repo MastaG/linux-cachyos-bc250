@@ -54,10 +54,10 @@ DCN201 PCON support and the DSC engines are enabled by separate patches.
 ---
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index 6c40b34..a44390d 100644
+index 4de6ee7748ca..7077f987e88e 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-@@ -256,6 +256,7 @@ extern int amdgpu_num_kcq;
+@@ -257,6 +257,7 @@ extern int amdgpu_num_kcq;
  extern int amdgpu_vcnfw_log;
  extern int amdgpu_sg_display;
  extern int amdgpu_bc250_hdmi21;
@@ -66,10 +66,10 @@ index 6c40b34..a44390d 100644
  extern int amdgpu_seamless;
  extern int amdgpu_umsch_mm_fwlog;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-index 5b73811..4320891 100644
+index a8988464ac4d..56ad3f882f0c 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-@@ -236,6 +236,7 @@ int amdgpu_use_xgmi_p2p = 1;
+@@ -237,6 +237,7 @@ int amdgpu_use_xgmi_p2p = 1;
  int amdgpu_vcnfw_log;
  int amdgpu_sg_display = -1; /* auto */
  int amdgpu_bc250_hdmi21 = 1;
@@ -77,7 +77,7 @@ index 5b73811..4320891 100644
  int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
  int amdgpu_umsch_mm;
  int amdgpu_seamless = -1; /* auto */
-@@ -987,6 +988,25 @@ module_param_named(sg_display, amdgpu_sg_display, int, 0444);
+@@ -999,6 +1000,25 @@ module_param_named(sg_display, amdgpu_sg_display, int, 0444);
  MODULE_PARM_DESC(bc250_hdmi21, "BC-250: HDMI 2.1 PCON and DSC on DCN201 (0 = disabled, 1 = enabled (default))");
  module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
  
@@ -104,10 +104,10 @@ index 5b73811..4320891 100644
   * DOC: umsch_mm (int)
   * Enable Multi Media User Mode Scheduler. This is a HW scheduling engine for VCN and VPE.
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-index 8c23cc9..f9861b5 100644
+index 21c8dce6efc1..5abd57ca0832 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -962,6 +962,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
+@@ -964,6 +964,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
  		init_data.flags.enable_frl = true;
  
  	init_data.flags.bc250_hdmi21 = (amdgpu_bc250_hdmi21 != 0);
@@ -116,7 +116,7 @@ index 8c23cc9..f9861b5 100644
  	init_data.flags.seamless_boot_edp_requested = false;
  
 diff --git a/drivers/gpu/drm/amd/display/dc/dc.h b/drivers/gpu/drm/amd/display/dc/dc.h
-index 159ab43..b0c8426 100644
+index adb641d6f612..090e6c7bfff4 100644
 --- a/drivers/gpu/drm/amd/display/dc/dc.h
 +++ b/drivers/gpu/drm/amd/display/dc/dc.h
 @@ -603,6 +603,7 @@ struct dc_config {
@@ -128,7 +128,7 @@ index 159ab43..b0c8426 100644
  	bool use_default_clock_table;
  	bool force_bios_enable_lttpr;
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-index 24e3bbe..a0f0118 100644
+index 24e3bbec15ff..a0f011840e6e 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 @@ -1166,18 +1166,89 @@ static void read_and_intersect_post_frl_lt_status(

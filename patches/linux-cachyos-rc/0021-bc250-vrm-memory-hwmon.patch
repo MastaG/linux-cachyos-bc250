@@ -23,9 +23,10 @@ it loads only when the user asks, e.g. via /etc/modules-load.d (a modprobe
 blacklist would block that path too: systemd-modules-load honors it).
 ---
 diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
+index 74825fd7f7c6..fd26ac775c32 100644
 --- a/drivers/hwmon/Kconfig
 +++ b/drivers/hwmon/Kconfig
-@@ -1791,6 +1791,34 @@
+@@ -1790,6 +1790,34 @@ config SENSORS_NCT6687
  	  This driver can also be built as a module. If so, the module
  	  will be called nct6687.
  
@@ -61,9 +62,10 @@ diff --git a/drivers/hwmon/Kconfig b/drivers/hwmon/Kconfig
  	tristate "Nuvoton NCT6694 Hardware Monitor support"
  	depends on MFD_NCT6694
 diff --git a/drivers/hwmon/Makefile b/drivers/hwmon/Makefile
+index 8bf130ef5f2a..ff6f7a487b02 100644
 --- a/drivers/hwmon/Makefile
 +++ b/drivers/hwmon/Makefile
-@@ -183,6 +183,8 @@
+@@ -183,6 +183,8 @@ obj-$(CONFIG_SENSORS_MENF21BMC_HWMON) += menf21bmc_hwmon.o
  obj-$(CONFIG_SENSORS_MR75203)	+= mr75203.o
  obj-$(CONFIG_SENSORS_NCT6683)	+= nct6683.o
  obj-$(CONFIG_SENSORS_NCT6687)	+= nct6687.o

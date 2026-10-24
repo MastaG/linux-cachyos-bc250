@@ -29,7 +29,7 @@ the PCON path.
 ---
 
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-index a0f0118..19779a5 100644
+index a0f011840e6e..19779a5ca56c 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 @@ -1233,6 +1233,42 @@ static void bc250_ch7218_force_converter_identity(struct dc_link *link)

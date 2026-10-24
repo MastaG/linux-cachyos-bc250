@@ -31,10 +31,10 @@ retrieve_link_cap(), where dongle_type is already known.
 ---
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index a44390d..7ec3301 100644
+index 7077f987e88e..831e71aec33f 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-@@ -257,6 +257,7 @@ extern int amdgpu_vcnfw_log;
+@@ -258,6 +258,7 @@ extern int amdgpu_vcnfw_log;
  extern int amdgpu_sg_display;
  extern int amdgpu_bc250_hdmi21;
  extern int amdgpu_bc250_ch7218_quirk;
@@ -43,10 +43,10 @@ index a44390d..7ec3301 100644
  extern int amdgpu_seamless;
  extern int amdgpu_umsch_mm_fwlog;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-index 4320891..14f9123 100644
+index 56ad3f882f0c..5e8fa7107211 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-@@ -237,6 +237,7 @@ int amdgpu_vcnfw_log;
+@@ -238,6 +238,7 @@ int amdgpu_vcnfw_log;
  int amdgpu_sg_display = -1; /* auto */
  int amdgpu_bc250_hdmi21 = 1;
  int amdgpu_bc250_ch7218_quirk;
@@ -54,7 +54,7 @@ index 4320891..14f9123 100644
  int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
  int amdgpu_umsch_mm;
  int amdgpu_seamless = -1; /* auto */
-@@ -1007,6 +1008,25 @@ module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
+@@ -1019,6 +1020,25 @@ module_param_named(bc250_hdmi21, amdgpu_bc250_hdmi21, int, 0444);
  MODULE_PARM_DESC(bc250_ch7218_quirk, "BC-250: opt-in CH7218 DP-to-HDMI 2.1 adapter quirk (0 = disabled (default), 1 = enabled)");
  module_param_named(bc250_ch7218_quirk, amdgpu_bc250_ch7218_quirk, int, 0444);
  
@@ -81,10 +81,10 @@ index 4320891..14f9123 100644
   * DOC: umsch_mm (int)
   * Enable Multi Media User Mode Scheduler. This is a HW scheduling engine for VCN and VPE.
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-index f9861b5..8906549 100644
+index 5abd57ca0832..46f196173146 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -963,6 +963,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
+@@ -965,6 +965,7 @@ static int amdgpu_dm_init(struct amdgpu_device *adev)
  
  	init_data.flags.bc250_hdmi21 = (amdgpu_bc250_hdmi21 != 0);
  	init_data.flags.bc250_ch7218_quirk = (amdgpu_bc250_ch7218_quirk != 0);
@@ -93,7 +93,7 @@ index f9861b5..8906549 100644
  	init_data.flags.seamless_boot_edp_requested = false;
  
 diff --git a/drivers/gpu/drm/amd/display/dc/dc.h b/drivers/gpu/drm/amd/display/dc/dc.h
-index b0c8426..6df6bcf 100644
+index 090e6c7bfff4..bb1587691362 100644
 --- a/drivers/gpu/drm/amd/display/dc/dc.h
 +++ b/drivers/gpu/drm/amd/display/dc/dc.h
 @@ -604,6 +604,7 @@ struct dc_config {
@@ -105,7 +105,7 @@ index b0c8426..6df6bcf 100644
  	bool use_default_clock_table;
  	bool force_bios_enable_lttpr;
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-index 19779a5..3bcec12 100644
+index 19779a5ca56c..3bcec1233c58 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 @@ -1269,6 +1269,61 @@ static void bc250_ch7218_restore_dsc_support(struct dc_link *link)
