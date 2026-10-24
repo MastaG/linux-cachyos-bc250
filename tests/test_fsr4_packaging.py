@@ -82,18 +82,7 @@ build() {
 """
 
 
-class PreparationTests(unittest.TestCase):
-    def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="fsr4 packaging ")
-        self.addCleanup(self.temporary.cleanup)
-        self.work = Path(self.temporary.name)
-        (self.work / "stable").write_text(STABLE)
-        (self.work / "git").write_text(GIT)
-        (self.work / "native").write_text(NATIVE)
-        commands = self.work / "bin"
-        commands.mkdir()
-        curl = commands / "curl"
-        curl.write_text("""#!/usr/bin/env python3
+CURL_STUB = """#!/usr/bin/env python3
 import os, sys
 from pathlib import Path
 args = sys.argv[1:]
@@ -119,16 +108,45 @@ elif url.endswith('/customization.cfg'):
 else:
     text = 'fixture for ' + output.name + '\\n'
 output.write_text(text)
-""")
-        curl.chmod(0o755)
-        self.env = dict(
-            os.environ,
-            PATH=str(commands) + ":" + os.environ["PATH"],
-            BC250_TEST_UPSTREAM=str(self.work),
-            CACHYOS_MESA_COMMIT="a" * 40,
-            MESA_GIT_COMMIT="b" * 40,
-            BC250_SKIP_MESA_PREFETCH="1",
-        )
+"""
+
+
+def offline_env_for(work):
+    """The stub curl plus the upstream fixture texts, so the prepare scripts run
+    without the network.
+
+    2026-10-24: run 40041532906 went red on one hosted-runner leg and green on
+    the other, same commit -- the test that runs
+    prepare-proton-cachyos-native-pkgbuild.sh really curls the upstream
+    PKGBUILD. The stub answers from the fixtures above; the pinned commit is
+    fake, so the resolver is not called either.
+    """
+    work = Path(work)
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "stable").write_text(STABLE)
+    (work / "git").write_text(GIT)
+    (work / "native").write_text(NATIVE)
+    commands = work / "bin"
+    commands.mkdir(parents=True, exist_ok=True)
+    curl = commands / "curl"
+    curl.write_text(CURL_STUB)
+    curl.chmod(0o755)
+    return dict(
+        os.environ,
+        PATH=str(commands) + ":" + os.environ["PATH"],
+        BC250_TEST_UPSTREAM=str(work),
+        CACHYOS_MESA_COMMIT="a" * 40,
+        MESA_GIT_COMMIT="b" * 40,
+        BC250_SKIP_MESA_PREFETCH="1",
+    )
+
+
+class PreparationTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="fsr4 packaging ")
+        self.addCleanup(self.temporary.cleanup)
+        self.work = Path(self.temporary.name)
+        self.env = offline_env_for(self.work)
 
     def test_llvm_linked_packages_are_pinned_to_the_build_llvm(self):
         # 2026-10-01: a Mesa built against LLVM 22 was installed next to llvm-libs 23 and
@@ -391,9 +409,8 @@ class NativeToolManifestAndMonoTests(unittest.TestCase):
         subprocess.run(
             ["bash", str(ROOT / "scripts/prepare-proton-cachyos-native-pkgbuild.sh")],
             env=dict(
-                os.environ,
+                offline_env_for(Path(generated.name) / "stub"),
                 PROTON_CACHYOS_NATIVE_BUILD_DIR=str(Path(generated.name) / "native"),
-                BC250_SKIP_MESA_PREFETCH="1",
             ),
             check=True,
             capture_output=True,
@@ -1674,9 +1691,8 @@ class LocalPatchGateTests(unittest.TestCase):
         subprocess.run(
             ["bash", str(ROOT / "scripts/prepare-proton-cachyos-native-pkgbuild.sh")],
             env=dict(
-                os.environ,
+                offline_env_for(Path(generated.name) / "stub"),
                 PROTON_CACHYOS_NATIVE_BUILD_DIR=str(Path(generated.name) / "native"),
-                BC250_SKIP_MESA_PREFETCH="1",
             ),
             check=True,
             capture_output=True,
