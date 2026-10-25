@@ -66,7 +66,15 @@ it here because the gate stays ours; the build runs with
 radv_bc250.h (the corrected RADV_PERFTEST=mesh comment stays, upstream's new
 hybrid-Task comment is kept), and radv_physical_device.c (the three gated
 lines keep radv_bc250_directmesh_requested(); upstream's wording around them
-is kept). The other 29 files take the delta unchanged. Only the lines this
+is kept). One more change: src/amd/vulkan/radv_bc250_idx.h gets an explicit
+uint32_t pad at the end of struct bc250_idx_setup_args. The release's new
+static_assert hard-codes sizeof == 88, which only holds where pointers are 8
+bytes, and the packages also build 32-bit Mesa (lib32-mesa, and the multilib
+half of mesa-git), where the struct is 84 bytes and the assert fires. With the
+pad the size is 88 and the asserted offset 80 on both ABIs, no field offset
+moves, and every entry in an array stays 8-byte aligned, so the setup pass
+reads its 64-bit arguments at the same addresses either way. The other 28
+files take the delta unchanged. Only the lines this
 repository wrote are clang-format clean; the series as a whole is not.
 
 Changes on top of upstream (this repository): everything the series changes by
@@ -15353,10 +15361,10 @@ index 00000000000..798da4602f9
 +}
 diff --git a/src/amd/vulkan/radv_bc250_idx.h b/src/amd/vulkan/radv_bc250_idx.h
 new file mode 100644
-index 00000000000..00f5c54aee9
+index 00000000000..eef36576a56
 --- /dev/null
 +++ b/src/amd/vulkan/radv_bc250_idx.h
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,62 @@
 +/* SPDX-License-Identifier: MIT */
 +#ifndef RADV_BC250_IDX_H
 +#define RADV_BC250_IDX_H
@@ -15395,6 +15403,7 @@ index 00000000000..00f5c54aee9
 +   /* First setup of the command buffer: the pool is empty. */
 +   uint32_t reset, vertex_stride;
 +   uint32_t output_bytes;
++   uint32_t pad; /* explicit tail padding: same layout and alignment on 32-bit */
 +};
 +
 +/* Immutable after recording, like the side IB. Each batch has one pool and
