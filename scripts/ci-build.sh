@@ -203,6 +203,25 @@ fi
     printf 'ERROR: ccache compiler wrappers not found in %s\n' "$CCACHE_WRAPPER_DIR" >&2
     exit 1
 }
+# Arch's wrappers cover the host compilers only. Wine and the other PE parts of
+# Proton call the MinGW cross compilers by their target names, so run 350 sent
+# 9,088 of them straight past the cache. ccache dispatches on the name it is
+# invoked as and finds the real compiler further down PATH, so a link per name
+# is all a wrapper is. Harmless where no MinGW compiler is installed: nothing
+# calls these names then.
+for _target in i686-w64-mingw32 x86_64-w64-mingw32; do
+    for _tool in gcc g++ cc c++; do
+        ln -sfn /usr/bin/ccache "$CCACHE_WRAPPER_DIR/$_target-$_tool"
+    done
+done
+
+# makepkg's SRCDEST for the native Proton build: the proton-cachyos git mirror
+# and the cargo crates its PKGBUILD keeps under ${SRCDEST}/proton-cargo. In the
+# workspace both went with every checkout's clean and were fetched again in
+# full each run. The workflow mounts a named volume here.
+if [[ -d /srcdest ]]; then
+    chown builder:builder /srcdest
+fi
 
 # Self-hosted runners keep the workspace between runs, so clear any marker left
 # by a previous run before it can be mistaken for this one.

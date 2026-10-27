@@ -13,6 +13,12 @@ source "${ROOT_DIR}/scripts/repo-package-helpers.sh"
 
 cd -- "$BUILD_DIR"
 export MAKEFLAGS="${MAKEFLAGS:--j$(nproc)}"
+# A persistent SRCDEST when CI provides one (ci-build.sh): makepkg then only
+# fetches what changed in the proton-cachyos mirror, and cargo reuses its crates.
+if [[ -z "${SRCDEST:-}" && -d /srcdest && -w /srcdest ]]; then
+    export SRCDEST=/srcdest/proton-cachyos-native-bc250
+    mkdir -p -- "$SRCDEST"
+fi
 
 # This one compiles Proton and Wine from source and takes hours. It is gated by
 # the same fingerprint mechanism as everything else, so it only runs when the

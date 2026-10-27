@@ -175,6 +175,46 @@ checkbutton:focus-visible { background-color: alpha(#ff8c1a, 0.15); }
 EVENTS = {0x650: "AXIS", 0x652: "BUTTONDOWN", 0x653: "DEVICEADDED", 0x100: "QUIT"}
 
 
+def tag_steam_game(surface, env=os.environ):
+    """Mark the menu's X11 window as the game's, as Steam's overlay does for the game.
+
+    Gamescope only shows windows whose STEAM_GAME property is the running app id.
+    The game's own processes get it from Steam's LD_PRELOAD overlay; the SLR and GE
+    packages start this menu beside the Steam client (steam-runtime-launch-client
+    --alongside-steam), without that preload, so in Gaming Mode the window stayed
+    hidden behind the launch spinner. Harmless on a desktop.
+    """
+    try:
+        appid = int(env.get("SteamAppId") or env.get("SteamGameId") or 0)
+    except ValueError:
+        appid = 0
+    if not appid:
+        return
+    try:
+        import gi
+        gi.require_version("GdkX11", "4.0")
+        from gi.repository import GdkX11
+        if not isinstance(surface, GdkX11.X11Surface):
+            return
+        xid = surface.get_xid()
+        x11 = ctypes.CDLL("libX11.so.6")
+    except (ImportError, ValueError, OSError):
+        return
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XInternAtom.restype = ctypes.c_ulong
+    x11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+    x11.XChangeProperty.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong,
+                                    ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    display = x11.XOpenDisplay(None)
+    if not display:
+        return
+    value = (ctypes.c_ulong * 1)(appid)
+    x11.XChangeProperty(display, xid, x11.XInternAtom(display, b"STEAM_GAME", 0),
+                        x11.XInternAtom(display, b"CARDINAL", 0), 32, 0, value, 1)
+    x11.XCloseDisplay(display)  # flushes
+
+
 def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
     try:
         sdl = ctypes.CDLL("libSDL3.so.0")
@@ -202,6 +242,7 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
     loop = GLib.MainLoop()
     win = Gtk.Window(title="BC-250 upscaler")
     win.set_default_size(900, 780)
+    win.connect("realize", lambda w: tag_steam_game(w.get_surface()))
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
     for margin in ("margin_top", "margin_bottom", "margin_start", "margin_end"):
         box.set_property(margin, 28)

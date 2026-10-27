@@ -607,6 +607,7 @@ jobs:
             --security-opt label=disable \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -v bc250-ccache:/ccache \
+            -v bc250-srcdest:/srcdest \
             -w /workspace \
             -e CCACHE_DIR=/ccache \
             -e CCACHE_MAXSIZE \
@@ -677,6 +678,10 @@ jobs:
             echo "::group::compile the Steam Linux Runtime Proton tree"
             eval "$(./scripts/resolve-proton-cachyos-slr.sh)"
             slr_work="${RUNNER_TEMP}/bc250-proton"
+            # The checkout outlives the job: build-proton-runtime-dist.sh fetches
+            # only the new tag into an existing one, and cleans it before use.
+            # RUNNER_TEMP is wiped per job and re-cloning took 9.5 minutes.
+            slr_src="${RUNNER_WORKSPACE}/bc250-proton-src"
             slr_tarball="${slr_work}/proton-cachyos-slr-bc250-${SLR_VERSION}-dist.tar.xz"
             mkdir -p "$slr_work"
             if BC250_CONTAINER_ENGINE=docker \
@@ -685,7 +690,7 @@ jobs:
                  --repo https://github.com/CachyOS/proton-cachyos.git \
                  --tag "$SLR_TAG" \
                  --name proton-cachyos-slr-bc250 \
-                 --src "${slr_work}/src" \
+                 --src "$slr_src" \
                  --out "$slr_tarball" > >(tee "$build_logs/proton-cachyos-slr-bc250-compile.log") 2>&1; then
               wait || true
               docker exec "$container" install -d -o builder -g builder /workspace/out/dist
