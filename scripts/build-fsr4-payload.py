@@ -20,11 +20,13 @@ import configparser
 import hashlib
 import json
 import lzma
+import os
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
@@ -612,7 +614,7 @@ def optiscaler_artifact(
     for path in files.values():
         path.chmod(0o644)
 
-    output = staging / "optiscaler.tar.xz"
+    output = staging / ("optiscaler-" + version + ".tar.xz")
     tar_tree(extracted, output)
     archive_sha256 = digest(output)
     return output, {
@@ -982,11 +984,21 @@ def main() -> int:
 
         entries = []
         ini_keys_map = {}
-        for ffx_sdk, version, provenance, notices, extra in variants:
-            archive, entry = optiscaler_artifact(
+        # xz -9e runs on one core and the variants share nothing, so they are
+        # built side by side: one after another took ~15 min per package. lzma
+        # lets go of the GIL while it compresses, so threads are enough, and each
+        # archive comes out byte for byte as it would on its own.
+        def build(variant):
+            ffx_sdk, version, provenance, notices, extra = variant
+            return optiscaler_artifact(
                 args, staging, ffx_sdk, version, provenance, notices, extra,
                 variant_presets.get(version)
             )
+
+        workers = max(1, min(len(variants), len(os.sched_getaffinity(0))))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            built = list(pool.map(build, variants))
+        for archive, entry in built:
             shutil.copy2(archive, artifacts / Path(entry["download_url"]).name)
             entries.append(entry)
             # What this build's own ini defines, read back out of the archive the
