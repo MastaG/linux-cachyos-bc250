@@ -37,10 +37,16 @@ changed default reaches a fresh install and never a prefix that has decided.
 Anything unreadable keeps the whole preset, because the safe way to be wrong is a
 launch that behaves as documented.
 
+A variant switch removes the prefix's ini before the launch reads it, and
+protonfixes copies a fresh one, so the new variant seeds from scratch rather than
+inheriting the last one's answers (FreeFG's frame generation left on for the
+default was the Ghost of Tsushima case). A variant's frame generation keys are
+seeded like the shared preset, on its first launch only, so turning it off in
+the overlay and saving survives a restart.
+
 Enforced on every launch is what a prefix must not be left to decide: a variant's
-own entries — the library paths that make `PROTON_USE_OPTISCALER=helixsr-ffx`
-mean something, since a variant switch reuses the prefix's ini and protonfixes
-does not re-copy it — the debug keys under `BC250_FSR4_DEBUG=1`, and
+own wiring — the library paths that make `PROTON_USE_OPTISCALER=helixsr-ffx`
+mean something — the debug keys under `BC250_FSR4_DEBUG=1`, and
 `BC250_OPTISCALER_EXTRA`, merged last so it beats both. Every preset key is still
 checked against the ini it ships with at build time: protonfixes refuses a launch
 on a key the build does not define, so a preset that names one fails the build
@@ -72,10 +78,10 @@ value is not checked against that list, because it is OptiScaler's to grow and a
 name outside it fails visibly as "no upscaler" rather than dangerously.
 
 Note that this has nothing to do with `Spoofing.Dxgi`, which the preset sets to
-`false`. The proxy name decides which import resolves to OptiScaler; the spoofing
-key decides whether OptiScaler reports an NVIDIA vendor/device ID and GPU name to
-the game once loaded. The two are independent, and the shared word is a trap when
-reading a bug report.
+`auto` (the upscaler menu can force it per game). The proxy name decides which
+import resolves to OptiScaler; the spoofing key decides whether OptiScaler
+reports an NVIDIA vendor/device ID and GPU name to the game once loaded. The
+two are independent, and the shared word is a trap when reading a bug report.
 
 `PROTON_DLSS_UPGRADE`, `PROTON_XESS_UPGRADE`, `PROTON_FFX3_UPGRADE`, `PROTON_FFX4_UPGRADE`, the older `PROTON_FSR3_UPGRADE` spelling and `PROTON_MLFG_UPGRADE` are cleared: this package ships none of those upscalers, and in pinned mode a request for one that is absent stops the game from starting. A stale launch option left over from another Proton build would otherwise become a game that will not launch.
 

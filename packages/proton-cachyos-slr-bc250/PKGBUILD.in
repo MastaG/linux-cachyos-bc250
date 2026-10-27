@@ -32,7 +32,7 @@ license=('custom')
 
 # python3 runs both the wrapper and Proton itself. Everything else is inside the
 # tree's own files/, which is what the Steam Linux Runtime then runs.
-depends=('python')
+depends=('python' 'python-gobject' 'gtk4' 'sdl3')
 
 optdepends=('steam: the client that runs this compatibility tool')
 
@@ -71,18 +71,19 @@ source=(
     # HelixSR Scaler 1.1.0 (OptiScaler with HelixSR built in, GPL-3.0): the default
     # upscaler. Only its OptiScaler.dll and OptiScaler.ini differ from the nightly.
     "HelixSR-Scaler-1.1.0-core.zip::@PAYLOAD_BASE@/HelixSR-Scaler-1.1.0-core.zip"
-    # FreeFG 1.0.1 (daniel-h-0): Intel XeSS frame generation with its own BC-250
+    # FreeFG 1.1.3.1 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
     # Mirrored release zip; its OptiScaler build is GPL-3.0, and the matching
-    # freefg-1.0.1-source.zip is mirrored beside it.
-    "freefg-1.0.1.zip::@PAYLOAD_BASE@/freefg-1.0.1.zip"
-    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-f971ed1),
-    # pinned by commit: that build is newer than the nightly and renamed keys.
-    "OptiScaler-bc250-f971ed1.ini::https://raw.githubusercontent.com/daniel-h-0/OptiScaler/d3decb62af2e3b495e330ad16a55507aac0fa48d/OptiScaler.ini"
+    # freefg-1.1.3.1-source.zip is mirrored beside it.
+    "freefg-1.1.3.1.zip::@PAYLOAD_BASE@/freefg-1.1.3.1.zip"
+    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-03db4f8),
+    # pinned by commit: the freefg variants ship this build and this ini.
+    "OptiScaler-bc250-03db4f8.ini::https://raw.githubusercontent.com/daniel-h-0/OptiScaler/d191284afa25968f8ae709e70ccd7a8701003ec8/OptiScaler.ini"
     "@FAKENVAPI_ASSET@::@FAKENVAPI_URL@"
     "nvngx_dlss.dll::https://raw.githubusercontent.com/NVIDIA/DLSS/a291cc7d2cc642a51566f3dfd5376f635cd1b284/lib/Windows_x86_64/rel/nvngx_dlss.dll"
     '0001-pinned-upscaler-manifest.patch'
     'bc250-fsr4-launch.py'
+    'bc250-fsr4-menu.py'
     'build-fsr4-payload.py'
     'optiscaler-preset.json'
     'proton-shim.sh'
@@ -102,7 +103,7 @@ noextract=(
     'bc250-fsr4-dll-4.0.0-rc10.zip'
     'HelixSR-2.0.0-network-fg.zip'
     'HelixSR-Scaler-1.1.0-core.zip'
-    'freefg-1.0.1.zip'
+    'freefg-1.1.3.1.zip'
 )
 
 sha256sums=(
@@ -118,12 +119,13 @@ sha256sums=(
     'eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98'
     '833050356f12215da35096750e9856aa56b0e8eb746e218c5ee01be5bd9fa96f'
     'c798b51b3802031627cd118f7e9aee5b98de552fb45f4fe7e28d0e688d1646df'
-    '0828855b6a08b9f9f256aa64245ce15fc51f4809c7ea3fe474d6ea3af6427389'
-    'fb798d1f49e28c78457c0d17248c45e565b7dc70df5a75ad41c53d6768b3d139'
+    '2aff8ab9c9e4ce5de36bc95a2f1246e699850a4e68675698e6a8336fe8f36446'
+    '54493b7795f92e2b2ef063815f62bb29e983716a27b524d19b27d5ddc473caac'
     '@FAKENVAPI_SHA256@'
     'be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e'
     '@SHA_PATCH@'
     '@SHA_LAUNCH@'
+    '@SHA_MENU@'
     '@SHA_PAYLOAD_BUILDER@'
     '@SHA_PRESET@'
     '@SHA_SHIM@'
@@ -182,7 +184,7 @@ build() {
         --provider "$srcdir/amdxcffx64_v4.1.1.xz" \
         --provider-version "$_provider_version" \
         --ffx-sdk "$srcdir/amd_fidelityfx_upscaler_dx12.dll" \
-        --ffx-sdk-default helixsr \
+        --ffx-sdk-default freefg-helixsr \
         --ffx-sdk-alt fsr411b "$srcdir/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \
             "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \
         --ffx-sdk-alt fsr412f "$srcdir/bc250-fsr4-dll-4.0.0-rc12.zip" \
@@ -197,9 +199,10 @@ build() {
             "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \
         --helixsr-scaler "$srcdir/HelixSR-Scaler-1.1.0-core.zip" \
             "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \
-        --freefg "$srcdir/freefg-1.0.1.zip" \
-            "https://github.com/daniel-h-0/freefg/releases/tag/v1.0.1" \
-        --freefg-ini "$srcdir/OptiScaler-bc250-f971ed1.ini" \
+        --freefg "$srcdir/freefg-1.1.3.1.zip" \
+            "https://github.com/daniel-h-0/freefg/releases/tag/v1.1.3.1" \
+        --freefg-ini "$srcdir/OptiScaler-bc250-03db4f8.ini" \
+        --freefg-bridge fsr412f \
         --dlss "$srcdir/nvngx_dlss.dll" \
         --licenses "$srcdir" \
         --preset "$srcdir/optiscaler-preset.json" \
@@ -218,6 +221,7 @@ package() {
 
     install -Dm755 "$srcdir/proton-shim.sh" "$_tool/bc250-fsr4-proton"
     install -Dm644 "$srcdir/bc250-fsr4-launch.py" "$_tool/bc250-fsr4-launch.py"
+    install -Dm644 "$srcdir/bc250-fsr4-menu.py" "$_tool/bc250-fsr4-menu.py"
 
     # Steam runs whatever toolmanifest.vdf names. Point it at the shim so the
     # pinned payload is selected before Proton starts; upstream's launcher stays

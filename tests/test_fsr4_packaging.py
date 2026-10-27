@@ -994,7 +994,7 @@ class SlrPackageTests(unittest.TestCase):
         }
         for name, text in templates.items():
             with self.subTest(package=name):
-                self.assertIn("--ffx-sdk-default helixsr", text)
+                self.assertIn("--ffx-sdk-default freefg-helixsr", text)
                 self.assertIn("--ffx-sdk-alt fsr411b", text)
                 self.assertIn("--ffx-sdk-alt fsr412f", text)
                 self.assertIn("--ffx-sdk-alt fsr411f", text)
@@ -1008,16 +1008,18 @@ class SlrPackageTests(unittest.TestCase):
                                 "bc250-fsr4-dll-4.0.0-rc11.zip",
                                 "bc250-fsr4-dll-4.0.0-rc12.zip"):
                     self.assertIn(archive, text)
-                # HelixSR is the default; the RC11 bridge stays reachable as
-                # fsr411f, and the default is only valid with --helixsr given.
-                self.assertIn('helixsr', text.split("--ffx-sdk-default", 1)[1][:16])
+                # FreeFG + HelixSR is the default now (owner's decision
+                # 2026-10-26), and the freefg variants take the RC12 bridge by
+                # name; the older bridges stay reachable as their own variants.
+                self.assertIn('freefg-helixsr', text.split("--ffx-sdk-default", 1)[1][:22])
+                self.assertIn("--freefg-bridge fsr412f", text)
                 self.assertIn("--helixsr", text)
                 # FreeFG, opt-in, from its mirrored release zip.
                 self.assertIn("--freefg", text)
-                self.assertIn("freefg-1.0.1.zip", text)
+                self.assertIn("freefg-1.1.3.1.zip", text)
                 self.assertIn("--freefg-ini", text)
-                self.assertIn("fb798d1f49e28c78457c0d17248c45e565b7dc70df5a75ad41c53d6768b3d139", text)
-                self.assertIn("0828855b6a08b9f9f256aa64245ce15fc51f4809c7ea3fe474d6ea3af6427389", text)
+                self.assertIn("54493b7795f92e2b2ef063815f62bb29e983716a27b524d19b27d5ddc473caac", text)
+                self.assertIn("2aff8ab9c9e4ce5de36bc95a2f1246e699850a4e68675698e6a8336fe8f36446", text)
 
     def test_the_metapackage_pulls_in_all_three(self):
         pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()

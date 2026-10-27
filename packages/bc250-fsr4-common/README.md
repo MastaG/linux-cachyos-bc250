@@ -163,7 +163,7 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
-### The variants: `helixsr` (default), `optiscaler`, `helixsr-ffx`, `freefg`, `freefg-helixsr`, `fsr412f`, `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
+### The variants: `freefg-helixsr` (default), `helixsr`, `optiscaler`, `helixsr-ffx`, `freefg`, `fsr412f`, `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
 
 OptiScaler loads two separate things: `amdxcffx64.dll`, the FSR4 provider our
 patched RADV drives, and `amd_fidelityfx_upscaler_dx12.dll`, the FidelityFX
@@ -179,7 +179,8 @@ picks one:
 - **`optiscaler`** — the stock OptiScaler nightly with the FSR4 fork's bridge
   (an alias of `fsr411f`'s version): the way to ask for plain OptiScaler.
 - **`fsr412f`** — the same fork's newest bridge (RC12, `4.1.1r12`), opt-in and
-  reached by name only; the default stays the Scaler. Its zip carries no ini, so
+  reached by name only; the default is now the FreeFG + HelixSR pair. Its zip
+  carries no ini, so
   the preset above is unchanged for it and for every other variant. Mirrored on
   the payload release like the other bridges and pinned by SHA256
   `646778a0d06c42bf3cdcc99f9396680f5cc4a33658b90c0889fd15751bfb800d`, and unsigned
@@ -245,7 +246,7 @@ picks one:
   latter says the DLSS weights and kernels remain NVIDIA's property and are
   not covered by HelixSR's licence.
 - **`freefg`** — opt-in, built with `--freefg` from FreeFG's release zip
-  (mirrored unchanged as `freefg-1.0.1.zip`, its GPL source zip beside it).
+  (mirrored unchanged as `freefg-1.1.3.1.zip`, its GPL source zip beside it).
   [FreeFG](https://github.com/daniel-h-0/freefg) speeds up Intel's XeSS frame
   generation on the BC-250. The tree is the nightly's with FreeFG's OptiScaler
   build as the proxy, the `fsr411f` bridge (`--freefg-bridge`; RC11 is also

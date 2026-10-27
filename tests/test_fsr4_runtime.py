@@ -46,7 +46,10 @@ builder = load_script("builder", ROOT / "scripts/build-fsr4-payload.py")
 # ships as "auto", which is what marks a prefix as having no opinion of its own
 # yet -- for the shared preset, which seeds a prefix and then leaves it alone.
 STUB_INI = (
-    b"[FSR]\nFsr4ForceModel=auto\nUpscalerIndex=auto\n"
+    # The pinned 20261025 nightly defines Fsr4GpuSupport (the renamed model
+    # switch) and no longer Fsr4ForceModel; the old name is kept in this fixture
+    # as well so the paired expectations across this file stay meaningful.
+    b"[FSR]\nFsr4ForceModel=auto\nFsr4GpuSupport=auto\nUpscalerIndex=auto\n"
     b"[Spoofing]\nDxgi=auto\nVulkanExtensionSpoofing=auto\n"
     b"[Libraries]\nFfxDx12Path=auto\nFfxDx12SRPath=auto\n"
     b"[Upscalers]\nDx12Upscaler=auto\n[FrameGen]\nEnabled=auto\nFGInput=auto\nFGNvngxReplacement=auto\n"
@@ -213,7 +216,7 @@ class RuntimeTests(unittest.TestCase):
                 f"{section}.{option}" for section, option in
                 [("FrameGen", o) for o in
                  ("Enabled", "FGInput", "FGOutput", "FGNvngxReplacement")]
-                + [("FSR", o) for o in ("Fsr4ForceModel", "UpscalerIndex")]
+                + [("FSR", o) for o in ("Fsr4ForceModel", "Fsr4GpuSupport", "UpscalerIndex")]
                 + [("Spoofing", o) for o in ("Dxgi", "VulkanExtensionSpoofing")]
                 + [("Libraries", o) for o in ("FfxDx12Path", "FfxDx12SRPath")]
                 + [("Upscalers", "Dx12Upscaler")]
@@ -241,6 +244,10 @@ class RuntimeTests(unittest.TestCase):
     def run_upscalers(self, base, inherited, arguments):
         game = wrapper.game_launch(arguments, inherited)
         with mock.patch.object(wrapper, "TOOL", self.work):
+            # As main() does: a variant switch starts the prefix's ini fresh,
+            # before environment() reads it.
+            if game:
+                wrapper.start_fresh_on_switch(self.config, inherited)
             env = wrapper.environment(self.config, inherited, game=game)
             # As main() does, before Proton runs protonfixes.
             if game:
@@ -373,8 +380,8 @@ class RuntimeTests(unittest.TestCase):
     def test_a_freefg_run_does_not_leave_frame_generation_on_for_the_default(self):
         # Ghost of Tsushima: a freefg run answers FrameGen.Enabled/FGInput/FGOutput
         # in the shared ini, seed_once then treats those as somebody's decision and
-        # the default path inherits frame generation on a switch. The launcher resets
-        # the leaving variant's keys to auto, and the next launch re-seeds the preset.
+        # the default path inherits frame generation on a switch. A switch now removes
+        # the prefix's ini, protonfixes re-copies it, and the preset seeds from scratch.
         for base in BASES:
             with self.subTest(base=base):
                 self.setUp()
@@ -383,7 +390,7 @@ class RuntimeTests(unittest.TestCase):
                 freefg_files = dict(self.files, **{
                     "OptiScaler.ini": STUB_INI.replace(
                         b"UpscalerIndex=auto\n",
-                        b"UpscalerIndex=auto\nFsr4GpuSupport=auto\n", 1),
+                        b"UpscalerIndex=auto\n", 1),
                     "OptiScaler/libxess_fg.dll": b"freefg-wrapper" * 512,
                 })
                 freefg_version = self.add_variant("freefglike", freefg_files)
@@ -392,16 +399,23 @@ class RuntimeTests(unittest.TestCase):
                 expected = {k: v for k, v in expected.items() if v is not None}
                 self.assertEqual(self.handed(self.launch(base, "freefglike")), expected)
 
+                # In real use, protonfixes has put FreeFG's own wrapper in the
+                # prefix by now; that is what marks the switch on disk.
+                (self.umu() / "OptiScaler/libxess_fg.dll").write_bytes(b"freefg-wrapper")
                 switched = self.handed(self.launch(base))
-                self.assertEqual(switched["FrameGen.Enabled"], "auto")   # reset, was: true
-                self.assertEqual(switched["FrameGen.FGInput"], "auto")   # was: upscaler
-                self.assertEqual(switched["FrameGen.FGOutput"], "auto")
-                self.assertEqual(switched["XeFG.InterpolationCount"], "auto")
-                # A key the default's build does not define cannot be handed over:
-                # protonfixes refuses a launch on a key missing from the ini.
+                # The switch deleted the prefix's ini, so the default re-seeds from
+                # scratch and frame generation is off again (was: left on by freefg).
+                self.assertEqual(switched["FrameGen.Enabled"], "false")
+                # Nothing of FreeFG's layer is handed over: the fresh ini already
+                # says auto for it, so there is nothing to reset.
+                self.assertNotIn("XeFG.InterpolationCount", switched)
+                self.assertNotIn("FrameGen.FGOutput", switched)
                 self.assertNotIn("FSR.Fsr4GpuSupport", switched)
 
-                self.assertEqual(self.handed(self.launch(base))["FrameGen.Enabled"], "false")
+                # The next launch is no switch: the seed is the prefix's answer now.
+                again = self.handed(self.launch(base))
+                self.assertNotIn("FrameGen.Enabled", again)
+                self.assertEqual(self.read_ini()["FrameGen"]["enabled"], "false")
 
     def test_a_player_answer_on_the_selected_variant_still_persists(self):
         for base in BASES:
@@ -512,18 +526,20 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(env["WINEPATH"], "C:\\windows\\system32\\umu\\OptiScaler;D:\\tools")
 
     def test_a_variant_can_drop_a_shared_preset_key(self):
-        # FreeFG's OptiScaler writes its ini without FSR.Fsr4ForceModel; a
-        # shared key the ini lacks would stop the launch in protonfixes.
+        # A shared key the selected build's OptiScaler.ini does not define would
+        # stop the launch in protonfixes, so a variant drops it with None. Both
+        # pinned builds define Fsr4GpuSupport now, so the demo names a key
+        # neither fixture ini has.
         self.add_scaler_and_freefg()
         version = self.config["optiscaler_aliases"]["freefglike"]
         self.config["optiscaler_variant_preset"] = {
-            version: {"FSR.Fsr4ForceModel": None, "FSR.Fsr4GpuSupport": "2"}}
+            version: {"FSR.Fsr4RenamedAway": None, "FSR.Fsr4GpuSupport": "auto"}}
         with mock.patch.object(wrapper, "TOOL", self.work):
             env = wrapper.environment(self.config, {
                 "SteamAppId": "1", "PROTON_USE_OPTISCALER": "freefglike"}, game=True)
             other = wrapper.environment(self.config, {"SteamAppId": "1"}, game=True)
-        self.assertNotIn("Fsr4ForceModel", env["PROTON_OPTISCALER_CONFIG"])
-        self.assertIn("FSR.Fsr4GpuSupport=2", env["PROTON_OPTISCALER_CONFIG"])
+        self.assertNotIn("Fsr4RenamedAway", env["PROTON_OPTISCALER_CONFIG"])
+        self.assertIn("FSR.Fsr4GpuSupport=auto", env["PROTON_OPTISCALER_CONFIG"])
         self.assertIn("FSR.Fsr4ForceModel=2", other["PROTON_OPTISCALER_CONFIG"])
 
     def test_freefgs_own_switch_keeps_staggered_submit(self):
@@ -1007,6 +1023,28 @@ class RuntimeTests(unittest.TestCase):
             {"SteamAppId": "999999998", "WINEPREFIX": str(self.prefix)})
         self.assertEqual(applied["Spoofing.Dxgi"], "false")
 
+    def test_the_shipped_preset_lets_optiscaler_decide_spoofing(self):
+        # FreeFG's and HelixSR Scaler's own installers leave Dxgi=auto: OptiScaler
+        # spoofs when the game ships nvngx_dlss.dll, so it offers DLSS. Forced off,
+        # SOTTR lost its DLSS row (2026-10-26). The menu forces it per game.
+        shipped = json.loads((ROOT / "packages/bc250-fsr4-common/optiscaler-preset.json").read_text())
+        self.assertEqual(shipped["preset"]["Spoofing.Dxgi"], "auto")
+        # The extension spoofing stays off: that one was the "DX12 not supported" report.
+        self.assertEqual(shipped["preset"]["Spoofing.VulkanExtensionSpoofing"], "false")
+
+    def test_a_variant_can_seed_its_own_spoofing(self):
+        # FreeFG and HelixSR Scaler: "auto" over the shared false in a fresh prefix,
+        # and again while the ini still says "auto" (nobody has decided).
+        self.config["optiscaler_variant_seed"] = {
+            self.config["optiscaler_version"]: {"Spoofing.Dxgi": "auto"}}
+        inherited = {"SteamAppId": "999999998", "WINEPREFIX": str(self.prefix)}
+        self.assertEqual(self.applied_preset(inherited)["Spoofing.Dxgi"], "auto")
+        self.write_prefix_ini("[Spoofing]\nDxgi=auto\nVulkanExtensionSpoofing=auto\n")
+        self.assertEqual(self.applied_preset(inherited)["Spoofing.Dxgi"], "auto")
+        # The player turned it off in the overlay and saved: nothing is handed over.
+        self.write_prefix_ini("[Spoofing]\nDxgi=false\nVulkanExtensionSpoofing=auto\n")
+        self.assertNotIn("Spoofing.Dxgi", self.applied_preset(inherited))
+
     def test_a_value_the_player_chose_is_not_written_over(self):
         self.write_prefix_ini(
             "[FSR]\nFsr4ForceModel=3\n"
@@ -1480,9 +1518,9 @@ class PresetTests(unittest.TestCase):
     INTEL_XEFG = b"intel-xefg-runtime" * 512
 
     FREEFG_OPTI = b"freefg-optiscaler-fork" * 512
-    # FreeFG's OptiScaler is newer than the nightly: Fsr4ForceModel became
-    # Fsr4GpuSupport.
-    FORK_INI = STUB_INI.replace(b"Fsr4ForceModel=auto", b"Fsr4GpuSupport=auto") + b"[Reprojection]\nFillMode=auto\n"
+    # FreeFG's OptiScaler build (its fork) and the pinned 20261025 nightly now
+    # define the same FSR keys; the fork's ini adds the Reprojection section.
+    FORK_INI = STUB_INI + b"[Reprojection]\nFillMode=auto\n"
     FREEFG_PROXY = b"freefg-libxess-fg-proxy" * 512
 
     def freefg_zip(self, work, runtime_sha=None, layer_name="VK_LAYER_BC250_xefg_wave"):
@@ -1560,7 +1598,7 @@ class PresetTests(unittest.TestCase):
         return path
 
     SCALER_DLL = b"helixsr-scaler-optiscaler" * 64
-    SCALER_INI = STUB_INI + b"[HelixSR]\nWaveSize=auto\nFGPreset=auto\n"
+    SCALER_INI = STUB_INI + b"[HelixSR]\nWaveSize=auto\nFGPreset=auto\nInt8=auto\n"
 
     # HelixSR 1.8.0 and later, as the Scaler needs it.
     BUILT = {"network": (), "helixsr_dll": b"helixsr-built-in-network" * 400_000,
@@ -1765,8 +1803,10 @@ class PresetTests(unittest.TestCase):
         # Its own OptiScaler's ini, not the nightly's, and the renamed key.
         self.assertEqual(tree["OptiScaler.ini"], self.FORK_INI)
         variant = config["optiscaler_variant_preset"][version]
-        self.assertIsNone(variant["FSR.Fsr4ForceModel"])
-        self.assertEqual(variant["FSR.Fsr4GpuSupport"], "2")
+        # Both pinned builds define Fsr4GpuSupport now, and this repo does not
+        # force the INT8 model on a BC-250 build (owner's ruling 2026-10-26).
+        self.assertNotIn("FSR.Fsr4ForceModel", variant)
+        self.assertEqual(variant["FSR.Fsr4GpuSupport"], "auto")
         # Every file pinned, the layer included.
         hashes = self.entries[version]["sha256_hash"]
         self.assertIn("OptiScaler/BC250-XeFG/layer/libxefg_wave.so", hashes)
@@ -1779,7 +1819,8 @@ class PresetTests(unittest.TestCase):
                       tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
         # Its frame generation settings, for it alone, and the layer for the
         # launcher.
-        preset = config["optiscaler_variant_preset"][version]
+        preset = dict(config["optiscaler_variant_preset"][version])
+        preset.update(config["optiscaler_variant_seed"][version])  # frame-gen seeds there now
         self.assertEqual(preset["FrameGen.FGOutput"], "xefg")
         self.assertEqual(preset["FrameGen.Enabled"], "true")
         self.assertNotIn("FrameGen.FGOutput",
@@ -1815,7 +1856,7 @@ class PresetTests(unittest.TestCase):
                      "OptiScaler/BC250-XeFG/layer/libxefg_wave.so"):
             self.assertEqual(helix[name], plain[name], name)
         preset = config["optiscaler_variant_preset"][helix_version]
-        self.assertEqual(preset["FrameGen.FGOutput"], "xefg")
+        self.assertEqual(config["optiscaler_variant_seed"][helix_version]["FrameGen.FGOutput"], "xefg")
         self.assertIn("Libraries.FfxDx12SRPath", preset)
         # HelixSR lists AMD's FSR4 provider first and itself second: index 1.
         self.assertEqual(preset["FSR.UpscalerIndex"], "1")
@@ -1823,6 +1864,26 @@ class PresetTests(unittest.TestCase):
                          config["optiscaler_variant_preset"][config["optiscaler_aliases"]["freefg"]])
         notices = {n.rsplit("/", 1)[1] for n in helix if n.startswith(f"Licenses/{helix_version}/")}
         self.assertTrue({"freefg.txt", "HelixSR-LICENSE", "HelixSR-THIRD_PARTY_NOTICES.md"} <= notices)
+
+    def test_freefg_helixsr_can_be_the_default(self):
+        # What the three packages pass since 00decc43. The builder used to accept
+        # only a bridge or a HelixSR name here and refused the build.
+        config, _ = self.build_payload("freefg-helixsr", helixsr=True, scaler=True,
+                                       freefg={}, **self.BUILT)
+        aliases = config["optiscaler_aliases"]
+        default = config["optiscaler_version"]
+        self.assertEqual(aliases["freefg-helixsr"], default)
+        self.assertIn("OptiScaler/libxess_fg.dll", self.trees[default])
+        # The others stay reachable by name, each its own version.
+        for name in ("freefg", "helixsr", "fsr412f" if "fsr412f" in aliases else "fsr411f"):
+            self.assertNotEqual(aliases[name], default, name)
+        self.assertEqual(config["optiscaler_variant_seed"][default]["FrameGen.Enabled"], "true")
+        self.assertIn(default, config["freefg"])
+        # Spoofing is the shared preset's (auto, OptiScaler decides) and the
+        # menu's; no variant forces it.
+        for layer in (config["optiscaler_variant_seed"], config["optiscaler_variant_preset"]):
+            for values in layer.values():
+                self.assertNotIn("Spoofing.Dxgi", values)
 
     def test_freefg_without_its_ini_fails_the_build(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1892,6 +1953,10 @@ class PresetTests(unittest.TestCase):
             "Upscalers.Dx12Upscaler": "ffx",
             "Libraries.FfxDx12SRPath":
                 "C:\\windows\\system32\\umu\\HelixSR-fsrfg\\amd_fidelityfx_dx12.dll",
+                "HelixSR.Int8": "off",
+            # The Scaler's ini still has the old Fsr4ForceModel: the shared
+            # Fsr4GpuSupport is dropped for it (null), not handed over.
+            "FSR.Fsr4GpuSupport": None,
         })
         # The stock nightly and every bridge stay reachable by name, and none
         # of them carries the Scaler.
@@ -2048,6 +2113,208 @@ class PresetTests(unittest.TestCase):
             self.assertEqual(config["preset"],
                              document["preset"] if "preset" in document else document)
             self.assertEqual(config["optiscaler_variant_preset"].get(aliases["fsr412f"], {}), {})
+
+
+class FirstLaunchMenuStateTests(unittest.TestCase):
+    """The menu's state logic. The window itself (GTK4 + SDL3 through the HIDAPI,
+    Steam's filter lifted for its own process) was verified on the board; these
+    pin what the launcher acts on."""
+
+    def load(self):
+        import importlib.util, pathlib
+        path = pathlib.Path(__file__).resolve().parents[1] / "packages/bc250-fsr4-common/bc250-fsr4-menu.py"
+        spec = importlib.util.spec_from_file_location("bc250_menu", path)
+        menu = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(menu)
+        return menu
+
+    def prefix(self, ini_lines):
+        import pathlib, tempfile
+        root = pathlib.Path(tempfile.mkdtemp())
+        ini = root / "pfx/drive_c/windows/system32/umu/OptiScaler.ini"
+        ini.parent.mkdir(parents=True)
+        ini.write_text("\n".join(ini_lines) + "\n")
+        return str(root), ini
+
+    def test_shows_on_every_launch_until_saved(self):
+        menu = self.load()
+        root, _ = self.prefix(["[FrameGen]", "enabled = auto"])
+        self.assertEqual(menu.decide(root, {})[0], True)
+        with open(menu.store_path(root), "w") as stream:
+            stream.write('{"variant": "helixsr", "remember": 1}')
+        self.assertEqual(menu.decide(root, {})[0], False)
+
+    def test_a_launch_option_by_name_skips_the_menu(self):
+        menu = self.load()
+        root, _ = self.prefix(["[FrameGen]", "enabled = auto"])
+        self.assertEqual(menu.decide(root, {"PROTON_USE_OPTISCALER": "fsr412f"})[0], False)
+
+    def test_the_menu_shows_again_for_one_launch_and_clears_the_save(self):
+        menu = self.load()
+        root, _ = self.prefix(["[FrameGen]", "enabled = auto"])
+        open(menu.store_path(root), "w").write('{"variant": "helixsr", "remember": 1}')
+        self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1"})[0], True)
+
+    def test_the_frame_gen_row_reads_the_prefix_real_state(self):
+        menu = self.load()
+        # The Scaler: the routing pair is the switch, Enabled stays false. SOTTR's
+        # prefix on the board is in exactly this state with FG on.
+        root, _ = self.prefix(["[FrameGen]", "enabled = false", "fginput = nvngxfg",
+                               "fgnvngxreplacement = HelixSR"])
+        with open(menu.store_path(root), "w") as stream:
+            stream.write('{"variant": "helixsr", "remember": 1}')
+        # decide() reports (show, current, fg_on, saved) for the variant the store
+        # says the prefix is on -- the Scaler's routing pair, which SOTTR's prefix
+        # on the board really has.
+        self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1",
+                                            "BC250_MENU_INSTALLED": "helixsr"})[2], True)
+        # Another variant (or an older package's) on disk: the launch starts the
+        # pick fresh, so the row shows the fresh seed, here the Scaler's off.
+        self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1"})[2], False)
+        self.assertEqual(menu.fg_state("helixsr", menu.read_ini_sections(root + "/pfx/drive_c/windows/system32/umu/OptiScaler.ini")), True)
+        self.assertEqual(menu.fg_state("freefg-helixsr", menu.read_ini_sections(root + "/pfx/drive_c/windows/system32/umu/OptiScaler.ini")), False)
+        root2, _ = self.prefix(["[FrameGen]", "enabled = true", "fginput = upscaler",
+                                "fgoutput = xefg"])
+        self.assertEqual(menu.fg_state("freefg-helixsr", menu.read_ini_sections(root2 + "/pfx/drive_c/windows/system32/umu/OptiScaler.ini")), True)
+        self.assertEqual(menu.fg_state("fsr412f", menu.read_ini_sections(root2 + "/pfx/drive_c/windows/system32/umu/OptiScaler.ini")), True)
+
+    def test_only_a_change_is_written(self):
+        menu = self.load()
+        self.assertEqual(menu.change("helixsr", True, True, menu.DEFINABLE["helixsr"]), {})
+        # Turning it off again puts the two routing keys back to auto, and nothing else.
+        self.assertEqual(menu.change("helixsr", True, False, menu.DEFINABLE["helixsr"]),
+                         {"FrameGen.FGInput": "auto", "FrameGen.FGNvngxReplacement": "auto"})
+        # A key this build's ini does not define is not handed over: protonfixes
+        # refuses the launch on it.
+        self.assertEqual(menu.change("fsr412f", False, True, set()), {})
+        self.assertEqual(menu.change("freefg", False, True, menu.DEFINABLE["freefg"]),
+                         {"FrameGen.Enabled": "true"})
+    def test_a_fresh_prefix_shows_what_the_variant_seeds(self):
+        # No answer in the ini yet: FreeFG seeds frame generation on, the others off,
+        # so a player who just presses Start changes nothing.
+        menu = self.load()
+        for lines in ([], ["[FrameGen]", "enabled = auto", "fginput = auto"]):
+            sections = menu.read_ini_sections(self.prefix(lines)[1]) if lines else {}
+            self.assertEqual(menu.fg_state("freefg-helixsr", sections), True)
+            self.assertEqual(menu.fg_state("freefg", sections), True)
+            self.assertEqual(menu.fg_state("helixsr", sections), False)
+            self.assertEqual(menu.fg_state("fsr412f", sections), False)
+        # The player's own answer from the overlay wins over the seed.
+        sections = menu.read_ini_sections(self.prefix(["[FrameGen]", "enabled = false"])[1])
+        self.assertEqual(menu.fg_state("freefg-helixsr", sections), False)
+
+    def test_the_prefix_variant_is_preselected_unless_a_choice_is_saved(self):
+        menu = self.load()
+        root, _ = self.prefix(["[FrameGen]", "enabled = auto"])
+        env = {"BC250_MENU_INSTALLED": "helixsr", "BC250_MENU_DEFAULT": "freefg-helixsr"}
+        self.assertEqual(menu.decide(root, {"BC250_MENU_DEFAULT": "freefg-helixsr"})[1], "freefg-helixsr")
+        with open(menu.store_path(root), "w") as stream:
+            stream.write('{"variant": "fsr412f", "remember": 0}')
+        # What is on disk is what runs; the last pick only fills in when nothing is.
+        self.assertEqual(menu.decide(root, env)[1], "helixsr")
+        self.assertEqual(menu.decide(root, {})[1], "fsr412f")
+        with open(menu.store_path(root), "w") as stream:
+            stream.write('{"variant": "fsr412f", "remember": 1}')
+        self.assertEqual(menu.decide(root, env)[:2], (False, "fsr412f"))
+
+    def test_the_installed_variant_comes_from_protonfixes_record(self):
+        import tempfile
+        data = Path(tempfile.mkdtemp())
+        config = {"manifest": "m.json"}
+        (data / "m.json").write_text(json.dumps({"optiscaler": [
+            {"version": "v1", "md5_hash": {"a": ""}}, {"version": "v1-freefg", "md5_hash": {"a": ""}}]}))
+        env = {"STEAM_COMPAT_DATA_PATH": str(data)}
+        with mock.patch.object(wrapper, "TOOL", data):
+            self.assertIsNone(wrapper.installed_variant(config, env))
+            (data / "upscaler_files").write_text(json.dumps({"opti_files": {
+                "x": {"version": "v1-freefg"}, "y": {"version": "v1-freefg"}, "z": {"version": "v1"}}}))
+            self.assertEqual(wrapper.installed_variant(config, env), "v1-freefg")
+            # An older package's version is nobody this package can name.
+            (data / "upscaler_files").write_text(json.dumps({"opti_files": {"x": {"version": "v0"}}}))
+            self.assertIsNone(wrapper.installed_variant(config, env))
+
+    def test_spoofing_is_written_only_when_the_player_changes_it(self):
+        menu = self.load()
+        for lines, shown in (([], "auto"), (["[Spoofing]", "dxgi = true"], "true"),
+                             (["[Spoofing]", "dxgi = False"], "false"), (["[Spoofing]", "dxgi = 1"], "auto")):
+            sections = menu.read_ini_sections(self.prefix(lines)[1]) if lines else {}
+            self.assertEqual(menu.spoof_state(sections), shown)
+        fg = dict(menu.FRESH_ON)
+        pick = {"preset": "freefg-helixsr", "disable_framegen": 0, "spoof": "true"}
+        # The prefix already says true: Start changes nothing.
+        same = menu.answer(pick, "freefg-helixsr", "freefg-helixsr", fg, {"freefg-helixsr": "true"})
+        self.assertEqual(same["changed"], "")
+        # Auto in the prefix, On in the menu: forced on.
+        on = menu.answer(pick, "freefg-helixsr", "freefg-helixsr", fg, {"freefg-helixsr": "auto"})
+        self.assertEqual(on["changed"], "Spoofing.Dxgi=true")
+        # A switch starts from auto, so Off is handed over; No upscaling hands nothing.
+        off = menu.answer(dict(pick, preset="fsr412f", spoof="false", disable_framegen=1),
+                          "freefg-helixsr", "freefg-helixsr", fg, {"freefg-helixsr": "true"})
+        self.assertEqual((off["switched"], off["changed"]), (1, "Spoofing.Dxgi=false"))
+        none = menu.answer(dict(pick, preset="off", spoof="false"), "freefg-helixsr",
+                           "freefg-helixsr", fg, {})
+        self.assertEqual(none["changed"], "")
+
+    def test_no_upscaling_is_a_pick_that_keeps_the_prefix(self):
+        menu = self.load()
+        root, _ = self.prefix(["[FrameGen]", "enabled = false"])
+        env = {"BC250_MENU_INSTALLED": "freefg-helixsr", "BC250_MENU_DEFAULT": "freefg-helixsr"}
+        with open(menu.store_path(root), "w") as stream:
+            stream.write('{"variant": "off", "remember": 0}')
+        # The files still say FreeFG, but the last pick was No upscaling.
+        self.assertEqual(menu.decide(root, env)[:2], (True, "off"))
+        states = dict(menu.FRESH_ON, **{"freefg-helixsr": False})
+        # Off: nothing switched, nothing written into the ini.
+        self.assertEqual(menu.answer({"preset": "off", "disable_framegen": 1}, "freefg-helixsr",
+                                     "freefg-helixsr", states),
+                         {"preset": "off", "disable_framegen": 1, "remember": 0, "switched": 0, "changed": ""})
+        # Back to the variant the files belong to: not a switch, the overlay's FG off stays.
+        back = menu.answer({"preset": "freefg-helixsr", "disable_framegen": 1}, "off", "freefg-helixsr", states)
+        self.assertEqual((back["switched"], back["changed"]), (0, ""))
+        # Another variant is a switch and starts from its seed.
+        other = menu.answer({"preset": "freefg", "disable_framegen": 0}, "off", "freefg-helixsr", states)
+        self.assertEqual((other["switched"], other["changed"]), (1, ""))
+
+    def test_no_upscaling_launches_with_the_documented_opt_out(self):
+        import tempfile
+        tool = Path(tempfile.mkdtemp())
+        (tool / "bc250-fsr4-config.json").write_text('{"proton": "proton"}')
+        seen = {}
+        with mock.patch.object(wrapper, "menu_choice", return_value=("off", {}, False)), \
+                mock.patch.object(wrapper, "game_launch", return_value=True), \
+                mock.patch.object(wrapper, "start_fresh_on_switch"), \
+                mock.patch.object(wrapper, "clean_other_variants"), \
+                mock.patch.object(wrapper, "environment",
+                                  lambda config, inherited, **_: seen.update(inherited) or {}), \
+                mock.patch.object(wrapper.os, "execve", lambda *_: None), \
+                mock.patch.dict(wrapper.os.environ, {}, clear=True), \
+                mock.patch.object(wrapper, "TOOL", tool):
+            wrapper.main()
+        self.assertEqual(seen["PROTON_FSR4_UPGRADE"], "0")
+        self.assertEqual(seen["PROTON_USE_OPTISCALER"], "0")
+
+    def test_an_anticheat_game_gets_no_menu_unless_the_guard_is_off(self):
+        import tempfile
+        game = Path(tempfile.mkdtemp())
+        (game / "EasyAntiCheat").mkdir()
+        prefix = tempfile.mkdtemp()
+        tool = Path(tempfile.mkdtemp())
+        # A menu that would answer if it were asked.
+        (tool / "bc250-fsr4-menu.py").write_text('print("show=0")\nprint("current=freefg")\n')
+        config = {"optiscaler_version": "v", "manifest": "m.json"}
+        env = {"STEAM_COMPAT_DATA_PATH": prefix, "STEAM_COMPAT_INSTALL_PATH": str(game)}
+        with mock.patch.object(wrapper, "TOOL", tool):
+            self.assertEqual(wrapper.menu_choice(config, env), (None, {}, False))
+            env["BC250_FSR4_IGNORE_ANTICHEAT"] = "1"
+            self.assertEqual(wrapper.menu_choice(config, env), ("freefg", {}, False))
+
+    def test_the_launcher_asks_no_menu_when_the_launch_already_says(self):
+        import tempfile
+        prefix = tempfile.mkdtemp()
+        for extra in ({"PROTON_USE_OPTISCALER": "freefg"}, {"PROTON_FSR4_UPGRADE": "0"}):
+            self.assertEqual(
+                wrapper.menu_choice({}, dict({"STEAM_COMPAT_DATA_PATH": prefix}, **extra)),
+                (None, {}, False))
 
 
 if __name__ == "__main__":

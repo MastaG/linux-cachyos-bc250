@@ -107,6 +107,7 @@ python3 - \
     "$FAKENVAPI_ASSET" "$FAKENVAPI_URL" "$FAKENVAPI_SHA256" \
     "$BC250_FSR4_PAYLOAD_BASE" \
     "${FSR4_PAYLOAD_SHA256[SHA_PATCH]}" "${FSR4_PAYLOAD_SHA256[SHA_LAUNCH]}" \
+    "${FSR4_PAYLOAD_SHA256[SHA_MENU]}" \
     "${FSR4_PAYLOAD_SHA256[SHA_PAYLOAD_BUILDER]}" "${FSR4_PAYLOAD_SHA256[SHA_PRESET]}" \
     "${FSR4_PAYLOAD_SHA256[SHA_SHIM]}" "$OPTISCALER_PROXY" <<'PY'
 from pathlib import Path
@@ -115,7 +116,7 @@ import sys
 
 (path, pkgrel, march, mtune, upstream_n, opti_asset, opti_url, opti_sha,
  opti_version, fakenvapi_asset, fakenvapi_url, fakenvapi_sha, payload_base,
- sha_patch, sha_launch, sha_builder, sha_preset, sha_shim, proxy) = sys.argv[1:20]
+ sha_patch, sha_launch, sha_menu, sha_builder, sha_preset, sha_shim, proxy) = sys.argv[1:21]
 upstream_n = int(upstream_n)
 
 path = Path(path)
@@ -243,7 +244,7 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     f'        --fakenvapi "${{srcdir}}/{fakenvapi_asset}" \\\n'
     '        --provider "${srcdir}/amdxcffx64_v4.1.1.xz" \\\n'
     '        --ffx-sdk "${srcdir}/amd_fidelityfx_upscaler_dx12.dll" \\\n'
-    '        --ffx-sdk-default helixsr \\\n'
+    '        --ffx-sdk-default freefg-helixsr \\\n'
     '        --ffx-sdk-alt fsr411b \\\n'
     '            "${srcdir}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \\\n'
     '            "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \\\n'
@@ -263,9 +264,10 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \\\n'
     '        --helixsr-scaler "${srcdir}/HelixSR-Scaler-1.1.0-core.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \\\n'
-    '        --freefg "${srcdir}/freefg-1.0.1.zip" \\\n'
-    '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.0.1" \\\n'
-    '        --freefg-ini "${srcdir}/OptiScaler-bc250-f971ed1.ini" \\\n'
+    '        --freefg "${srcdir}/freefg-1.1.3.1.zip" \\\n'
+    '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.1.3.1" \\\n'
+    '        --freefg-ini "${srcdir}/OptiScaler-bc250-03db4f8.ini" \\\n'
+    '        --freefg-bridge fsr412f \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -277,6 +279,7 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     "\n"
     '    install -Dm755 "${srcdir}/proton-shim.sh" bc250-fsr4-proton\n'
     '    install -Dm644 "${srcdir}/bc250-fsr4-launch.py" bc250-fsr4-launch.py\n'
+    '    install -Dm644 "${srcdir}/bc250-fsr4-menu.py" bc250-fsr4-menu.py\n'
     "\n"
     "    # Steam runs whatever toolmanifest.vdf names. Point it at the shim so the\n"
     "    # pinned payload is selected before Proton starts; upstream's launcher is\n"
@@ -345,17 +348,17 @@ payload_sources = [
     # HelixSR Scaler 1.1.0 (OptiScaler with HelixSR built in, GPL-3.0): the default.
     ("HelixSR-Scaler-1.1.0-core.zip", f"{payload_base}/HelixSR-Scaler-1.1.0-core.zip",
      "c798b51b3802031627cd118f7e9aee5b98de552fb45f4fe7e28d0e688d1646df", True),
-    # FreeFG 1.0.1 (daniel-h-0): Intel XeSS frame generation with its own BC-250
+    # FreeFG 1.1.3.1 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
     # Mirrored release zip; its OptiScaler build is GPL-3.0, and the matching
-    # freefg-1.0.1-source.zip is mirrored beside it.
-    ("freefg-1.0.1.zip", f"{payload_base}/freefg-1.0.1.zip",
-     "0828855b6a08b9f9f256aa64245ce15fc51f4809c7ea3fe474d6ea3af6427389", True),
-    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-f971ed1),
-    # pinned by commit: that build is newer than the nightly and renamed keys.
-    ("OptiScaler-bc250-f971ed1.ini",
-     "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/d3decb62af2e3b495e330ad16a55507aac0fa48d/OptiScaler.ini",
-     "fb798d1f49e28c78457c0d17248c45e565b7dc70df5a75ad41c53d6768b3d139", False),
+    # freefg-1.1.3.1-source.zip is mirrored beside it.
+    ("freefg-1.1.3.1.zip", f"{payload_base}/freefg-1.1.3.1.zip",
+     "2aff8ab9c9e4ce5de36bc95a2f1246e699850a4e68675698e6a8336fe8f36446", True),
+    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-03db4f8),
+    # pinned by commit: the freefg variants ship this build and this ini.
+    ("OptiScaler-bc250-03db4f8.ini",
+     "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/d191284afa25968f8ae709e70ccd7a8701003ec8/OptiScaler.ini",
+     "54493b7795f92e2b2ef063815f62bb29e983716a27b524d19b27d5ddc473caac", False),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),
@@ -367,6 +370,7 @@ payload_sources = [
 local_sources = [
     ("0001-pinned-upscaler-manifest.patch", sha_patch),
     ("bc250-fsr4-launch.py", sha_launch),
+    ("bc250-fsr4-menu.py", sha_menu),
     ("build-fsr4-payload.py", sha_builder),
     ("optiscaler-preset.json", sha_preset),
     ("proton-shim.sh", sha_shim),
@@ -395,6 +399,7 @@ text += (
     f"noextract+=({newline}{newline.join(noextract)}{newline})\n"
     f"b2sums+=({newline}{newline.join('  ' + chr(39) + 'SKIP' + chr(39) for _ in added)}{newline})\n"
     f"sha256sums=({newline}{skips}{newline}{newline.join(sums)}{newline})\n"
+    f"depends+=('python-gobject' 'gtk4' 'sdl3')\n"
 )
 
 path.write_text(text, encoding="utf-8", newline="\n")

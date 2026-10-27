@@ -664,7 +664,7 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   no ini, so the preset is unchanged for it and for every other variant, and the
   packages keep the 2026-10-15 nightly they already ship; the client build this
   asset comes from pins an older one (20260904), and its app is not needed here.
-- **Changed: HelixSR Scaler is the default** ([HelixSR 2.0.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0)
+- **Changed: the default is now FreeFG 1.1.3.1 + HelixSR 2.0.0** ([HelixSR 2.0.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0)
   with Scaler 1.1.0, by lonewolf0622). The Scaler is OptiScaler
   (GPL-3.0) with HelixSR built in, which runs NVIDIA's DLSS network (Model E) as D3D12 compute,
   so DLSS-quality reconstruction without an NVIDIA GPU. Pick DLSS, XeSS or
@@ -678,7 +678,7 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   before; \`[DlssFrameGeneration] Preset = full\` in helixsr.ini for the full mode) and runs in
   games that have DLSS Frame Generation (it needs 32-lane waves, which the BC-250 has). Upscaling is
   15 to 18% faster at high render resolutions by its author's measurements.
-  \`PROTON_USE_OPTISCALER=optiscaler\` selects the stock OptiScaler nightly (20261015) with the
+  \`PROTON_USE_OPTISCALER=optiscaler\` selects the stock OptiScaler nightly (20261025) with the
   FSR4 fork's bridge, \`helixsr-ffx\` the nightly with HelixSR as its FidelityFX library, and
   \`fsr412f\`, \`fsr411f\`, \`signed\`, \`fsr411b\`, \`fsr411rc9\`, \`fsr411rc10\` the other bridge DLLs. The Scaler
   does not mix with them. Per its author, the DLSS weights and kernels it runs remain NVIDIA's

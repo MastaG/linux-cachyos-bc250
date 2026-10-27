@@ -43,8 +43,10 @@ def validate_preset(preset_path: Path, ini_path: Path, extra: dict | None = None
     if not isinstance(preset, dict) or not preset:
         raise RuntimeError("OptiScaler preset must be a non-empty object")
     preset = {**preset, **(extra or {})}
-    # A variant drops a shared key with None (JSON null): FreeFG's OptiScaler
-    # renamed FSR.Fsr4ForceModel and writes its ini without it.
+    # A variant drops a shared key with None (JSON null): a build whose own
+    # OptiScaler.ini does not define that key makes protonfixes refuse the launch
+    # ("Unknown pinned OptiScaler option"). HelixSR Scaler 1.1.0 is one: its ini
+    # still has the old Fsr4ForceModel, not Fsr4GpuSupport (SCALER_PRESET).
     preset = {key: value for key, value in preset.items() if value is not None}
     parser = configparser.ConfigParser()
     # Use the same strict parser and encoding as protonfixes, including option
@@ -65,6 +67,12 @@ def validate_preset(preset_path: Path, ini_path: Path, extra: dict | None = None
     # prefix has not answered, so a key this check passes must exist in the ini
     # for protonfixes to accept it at all.
     return preset
+
+
+def is_framegen_key(key):
+    """A frame-gen key: the player's to decide, so it is seeded on the variant's
+    first launch only, not enforced every launch. Wiring is everything else."""
+    return key.lower().startswith("framegen.")
 
 
 def ini_keys_from_text(text: str) -> list:
@@ -164,6 +172,16 @@ SCALER_PRESET = {
     "Upscalers.Dx12Upscaler": "ffx",
     "Libraries.FfxDx12SRPath":
         "C:\\windows\\system32\\umu\\" + SCALER_FOLDER + "\\amd_fidelityfx_dx12.dll",
+    # The BC-250 has no fast int8 path, so HelixSR's int8 switch is forced off
+    # here instead of letting "auto" decide by card (owner's ruling, 2026-10-26).
+    # Only the Scaler can carry it: protonfixes refuses a preset option the
+    # selected build's OptiScaler.ini does not define, and the Scaler's does
+    # ("Int8=auto", spelling on/off per its own comment). The stock build has no
+    # such key, so helixsr-ffx cannot force it; auto picks off on this card.
+    "HelixSR.Int8": "off",
+    # The Scaler's ini predates the nightly's rename (it has Fsr4ForceModel=auto),
+    # so the shared Fsr4GpuSupport is dropped here; its auto is the same answer.
+    "FSR.Fsr4GpuSupport": None,
 }
 # Where OptiScaler finds the HelixSR DLL in the prefix: the payload folder
 # (Libraries.OptiDllPath), under both FidelityFX names. HelixSR's README has
@@ -197,7 +215,7 @@ FREEFG_FOLDER = "OptiScaler/BC250-XeFG"
 FREEFG_LAYER = "VK_LAYER_BC250_xefg_wave"
 # What FreeFG's installer writes for its OptiScaler route at 2x (install.py
 # CHANGES plus the route's own keys); the shared preset already has
-# Dx12Upscaler=ffx, UpscalerIndex=0, Fsr4ForceModel=2 and LoadAsiPlugins=true.
+# Dx12Upscaler=ffx, UpscalerIndex=0, Fsr4GpuSupport=auto and LoadAsiPlugins=true.
 # FGInput: FreeFG picks it per game from its recipes and falls back to OptiFG
 # (upscaler), which works in any game whose upscaler OptiScaler sees, so that
 # fallback is the default here. XeLL then needs Reflex forced on (FreeFG does
@@ -212,11 +230,12 @@ FREEFG_PRESET = {
     # XeFG does not interpolate in exclusive fullscreen.
     "XeFG.ForceBorderless": "true",
     "fakenvapi.ForceReflex": "2",
-    # FreeFG's OptiScaler (master of 19 October) renamed Fsr4ForceModel to
-    # Fsr4GpuSupport and writes its ini without the old name, so the shared key
-    # would stop the next launch once the player changed anything in the menu.
-    "FSR.Fsr4ForceModel": None,
-    "FSR.Fsr4GpuSupport": "2",
+    # Their installer forces the INT8 model here (its CHANGES has
+    # Fsr4ForceModel=2, now Fsr4GpuSupport=2). The BC-250 has no fast int8 path,
+    # so this repo keeps the build's own default (auto = 0 = no override,
+    # owner's ruling 2026-10-26); a player who wants the INT8 model asks per
+    # game with BC250_OPTISCALER_EXTRA="FSR.Fsr4GpuSupport=2".
+    "FSR.Fsr4GpuSupport": "auto",
 }
 
 
@@ -683,7 +702,9 @@ def main() -> int:
                          "the tagged commit); the nightly's is older than that build")
     ap.add_argument("--freefg-bridge", default="fsr411f",
                     help="name of the --ffx-sdk-alt bridge the FreeFG variant ships "
-                         "as its FidelityFX upscaler (FreeFG's own is RC11, fsr411f)")
+                         "as its FidelityFX upscaler; the packages pass fsr412f "
+                         "explicitly since FreeFG 1.1.2 pins RC12 (the default stays "
+                         "fsr411f so a build without the RC12 alt still works)")
     ap.add_argument("--dlss", type=Path, required=True, help="NVIDIA nvngx_dlss.dll surrogate")
     ap.add_argument("--licenses", type=Path, required=True, help="directory of license notices")
     ap.add_argument("--preset", type=Path, required=True, help="optiscaler-preset.json")
@@ -723,7 +744,9 @@ def main() -> int:
     if args.ffx_sdk_default and args.ffx_sdk_default not in {
         name for name, _, _ in args.ffx_sdk_alt
     } | ({HELIXSR_FFX_NAME} if args.helixsr else set()) \
-      | ({HELIXSR_NAME} if args.helixsr_scaler else set()):
+      | ({HELIXSR_NAME} if args.helixsr_scaler else set()) \
+      | ({FREEFG_NAME} if args.freefg else set()) \
+      | ({FREEFG_HELIXSR_NAME} if args.freefg and args.helixsr else set()):
         raise SystemExit(
             f"ERROR: --ffx-sdk-default names no variant: {args.ffx_sdk_default!r}")
 
@@ -870,8 +893,6 @@ def main() -> int:
             variants.append((bridge, version, provenance, merged, extra))
 
         if args.freefg:
-            # Opt-in only: FreeFG 1.0.x has been qualified in menus and
-            # benchmarks, not in play.
             freefg, freefg_notices = freefg_from(
                 Path(args.freefg[0]), args.optiscaler, staging)
             if not args.freefg_ini:
@@ -902,7 +923,11 @@ def main() -> int:
                     "the property of NVIDIA Corporation and is not covered by HelixSR's licence"))
             for name, ffx_sdk, upscaler_files, upscaler_preset, upscaler_notices, \
                     notice_prefix, upscaler_text in upscalers:
-                version = args.optiscaler_version + "-" + name
+                # freefg-helixsr is the packages' default (owner's decision,
+                # 2026-10-26), so it takes the bare version like any default.
+                is_default = name == args.ffx_sdk_default
+                version = (args.optiscaler_version if is_default
+                           else args.optiscaler_version + "-" + name)
                 aliases[name] = version
                 variant_presets[version] = {**FREEFG_PRESET, **upscaler_preset}
                 freefg_layers[version] = {
@@ -926,8 +951,8 @@ def main() -> int:
                         shutil.copy2(path, merged / (notice_prefix + "-" + path.name))
                 provenance = (
                     f"{args.proxy} in this directory is FreeFG's build of OptiScaler (GPL-3.0; "
-                    "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-f971ed1 "
-                    "and freefg-1.0.1-source.zip beside FreeFG's release), NOT the stock "
+                    "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-03db4f8 "
+                    "and freefg-1.1.3.1-source.zip beside FreeFG's release), NOT the stock "
                     "OptiScaler nightly.\n\n"
                     f"Origin: {args.freefg[1]}\n"
                     f"SHA256: {digest(freefg['opti'])}\n\n"
@@ -939,7 +964,10 @@ def main() -> int:
                     f"{FREEFG_FOLDER}/layer/ is FreeFG's Linux Vulkan layer that paces "
                     "generated frames for VRR displays.\n\n"
                     f"OptiScaler/amd_fidelityfx_upscaler_dx12.dll is {upscaler_text}.\n"
-                    f"Selected explicitly by PROTON_USE_OPTISCALER={name}.\n"
+                    + ("This package ships it by default; the other variants stay "
+                       "available by name with PROTON_USE_OPTISCALER.\n"
+                       if is_default else
+                       f"Selected explicitly by PROTON_USE_OPTISCALER={name}.\n")
                 )
                 extra = {args.proxy: freefg["opti"], "OptiScaler.ini": args.freefg_ini,
                          **{n: path for n, path in freefg.items() if n != "opti"},
@@ -961,11 +989,11 @@ def main() -> int:
             )
             shutil.copy2(archive, artifacts / Path(entry["download_url"]).name)
             entries.append(entry)
-        # What this build's own ini defines, read back out of the archive the
-        # manifest points at: the launcher will not hand over a key outside it.
-        with tarfile.open(archive) as reader:
-            ini_keys_map[entry["version"]] = ini_keys_from_text(
-                reader.extractfile("OptiScaler.ini").read().decode())
+            # What this build's own ini defines, read back out of the archive the
+            # manifest points at: the launcher will not hand over a key outside it.
+            with tarfile.open(archive) as reader:
+                ini_keys_map[entry["version"]] = ini_keys_from_text(
+                    reader.extractfile("OptiScaler.ini").read().decode())
     provider = provider_artifact(args, artifacts)
 
     manifest = {"optiscaler": entries, "fsr_40_drv": [provider]}
@@ -992,7 +1020,13 @@ def main() -> int:
                 "preset": preset,
                 # Merged over the preset only when that version is the one
                 # asked for (keyed by pinned version, like the manifest).
-                "optiscaler_variant_preset": variant_presets,
+                "optiscaler_variant_preset": {n: {k: v for k, v in d.items() if not is_framegen_key(k)}
+                                              for n, d in variant_presets.items()},
+                # The variant's frame-gen keys, seeded on its first launch and then
+                # left alone: re-forcing them every launch is what undid an overlay
+                # "FG off" + Save at the next start (the bug the menu fixes).
+                "optiscaler_variant_seed": {n: {k: v for k, v in d.items() if is_framegen_key(k)}
+                                            for n, d in variant_presets.items()},
                 # Per pinned version: the options that build's own OptiScaler.ini
                 # defines, so the launcher only hands over keys protonfixes accepts.
                 "optiscaler_ini_keys": ini_keys_map,

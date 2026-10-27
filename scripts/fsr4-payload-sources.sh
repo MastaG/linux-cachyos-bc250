@@ -37,6 +37,7 @@ stage_fsr4_payload_sources() {
     local -A sources=(
         [SHA_PATCH]="$common/patches/$base/0001-pinned-upscaler-manifest.patch"
         [SHA_LAUNCH]="$common/bc250-fsr4-launch.py"
+        [SHA_MENU]="$common/bc250-fsr4-menu.py"
         [SHA_PAYLOAD_BUILDER]="$root/scripts/build-fsr4-payload.py"
         [SHA_PRESET]="$common/optiscaler-preset.json"
         [SHA_SHIM]="$common/proton-shim.sh"

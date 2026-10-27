@@ -725,10 +725,44 @@ Per game, if you want them:
 ```text
 BC250_FSR4_DEBUG=1 %command%              # FSR4 watermark + OptiScaler log + PROTON_LOG
 PROTON_FSR4_UPGRADE=0 %command%           # turn the packaged FSR4 upgrade off
-PROTON_USE_OPTISCALER=fsr411f %command%   # the FSR4 fork's bridge instead of the default HelixSR Scaler, see below
+PROTON_USE_OPTISCALER=fsr411f %command%   # the FSR4 fork's RC11 bridge instead of the default
+                                          # (FreeFG + HelixSR), see below; skips the menu
+PROTON_OPTISCALER_MENU=1 %command%        # show the upscaler menu again after "Save selection"
 BC250_OPTISCALER_EXTRA="A.B=c;D.E=f"      # override individual OptiScaler settings
 PROTON_OPTISCALER_NAME=dxgi.dll %command% # load OptiScaler as dxgi instead of winmm
 ```
+
+### The upscaler menu
+
+Every game launch first shows a small menu: the upscaler (FreeFG + HelixSR, the
+default; FreeFG + FSR4 RC12; HelixSR Scaler + HelixSR; FSR4 RC12 alone; No
+upscaling), **GPU spoofing**, **Disable frame generation**, and **Save selection
+for next time**.
+It works with a controller (Steam Controller, PS5 pad; D-pad or stick to move, A
+to select, Start to start the game), with mouse and keyboard, in Gaming Mode and
+on the desktop, and it waits until you choose.
+
+- The variant the game is on now is pre-selected, and the frame generation box
+  shows what the game really does now — including what you saved in the
+  OptiScaler overlay. Pressing Start without touching it changes nothing.
+- Choosing another upscaler starts that one fresh: its files and a new
+  `OptiScaler.ini` replace the old ones, so settings saved in the overlay for the
+  previous upscaler are gone.
+- **GPU spoofing (DXGI)**: Auto lets OptiScaler decide (on when the game ships
+  `nvngx_dlss.dll`, which is what brings its DLSS option); On and Off force it
+  for this game. Like the frame generation box, it shows the prefix's current
+  value and is written only when you change it.
+- **No upscaling** runs the game as it ships, the same as
+  `PROTON_FSR4_UPGRADE=0`: no FSR4 and no OptiScaler. It leaves the previous
+  upscaler's files and settings alone, so going back to that one later is not a
+  switch.
+- **Save selection** skips the menu from then on. `PROTON_OPTISCALER_MENU=1
+  %command%` shows it again; a launch option that names a variant
+  (`PROTON_USE_OPTISCALER=...`) skips it too. Anti-cheat games never see it,
+  unless the anti-cheat guard is switched off (`BC250_FSR4_IGNORE_ANTICHEAT=1`
+  or `~/.config/bc250-fsr4/ignore-anticheat`).
+- No display, or `python-gobject`, `gtk4` or `sdl3` missing: no menu, and the
+  game starts with its current choice.
 
 `PROTON_OPTISCALER_NAME` is for one specific symptom: FSR4 quietly does nothing
 in a game that has a mod loader, an ASI loader, or anything else of its own
@@ -773,36 +807,38 @@ BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=auto;FrameGen.Enabled=true" %command%
 A key the shipped OptiScaler build does not define stops the launch and names
 it, rather than being silently ignored.
 
-**No DLSS option in a game's menu?** That is this package's doing, and it is
-deliberate. The preset sets `Spoofing.Dxgi=false`, so the game is told what GPU
-it is actually running on — a BC-250 — and games gate their DLSS row on seeing
-an NVIDIA GPU. The OptiScaler overlay says `Spoof: Off` when this is why.
-Spoofing was turned off because turning it on produced "DX12 not supported" for
-a user after enabling frame generation, and because it costs performance. To
-trade that back per game:
+**No DLSS option in a game's menu?** A fresh prefix starts with
+`Spoofing.Dxgi=auto`, as FreeFG's and HelixSR Scaler's own installers leave it:
+OptiScaler then reports an NVIDIA GPU whenever the game ships its own
+`nvngx_dlss.dll`, and games gate their DLSS row on seeing one. Without that file
+it reports the BC-250, and the OptiScaler overlay says `Spoof: Off`. A prefix
+from an older package can still hold the old `false` (that value counts as an
+answer and is kept). Set **GPU spoofing** to **On** in the upscaler menu, or per
+game:
 
 ```text
 BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=true" %command%
 ```
 
-FSR4 itself does not need this. With spoofing off the game's own FSR option is
-the input and OptiScaler translates it, which is the normal path here — the
-overlay shows `Input: FFX` and the FSR 4.1.1 upscaler running.
+Some games crash with spoofing on; **Off** in the menu forces it off for that
+game. `Spoofing.VulkanExtensionSpoofing` stays off: that one was behind the
+"DX12 not supported" report.
 
-**Worth trying, though.** Turning spoofing on gives the game its DLSS path,
-which OptiScaler still translates to FSR4, and brings NVIDIA Reflex with it. It
-has measured faster than the game's own FSR input on a BC-250, and it is
-reported working in The Last of Us Part II and A Plague Tale: Innocence. The
-fuller version, which also answers the driver-version question below:
+The upscaler itself does not need spoofing. With it off the game's own FSR or
+XeSS option is the input and OptiScaler translates it — the overlay shows
+`Input: FFX` or `Input: XeSS`.
+
+The DLSS path is still often the better input: OptiScaler translates it the same
+way, it brings NVIDIA Reflex with it, it has measured faster than the game's own
+FSR input on a BC-250, and it is reported working in The Last of Us Part II and A
+Plague Tale: Innocence. The fuller version, which also answers the
+driver-version question below:
 
 ```text
 BC250_OPTISCALER_EXTRA="Spoofing.Dxgi=true;Spoofing.Registry=true" %command%
 ```
 
-Then pick DLSS in the game's own graphics menu. The overlay's frame-time and
-upscaler graphs are what settle whether it helped — same save, same spot, both
-ways — and we would like to hear the numbers, because if this behaves it is a
-candidate for the default.
+Then pick DLSS in the game's own graphics menu.
 
 The OptiScaler overlay owns the whole preset now. OptiScaler ships every key as
 `auto`, a key that still says `auto` is nobody's answer, and the preset writes
@@ -840,14 +876,14 @@ change sticks:
 
 ### Which FidelityFX bridge you get, and the alternatives
 
-The upscaler a game gets is **HelixSR Scaler by default** (see the next
-section). For the stock OptiScaler nightly, one file in the payload — the
+The upscaler a game gets is **FreeFG + HelixSR by default**, or what you pick
+in the menu (see the next section). For the stock OptiScaler nightly, one file in the payload — the
 FidelityFX bridge, `amd_fidelityfx_upscaler_dx12.dll` — exists in five other
 pinned builds. Each package ships all of them and swaps only that file;
 `PROTON_USE_OPTISCALER` picks one per game:
 
 ```text
-                                          # (unset) HelixSR Scaler, DLSS Model E network — the default
+                                          # (unset) FreeFG 1.1.3.1 + HelixSR 2.0.0 — the default
 PROTON_USE_OPTISCALER=optiscaler %command%  # stock OptiScaler nightly with the fsr411f bridge
 PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork RC11, 4.1.1r11 — the default until HelixSR
 PROTON_USE_OPTISCALER=fsr412f %command%   # the same fork's RC12, 4.1.1r12 — newest bridge, opt-in
@@ -927,7 +963,7 @@ Two things to know about the alternatives:
 
 Please report whether any of them helps or hurts.
 
-### HelixSR Scaler: DLSS's network instead of FSR4 (the default)
+### HelixSR Scaler: DLSS's network instead of FSR4 (the default until the 2026-10-26 packages)
 
 All three Proton packages ship [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
 1.1.0 with [HelixSR](https://github.com/lonewolf0622/HelixSR) 2.0.0, both by
@@ -964,8 +1000,9 @@ PROTON_USE_OPTISCALER=freefg-helixsr %command%  # FreeFG's frame generation with
 
 Switching between them is safe: on a game launch the wrapper removes every
 file and folder another variant left in the prefix (its `.ini` files and logs
-included, which Proton's own replacement keeps), so a game never runs with
-pieces of two variants.
+included, which Proton's own replacement keeps), and the prefix's
+`OptiScaler.ini` too, so the new variant seeds from scratch and a game never
+runs with pieces of two variants.
 
 Since HelixSR 2.0 and Scaler 1.1.0 the Scaler is OptiScaler first: HelixSR is its
 FidelityFX upscaler for Direct3D 12, and also for Direct3D 11 and Vulkan games

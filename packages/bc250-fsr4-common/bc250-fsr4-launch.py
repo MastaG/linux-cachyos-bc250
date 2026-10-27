@@ -417,41 +417,6 @@ def seed_once(preset, inherited):
     return kept
 
 
-def leaving_variant_keys(config, inherited, selected):
-    """Hand back `auto` for the keys a variant that is leaving the prefix wrote.
-
-    seed_once treats anything in the prefix's ini that is not `auto` as somebody's
-    decision, and a variant's own layer is what writes those keys at seed time. So a
-    FreeFG run that set FrameGen.Enabled=true keeps governing the default path after
-    the switch, and Ghost of Tsushima pays for it: HelixSR frame generation there
-    costs 80-90 fps down to ~50 (confirmed by users, measured on board1 2026-10-24).
-    The per-variant files are already cleaned on a switch; the ini is shared, so its
-    keys need the same treatment. A player's answer for the variant they are on keeps
-    persisting -- only what the leaving variant's layer wrote goes back to `auto`, and
-    only keys this build's ini defines, since protonfixes refuses the others.
-    """
-    payload, ini = payload_dir(inherited), prefix_ini(inherited)
-    if selected == "0" or payload is None or not payload.is_dir():
-        return {}
-    if not ini or not ini.is_file():
-        return {}
-    entries = json.loads((TOOL / config["manifest"]).read_text()).get("optiscaler", [])
-    files = {e.get("version"): set(e.get("md5_hash", {})) for e in entries}
-    if selected not in files:
-        return {}
-    keys = {k.lower() for k in config.get("optiscaler_ini_keys", {}).get(selected, [])}
-    reset = {}
-    for version, layer in config.get("optiscaler_variant_preset", {}).items():
-        if version == selected or not layer or version not in files:
-            continue
-        # Files only that variant has, still in the prefix: that is what it wrote.
-        theirs = files[version] - files[selected]
-        if not any((payload / name).exists() for name in theirs):
-            continue
-        for key in layer:
-            if key.lower() in keys:
-                reset[key] = "auto"
-    return reset
 
 
 def optiscaler_version(config, requested):
@@ -500,7 +465,7 @@ def extra_preset(value):
     return extra
 
 
-def environment(config, inherited, *, game):
+def environment(config, inherited, *, game, menu=None):
     env = dict(inherited)
     # /usr is read-only, so Proton's own imports cannot drop __pycache__ beside
     # them. Python tolerates that silently, but saying so avoids the attempts.
@@ -561,12 +526,22 @@ def environment(config, inherited, *, game):
         load_native(env, proxy)
 
     preset = seed_once(config["preset"], inherited)
-    preset.update(leaving_variant_keys(config, inherited, env["PROTON_USE_OPTISCALER"]))
     # A variant's own entries (HelixSR's library paths), only when that pinned
     # version is the one being launched -- and enforced every launch, not seeded
     # (see seed_once: a variant switch reuses the prefix's ini). Debug and
     # BC250_OPTISCALER_EXTRA go on top.
+    # A variant's own entries, only when that pinned version is the one being
+    # launched. The wiring (library paths, the upscaler pick) is enforced every
+    # launch -- a variant switch reuses the prefix's ini (see seed_once). Its
+    # frame-gen keys are seeded on that variant's first launch only: re-forcing
+    # them is what undid an overlay "FG off" + Save at the next start.
     preset.update(config.get("optiscaler_variant_preset", {}).get(env["PROTON_USE_OPTISCALER"], {}))
+    preset.update(seed_once(config.get("optiscaler_variant_seed", {}).get(env["PROTON_USE_OPTISCALER"], {}),
+                            inherited))
+    if menu:
+        # The player chose in the menu. A decision for this game, like a launch
+        # option, so it goes on top of the seed filter.
+        preset.update(menu)
     # null drops a shared key the variant's OptiScaler does not have: protonfixes
     # refuses a launch on a key missing from the ini, and FreeFG's OptiScaler
     # writes its ini without the old FSR.Fsr4ForceModel.
@@ -597,10 +572,173 @@ def environment(config, inherited, *, game):
     return env
 
 
+def variant_files(config):
+    """Each pinned OptiScaler version and the payload files protonfixes installs for it."""
+    entries = json.loads((TOOL / config["manifest"]).read_text()).get("optiscaler", [])
+    return {e.get("version"): set(e.get("md5_hash", {})) for e in entries}
+
+
+def installed_variant(config, inherited):
+    """The pinned version this prefix was last launched with, or None.
+
+    protonfixes records it per installed file in <compatdata>/upscaler_files. A
+    version this package does not pin (an older package's) is None: that prefix
+    is switched, and so starts fresh, on its next launch whatever is picked.
+    """
+    data = inherited.get("STEAM_COMPAT_DATA_PATH", "").strip()
+    if not data:
+        return None
+    try:
+        tracked = json.loads((Path(data) / "upscaler_files").read_text())["opti_files"]
+        versions = [item.get("version") for item in tracked.values()]
+    except (OSError, ValueError, KeyError, AttributeError, TypeError):
+        return None
+    if not versions:
+        return None
+    version = max(set(versions), key=versions.count)
+    return version if version in variant_files(config) else None
+
+
+# The variants the menu offers, by the short names PROTON_USE_OPTISCALER takes.
+MENU_VARIANTS = ("freefg-helixsr", "freefg", "helixsr", "fsr412f")
+
+
+def menu_names(config):
+    """Pinned version -> its menu name, for the variants the menu offers."""
+    aliases = config.get("optiscaler_aliases", {})
+    return {aliases[name]: name for name in MENU_VARIANTS if name in aliases}
+
+
+# Where Steam Linux Runtime's pressure-vessel keeps its client inside the
+# container, and beside the runtime outside it.
+LAUNCH_CLIENT = "steam-runtime-launch-client"
+
+
+def launch_client(inherited):
+    found = shutil.which(LAUNCH_CLIENT)
+    if found:
+        return found
+    candidates = [Path("/run/pressure-vessel/pv-from-host/bin") / LAUNCH_CLIENT]
+    for tool in inherited.get("STEAM_COMPAT_TOOL_PATHS", "").split(":"):
+        if tool:
+            candidates.append(Path(tool) / "pressure-vessel/bin" / LAUNCH_CLIENT)
+    return next((str(c) for c in candidates if c.is_file()), None)
+
+
+# What the menu needs from the launch when it runs outside the container.
+MENU_ENV = ("STEAM_COMPAT_DATA_PATH", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
+            "XDG_RUNTIME_DIR", "SteamAppId", "SteamGameId", "PROTON_OPTISCALER_MENU",
+            "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED", "BC250_MENU_DEFAULT")
+
+
+def menu_choice(config, inherited):
+    """Ask the first-launch menu which variant to run and what to change.
+
+    Returns (variant, change, switched). variant is a short name, or None when
+    the launch already says (PROTON_USE_OPTISCALER, an anti-cheat game) or the
+    prefix has no answer of its own yet. It never blocks a launch: no display, no
+    gi/GTK4/SDL3, any error, and the game starts on the prefix's current variant.
+    """
+    import subprocess
+    menu = TOOL / "bc250-fsr4-menu.py"
+    prefix = inherited.get("STEAM_COMPAT_DATA_PATH", "").strip()
+    if not prefix or not menu.is_file():
+        return None, {}, False
+    if inherited.get("PROTON_USE_OPTISCALER", "").strip() or inherited.get("PROTON_FSR4_UPGRADE") == "0":
+        return None, {}, False
+    if anticheat_reason(inherited) and not anticheat_ignored(inherited):
+        return None, {}, False
+    names = menu_names(config)
+    env = dict(inherited)
+    env["BC250_MENU_INSTALLED"] = names.get(installed_variant(config, inherited), "")
+    env["BC250_MENU_DEFAULT"] = names.get(config["optiscaler_version"], "")
+    # The SLR and GE packages run this inside Steam Linux Runtime 4
+    # ("require_tool_appid" 4183110), which has no python-gobject and no GTK4.
+    # Steam's own launcher service runs the menu beside the Steam client instead,
+    # where the host's python, GTK4 and SDL3 are. The native package runs on the
+    # host and needs no hop.
+    command = [sys.executable, str(menu)]
+    if Path("/run/pressure-vessel").is_dir():
+        client = launch_client(inherited)
+        if not client:
+            return None, {}, False
+        command = [client, "--alongside-steam",
+                   *("--pass-env=" + name for name in MENU_ENV), "--", "python3", str(menu)]
+
+    def ask(args):
+        try:
+            done = subprocess.run([*command, *args], env=env, capture_output=True, text=True)
+        except (OSError, ValueError):
+            return {}
+        sys.stderr.write(done.stderr)
+        if done.returncode != 0:
+            return {}
+        return dict(line.split("=", 1) for line in done.stdout.splitlines() if "=" in line)
+
+    decided = ask(["--decide"])
+    current = decided.get("current") or None
+    if decided.get("show") != "1":
+        return current, {}, False
+    choice = ask([])
+    if not choice.get("preset"):
+        return current, {}, False
+    change = dict(part.split("=", 1) for part in choice.get("changed", "").split(";") if "=" in part)
+    return choice["preset"], change, choice.get("switched") == "1"
+
+
+def variant_switched(config, inherited):
+    """True when this prefix still carries files only some other variant has.
+
+    That is a switch, and a switch means starting fresh: the prefix's shared
+    OptiScaler.ini goes, protonfixes re-copies a missing one, and the new variant
+    seeds from scratch. This is the disk test that replaced the 1122e656 key reset,
+    and it holds for every switch, made in the menu or by launch option.
+    """
+    requested = inherited.get("PROTON_USE_OPTISCALER", "").strip() or config["optiscaler_version"]
+    version = optiscaler_version(config, requested)
+    payload = payload_dir(inherited)
+    if version == "0" or not payload or not payload.is_dir():
+        return False
+    files = variant_files(config)
+    if version not in files:
+        return False
+    for name, theirs in files.items():
+        if name == version or not theirs:
+            continue
+        if any((payload / other).exists() for other in theirs - files[version]):
+            return True
+    return False
+
+
+def start_fresh_on_switch(config, inherited, switched=False):
+    """Remove the prefix's OptiScaler.ini when this launch switches variant.
+
+    protonfixes re-copies a missing ini, so the new variant seeds from scratch.
+    Runs before environment() reads the ini, or the leaving variant's answers
+    (FreeFG's FrameGen.Enabled=true) would count as the player's.
+    """
+    if not (switched or variant_switched(config, inherited)):
+        return False
+    ini = prefix_ini(inherited)
+    if ini and ini.is_file():
+        ini.unlink()
+    return True
+
+
 def main():
     config = json.loads((TOOL / "bc250-fsr4-config.json").read_text())
     game = game_launch(sys.argv[1:], os.environ)
-    env = environment(config, os.environ, game=game)
+    variant, change, menu_switched = menu_choice(config, os.environ) if game else (None, {}, False)
+    if variant == "off":
+        # The menu's "No upscaling" is the documented opt-out: no FSR4 provider,
+        # and so no OptiScaler either (see environment()).
+        os.environ["PROTON_FSR4_UPGRADE"] = "0"
+        os.environ["PROTON_USE_OPTISCALER"] = "0"
+    elif variant:
+        os.environ["PROTON_USE_OPTISCALER"] = variant
+    if game:
+        start_fresh_on_switch(config, os.environ, menu_switched)
+    env = environment(config, os.environ, game=game, menu=change)
     if game:
         # Before Proton runs protonfixes, which then installs the selected
         # variant over a folder with no other variant's files in it.
@@ -609,7 +747,6 @@ def main():
     # descriptor, exactly as if it had run Proton directly.
     proton = str(TOOL / config["proton"])
     os.execve(proton, [proton, *sys.argv[1:]], env)
-
 
 if __name__ == "__main__":
     try:
