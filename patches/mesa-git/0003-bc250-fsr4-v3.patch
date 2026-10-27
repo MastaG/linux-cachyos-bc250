@@ -57,17 +57,18 @@ They now also require the new nir_shader_compiler_options::bc250_sdot_mad24,
 which RADV sets only for ACO on GFX1013; every other driver keeps
 upstream's sdot_4x8_iadd lowering unchanged.
 ---
- .../instruction_selection/aco_select_nir_alu.cpp   |  17 +++
- src/amd/vulkan/radv_shader.c                       | 135 ++++++++++++++++++++-
- src/compiler/nir/nir_opt_algebraic.py              |  57 ++++++++-
- src/compiler/nir/nir_shader_compiler_options.h     |   4 +
- 4 files changed, 207 insertions(+), 6 deletions(-)
+src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp   | 17 +++++++++++++++++
+src/amd/vulkan/radv_shader.c                                    | 135 +++++++++++++++++++++
+src/compiler/nir/nir_opt_algebraic.py                           | 57 +++++++++++++++++++++
+src/compiler/nir/nir_shader_compiler_options.h                  |  5 ++++-
+4 files changed, 207 insertions(+), 7 deletions(-)
+---
 
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-index 3802730edce..83b1d18d3e5 100644
+index 523e1d871dc..1320b2fc401 100644
 --- a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-@@ -1801,6 +1801,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1804,6 +1804,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
@@ -75,7 +76,7 @@ index 3802730edce..83b1d18d3e5 100644
     case nir_op_imul24_relaxed: {
        if (dst.regClass() == s1) {
           emit_sop2_instruction(ctx, instr, aco_opcode::s_mul_i32, dst, false, 0x3);
-@@ -1811,6 +1812,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1814,6 +1815,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
@@ -99,7 +100,7 @@ index 3802730edce..83b1d18d3e5 100644
        if (dst.regClass() == s1) {
           Operand op1(get_alu_src(ctx, instr->src[0]));
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 1eda4b4d158..ec693f331ea 100644
+index 43fa879febc..841cfd084fd 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -62,6 +62,8 @@ get_nir_options_for_stage(struct radv_compiler_info *compiler_info, mesa_shader_
@@ -259,7 +260,7 @@ index 1eda4b4d158..ec693f331ea 100644
        NIR_PASS(_, nir, nir_opt_scalar_array_vars_to_vec, nir_var_function_temp | nir_var_mem_shared);
  
 diff --git a/src/compiler/nir/nir_opt_algebraic.py b/src/compiler/nir/nir_opt_algebraic.py
-index ae72edc1734..05b9a7f0a97 100644
+index cbea9b8fa2b..2fdc0930f19 100644
 --- a/src/compiler/nir/nir_opt_algebraic.py
 +++ b/src/compiler/nir/nir_opt_algebraic.py
 @@ -444,10 +444,47 @@ for sz in (16, 32, 64):
@@ -350,4 +351,3 @@ index 0b5a961ad8f..ad32401a011 100644
  
 -- 
 2.55.0
-

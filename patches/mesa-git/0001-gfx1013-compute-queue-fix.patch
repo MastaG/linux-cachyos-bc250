@@ -6,8 +6,9 @@ Subject: [PATCH 1/9] radv,ac: GFX1013 compute queue fix (identity, exposure,
 
 Expose the GFX1013 ACE compute queue when paired with the BC-250 kernel fixes and route GFX1013 through the async-compute threadgroup workaround. Keep the GFX10.1 IP correction where it is not already present upstream.
 ---
- src/amd/common/ac_gpu_info.c | 11 +++++------
- 1 file changed, 5 insertions(+), 6 deletions(-)
+src/amd/common/ac_gpu_info.c   | 12 +++++-------
+1 files changed, 5 insertions(+), 7 deletions(-)
+---
 
 diff --git a/src/amd/common/ac_gpu_info.c b/src/amd/common/ac_gpu_info.c
 index 9741b41a68a..af4e511eeb3 100644
@@ -40,4 +41,3 @@ index 9741b41a68a..af4e511eeb3 100644
      * the compute queue.
 -- 
 2.55.0
-

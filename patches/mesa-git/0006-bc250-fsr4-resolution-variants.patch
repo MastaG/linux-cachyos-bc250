@@ -35,12 +35,13 @@ here. Not measured by us on real hardware.
 Origin: bc250-fsr4-discord-20260907 bundle,
 upgrade-from-previous/0003-resolution-over-composed.patch
 ---
- src/amd/vulkan/radv_physical_device.c | 12 +++++
- src/amd/vulkan/radv_shader.c          | 84 +++++++++++++++++++++++++++++++++++
- 2 files changed, 96 insertions(+)
+src/amd/vulkan/radv_physical_device.c   | 12 ++++++++++++
+src/amd/vulkan/radv_shader.c            | 85 +++++++++++++++++++++
+2 files changed, 96 insertions(+), 1 deletions(-)
+---
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 8e8516c84f3..b2a3e16303b 100644
+index 23b9f2fda18..afef22d185b 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -386,7 +386,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -64,7 +65,7 @@ index 8e8516c84f3..b2a3e16303b 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 4c48c3a0e69..d05151f2759 100644
+index e996d7bb966..5522964676f 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8525,6 +8525,30 @@ bc250_fsr4_profile(const void *bytes, size_t size)
@@ -188,4 +189,3 @@ index 4c48c3a0e69..d05151f2759 100644
     if (nir->info.uses_abort) {
 -- 
 2.55.0
-

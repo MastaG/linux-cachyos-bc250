@@ -26,12 +26,13 @@ more launches on another board. Kept opt-in for that reason.
 
 Origin: bc250-fsr4-20260906 research kit, source/composed-over-2.84.patch
 ---
- src/amd/vulkan/radv_physical_device.c |    8 +
- src/amd/vulkan/radv_shader.c          | 4173 ++++++++++++++++++++++++++++++++-
- 2 files changed, 4176 insertions(+), 5 deletions(-)
+src/amd/vulkan/radv_physical_device.c   |  8 ++++++++
+src/amd/vulkan/radv_shader.c            | 4174 +++++++++++++++++++++
+2 files changed, 4176 insertions(+), 6 deletions(-)
+---
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index d08fda20a2a..8e8516c84f3 100644
+index 94c62eb1f9d..23b9f2fda18 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -378,6 +378,14 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -50,7 +51,7 @@ index d08fda20a2a..8e8516c84f3 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 41b7b3a7627..4c48c3a0e69 100644
+index 49c387f0b7d..e996d7bb966 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8499,7 +8499,7 @@ bc250_fsr4_dynamic_columns(nir_shader *nir, unsigned profile)
@@ -4270,4 +4271,3 @@ index 41b7b3a7627..4c48c3a0e69 100644
        progress = false;
 -- 
 2.55.0
-
