@@ -36,9 +36,9 @@ from pathlib import Path
 
 # The known-good build. Every preset key is present in its OptiScaler.ini, and
 # it is the build the upstream BC-250 FSR4 work was validated against.
-FALLBACK_TAG = "nightly-20261015"
-FALLBACK_ASSET = "OptiScaler_v10.0.0-pre1_20261015.7z"
-FALLBACK_SHA256 = "4690a8a68814919d8f7e6252f39d2121a8c878c4f74d2020bb9132dfb546afde"
+FALLBACK_TAG = "nightly-20261025"
+FALLBACK_ASSET = "OptiScaler_v10.0.0-pre1_20261025.7z"
+FALLBACK_SHA256 = "6bb2e9cd6ac0204c76c974df1c202afb1fc7a765844a9ccf608103557aa595fe"
 
 NIGHTLY_REPO = "optiscaler/OptiScaler-nightly"
 NIGHTLY_URL = f"https://github.com/{NIGHTLY_REPO}/releases/download"
