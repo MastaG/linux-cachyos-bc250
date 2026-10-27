@@ -68,6 +68,7 @@ fsr4_payload_source_paths() {
     printf '%s\n' \
         "$root/packages/bc250-fsr4-common/patches/$base/0001-pinned-upscaler-manifest.patch" \
         "$root/packages/bc250-fsr4-common/bc250-fsr4-launch.py" \
+        "$root/packages/bc250-fsr4-common/bc250-fsr4-menu.py" \
         "$root/packages/bc250-fsr4-common/optiscaler-preset.json" \
         "$root/packages/bc250-fsr4-common/proton-shim.sh" \
         "$root/packages/bc250-fsr4-common/licenses/FidelityFX-SDK-4.0.2.txt" \
