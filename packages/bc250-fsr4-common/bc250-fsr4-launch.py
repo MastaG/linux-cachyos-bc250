@@ -311,18 +311,26 @@ def freefg_environment(env, layer, inherited):
 FREEFG_LOGS = ("OptiScaler/BC250-MFG.log", "OptiScaler/BC250-XeFG-fast.log")
 
 
+# Folders an older package put into prefixes that no variant uses any more, so
+# the manifest no longer names them. HelixSR-fsrfg is HelixSR Scaler 1.1.0's
+# HelixSR 2.0 folder: Scaler 2.0.0 still looks for it beside its proxy when
+# HelixSR/helixsr.dll is missing, and the HelixSR inside it is gone from the
+# package.
+RETIRED_FOLDERS = ("HelixSR-fsrfg",)
+
+
 def clean_other_variants(config, env, inherited):
     """Remove what another OptiScaler variant left in this prefix.
 
     Switching PROTON_USE_OPTISCALER makes protonfixes replace the payload, but
     it only removes the files it checksums: .ini files stay (HelixSR Scaler's
-    HelixSR-fsrfg/helixsr.ini, for one), as does anything written at run time
-    (helixsr.log, FreeFG's logs). A leftover HelixSR-fsrfg folder is not inert
+    HelixSR/helixsr.ini, for one), as does anything written at run time
+    (helixsr.log, FreeFG's logs). A leftover HelixSR folder is not inert
     either: HelixSR Scaler looks for it beside its proxy.
 
     So every file the manifest lists for some variant but not for the selected
     one is removed, and so is every folder that only other variants use, with
-    whatever was written into it. Files the selected variant also has are left
+    whatever was written into it, and every folder of RETIRED_FOLDERS. Files the selected variant also has are left
     to protonfixes, which replaces them. Nothing outside the payload folder is
     touched, and nothing at all when OptiScaler is off.
     """
@@ -345,7 +353,7 @@ def clean_other_variants(config, env, inherited):
     stale = set().union(*(set(e["md5_hash"]) for e in entries)) - keep
     if version not in config.get("freefg", {}):
         stale |= set(FREEFG_LOGS)
-    stale_folders = folders(stale) - folders(keep)
+    stale_folders = (folders(stale) | set(RETIRED_FOLDERS)) - folders(keep)
 
     root = payload.resolve()
 
@@ -600,7 +608,7 @@ def installed_variant(config, inherited):
 
 
 # The variants the menu offers, by the short names PROTON_USE_OPTISCALER takes.
-MENU_VARIANTS = ("freefg-helixsr", "freefg", "helixsr", "fsr412f")
+MENU_VARIANTS = ("freefg-helixsr", "freefg-hlxfsr4", "freefg", "helixsr", "fsr412f")
 
 
 def menu_names(config):

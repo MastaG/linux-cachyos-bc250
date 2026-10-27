@@ -262,10 +262,12 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \\\n'
     '        --helixsr "${srcdir}/HelixSR-2.0.0-network-fg.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \\\n'
-    '        --helixsr-scaler "${srcdir}/HelixSR-Scaler-1.1.0-core.zip" \\\n'
-    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \\\n'
-    '        --freefg "${srcdir}/freefg-1.1.3.1.zip" \\\n'
-    '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.1.3.1" \\\n'
+    '        --helixsr-ngx "${srcdir}/HelixSR-3.0.0-network.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.0.0" \\\n'
+    '        --helixsr-scaler "${srcdir}/HelixSR-Scaler-2.0.0-core.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.0.0" \\\n'
+    '        --freefg "${srcdir}/freefg-1.1.4.zip" \\\n'
+    '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.1.4" \\\n'
     '        --freefg-ini "${srcdir}/OptiScaler-bc250-03db4f8.ini" \\\n'
     '        --freefg-bridge fsr412f \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
@@ -345,15 +347,22 @@ payload_sources = [
     # NVIDIA components inside it remain NVIDIA's property.
     ("HelixSR-2.0.0-network-fg.zip", f"{payload_base}/HelixSR-2.0.0-network-fg.zip",
      "833050356f12215da35096750e9856aa56b0e8eb746e218c5ee01be5bd9fa96f", True),
-    # HelixSR Scaler 1.1.0 (OptiScaler with HelixSR built in, GPL-3.0): the default.
-    ("HelixSR-Scaler-1.1.0-core.zip", f"{payload_base}/HelixSR-Scaler-1.1.0-core.zip",
-     "c798b51b3802031627cd118f7e9aee5b98de552fb45f4fe7e28d0e688d1646df", True),
-    # FreeFG 1.1.3.1 (daniel-h-0): Intel XeSS frame generation with its own BC-250
+    # HelixSR 3.0.0 (lonewolf0622, pre-release): HLX DLSS (HelixSR/helixsr.dll,
+    # NVIDIA's DLSS Model E network, for HelixSR Scaler) and HLX FSR 4 (AMD's FSR 4
+    # network on HelixSR's pipeline). Mirrored after its own setup built both; per
+    # its author those parts remain NVIDIA's and AMD's.
+    ("HelixSR-3.0.0-network.zip", f"{payload_base}/HelixSR-3.0.0-network.zip",
+     "2ff7e862d438dd40f13c0d55e996d8cc257ade06211749aa7c00141a4f60b636", True),
+    # HelixSR Scaler 2.0.0 (OptiScaler with HelixSR built in, GPL-3.0), from the
+    # HelixSR 3.0.0 download: only what differs from the nightly.
+    ("HelixSR-Scaler-2.0.0-core.zip", f"{payload_base}/HelixSR-Scaler-2.0.0-core.zip",
+     "9806e9ebc6e55e8b38877ac89a27f4c02c164a2f9a2f9affc78c09b62bccdb91", True),
+    # FreeFG 1.1.4 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
     # Mirrored release zip; its OptiScaler build is GPL-3.0, and the matching
-    # freefg-1.1.3.1-source.zip is mirrored beside it.
-    ("freefg-1.1.3.1.zip", f"{payload_base}/freefg-1.1.3.1.zip",
-     "2aff8ab9c9e4ce5de36bc95a2f1246e699850a4e68675698e6a8336fe8f36446", True),
+    # freefg-1.1.4-source.zip is mirrored beside it.
+    ("freefg-1.1.4.zip", f"{payload_base}/freefg-1.1.4.zip",
+     "6cebce07d379ca89eb49a8c845fb72293858acc17281c4257e0b4e5bce40ea43", True),
     # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-03db4f8),
     # pinned by commit: the freefg variants ship this build and this ini.
     ("OptiScaler-bc250-03db4f8.ini",

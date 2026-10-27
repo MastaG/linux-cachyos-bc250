@@ -97,7 +97,7 @@ fakenvapi did not bring settings of its own, and stays editable in the prefix
 because `.ini` files are excluded from the payload's per-file checksums.
 
 HelixSR is the deliberate exception: its `helixsr.ini` ships as released, so it
-writes `helixsr.log` beside its DLL (`system32/umu/HelixSR-fsrfg` with the
+writes `helixsr.log` beside its DLL (`system32/umu/HelixSR` with the
 Scaler) on every launch. That log is what its author asks for with a problem
 report, and a package that switched it off left players unable to send one.
 
