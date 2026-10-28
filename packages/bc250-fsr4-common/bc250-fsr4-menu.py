@@ -30,9 +30,9 @@ import sys
 # name, label, sub-label. The order is the order in the window.
 PRESETS = [
     ("freefg-helixsr", "FreeFG + HelixSR", "FreeFG 1.1.4 frame generation, HelixSR 2.0.0 upscaler"),
-    ("freefg-hlxfsr4", "FreeFG + HLX FSR 4", "FreeFG 1.1.4 frame generation, HelixSR 3.0.0's HLX FSR 4 upscaler"),
+    ("freefg-hlxfsr4", "FreeFG + HLX FSR 4", "FreeFG 1.1.4 frame generation, HelixSR 3.1.0's HLX FSR 4 upscaler"),
     ("freefg", "FreeFG + FSR4 RC12", "FreeFG 1.1.4 frame generation, FSR4 RC12 upscaler"),
-    ("helixsr", "HelixSR Scaler", "HelixSR Scaler 2.0.0, HelixSR 3.0.0: HLX DLSS, or HLX FSR 4 from its menu"),
+    ("helixsr", "HelixSR Scaler", "HelixSR Scaler 2.1.0, HelixSR 3.1.0: HLX DLSS, or HLX FSR 4 from its menu"),
     ("fsr412f", "FSR4 RC12", "FSR4 RC12 upscaler only, no FreeFG"),
     (OFF := "off", "No upscaling", "The game as it ships: no OptiScaler, no FSR4"),
 ]
@@ -48,7 +48,7 @@ HINT = "Launch your game with PROTON_OPTISCALER_MENU=1 %command% to show this me
 # Which keys mean "frame generation on" for each build, verified from the build's
 # own OptiScaler.ini comments and the HelixSR Scaler README:
 #   freefg*:               [FrameGen] Enabled (+ FGOutput=xefg, that is the wiring)
-#   helixsr (the Scaler):  [FrameGen] Enabled + FG_WIRING -- HelixSR 3.0 has no
+#   helixsr (the Scaler):  [FrameGen] Enabled + FG_WIRING -- HelixSR 3.x has no
 #                          frame generation of its own, OptiScaler's is all there is
 #   fsr412f:               [FrameGen] Enabled + FG_WIRING, the stock nightly's keys
 FG_ON = {

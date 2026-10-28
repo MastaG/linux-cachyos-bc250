@@ -198,14 +198,15 @@ picks one:
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
 - **`helixsr` (the Scaler)** — built with `--helixsr-scaler` and
-  `--helixsr-ngx` (HelixSR 3.0.0 after its setup, mirrored as
-  `HelixSR-3.0.0-network.zip`). [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
-  2.0.0 is OptiScaler v10 built on the same nightly (20261025) with HelixSR's
+  `--helixsr-ngx` (HelixSR 3.1.0 after its setup, mirrored as
+  `HelixSR-3.1.0-network.zip`). [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
+  2.1.0 is OptiScaler v10 built on the same nightly (20261025) with HelixSR's
   upscalers in its list: every other library is byte-identical, so its archive
-  (`HelixSR-Scaler-2.0.0-core.zip`) holds only `OptiScaler.dll`,
+  (`HelixSR-Scaler-2.1.0-core.zip`, taken from the copy in the HelixSR 3.1.0
+  download, which its setup installs) holds only `OptiScaler.dll`,
   `OptiScaler.ini`, the licences, its own OptiPatcher (shipped instead of the
   pinned one) and the nightly's AMD FidelityFX DLL, which it keeps as
-  `OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll`. HelixSR 3.0 is two DLLs:
+  `OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll`. HelixSR 3.x is two DLLs:
   HLX DLSS, `HelixSR/helixsr.dll` next to the proxy (`umu/`) with its
   `helixsr.ini` as released, the Scaler's DLSS upscaler; and HLX FSR 4, which
   takes the bridge's place as `OptiScaler/amd_fidelityfx_upscaler_dx12.dll`.
@@ -214,7 +215,7 @@ picks one:
   what HelixSR's installer writes for this layout: `Upscalers.Dx12Upscaler =
   dlss` (seeded once, like the frame generation keys, so a switch to HLX FSR 4
   in the Insert menu sticks), `DLSS.HelixSR = true`, and `HelixSR.Int8 = off`.
-  HelixSR 3.0 has no frame generation, so the menu's switch is OptiScaler's
+  HelixSR 3.x has no frame generation, so the menu's switch is OptiScaler's
   `FrameGen.Enabled`, plus `FGInput = upscaler` and `FGOutput = fsrfg` where the
   ini still has them auto/nofg (both default to no frame generation; FSR4 RC12
   gets the same). The pinned version is `<nightly>-helixsr-scaler2`, not

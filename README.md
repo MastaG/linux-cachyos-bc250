@@ -895,8 +895,8 @@ PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork RC11, 4.1.1r11 — 
 PROTON_USE_OPTISCALER=fsr412f %command%   # the same fork's RC12, 4.1.1r12 — newest bridge, opt-in
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
-PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR Scaler 2.0.0 with HelixSR 3.0.0 (HLX DLSS, HLX FSR 4)
-PROTON_USE_OPTISCALER=freefg-hlxfsr4 %command% # FreeFG 1.1.4 with HelixSR 3.0.0's HLX FSR 4
+PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR Scaler 2.1.0 with HelixSR 3.1.0 (HLX DLSS, HLX FSR 4)
+PROTON_USE_OPTISCALER=freefg-hlxfsr4 %command% # FreeFG 1.1.4 with HelixSR 3.1.0's HLX FSR 4
 PROTON_USE_OPTISCALER=helixsr-ffx %command% # HelixSR as the stock nightly's FidelityFX library
 PROTON_USE_OPTISCALER=fsr411rc9 %command%  # the older RC9 build
 PROTON_USE_OPTISCALER=fsr411rc10 %command% # the older RC10 build
@@ -973,21 +973,22 @@ Please report whether any of them helps or hurts.
 ### HelixSR Scaler: HLX DLSS and HLX FSR 4
 
 All three Proton packages ship [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
-2.0.0 with [HelixSR](https://github.com/lonewolf0622/HelixSR) 3.0.0 (a pre-release),
+2.1.0 with [HelixSR](https://github.com/lonewolf0622/HelixSR) 3.1.0,
 both by lonewolf0622, the DirectMesh author, as `PROTON_USE_OPTISCALER=helixsr`
 or "HelixSR Scaler" in the menu. The Scaler is OptiScaler (GPL-3.0, source
-published; 2.0.0 is built on the same nightly, 20261025, as the stock variant)
+published; 2.1.0 is built on the same nightly, 20261025, as the stock variant)
 with HelixSR's two upscalers in its list:
 
 - **HLX DLSS**: NVIDIA's DLSS neural network (Model E) as ordinary DirectX 12
   compute shaders, so no NVIDIA GPU or driver is needed. It is the Scaler's DLSS
   upscaler; pick DLSS in the game (OptiScaler's spoofing makes games offer it).
-  This is where the Scaler starts.
-- **HLX FSR 4**: AMD's FSR 4 network on HelixSR's own, faster pipeline. Switch to
-  it in the Insert menu; the choice is kept from then on. It also carries the
+  This is where the Scaler starts. Since 3.1 it also works in Vulkan games.
+- **HLX FSR 4**: AMD's FSR 4 network on HelixSR's own, faster pipeline (3.1 adds a
+  faster pre- and post-pass on AMD GPUs, same picture). Since Scaler 2.1 it is an
+  upscaler of its own in the Insert menu's list; the choice is kept from then on. It also carries the
   Direct3D 11 and Vulkan games (OptiScaler's `ffx_12` route).
 
-HelixSR 3.0 has **no frame generation of its own** any more; OptiScaler's
+HelixSR 3.x has **no frame generation of its own** any more; OptiScaler's
 is what the menu's frame generation switch turns on: OptiFG into FSR frame
 generation (`FrameGen.FGInput=upscaler`, `FrameGen.FGOutput=fsrfg`). XeFG can
 be picked in the overlay instead. HelixSR 2.0's DLSS frame generation is gone with the old Scaler 1.1.0; the
@@ -1023,8 +1024,8 @@ author, NVIDIA's property, and HLX FSR 4's shaders are built from AMD's FSR 4
 driver file (`amdxcffx64.dll` 2.4.0.4370); neither is covered by any licence
 here. Its release contains neither: its setup script builds them from NVIDIA's
 public DLSS 310.7.0 DLL and from AMD's driver package. We ran that script once
-and mirrored the result (`HelixSR-3.0.0-network.zip`; the Scaler's own files
-are `HelixSR-Scaler-2.0.0-core.zip`, HelixSR 2.0.0 is
+and mirrored the result (`HelixSR-3.1.0-network.zip`; the Scaler's own files
+are `HelixSR-Scaler-2.1.0-core.zip`, HelixSR 2.0.0 is
 `HelixSR-2.0.0-network-fg.zip`), so the Proton packages need no setup step and
 nothing is downloaded at game launch. Like the unsigned bridges it is pinned by
 SHA256 and its origin is written into the prefix
@@ -1048,8 +1049,8 @@ upscaler, with frame generation still XeFG:
 - `freefg-helixsr` (the packages' default): HelixSR 2.0.0, as FreeFG's own Setup
   offers; cheaper per frame than the fork's bridge on the BC-250 (in Spider-Man 2
   RC11 took about 4.8 ms from 1512×856 to 1440p, HelixSR 1.7 ms).
-- `freefg-hlxfsr4`: HelixSR 3.0.0's HLX FSR 4 (see above). On a BC-250 in Shadow
-  of the Tomb Raider it took 1.17 ms from 720p to 1080p, against 3.6 ms for RC11 measured there earlier.
+- `freefg-hlxfsr4`: HelixSR 3.1.0's HLX FSR 4 (see above). On a BC-250 in Shadow
+  of the Tomb Raider 3.0.0's took 1.17 ms from 720p to 1080p, against 3.6 ms for RC11 measured there earlier.
 
 FreeFG 1.1.4 adds optional generated-frame scaling (50–100% or a resolution
 limit, with a choice of filters); the default, and what this package leaves it
