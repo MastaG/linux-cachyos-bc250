@@ -745,6 +745,12 @@ on the desktop, and it waits until you choose.
 - The variant the game is on now is pre-selected, and the frame generation box
   shows what the game really does now — including what you saved in the
   OptiScaler overlay. Pressing Start without touching it changes nothing.
+- HelixSR Scaler and FSR4 RC12 have no frame generator picked by default.
+  Turning frame generation on there also picks one: OptiFG as the input and FSR
+  frame generation as the output, unless you already picked something else in
+  the overlay. A game that got frame generation turned on without that (the
+  first Scaler 2.0 package) gets it the next time you press Start with the box
+  unticked.
 - Choosing another upscaler starts that one fresh: its files and a new
   `OptiScaler.ini` replace the old ones, so settings saved in the overlay for the
   previous upscaler are gone.
@@ -982,8 +988,9 @@ with HelixSR's two upscalers in its list:
   Direct3D 11 and Vulkan games (OptiScaler's `ffx_12` route).
 
 HelixSR 3.0 has **no frame generation of its own** any more; OptiScaler's
-(XeFG, FSR frame generation) is what the menu's frame generation switch turns
-on. HelixSR 2.0's DLSS frame generation is gone with the old Scaler 1.1.0; the
+is what the menu's frame generation switch turns on: OptiFG into FSR frame
+generation (`FrameGen.FGInput=upscaler`, `FrameGen.FGOutput=fsrfg`). XeFG can
+be picked in the overlay instead. HelixSR 2.0's DLSS frame generation is gone with the old Scaler 1.1.0; the
 2.0 upscaler stays in `freefg-helixsr` and `helixsr-ffx`.
 
 The Scaler brings its own OptiScaler build, so the stock nightly and the other

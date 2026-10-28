@@ -215,7 +215,9 @@ picks one:
   dlss` (seeded once, like the frame generation keys, so a switch to HLX FSR 4
   in the Insert menu sticks), `DLSS.HelixSR = true`, and `HelixSR.Int8 = off`.
   HelixSR 3.0 has no frame generation, so the menu's switch is OptiScaler's
-  `FrameGen.Enabled`. The pinned version is `<nightly>-helixsr-scaler2`, not
+  `FrameGen.Enabled`, plus `FGInput = upscaler` and `FGOutput = fsrfg` where the
+  ini still has them auto/nofg (both default to no frame generation; FSR4 RC12
+  gets the same). The pinned version is `<nightly>-helixsr-scaler2`, not
   `<nightly>-helixsr`: a prefix that ran Scaler 1.1.0 keeps that build's
   `OptiScaler.ini` until the version string changes. The Scaler writes
   `helixsr.ini` and its log at run time, so those are not pinned.

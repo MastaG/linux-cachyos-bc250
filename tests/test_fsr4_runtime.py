@@ -2252,7 +2252,10 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
 
     def test_only_a_change_is_written(self):
         menu = self.load()
-        self.assertEqual(menu.change("helixsr", True, True, menu.DEFINABLE["helixsr"]), {})
+        wired = menu.read_ini_sections(self.prefix(["[FrameGen]", "enabled = true",
+                                                    "fginput = upscaler", "fgoutput = fsrfg"])[1])
+        self.assertEqual(menu.change("helixsr", True, True, menu.DEFINABLE["helixsr"], wired), {})
+        self.assertEqual(menu.change("freefg", True, True, menu.DEFINABLE["freefg"]), {})
         # Turning it off writes the one switch, and nothing else.
         self.assertEqual(menu.change("helixsr", True, False, menu.DEFINABLE["helixsr"]),
                          {"FrameGen.Enabled": "false"})
@@ -2263,6 +2266,40 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         self.assertEqual(menu.change("fsr412f", False, True, set()), {})
         self.assertEqual(menu.change("freefg", False, True, menu.DEFINABLE["freefg"]),
                          {"FrameGen.Enabled": "true"})
+    def test_frame_generation_on_brings_its_wiring(self):
+        # Enabled=true alone is nofg in the Scaler and the stock nightly: turning it
+        # on also picks OptiFG into FSR FG, wherever the ini has not picked yet.
+        menu = self.load()
+        wiring = {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"}
+        for variant in ("helixsr", "fsr412f"):
+            self.assertEqual(menu.change(variant, False, True, menu.DEFINABLE[variant]),
+                             {"FrameGen.Enabled": "true", **wiring})
+            # Off writes the switch only; the wiring is harmless with it off.
+            self.assertEqual(menu.change(variant, True, False, menu.DEFINABLE[variant]),
+                             {"FrameGen.Enabled": "false"})
+        # A prefix that got Enabled=true without the wiring (the first Scaler 2.0
+        # package) is repaired by pressing Start with the box as it is.
+        broken = menu.read_ini_sections(self.prefix(["[FrameGen]", "enabled = true",
+                                                     "fginput = auto", "fgoutput = nofg"])[1])
+        self.assertEqual(menu.fg_state("helixsr", broken), True)
+        self.assertEqual(menu.change("helixsr", True, True, menu.DEFINABLE["helixsr"], broken), wiring)
+        # An output the player picked in the overlay stays.
+        xefg = menu.read_ini_sections(self.prefix(["[FrameGen]", "enabled = false",
+                                                   "fginput = auto", "fgoutput = xefg"])[1])
+        self.assertEqual(menu.change("helixsr", False, True, menu.DEFINABLE["helixsr"], xefg),
+                         {"FrameGen.Enabled": "true", "FrameGen.FGInput": "upscaler"})
+        # FreeFG's wiring is its variant preset, enforced every launch.
+        self.assertEqual(menu.change("freefg-helixsr", False, True, menu.DEFINABLE["freefg-helixsr"]),
+                         {"FrameGen.Enabled": "true"})
+        # answer() reads the prefix's ini only for the variant it belongs to.
+        pick = {"preset": "helixsr", "disable_framegen": 0}
+        self.assertEqual(menu.answer(pick, "helixsr", "helixsr", {"helixsr": True}, {}, broken)["changed"],
+                         "FrameGen.FGInput=upscaler;FrameGen.FGOutput=fsrfg")
+        wired = menu.read_ini_sections(self.prefix(["[FrameGen]", "fginput = upscaler",
+                                                    "fgoutput = fsrfg"])[1])
+        self.assertIn("FrameGen.FGOutput=fsrfg",
+                      menu.answer(pick, "freefg", "freefg", {"helixsr": False}, {}, wired)["changed"])
+
     def test_a_fresh_prefix_shows_what_the_variant_seeds(self):
         # No answer in the ini yet: FreeFG seeds frame generation on, the others off,
         # so a player who just presses Start changes nothing.

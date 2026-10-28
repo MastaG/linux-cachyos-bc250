@@ -48,9 +48,9 @@ HINT = "Launch your game with PROTON_OPTISCALER_MENU=1 %command% to show this me
 # Which keys mean "frame generation on" for each build, verified from the build's
 # own OptiScaler.ini comments and the HelixSR Scaler README:
 #   freefg*:               [FrameGen] Enabled (+ FGOutput=xefg, that is the wiring)
-#   helixsr (the Scaler):  [FrameGen] Enabled -- HelixSR 3.0 has no frame
-#                          generation of its own, OptiScaler's is all there is
-#   fsr412f:               [FrameGen] Enabled, the stock nightly's own key
+#   helixsr (the Scaler):  [FrameGen] Enabled + FG_WIRING -- HelixSR 3.0 has no
+#                          frame generation of its own, OptiScaler's is all there is
+#   fsr412f:               [FrameGen] Enabled + FG_WIRING, the stock nightly's keys
 FG_ON = {
     "freefg-helixsr": {"FrameGen.Enabled": "true"},
     "freefg-hlxfsr4": {"FrameGen.Enabled": "true"},
@@ -65,6 +65,17 @@ FG_OFF = {
     "helixsr": {"FrameGen.Enabled": "false"},
     "fsr412f": {"FrameGen.Enabled": "false"},
 }
+# Enabled alone does nothing in these builds: FGInput and FGOutput both default
+# (auto) to nofg. FreeFG gets its wiring from its variant preset; these get it
+# when the player turns frame generation on, and only where the ini still says
+# auto/nofg, so an output picked in the overlay stays. OptiFG (upscaler input)
+# works in any game whose upscaler OptiScaler sees; FSR FG is the output, its DLLs
+# are in the nightly, and it needs neither FreeFG's wrapper nor XeFG's runtime.
+FG_WIRING = {
+    "helixsr": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
+    "fsr412f": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
+}
+UNWIRED = ("auto", "nofg")
 # What a variant does with frame generation on a fresh prefix (its seed): FreeFG
 # turns it on, the others leave it off.
 FRESH_ON = {"freefg-helixsr": True, "freefg-hlxfsr4": True, "freefg": True,
@@ -112,14 +123,17 @@ def fg_state(variant, ini_sections):
     want = FG_ON.get(variant, {})
     if not want:
         return False
-    got = {}
-    for key in want:
-        section, _, option = key.partition(".")
-        value = (ini_sections.get(section.lower(), {}) or {}).get(option.lower())
-        got[key] = str(value).strip().lower() if value is not None else "auto"
+    got = {key: ini_value(ini_sections, key) for key in want}
     if all(value == "auto" for value in got.values()):
         return FRESH_ON.get(variant, False)
     return all(got[key] == str(value).lower() for key, value in want.items())
+
+
+def ini_value(ini_sections, key):
+    """A "Section.Option" value from the prefix's ini, lower case; missing is auto."""
+    section, _, option = key.partition(".")
+    value = (ini_sections.get(section.lower(), {}) or {}).get(option.lower())
+    return str(value).strip().lower() if value is not None else "auto"
 
 
 def spoof_state(ini_sections):
@@ -138,13 +152,24 @@ def read_ini_sections(path):
     return {s.lower(): {k.lower(): v for k, v in parser.items(s)} for s in parser.sections()}
 
 
-def change(variant, was_on, is_on, can_write):
+def change(variant, was_on, is_on, can_write, ini_sections=None):
     """The keys the menu hands back: only what the player changed, and only keys
-    this build can take."""
-    if was_on == is_on or variant not in FG_ON:
+    this build can take.
+
+    Frame generation on also hands back the variant's FG_WIRING keys the ini
+    (ini_sections, the prefix's own; empty for a fresh start) still has unwired.
+    That is not only on a change: a prefix whose Enabled=true went in without
+    them (the 2026-10-27 Scaler) is repaired by pressing Start.
+    """
+    if variant not in FG_ON:
         return {}
-    wanted = FG_OFF if not is_on else FG_ON
-    return {k: v for k, v in wanted[variant].items() if k.lower() in can_write}
+    wanted = {}
+    if was_on != is_on:
+        wanted.update((FG_ON if is_on else FG_OFF)[variant])
+    if is_on:
+        wanted.update({key: value for key, value in FG_WIRING.get(variant, {}).items()
+                       if ini_value(ini_sections or {}, key) in UNWIRED})
+    return {k: v for k, v in wanted.items() if k.lower() in can_write}
 
 
 def should_show(env, store, menu_enabled_default=True):
@@ -414,12 +439,13 @@ def decide(prefix, env):
     return not int(store.get("remember", 0)), current, fg_on, int(store.get("remember", 0))
 
 
-def answer(result, current, base, fg_states, spoof_states=None):
+def answer(result, current, base, fg_states, spoof_states=None, ini_sections=None):
     """What the launcher gets back for the player's pick.
 
     base is the variant the prefix's files and ini belong to: the current one, or
     under No upscaling the one installed before it, so that going back to it is
-    not a switch and keeps the player's settings.
+    not a switch and keeps the player's settings. ini_sections is the prefix's
+    ini, which belongs to base.
     """
     new = result["preset"]
     is_on = not int(result["disable_framegen"])
@@ -428,7 +454,8 @@ def answer(result, current, base, fg_states, spoof_states=None):
     # protonfixes re-copies it), and fg_states holds that seed for every variant
     # but base: the box is handed back only where the player changed it.
     changed = {} if new == OFF else change(new, fg_states.get(new, False), is_on,
-                                           DEFINABLE.get(new, set()))
+                                           DEFINABLE.get(new, set()),
+                                           ini_sections if new == base else {})
     spoof = result.get("spoof", "auto")
     if new != OFF and spoof != (spoof_states or {}).get(new, "auto"):
         changed["Spoofing.Dxgi"] = spoof
@@ -477,7 +504,7 @@ def main():
     if path:
         with open(path, "w") as stream:
             json.dump({"variant": result["preset"], "remember": int(result.get("remember", 0))}, stream)
-    for key, value in answer(result, current, base, fg_states, spoof_states).items():
+    for key, value in answer(result, current, base, fg_states, spoof_states, sections).items():
         print("%s=%s" % (key, value))
     if path:
         print("store=%s" % path)
