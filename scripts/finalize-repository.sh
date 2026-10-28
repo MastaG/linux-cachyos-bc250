@@ -645,10 +645,12 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
 - **New: HelixSR 3.1.0 and FreeFG 1.1.4.** The menu's \`HelixSR Scaler\` is now
   [HelixSR Scaler 2.1.0 with HelixSR 3.1.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v3.1.0)
-  (by lonewolf0622): it starts on HLX DLSS (pick DLSS in the game; DirectX 12, 11 and
-  Vulkan), and HLX FSR 4, AMD's FSR 4 network on HelixSR's faster pipeline, is its own
-  entry in its Insert menu (the choice sticks). HelixSR 3.x has no frame generation of
-  its own; the menu's switch turns on OptiScaler's FSR frame generation.
+  (by lonewolf0622): it now starts on HLX FSR 4, AMD's FSR 4 network on HelixSR's
+  faster pipeline, with OptiScaler's FSR frame generation on (1.15 ms from 720p to
+  1080p in Shadow of the Tomb Raider, about 250 fps in its menu). HLX DLSS (pick DLSS
+  in the game; DirectX 12, 11 and Vulkan) is one pick away in its Insert menu, and the
+  choice sticks. HelixSR 3.x has no frame generation of its own; the menu's box turns
+  OptiScaler's off.
   New menu entry **FreeFG + HLX FSR 4** (\`PROTON_USE_OPTISCALER=freefg-hlxfsr4\`):
   FreeFG's frame generation with HLX FSR 4 as the upscaler, 1.17 ms from 720p to
   1080p in Shadow of the Tomb Raider on a BC-250. All FreeFG entries move to

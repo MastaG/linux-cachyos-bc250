@@ -77,9 +77,9 @@ FG_WIRING = {
 }
 UNWIRED = ("auto", "nofg")
 # What a variant does with frame generation on a fresh prefix (its seed): FreeFG
-# turns it on, the others leave it off.
+# and the Scaler turn it on, FSR4 RC12 leaves it off.
 FRESH_ON = {"freefg-helixsr": True, "freefg-hlxfsr4": True, "freefg": True,
-            "helixsr": False, "fsr412f": False, OFF: False}
+            "helixsr": True, "fsr412f": False, OFF: False}
 # Keys a build's own OptiScaler.ini does not define: protonfixes refuses the
 # launch, so the menu must not offer them (the fork ini has no [HelixSR] keys).
 DEFINABLE = {

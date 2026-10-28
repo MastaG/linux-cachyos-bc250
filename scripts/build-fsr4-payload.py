@@ -75,8 +75,8 @@ def is_player_key(key):
     """A frame-gen or upscaler choice: the player's to decide, so it is seeded on
     the variant's first launch only, not enforced every launch. Wiring is
     everything else. The upscaler counts since HelixSR Scaler 2.0, whose menu
-    offers HLX DLSS and HLX FSR 4 side by side: enforcing its HLX DLSS start
-    would undo a switch to HLX FSR 4 at every launch."""
+    offers HLX DLSS and HLX FSR 4 side by side: enforcing its HLX FSR 4 start
+    would undo a switch to HLX DLSS at every launch."""
     return key.lower().startswith(("framegen.", "upscalers."))
 
 
@@ -179,7 +179,14 @@ SCALER_FOLDER = "HelixSR"
 # re-extracts the ini only when the version string changes.
 SCALER_VERSION_SUFFIX = "helixsr-scaler2"
 SCALER_PRESET = {
-    "Upscalers.Dx12Upscaler": "dlss",
+    # HLX FSR 4 first (owner's pick, 2026-10-28: 1.15 ms in Shadow of the Tomb
+    # Raider, against 1.10 ms for HLX DLSS), with OptiScaler's FSR frame
+    # generation on. Seeded, not enforced (is_player_key): HLX DLSS stays one
+    # pick away in the Insert menu, and the menu's box turns frame generation off.
+    "Upscalers.Dx12Upscaler": "ffx",
+    "FrameGen.Enabled": "true",
+    "FrameGen.FGInput": "upscaler",
+    "FrameGen.FGOutput": "fsrfg",
     "DLSS.HelixSR": "true",
     # The BC-250 has no fast int8 path, so HelixSR's int8 switch is forced off
     # here instead of letting "auto" decide by card (owner's ruling, 2026-10-26).

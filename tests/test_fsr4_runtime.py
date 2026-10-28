@@ -436,11 +436,13 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(self.read_ini()["FrameGen"]["enabled"], "true")
 
     def test_the_default_ships_every_frame_gen_key_at_auto(self):
-        # What keeps a fresh prefix frame-generation free on the default path: the
-        # shipped help says auto for Enabled is false and auto for FGInput is nofg.
-        # The variant layer for the default names no FrameGen key of its own.
-        for name, layer in sorted(builder.SCALER_PRESET.items()):
-            self.assertFalse(name.startswith("FrameGen."), name)
+        # What keeps a fresh prefix frame-generation free where no variant asks
+        # for it: the shipped help says auto for Enabled is false and auto for
+        # FGInput is nofg. The Scaler's frame generation keys are its seed, only
+        # ever seeded (is_player_key), so the menu's box can still turn it off.
+        for name in builder.SCALER_PRESET:
+            if name.startswith("FrameGen."):
+                self.assertTrue(builder.is_player_key(name), name)
         keys = self.config["preset"]
         self.assertEqual(keys["FrameGen.Enabled"], "false")
         ini = configparser.ConfigParser()
@@ -1987,13 +1989,14 @@ class PresetTests(unittest.TestCase):
         hashes = self.entries[default]["sha256_hash"]
         self.assertIn("HelixSR/helixsr.dll", hashes)
         self.assertNotIn("OptiScaler.ini", hashes)
-        # DLSS (HLX DLSS) is where it starts, as HelixSR's installer sets it, but
-        # only seeded: the Scaler's menu offers HLX FSR 4 too, and a switch
-        # there has to stick. [DLSS] HelixSR is wiring, enforced.
+        # HLX FSR 4 (ffx) with FSR frame generation is where it starts, but only
+        # seeded: the Scaler's menu offers HLX DLSS too, and a switch there has
+        # to stick. [DLSS] HelixSR is wiring, enforced, so HLX DLSS stays listed.
         self.assertEqual(config["optiscaler_variant_preset"][default],
                          {"DLSS.HelixSR": "true", "HelixSR.Int8": "off"})
         self.assertEqual(config["optiscaler_variant_seed"][default],
-                         {"Upscalers.Dx12Upscaler": "dlss"})
+                         {"Upscalers.Dx12Upscaler": "ffx", "FrameGen.Enabled": "true",
+                          "FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"})
         # The stock nightly and every bridge stay reachable by name, and none
         # of them carries the Scaler.
         for name in ("optiscaler", "fsr411f", "signed"):
@@ -2238,8 +2241,14 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1",
                                             "BC250_MENU_INSTALLED": "helixsr"})[2], True)
         # Another variant (or an older package's) on disk: the launch starts the
-        # pick fresh, so the row shows the fresh seed, here the Scaler's off.
+        # pick fresh, so the row shows the fresh seed, here the Scaler's on;
+        # RC12's seed is off.
+        self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1"})[2], True)
+        with open(menu.store_path(root), "w") as stream:
+            stream.write('{"variant": "fsr412f", "remember": 1}')
         self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1"})[2], False)
+        with open(menu.store_path(root), "w") as stream:
+            stream.write('{"variant": "helixsr", "remember": 1}')
         self.assertEqual(menu.fg_state("helixsr", menu.read_ini_sections(root + "/pfx/drive_c/windows/system32/umu/OptiScaler.ini")), True)
         old, _ = self.prefix(["[FrameGen]", "enabled = false", "fginput = nvngxfg",
                               "fgnvngxreplacement = HelixSR"])
@@ -2301,14 +2310,14 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
                       menu.answer(pick, "freefg", "freefg", {"helixsr": False}, {}, wired)["changed"])
 
     def test_a_fresh_prefix_shows_what_the_variant_seeds(self):
-        # No answer in the ini yet: FreeFG seeds frame generation on, the others off,
-        # so a player who just presses Start changes nothing.
+        # No answer in the ini yet: FreeFG and the Scaler seed frame generation on,
+        # FSR4 RC12 off, so a player who just presses Start changes nothing.
         menu = self.load()
         for lines in ([], ["[FrameGen]", "enabled = auto", "fginput = auto"]):
             sections = menu.read_ini_sections(self.prefix(lines)[1]) if lines else {}
             self.assertEqual(menu.fg_state("freefg-helixsr", sections), True)
             self.assertEqual(menu.fg_state("freefg", sections), True)
-            self.assertEqual(menu.fg_state("helixsr", sections), False)
+            self.assertEqual(menu.fg_state("helixsr", sections), True)
             self.assertEqual(menu.fg_state("fsr412f", sections), False)
         # The player's own answer from the overlay wins over the seed.
         sections = menu.read_ini_sections(self.prefix(["[FrameGen]", "enabled = false"])[1])

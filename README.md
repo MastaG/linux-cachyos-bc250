@@ -982,15 +982,18 @@ with HelixSR's two upscalers in its list:
 - **HLX DLSS**: NVIDIA's DLSS neural network (Model E) as ordinary DirectX 12
   compute shaders, so no NVIDIA GPU or driver is needed. It is the Scaler's DLSS
   upscaler; pick DLSS in the game (OptiScaler's spoofing makes games offer it).
-  This is where the Scaler starts. Since 3.1 it also works in Vulkan games.
+  Since 3.1 it also works in Vulkan games.
 - **HLX FSR 4**: AMD's FSR 4 network on HelixSR's own, faster pipeline (3.1 adds a
   faster pre- and post-pass on AMD GPUs, same picture). Since Scaler 2.1 it is an
-  upscaler of its own in the Insert menu's list; the choice is kept from then on. It also carries the
+  upscaler of its own in the Insert menu's list, and it is where the Scaler starts
+  (1.15 ms from 720p to 1080p in Shadow of the Tomb Raider, HLX DLSS 1.10 ms);
+  a switch to HLX DLSS there is kept from then on. It also carries the
   Direct3D 11 and Vulkan games (OptiScaler's `ffx_12` route).
 
 HelixSR 3.x has **no frame generation of its own** any more; OptiScaler's
-is what the menu's frame generation switch turns on: OptiFG into FSR frame
-generation (`FrameGen.FGInput=upscaler`, `FrameGen.FGOutput=fsrfg`). XeFG can
+is what the Scaler starts with and the menu's "Disable frame generation" box
+turns off: OptiFG into FSR frame generation (`FrameGen.FGInput=upscaler`,
+`FrameGen.FGOutput=fsrfg`). XeFG can
 be picked in the overlay instead. HelixSR 2.0's DLSS frame generation is gone with the old Scaler 1.1.0; the
 2.0 upscaler stays in `freefg-helixsr` and `helixsr-ffx`.
 
