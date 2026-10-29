@@ -198,14 +198,14 @@ picks one:
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
 - **`helixsr` (the Scaler)** — built with `--helixsr-scaler` and
-  `--helixsr-ngx` (HelixSR 3.1.0 after its setup, mirrored as
-  `HelixSR-3.1.0-network.zip`). [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
+  `--helixsr-ngx` (HelixSR 3.2.0 after its setup, mirrored as
+  `HelixSR-3.2.0-network.zip`). [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
   2.1.0 is OptiScaler v10 built on the same nightly (20261025) with HelixSR's
   upscalers in its list: every other library is byte-identical, so its archive
-  (`HelixSR-Scaler-2.1.0-core.zip`, taken from the copy in the HelixSR 3.1.0
+  (`HelixSR-3.2.0-Scaler-2.1.0-core.zip`, taken from the copy in the HelixSR 3.2.0
   download, which its setup installs) holds only `OptiScaler.dll`,
   `OptiScaler.ini`, the licences, its own OptiPatcher (shipped instead of the
-  pinned one) and the nightly's AMD FidelityFX DLL, which it keeps as
+  pinned one) and AMD's FSR SDK 2.4.0 DLL (FSR 4.1.2, since HelixSR 3.2.0; the nightly's before), which it keeps as
   `OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll`. HelixSR 3.x is two DLLs:
   HLX DLSS, `HelixSR/helixsr.dll` next to the proxy (`umu/`) with its
   `helixsr.ini` as released, the Scaler's DLSS upscaler; and HLX FSR 4, which
@@ -256,7 +256,7 @@ picks one:
   latter says the DLSS weights and kernels remain NVIDIA's property and are
   not covered by HelixSR's licence.
 - **`freefg`** — opt-in, built with `--freefg` from FreeFG's release zip
-  (mirrored unchanged as `freefg-1.1.4.zip`, its GPL source zip beside it).
+  (mirrored unchanged as `freefg-1.1.5.zip`, its GPL source zip beside it).
   [FreeFG](https://github.com/daniel-h-0/freefg) speeds up Intel's XeSS frame
   generation on the BC-250. The tree is the nightly's with FreeFG's OptiScaler
   build as the proxy, the RC12 bridge (`--freefg-bridge fsr412f`, what FreeFG

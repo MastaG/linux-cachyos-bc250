@@ -889,14 +889,14 @@ pinned builds. Each package ships all of them and swaps only that file;
 `PROTON_USE_OPTISCALER` picks one per game:
 
 ```text
-                                          # (unset) FreeFG 1.1.4 + HelixSR 2.0.0 — the default
+                                          # (unset) FreeFG 1.1.5 + HelixSR 2.0.0 — the default
 PROTON_USE_OPTISCALER=optiscaler %command%  # stock OptiScaler nightly with the fsr411f bridge
 PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork RC11, 4.1.1r11 — the default until HelixSR
 PROTON_USE_OPTISCALER=fsr412f %command%   # the same fork's RC12, 4.1.1r12 — newest bridge, opt-in
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
-PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR Scaler 2.1.0 with HelixSR 3.1.0 (HLX DLSS, HLX FSR 4)
-PROTON_USE_OPTISCALER=freefg-hlxfsr4 %command% # FreeFG 1.1.4 with HelixSR 3.1.0's HLX FSR 4
+PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR Scaler 2.1.0 with HelixSR 3.2.0 (HLX DLSS, HLX FSR 4)
+PROTON_USE_OPTISCALER=freefg-hlxfsr4 %command% # FreeFG 1.1.5 with HelixSR 3.2.0's HLX FSR 4
 PROTON_USE_OPTISCALER=helixsr-ffx %command% # HelixSR as the stock nightly's FidelityFX library
 PROTON_USE_OPTISCALER=fsr411rc9 %command%  # the older RC9 build
 PROTON_USE_OPTISCALER=fsr411rc10 %command% # the older RC10 build
@@ -973,7 +973,7 @@ Please report whether any of them helps or hurts.
 ### HelixSR Scaler: HLX DLSS and HLX FSR 4
 
 All three Proton packages ship [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
-2.1.0 with [HelixSR](https://github.com/lonewolf0622/HelixSR) 3.1.0,
+2.1.0 with [HelixSR](https://github.com/lonewolf0622/HelixSR) 3.2.0 (a pre-release),
 both by lonewolf0622, the DirectMesh author, as `PROTON_USE_OPTISCALER=helixsr`
 or "HelixSR Scaler" in the menu. The Scaler is OptiScaler (GPL-3.0, source
 published; 2.1.0 is built on the same nightly, 20261025, as the stock variant)
@@ -1023,12 +1023,13 @@ HelixSR problem); HLX FSR 4 logs to OptiScaler's log. Sharpening is OptiScaler's
 
 Provenance, stated plainly: HelixSR is free to use under its own freeware
 licence (its source is not published). The DLSS network it runs is, per its
-author, NVIDIA's property, and HLX FSR 4's shaders are built from AMD's FSR 4
-driver file (`amdxcffx64.dll` 2.4.0.4370); neither is covered by any licence
-here. Its release contains neither: its setup script builds them from NVIDIA's
-public DLSS 310.7.0 DLL and from AMD's driver package. We ran that script once
-and mirrored the result (`HelixSR-3.1.0-network.zip`; the Scaler's own files
-are `HelixSR-Scaler-2.1.0-core.zip`, HelixSR 2.0.0 is
+author, NVIDIA's property and not covered by any licence here; its release
+does not contain it: its setup script builds it from NVIDIA's public DLSS
+310.7.0 DLL. Since 3.2.0, HLX FSR 4's shaders ship built in the release, made
+from AMD's FSR SDK 2.4.0 (FSR 4.1.2, MIT), and that SDK's own FSR 4.1.2 DLL is
+what the Scaler keeps as AMD FSR. We ran the setup script once and mirrored the
+result (`HelixSR-3.2.0-network.zip`; the Scaler's own files
+are `HelixSR-3.2.0-Scaler-2.1.0-core.zip`, HelixSR 2.0.0 is
 `HelixSR-2.0.0-network-fg.zip`), so the Proton packages need no setup step and
 nothing is downloaded at game launch. Like the unsigned bridges it is pinned by
 SHA256 and its origin is written into the prefix
@@ -1040,7 +1041,7 @@ and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md)
 ### FreeFG: XeSS frame generation for the BC-250 (opt-in)
 
 `PROTON_USE_OPTISCALER=freefg %command%` selects
-[FreeFG](https://github.com/daniel-h-0/freefg) 1.1.4 by daniel-h-0. Frame
+[FreeFG](https://github.com/daniel-h-0/freefg) 1.1.5 by daniel-h-0. Frame
 generation is Intel's XeSS FG (XeFG): Intel's unmodified runtime generates the
 frames, and FreeFG's wrapper runs part of its GPU work with FreeFG's own
 shaders, which are faster on the BC-250 (its author measured +21% in Cyberpunk
@@ -1052,10 +1053,10 @@ upscaler, with frame generation still XeFG:
 - `freefg-helixsr` (the packages' default): HelixSR 2.0.0, as FreeFG's own Setup
   offers; cheaper per frame than the fork's bridge on the BC-250 (in Spider-Man 2
   RC11 took about 4.8 ms from 1512×856 to 1440p, HelixSR 1.7 ms).
-- `freefg-hlxfsr4`: HelixSR 3.1.0's HLX FSR 4 (see above). On a BC-250 in Shadow
+- `freefg-hlxfsr4`: HelixSR 3.2.0's HLX FSR 4 (see above). On a BC-250 in Shadow
   of the Tomb Raider 3.0.0's took 1.17 ms from 720p to 1080p, against 3.6 ms for RC11 measured there earlier.
 
-FreeFG 1.1.4 adds optional generated-frame scaling (50–100% or a resolution
+FreeFG has optional generated-frame scaling since 1.1.4 (cheaper in 1.1.5; 50–100% or a resolution
 limit, with a choice of filters); the default, and what this package leaves it
 at, is generated frames at full output size. It is set in FreeFG's
 `settings.ini` beside the game's `.exe`, which this package does not ship.
@@ -1084,7 +1085,7 @@ FreeFG problems [to FreeFG](https://github.com/daniel-h-0/freefg/issues). The
 package ships FreeFG's release files unchanged, pinned by SHA256: its
 OptiScaler build (GPL-3.0; source at
 [daniel-h-0/OptiScaler](https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-03db4f8),
-and `freefg-1.1.4-source.zip` is mirrored beside the package inputs), its
+and `freefg-1.1.5-source.zip` is mirrored beside the package inputs), its
 wrapper, shaders and layer (MIT). Intel's XeFG and XeLL runtimes are the ones in
 the pinned OptiScaler nightly, byte-identical to what FreeFG pins.
 

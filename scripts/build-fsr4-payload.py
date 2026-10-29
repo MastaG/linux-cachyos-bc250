@@ -165,7 +165,7 @@ HELIXSR_FFX_NAME = "helixsr-ffx"
 # upscaler, HelixSR/helixsr.dll next to the Scaler's own DLL (the proxy, here
 # umu/winmm.dll) or the game's .exe; and HLX FSR 4, AMD's FSR 4 network on
 # HelixSR's own pipeline, as OptiScaler's FidelityFX upscaler
-# (OptiScaler/amd_fidelityfx_upscaler_dx12.dll, with the nightly's own AMD DLL
+# (OptiScaler/amd_fidelityfx_upscaler_dx12.dll, with AMD's FSR SDK DLL
 # kept beside it as .amd.dll). HelixSR's own frame generation is gone in 3.0;
 # OptiScaler's (XeFG, FSR FG) remains. The preset is what HelixSR's installer
 # writes for that layout ("ngx", helixsr_bridge.write_scaler_defaults): DLSS as
@@ -428,7 +428,7 @@ def scaler_from(source: Path, staging: Path) -> tuple[Path, Path, Path, dict[str
     same generation (every other library is byte-identical), so the archive
     given here holds just those two, the licence texts of the release zip and,
     since Scaler 2.0.0, what it puts in OptiScaler/ besides: its OptiPatcher
-    and the nightly's AMD FidelityFX DLL kept as
+    and AMD's FidelityFX DLL (FSR SDK 2.4.0 since HelixSR 3.2.0) kept as
     amd_fidelityfx_upscaler_dx12.amd.dll (its own name for that file comes
     from HLX FSR 4, which is a separate input).
     """
@@ -465,7 +465,7 @@ def scaler_from(source: Path, staging: Path) -> tuple[Path, Path, Path, dict[str
 
 # HelixSR 3.0's two DLLs end with what its setup appended, behind a trailer:
 # helixsr.dll the network (HELIXSR_NETWORK_TRAILER, 32 bytes), HLX FSR 4 the
-# shaders built from AMD's driver file (this, 24 bytes). Unbuilt, HLX FSR 4
+# shaders built from AMD's FSR 4 (this, 24 bytes; prebuilt since 3.2.0). Unbuilt, HLX FSR 4
 # has no shaders to run at all.
 HLX_FSR4_TRAILER = b"HLXFSR4D"
 
@@ -953,12 +953,12 @@ def main() -> int:
                 "OptiScaler/amd_fidelityfx_upscaler_dx12.dll is HLX FSR 4, AMD's FSR 4 "
                 "network on HelixSR's own pipeline; "
                 "OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll is AMD's FidelityFX DLL "
-                "of the OptiScaler nightly, kept beside it as HelixSR Scaler does.\n"
+                "from HelixSR's download (AMD's FSR SDK), kept beside it as HelixSR Scaler does.\n"
                 f"SHA256 of HLX FSR 4: {digest(hlx)}\n\n"
-                "Both HelixSR DLLs carry data built by HelixSR's own setup script, from "
-                "NVIDIA's DLSS DLL and from AMD's FSR 4 driver file. Per its author, "
-                "those components remain the property of NVIDIA and AMD and are not "
-                f"covered by HelixSR's licence; see Licenses/{version}/.\n"
+                "HLX DLSS carries the network HelixSR's own setup script built from "
+                "NVIDIA's DLSS DLL; per its author, that remains the property of NVIDIA "
+                "and is not covered by HelixSR's licence. HLX FSR 4's shaders are built "
+                f"from AMD's FSR SDK (MIT); see Licenses/{version}/.\n"
                 + ("This package ships the Scaler by default; the stock OptiScaler "
                    "nightly stays available with PROTON_USE_OPTISCALER=optiscaler "
                    "(and the bridge variants).\n"
@@ -1013,9 +1013,8 @@ def main() -> int:
                     FREEFG_HLXFSR4_NAME, hlx, {}, {}, helix_notices, "HelixSR",
                     f"HLX FSR 4 from HelixSR (origin: {args.helixsr_ngx[1]}, SHA256 "
                     f"{digest(hlx)}), AMD's FSR 4 network on HelixSR's own pipeline, with "
-                    "shaders HelixSR's setup built from AMD's FSR 4 driver file. Per its "
-                    "author, those remain the property of AMD and are not covered by "
-                    "HelixSR's licence"))
+                    "shaders built from AMD's FSR SDK (MIT, see HelixSR's "
+                    "THIRD_PARTY_NOTICES.md)"))
             for name, ffx_sdk, upscaler_files, upscaler_preset, upscaler_notices, \
                     notice_prefix, upscaler_text in upscalers:
                 # freefg-helixsr is the packages' default (owner's decision,
