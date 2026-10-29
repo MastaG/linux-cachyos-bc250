@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=KytyPS5-Native
+Comment=PS5 games natively on the BC-250
+Exec=kytyps5-native
+Icon=kytyps5-native
+Categories=Game;Emulator;
+Terminal=false

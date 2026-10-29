@@ -1,0 +1,111 @@
+# Maintainer: MastaG
+#
+# KytyPS5-Native (https://github.com/superkeka/KytyPS5-Native): PS5 games with
+# their GPU work running natively on the BC-250. Built from the commit of
+# upstream's newest GitHub release -- upstream releases every push to main
+# whose CI (build + unit tests) passed -- which
+# scripts/resolve-kytyps5-native.sh pins into @KYTY_COMMIT@. CI rebuilds it
+# whenever that release moves, so the repo carries a nightly.
+#
+# Differences from upstream's own tarball, all because pacman owns the files:
+# - The program is installed read-only to /usr/lib/kytyps5-native. Upstream
+#   writes saves and caches next to the program, so /usr/bin/kytyps5-native and
+#   /usr/bin/kytyps5-run copy it to ~/.local/share/KytyPS5-Native/package (again
+#   only when the package version changes) and run it from there, unmodified.
+#   kyty-lodhw, which runs as root, is never copied: it runs from /usr/lib.
+# - The system Qt instead of a bundled copy; no kyty_updater (the package
+#   manager updates it), no install-helper.sh (kyty-lodhw.service is shipped
+#   here, not enabled: the README says how).
+# - Nothing on the system is changed on install, not even a new group: the
+#   kernel options, the helper service and the render group membership are
+#   the owner's choice, documented in the README ("KytyPS5-Native").
+pkgname=kytyps5-native-git
+_name=kytyps5-native
+pkgver=0
+pkgrel=@PKGREL@
+pkgdesc="PS5 games natively on the BC-250's PS5 APU (KytyPS5-Native, nightly from upstream's newest release)"
+arch=('x86_64')
+url="https://github.com/superkeka/KytyPS5-Native"
+license=('GPL-2.0-only')
+depends=('qt6-base' 'vulkan-icd-loader' 'libx11' 'libxext' 'libxcursor' 'libxi'
+         'libxfixes' 'libxrandr' 'libxss' 'libxkbcommon' 'wayland' 'libpulse'
+         'alsa-lib' 'dbus' 'systemd-libs' 'hicolor-icon-theme')
+makedepends=('git' 'cmake' 'ninja' 'clang' 'lld' 'glslang' 'python' 'pkgconf'
+             'wayland-protocols' 'libxtst' 'mesa')
+optdepends=('xdotool: Steam shortcuts through kytyps5-run'
+            'xorg-xprop: Steam shortcuts through kytyps5-run')
+provides=("$_name")
+conflicts=("$_name")
+install=kytyps5-native-git.install
+# Upstream's link flags already strip the binaries.
+options=('!lto' '!debug')
+source=("$_name::git+https://github.com/superkeka/KytyPS5-Native.git#commit=@KYTY_COMMIT@"
+        'kytyps5-native-wrapper.sh'
+        'kytyps5-native.desktop'
+        'kyty-lodhw.service')
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP'
+            'SKIP')
+
+pkgver() {
+    cd "$_name"
+    # Commit date first: upstream's history is linear today, but a date keeps
+    # the version rising even if it ever is not.
+    printf '%s.r%s.g%s' "$(git log -1 --format=%cd --date=format:%Y%m%d)" \
+        "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+    cd "$_name"
+    git submodule update --init --recursive --depth 1
+}
+
+build() {
+    # Upstream's own flags (Release, clang, ThinLTO via IPO) on the repo's
+    # BC-250 CPU target. makepkg's hardening flags are left out on purpose:
+    # the emulator maps guest code at fixed addresses and writes trampolines,
+    # and upstream only ever tests its own flags.
+    export CFLAGS="-march=x86-64-v3 -mtune=znver2"
+    export CXXFLAGS="$CFLAGS"
+    export LDFLAGS=""
+    cmake -S "$_name" -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DKYTY_BUILD_ORIGIN=Fork \
+        -DKYTY_BUILD_REPOSITORY=superkeka/KytyPS5-Native \
+        -DKYTY_RELEASE_TAG="@KYTY_TAG@"
+    cmake --build build --target launcher kyty_emulator kyty_updater kyty-lodhw
+}
+
+package() {
+    local dest="$pkgdir/usr/lib/$_name"
+    # Upstream's install rules write the launcher's legacy name relative to
+    # CMAKE_INSTALL_PREFIX, which breaks with DESTDIR: stage into a prefix of
+    # its own, as upstream's CI does, and pick the files from there.
+    local staged="$srcdir/install"
+    rm -rf "$staged"
+    cmake --install build --prefix "$staged"
+
+    install -d "$dest"
+    install -m755 "$staged/kyty_launcher" "$staged/kyty_emulator" "$staged/kyty-lodhw" \
+        "$staged/kytyps5-run.sh" "$dest/"
+    cp -r --no-preserve=ownership "$staged/assets" "$dest/"
+    # The wrappers copy the program to the user's folder when this changes.
+    printf '%s-%s\n' "$pkgver" "$pkgrel" > "$dest/VERSION"
+    install -d "$pkgdir/usr/share/licenses/$pkgname"
+    install -m644 "$_name/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    cp -r --no-preserve=ownership "$_name/LICENSES" "$staged/licenses" \
+        "$pkgdir/usr/share/licenses/$pkgname/"
+
+    install -Dm755 kytyps5-native-wrapper.sh "$pkgdir/usr/bin/kytyps5-native"
+    install -Dm755 kytyps5-native-wrapper.sh "$pkgdir/usr/bin/kytyps5-run"
+    ln -s "/usr/lib/$_name/kyty_emulator" "$pkgdir/usr/bin/kyty_emulator"
+    install -Dm644 kytyps5-native.desktop "$pkgdir/usr/share/applications/kytyps5-native.desktop"
+    install -Dm644 "$_name/docs/logo.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/kytyps5-native.svg"
+    install -Dm644 kyty-lodhw.service "$pkgdir/usr/lib/systemd/system/kyty-lodhw.service"
+    install -Dm644 "$_name/tools/bc250-amdgpu/README.md" "$pkgdir/usr/share/doc/$pkgname/bc250-amdgpu.md"
+    install -Dm644 "$_name/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

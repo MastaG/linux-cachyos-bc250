@@ -83,10 +83,12 @@ linux-cachyos-bc250-meta
 protonge-latest-bc250
 proton-cachyos-native-bc250
 proton-cachyos-slr-bc250      (optional: see below)
+kytyps5-native-git            (optional: see below)
 ```
 
 A change to one kernel does **not** force the other kernels or any Mesa component to rebuild.  
-Likewise, a new Mesa `main` commit normally rebuilds only `mesa-git`/`lib32-mesa-git`.
+Likewise, a new Mesa `main` commit normally rebuilds only `mesa-git`/`lib32-mesa-git`.  
+`kytyps5-native-git` follows the newest [KytyPS5-Native](https://github.com/superkeka/KytyPS5-Native) release (`scripts/resolve-kytyps5-native.sh`; the repository variable `KYTY_TAG` pins one). Upstream releases most pushes to `main`, so it rebuilds on most runs: that is the nightly.
 
 For partial publications, `scripts/seed-from-release.sh` downloads the previous fixed `repo` release into `out/repo` — every asset except the archived older builds (see [Older builds](#older-builds)).  
 Each builder reads `.PKGINFO` from existing package archives and removes only packages whose `pkgbase` matches the component being rebuilt.  
@@ -109,7 +111,7 @@ mesa-git
 ```
 
 After the changed components are added, `scripts/finalize-repository.sh` validates that every required component's `*-info.env` is present and rebuilds the complete pacman database.  
-`proton-cachyos-slr-bc250` is the one optional component: a component that has never published has nothing to carry forward, so its first failed build must not block publishing everything else.
+`proton-cachyos-slr-bc250` and `kytyps5-native-git` are the optional components: a component that has never published has nothing to carry forward, so its first failed build must not block publishing everything else.
 
 The first run after migrating from the former single-kernel workflow intentionally rebuilds all three kernel families because the old release has no fingerprints for the new RC and BORE packages.  
 Existing unchanged Mesa packages can be preserved.
@@ -143,6 +145,7 @@ A complete fixed release contains at least:
 - `protonge-latest-bc250` + its PKGBUILD, `.SRCINFO` and `protonge-latest-bc250-info.env`;
 - `proton-cachyos-native-bc250` + its PKGBUILD, `.SRCINFO` and `proton-cachyos-native-bc250-info.env`;
 - `proton-cachyos-slr-bc250` + its metadata, once it has published;
+- `kytyps5-native-git` + its PKGBUILD, `.SRCINFO` and `kytyps5-native-git-info.env`, once it has published;
 - `archive-index.txt` and the older builds it lists (see below);
 - aggregate `build-info.env`, release notes and `SHA256SUMS`.
 

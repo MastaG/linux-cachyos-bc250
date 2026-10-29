@@ -29,6 +29,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `bc250-ch7218-fw` | Optional: UGREEN's updater and five firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
 | `bc250-vcn-fw` | Parked: the firmware file for the BC-250 VCN video-block experiment. No shipped kernel uses it (see [Hardware video (VCN)](#hardware-video-vcn-parked)) |
+| `kytyps5-native-git` | Optional, nightly: [KytyPS5-Native](#kytyps5-native-opt-in-nightly), PS5 games running natively on the BC-250. The kernel parameters and the helper service are manual steps |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 ---
@@ -1191,6 +1192,148 @@ sudo pacman -S bc250-paccache-cleanup
 ```
 
 With it installed there are no older package versions left on your disk to downgrade to. This repository keeps the previous builds of every package, so a downgrade comes from there instead; see [Downgrading a package](#downgrading-a-package). To keep the last version in the cache instead, copy `/usr/share/libalpm/hooks/bc250-paccache-cleanup.hook` to `/etc/pacman.d/hooks/` and change `-rqk0` to `-rqk1` in its `Exec` line (a hook there overrides the packaged one). To stop the cleanup, remove the package.
+
+## KytyPS5-Native (opt-in, nightly)
+
+`kytyps5-native-git` packages [KytyPS5-Native](https://github.com/superkeka/KytyPS5-Native):
+PS5 games, with their GPU work running natively on the BC-250's PS5 APU (gfx1013).
+The repository builds it from the commit of upstream's newest release (upstream
+publishes a release for every push whose build and tests passed) and rebuilds it
+whenever that moves, so updates arrive most days. Only use game files you obtained
+legally.
+
+```bash
+sudo pacman -S kytyps5-native-git
+kytyps5-native        # the launcher; also in the application menu as KytyPS5-Native
+```
+
+**Installing it changes nothing on your system.** The kernel parameters, the
+helper service and the group below are yours to set. Without them the emulator
+still starts, but large games stall while loading and games heavy on async
+compute are unplayable.
+
+Where everything is:
+
+| Path | What |
+|---|---|
+| `/usr/lib/kytyps5-native/` | The program, read-only: `kyty_launcher`, `kyty_emulator`, `kytyps5-run.sh`, `kyty-lodhw`, `assets/`, `VERSION` |
+| `/usr/bin/kytyps5-native` | Starts the launcher (also in the application menu) |
+| `/usr/bin/kytyps5-run` | Starts a game from a Steam shortcut (step 3) |
+| `/usr/bin/kyty_emulator` | The emulator on the command line (`kyty_emulator --help`, `kyty_emulator --game /path/to/game`) |
+| `/usr/lib/systemd/system/kyty-lodhw.service` | The GPU helper (step 2), runs `/usr/lib/kytyps5-native/kyty-lodhw` as root, socket `/run/kyty-lodhw.sock` |
+| `/usr/share/doc/kytyps5-native-git/` | Upstream's README and its kernel notes (`bc250-amdgpu.md`) |
+| `~/.local/share/KytyPS5-Native/package/` | Your copy of the program. KytyPS5-Native keeps its saves and caches next to the program, which cannot be written in `/usr/lib`, so `kytyps5-native` and `kytyps5-run` copy it here (about 30 MB) on first start and after each package update, and run it from here. Games started from the launcher keep their saves and caches here too |
+| `~/.local/share/KytyPS5-Native/data/` | Saves and caches of games started from Steam shortcuts; logs in `../logs/<title id>.log` |
+| `~/.config/Kyty/Kyty.ini` | Launcher settings (game folders, options) |
+| `~/.config/KytyPS5-Native/` | Optional `boot.webm` / `exit.webm`, played before a game from Steam and after leaving it |
+
+The system Qt is used instead of upstream's bundled copy, and there is no
+self-updater: `pacman -Syu` updates it.
+
+Tested on a BC-250 (2026-10-29, upstream release `KytyPS5-Native-2026-10-29-b9a29ef`):
+installs cleanly, creates no group and enables nothing, the launcher and
+`kyty_emulator` start, the helper serves its socket to members of `render` and
+refuses everyone else. Not yet tested there: a game.
+
+What you need besides the package:
+
+- **Your own game dumps, decrypted.** Kyty runs a game from a folder that
+  contains `eboot.bin` (with `sce_sys/param.json` for its title and id), or from
+  a ZArchive (`.zar`) of such a folder, which it reads without unpacking. No
+  games, firmware or system software come with it.
+- **No PS5 firmware, BIOS or keys.** KytyPS5, which this fork builds on, implements
+  the PS5's system libraries itself; the only modules it loads are the ones a game
+  ships in its own `sce_module/` folder.
+- **Memory:** 14 GiB of GTT for the larger games (step 1). Gran Turismo 7 uses
+  about 12.6 of the board's 14.8 GB, so close other programs; a Steam shortcut
+  (step 3) unloads Steam itself while the game runs.
+- **Disk space** for the dumps, plus shader and pipeline caches that grow per game.
+- Vulkan through this repository's Mesa (RADV) for presentation and as fallback;
+  the native path runs the game's own GPU commands.
+
+### 1. Kernel parameters
+
+| Parameter | Needed? | What it does |
+|---|---|---|
+| `ttm.pages_limit=3670016` | Yes | 14 GiB GTT. Without it games over 8 GiB of guest memory (Gran Turismo 7, ASTRO BOT, My First Gran Turismo) stall while loading |
+| `amdgpu.sched_policy=2 amdgpu.vm_update_mode=0 amdgpu.cwsr_enable=0` | Recommended | Lets Kyty run the game's async compute on KFD queues. Without them games heavy on async compute (ASTRO BOT) are unplayable |
+
+The three `amdgpu` options apply to **everything** on the board, not only to
+Kyty. `sched_policy=2` helps some games and hurts others (see
+[Optional AMDGPU scheduler tuning](#optional-amdgpu-scheduler-tuning)), and the
+[ROCm / KFD](docs/ROCM.md) TLB workaround does not operate with it. If other
+games get worse, take them out again while you are not playing PS5 games. Upstream's
+explanation of each option, and of its own patched amdgpu (not part of this
+repository's kernels), is in `/usr/share/doc/kytyps5-native-git/bc250-amdgpu.md`.
+
+Add them on CachyOS with Limine (each `sed` appends inside the quotes of the
+existing `KERNEL_CMDLINE[default]+="…"` line, the only one `limine-mkinitcpio`
+reads). If you already added `amdgpu.sched_policy=2` for scheduler tuning, use
+`amdgpu.vm_update_mode=0 amdgpu.cwsr_enable=0` on the second line instead:
+
+```bash
+sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 ttm.pages_limit=3670016"|' /etc/default/limine
+sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 amdgpu.sched_policy=2 amdgpu.vm_update_mode=0 amdgpu.cwsr_enable=0"|' /etc/default/limine
+sudo limine-mkinitcpio
+sudo reboot
+```
+
+Check after the reboot:
+
+```bash
+grep -o 'ttm.pages_limit=[0-9]*' /proc/cmdline                       # ttm.pages_limit=3670016
+cat /sys/module/amdgpu/parameters/{sched_policy,vm_update_mode,cwsr_enable}   # 2, 0, 0
+```
+
+Kyty also checks them when a game starts from a Steam shortcut, and names the
+ones that are off in its first notification.
+
+To remove them again:
+
+```bash
+sudo sed -i -e 's| ttm.pages_limit=3670016||' \
+    -e 's| amdgpu.sched_policy=2 amdgpu.vm_update_mode=0 amdgpu.cwsr_enable=0||' /etc/default/limine
+sudo limine-mkinitcpio
+```
+
+### 2. The GPU helper and the `render` group
+
+`kyty-lodhw` is a small helper that runs as root and does what the PS5's kernel
+does for a game: the GPU's texture LOD statistics, and TLB flushes for the KFD
+queues. Kyty talks to it over `/run/kyty-lodhw.sock`. The package ships the
+service but does not enable it. The socket belongs to the group `render`, which
+every Arch system already has; only its members can use it. Being in `render` then
+means real access: through the helper, every member can read GPU registers and
+write the few it allows. On a single-user board that is you; keep it in mind if
+other accounts are in `render`.
+
+```bash
+sudo usermod -aG render "$USER"
+sudo systemctl enable --now kyty-lodhw.service
+```
+
+Log out and back in (or reboot) so the new group applies to your session, then
+check:
+
+```bash
+id -nG | tr ' ' '\n' | grep -x render     # render
+systemctl status kyty-lodhw.service       # active (running)
+ls -l /run/kyty-lodhw.sock                # srw-rw---- root render
+```
+
+To undo: `sudo systemctl disable --now kyty-lodhw.service` and
+`sudo gpasswd -d "$USER" render`. Removing the package also disables the service.
+
+### 3. Playing
+
+- **Launcher:** `kytyps5-native`, then add the game's folder.
+- **Steam (Gaming Mode):** add `/usr/bin/kytyps5-run` as a non-Steam game and
+  give it the game folder as launch option: `"/path/to/game"`. Optional:
+  `--keep-steam` after the folder keeps Steam running during the game (by
+  default it is unloaded to free 2-3 GB of RAM for large games). It needs
+  `xdotool` and `xorg-xprop`: `sudo pacman -S xdotool xorg-xprop`.
+- Upstream's Decky plugin is for SteamOS and installs its own copy of Kyty; it
+  is not needed with this package.
 
 ## Hardware video (VCN), parked
 

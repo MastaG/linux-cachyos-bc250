@@ -18,6 +18,8 @@ CACHYOS_MESA_COMMIT="${CACHYOS_MESA_COMMIT:-}"
 MESA_GIT_COMMIT="${MESA_GIT_COMMIT:-}"
 PROTONGE_TAG="${PROTONGE_TAG:-}"
 FAKENVAPI_TAG="${FAKENVAPI_TAG:-}"
+KYTY_TAG="${KYTY_TAG:-}"
+KYTY_COMMIT="${KYTY_COMMIT:-}"
 
 case "$COMPONENT" in
     kernel-stable)
@@ -46,6 +48,7 @@ case "$COMPONENT" in
     protonge-latest-bc250) ;;
     proton-cachyos-native-bc250) ;;
     proton-cachyos-slr-bc250) ;;
+    kytyps5-native-git) ;;
     *)
         printf 'ERROR: unsupported fingerprint component: %s\n' "$COMPONENT" >&2
         exit 1
@@ -368,6 +371,28 @@ case "$COMPONENT" in
                 "$ROOT_DIR/scripts/resolve-proton-cachyos-slr.sh" \
                 "$ROOT_DIR/scripts/resolve-cachyos-mesa.sh" \
                 "$ROOT_DIR/scripts/resolve-fakenvapi.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    kytyps5-native-git)
+        # The upstream commit (that of KytyPS5-Native's newest release) and our
+        # packaging. Upstream releases most pushes to main, so this changes
+        # most days: that is the nightly.
+        if [[ -z "$KYTY_COMMIT" ]]; then
+            eval "$("$ROOT_DIR/scripts/resolve-kytyps5-native.sh")"
+        fi
+        [[ "$KYTY_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+            printf 'ERROR: invalid KYTY_COMMIT: %s\n' "$KYTY_COMMIT" >&2
+            exit 1
+        }
+        printf '%s\n' "$KYTY_COMMIT" > "$TMP/kyty-commit"
+        pkg_dir="$ROOT_DIR/packages/kytyps5-native-git"
+        {
+            (cd "$TMP" && sha256sum *)
+            hash_files "$pkg_dir"/*
+            hash_files "$ROOT_DIR/scripts/build-kytyps5-native-git-package.sh" \
+                "$ROOT_DIR/scripts/resolve-kytyps5-native.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;

@@ -53,6 +53,10 @@ BUILD_LINUX_CACHYOS_BC250_META="${BUILD_LINUX_CACHYOS_BC250_META:-false}"
 BUILD_PROTONGE_LATEST_BC250="${BUILD_PROTONGE_LATEST_BC250:-false}"
 BUILD_PROTON_CACHYOS_NATIVE_BC250="${BUILD_PROTON_CACHYOS_NATIVE_BC250:-false}"
 BUILD_PROTON_CACHYOS_SLR_BC250="${BUILD_PROTON_CACHYOS_SLR_BC250:-false}"
+BUILD_KYTYPS5_NATIVE_GIT="${BUILD_KYTYPS5_NATIVE_GIT:-false}"
+KYTY_TAG="${KYTY_TAG:-}"
+KYTY_COMMIT="${KYTY_COMMIT:-}"
+KYTYPS5_NATIVE_GIT_FINGERPRINT="${KYTYPS5_NATIVE_GIT_FINGERPRINT:-unknown}"
 NCT6687D_COMMIT="${NCT6687D_COMMIT:-}"
 BC250_VRM_COMMIT="${BC250_VRM_COMMIT:-}"
 BC250_MEMORY_COMMIT="${BC250_MEMORY_COMMIT:-}"
@@ -64,7 +68,7 @@ for var in BUILD_KERNEL_STABLE BUILD_KERNEL_RC BUILD_KERNEL_BORE BUILD_MESA BUIL
            BUILD_MESA_GIT BUILD_BC250_DUAL_AUDIO \
            BUILD_LINUX_CACHYOS_BC250_META BUILD_PROTONGE_LATEST_BC250 \
            BUILD_PROTON_CACHYOS_NATIVE_BC250 \
-           BUILD_PROTON_CACHYOS_SLR_BC250; do
+           BUILD_PROTON_CACHYOS_SLR_BC250 BUILD_KYTYPS5_NATIVE_GIT; do
     value="${!var}"
     [[ "$value" == true || "$value" == false ]] || {
         printf 'ERROR: %s must be true or false: %s\n' "$var" "$value" >&2
@@ -273,6 +277,9 @@ runuser -u builder -- env \
     PROTONGE_LATEST_BC250_FINGERPRINT="$PROTONGE_LATEST_BC250_FINGERPRINT" \
     PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT="$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" \
     PROTON_CACHYOS_SLR_BC250_FINGERPRINT="$PROTON_CACHYOS_SLR_BC250_FINGERPRINT" \
+    KYTYPS5_NATIVE_GIT_FINGERPRINT="$KYTYPS5_NATIVE_GIT_FINGERPRINT" \
+    KYTY_TAG="$KYTY_TAG" \
+    KYTY_COMMIT="$KYTY_COMMIT" \
     NCT6687D_COMMIT="$NCT6687D_COMMIT" \
     BC250_VRM_COMMIT="$BC250_VRM_COMMIT" \
     BC250_MEMORY_COMMIT="$BC250_MEMORY_COMMIT" \
@@ -319,6 +326,7 @@ runuser -u builder -- env \
                 protonge-latest-bc250)       /workspace/scripts/build-protonge-latest-bc250-package.sh ;;
                 proton-cachyos-native-bc250) /workspace/scripts/build-proton-cachyos-native-bc250-package.sh ;;
                 proton-cachyos-slr-bc250)    /workspace/scripts/build-proton-cachyos-slr-bc250-package.sh ;;
+                kytyps5-native-git)          /workspace/scripts/build-kytyps5-native-git-package.sh ;;
                 *) printf "ERROR: unknown component: %s\\n" "$COMPONENT" >&2; exit 1 ;;
             esac
 

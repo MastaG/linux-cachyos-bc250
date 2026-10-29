@@ -1,0 +1,21 @@
+# Upstream's tools/bc250-lodhw/kyty-lodhw.service, with the socket group fixed
+# to "render" (present on every Arch system, so the package creates no group)
+# instead of the group of whoever ran install-helper.sh. Every member of render
+# can then read GPU registers and write the few the helper allows.
+# Not enabled by the package: sudo systemctl enable --now kyty-lodhw.service
+[Unit]
+Description=Kyty native GPU helper (LOD statistics, KFD TLB flushes)
+After=systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/bash -c 'for _ in {1..30}; do compgen -G "/dev/dri/renderD*" >/dev/null && exit 0; sleep 1; done; exit 1'
+# kyty-lodhw takes a numeric gid. Refuse to start without the group rather
+# than fall back to a socket other users can reach.
+ExecStart=/usr/bin/bash -c 'gid=$(getent group render | cut -d: -f3); [[ -n $gid ]] || { echo "group render missing" >&2; exit 1; }; exec /usr/lib/kytyps5-native/kyty-lodhw /run/kyty-lodhw.sock "$gid"'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

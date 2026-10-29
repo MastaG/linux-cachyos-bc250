@@ -1,0 +1,19 @@
+# Nothing is enabled or changed here: the kernel options, the helper service and
+# the group membership are the user's to set (README, "KytyPS5-Native").
+post_install() {
+    echo "==> KytyPS5-Native installed: start it with 'kytyps5-native'."
+    echo "==> Not set up for you (see the repository README, section KytyPS5-Native):"
+    echo "==>   - kernel options: ttm.pages_limit=3670016, and optionally"
+    echo "==>     amdgpu sched_policy=2 vm_update_mode=0 cwsr_enable=0"
+    echo "==>   - the GPU helper: sudo usermod -aG render \$USER"
+    echo "==>     sudo systemctl enable --now kyty-lodhw.service"
+}
+
+post_upgrade() {
+    # Restart only a helper the user turned on, so it runs the new binary.
+    systemctl try-restart kyty-lodhw.service >/dev/null 2>&1 || true
+}
+
+pre_remove() {
+    systemctl disable --now kyty-lodhw.service >/dev/null 2>&1 || true
+}

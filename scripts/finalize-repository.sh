@@ -67,6 +67,7 @@ required_metadata=(
 # actually there; a run in this state publishes everything else.
 optional_metadata=(
     proton-cachyos-slr-bc250-info.env
+    kytyps5-native-git-info.env
 )
 for file in "${required_metadata[@]}"; do
     [[ -f "$OUT_DIR/$file" ]] || {
@@ -180,6 +181,17 @@ else
     printf '::warning title=proton-cachyos-slr-bc250 missing::not in this repository yet; its release-notes section is omitted\n'
 fi
 
+kyty_info="$OUT_DIR/kytyps5-native-git-info.env"
+kyty_present=false
+if [[ -f "$kyty_info" ]]; then
+    kyty_present=true
+    kyty_pkgver="$(value "$kyty_info" KYTYPS5_NATIVE_GIT_PKGVER)"
+    kyty_pkgrel="$(value "$kyty_info" KYTYPS5_NATIVE_GIT_PKGREL)"
+    kyty_tag="$(value "$kyty_info" KYTYPS5_NATIVE_GIT_TAG)"
+else
+    printf '::warning title=kytyps5-native-git missing::not in this repository yet; its release-notes section is omitted\n'
+fi
+
 for field in \
     stable_pkgbase stable_pkgver stable_pkgrel \
     rc_pkgbase rc_pkgver rc_pkgrel \
@@ -249,6 +261,8 @@ protonge_count="$(pkgbase_count protonge-latest-bc250)"
 proton_native_count="$(pkgbase_count proton-cachyos-native-bc250)"
 proton_slr_count="$(pkgbase_count proton-cachyos-slr-bc250)"
 [[ "$proton_slr_present" == true ]] || proton_slr_count=1
+kyty_count="$(pkgbase_count kytyps5-native-git)"
+[[ "$kyty_present" == true ]] || kyty_count=1
 
 (( stable_count >= 2 )) || { printf 'ERROR: expected stable kernel + headers; found %d package(s)\n' "$stable_count" >&2; exit 1; }
 (( rc_count >= 2 )) || { printf 'ERROR: expected RC kernel + headers; found %d package(s)\n' "$rc_count" >&2; exit 1; }
@@ -266,6 +280,7 @@ proton_slr_count="$(pkgbase_count proton-cachyos-slr-bc250)"
 (( protonge_count == 1 )) || { printf 'ERROR: expected exactly one protonge-latest-bc250 package; found %d\n' "$protonge_count" >&2; exit 1; }
 (( proton_native_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-native-bc250 package; found %d\n' "$proton_native_count" >&2; exit 1; }
 (( proton_slr_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-slr-bc250 package; found %d\n' "$proton_slr_count" >&2; exit 1; }
+(( kyty_count == 1 )) || { printf 'ERROR: expected exactly one kytyps5-native-git package; found %d\n' "$kyty_count" >&2; exit 1; }
 
 # The database is rebuilt after every component so the runner can publish each
 # one as it lands; do it once more here so the final release is built from the
@@ -430,6 +445,28 @@ if [[ "$proton_slr_present" == true ]]; then
 sudo pacman -S proton-cachyos-slr-bc250
 \`\`\`
 EOF_SLR_NOTES
+)"
+fi
+
+# Empty until the package has published once, as for the SLR section above.
+kyty_section=""
+if [[ "$kyty_present" == true ]]; then
+    kyty_section="$(cat <<EOF_KYTY_NOTES
+## kytyps5-native-git (opt-in, nightly)
+
+- Package version: \`${kyty_pkgver}-${kyty_pkgrel}\` (upstream release \`${kyty_tag}\`)
+- [KytyPS5-Native](https://github.com/superkeka/KytyPS5-Native): PS5 games with
+  their GPU work running natively on the BC-250. Built from the commit of
+  upstream's newest release and rebuilt whenever that moves, so updates arrive
+  most days.
+- Installing changes nothing on the system: the kernel options, the
+  \`kyty-lodhw\` helper service and \`render\` group membership are yours to set, see
+  the README section **KytyPS5-Native**.
+
+\`\`\`bash
+sudo pacman -S kytyps5-native-git
+\`\`\`
+EOF_KYTY_NOTES
 )"
 fi
 
@@ -742,6 +779,8 @@ sudo pacman -S proton-cachyos-native-bc250
 \`\`\`
 
 ${slr_section}
+
+${kyty_section}
 
 ## linux-cachyos-bc250-meta
 

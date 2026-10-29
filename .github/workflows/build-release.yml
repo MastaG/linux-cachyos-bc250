@@ -123,6 +123,19 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Using GE-Proton release: $tag"
 
+      - name: Resolve KytyPS5-Native release
+        id: kyty
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KYTY_TAG: ${{ vars.KYTY_TAG }}
+        run: |
+          set -euo pipefail
+          eval "$(./scripts/resolve-kytyps5-native.sh)"
+          echo "tag=$KYTY_TAG" >> "$GITHUB_OUTPUT"
+          echo "commit=$KYTY_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "Using KytyPS5-Native release: $KYTY_TAG ($KYTY_COMMIT)"
+
       - name: Calculate component fingerprints
         id: fingerprints
         shell: bash
@@ -135,6 +148,7 @@ jobs:
           CACHYOS_MESA_COMMIT: ${{ steps.mesa_packaging.outputs.commit }}
           MESA_GIT_COMMIT: ${{ steps.mesa_git.outputs.commit }}
           PROTONGE_TAG: ${{ steps.protonge.outputs.tag }}
+          KYTY_COMMIT: ${{ steps.kyty.outputs.commit }}
         run: |
           set -euo pipefail
 
@@ -154,6 +168,7 @@ jobs:
           protonge_latest_bc250="$(./scripts/source-fingerprint.sh protonge-latest-bc250)"
           proton_cachyos_native_bc250="$(./scripts/source-fingerprint.sh proton-cachyos-native-bc250)"
           proton_cachyos_slr_bc250="$(./scripts/source-fingerprint.sh proton-cachyos-slr-bc250)"
+          kytyps5_native_git="$(./scripts/source-fingerprint.sh kytyps5-native-git)"
           aggregate="$(printf '%s\n' \
             "$kernel_stable" "$kernel_rc" "$kernel_bore" \
             "$mesa" "$lib32_mesa" "$mesa_git" \
@@ -177,6 +192,7 @@ jobs:
           echo "protonge_latest_bc250=$protonge_latest_bc250" >> "$GITHUB_OUTPUT"
           echo "proton_cachyos_native_bc250=$proton_cachyos_native_bc250" >> "$GITHUB_OUTPUT"
           echo "proton_cachyos_slr_bc250=$proton_cachyos_slr_bc250" >> "$GITHUB_OUTPUT"
+          echo "kytyps5_native_git=$kytyps5_native_git" >> "$GITHUB_OUTPUT"
           echo "aggregate=$aggregate" >> "$GITHUB_OUTPUT"
 
           printf 'Stable kernel fingerprint: %s\n' "$kernel_stable"
@@ -195,6 +211,7 @@ jobs:
           printf 'protonge-latest-bc250 fp:  %s\n' "$protonge_latest_bc250"
           printf 'proton-cachyos-native fp:  %s\n' "$proton_cachyos_native_bc250"
           printf 'proton-cachyos-slr fp:     %s\n' "$proton_cachyos_slr_bc250"
+          printf 'kytyps5-native-git fp:     %s\n' "$kytyps5_native_git"
 
       - name: Determine components to build
         id: build
@@ -216,6 +233,7 @@ jobs:
           PROTONGE_LATEST_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.protonge_latest_bc250 }}
           PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_native_bc250 }}
           PROTON_CACHYOS_SLR_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_slr_bc250 }}
+          KYTYPS5_NATIVE_GIT_FINGERPRINT: ${{ steps.fingerprints.outputs.kytyps5_native_git }}
         shell: bash
         run: |
           set -euo pipefail
@@ -323,6 +341,7 @@ jobs:
           build_protonge_latest_bc250=false
           build_proton_cachyos_native_bc250=false
           build_proton_cachyos_slr_bc250=false
+          build_kytyps5_native_git=false
 
           [[ "$(previous_value kernel-stable-info.env KERNEL_FINGERPRINT KERNEL_STABLE_FINGERPRINT)" == "$KERNEL_STABLE_FINGERPRINT" ]] || build_kernel_stable=true
           [[ "$(previous_value kernel-rc-info.env KERNEL_FINGERPRINT KERNEL_RC_FINGERPRINT)" == "$KERNEL_RC_FINGERPRINT" ]] || build_kernel_rc=true
@@ -340,6 +359,7 @@ jobs:
           [[ "$(previous_value protonge-latest-bc250-info.env PROTONGE_LATEST_BC250_FINGERPRINT PROTONGE_LATEST_BC250_FINGERPRINT)" == "$PROTONGE_LATEST_BC250_FINGERPRINT" ]] || build_protonge_latest_bc250=true
           [[ "$(previous_value proton-cachyos-native-bc250-info.env PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT)" == "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" ]] || build_proton_cachyos_native_bc250=true
           [[ "$(previous_value proton-cachyos-slr-bc250-info.env PROTON_CACHYOS_SLR_BC250_FINGERPRINT PROTON_CACHYOS_SLR_BC250_FINGERPRINT)" == "$PROTON_CACHYOS_SLR_BC250_FINGERPRINT" ]] || build_proton_cachyos_slr_bc250=true
+          [[ "$(previous_value kytyps5-native-git-info.env KYTYPS5_NATIVE_GIT_FINGERPRINT KYTYPS5_NATIVE_GIT_FINGERPRINT)" == "$KYTYPS5_NATIVE_GIT_FINGERPRINT" ]] || build_kytyps5_native_git=true
 
           if [[ '${{ github.event_name }}' == workflow_dispatch && '${{ inputs.force }}' == true ]]; then
             build_kernel_stable=true
@@ -358,6 +378,7 @@ jobs:
             build_protonge_latest_bc250=true
             build_proton_cachyos_native_bc250=true
             build_proton_cachyos_slr_bc250=true
+            build_kytyps5_native_git=true
           fi
 
           # PARKED (2026-10-24): do not build linux-cachyos-rc at all until CachyOS
@@ -395,7 +416,8 @@ jobs:
                 "$build_bc250_dual_audio" == true || "$build_bc250_cec" == true || "$build_bc250_paccache_cleanup" == true || "$build_bc250_fixes" == true || "$build_bc250_ch7218_fw" == true || "$build_bc250_vcn_fw" == true || "$build_linux_cachyos_bc250_meta" == true || \
                 "$build_protonge_latest_bc250" == true || \
                 "$build_proton_cachyos_native_bc250" == true || \
-                "$build_proton_cachyos_slr_bc250" == true ]]; then
+                "$build_proton_cachyos_slr_bc250" == true || \
+                "$build_kytyps5_native_git" == true ]]; then
             any=true
           fi
 
@@ -415,6 +437,7 @@ jobs:
           echo "protonge_latest_bc250=$build_protonge_latest_bc250" >> "$GITHUB_OUTPUT"
           echo "proton_cachyos_native_bc250=$build_proton_cachyos_native_bc250" >> "$GITHUB_OUTPUT"
           echo "proton_cachyos_slr_bc250=$build_proton_cachyos_slr_bc250" >> "$GITHUB_OUTPUT"
+          echo "kytyps5_native_git=$build_kytyps5_native_git" >> "$GITHUB_OUTPUT"
           echo "any=$any" >> "$GITHUB_OUTPUT"
 
           echo "Build stable kernel: $build_kernel_stable"
@@ -433,6 +456,7 @@ jobs:
           echo "Build protonge-latest-bc250:    $build_protonge_latest_bc250"
           echo "Build proton-cachyos-native-bc250: $build_proton_cachyos_native_bc250"
           echo "Build proton-cachyos-slr-bc250: $build_proton_cachyos_slr_bc250"
+          echo "Build kytyps5-native-git: $build_kytyps5_native_git"
 
       - name: Seed previous repository
         if: steps.build.outputs.any == 'true'
@@ -554,6 +578,7 @@ jobs:
           PROTONGE_LATEST_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.protonge_latest_bc250 }}
           PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_native_bc250 }}
           PROTON_CACHYOS_SLR_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_slr_bc250 }}
+          KYTYPS5_NATIVE_GIT_FINGERPRINT: ${{ steps.fingerprints.outputs.kytyps5_native_git }}
           NCT6687D_COMMIT: ${{ steps.nct6687d.outputs.commit }}
           BC250_VRM_COMMIT: ${{ steps.bc250_sensors.outputs.BC250_VRM_COMMIT }}
           BC250_MEMORY_COMMIT: ${{ steps.bc250_sensors.outputs.BC250_MEMORY_COMMIT }}
@@ -577,6 +602,9 @@ jobs:
           BUILD_PROTONGE_LATEST_BC250: ${{ steps.build.outputs.protonge_latest_bc250 }}
           BUILD_PROTON_CACHYOS_NATIVE_BC250: ${{ steps.build.outputs.proton_cachyos_native_bc250 }}
           BUILD_PROTON_CACHYOS_SLR_BC250: ${{ steps.build.outputs.proton_cachyos_slr_bc250 }}
+          BUILD_KYTYPS5_NATIVE_GIT: ${{ steps.build.outputs.kytyps5_native_git }}
+          KYTY_TAG: ${{ steps.kyty.outputs.tag }}
+          KYTY_COMMIT: ${{ steps.kyty.outputs.commit }}
           PROTONGE_TAG: ${{ steps.protonge.outputs.tag }}
           # Empty unless the repository variable pins it, in which case
           # ci-build.sh sizes the cache from the runner's own free space.
@@ -628,6 +656,7 @@ jobs:
             -e BUILD_PROTONGE_LATEST_BC250 \
             -e BUILD_PROTON_CACHYOS_NATIVE_BC250 \
             -e BUILD_PROTON_CACHYOS_SLR_BC250 \
+            -e BUILD_KYTYPS5_NATIVE_GIT \
             -e BC250_PKGREL='${{ github.run_number }}' \
             -e SOURCE_FINGERPRINT \
             -e KERNEL_STABLE_FINGERPRINT \
@@ -646,6 +675,7 @@ jobs:
             -e PROTONGE_LATEST_BC250_FINGERPRINT \
             -e PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT \
             -e PROTON_CACHYOS_SLR_BC250_FINGERPRINT \
+            -e KYTYPS5_NATIVE_GIT_FINGERPRINT \
             -e NCT6687D_COMMIT \
             -e BC250_VRM_COMMIT \
             -e BC250_MEMORY_COMMIT \
@@ -654,6 +684,8 @@ jobs:
             -e CACHYOS_MESA_COMMIT \
             -e MESA_GIT_COMMIT \
             -e PROTONGE_TAG \
+            -e KYTY_TAG \
+            -e KYTY_COMMIT \
             -e GITHUB_REPOSITORY='${{ github.repository }}' \
             -e GITHUB_SHA='${{ github.sha }}' \
             archlinux:base-devel sleep infinity
@@ -726,6 +758,7 @@ jobs:
             "protonge-latest-bc250:$BUILD_PROTONGE_LATEST_BC250"
             "proton-cachyos-native-bc250:$BUILD_PROTON_CACHYOS_NATIVE_BC250"
             "proton-cachyos-slr-bc250:$BUILD_PROTON_CACHYOS_SLR_BC250"
+            "kytyps5-native-git:$BUILD_KYTYPS5_NATIVE_GIT"
             "linux-cachyos-bc250-meta:$BUILD_LINUX_CACHYOS_BC250_META"
           )
 
