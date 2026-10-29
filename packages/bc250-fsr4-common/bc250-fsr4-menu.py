@@ -190,15 +190,29 @@ for name in ("SDL_JOYSTICK_HIDAPI", "SDL_JOYSTICK_HIDAPI_STEAM", "SDL_JOYSTICK_H
     os.environ[name] = "1"
 os.environ["SDL_NO_SIGNAL_HANDLERS"] = "1"  # SDL would swallow SIGTERM (Steam's "Exit game")
 
-CSS = b"""
-window { font-size: 20px; }
-.title { font-size: 28px; font-weight: bold; }
-.sub { font-size: 15px; opacity: 0.7; }
-.hint { font-size: 15px; opacity: 0.8; }
-checkbutton, button { padding: 6px; }
+CSS = """
+window { font-size: %(text)dpx; }
+.title { font-size: %(title)dpx; font-weight: bold; }
+.sub { font-size: %(small)dpx; opacity: 0.7; }
+.hint { font-size: %(small)dpx; opacity: 0.8; }
+checkbutton, button { padding: %(pad)dpx; }
 checkbutton:focus-visible, button:focus-visible { outline: 4px solid #ff8c1a; outline-offset: 2px; border-radius: 8px; }
 checkbutton:focus-visible { background-color: alpha(#ff8c1a, 0.15); }
 """
+MARGIN = 28
+MIN_SCALE = 0.55  # below this the text gets hard to read on a TV; the menu scrolls instead
+
+
+def css(scale):
+    return (CSS % {"text": round(20 * scale), "title": round(28 * scale), "small": max(9, round(15 * scale)),
+                   "pad": round(6 * scale)}).encode()
+
+
+def fit_scale(natural_height, room):
+    """How far to shrink the text so a menu natural_height tall fits in room."""
+    if natural_height <= room:
+        return 1.0
+    return max(MIN_SCALE, room / natural_height)
 
 EVENTS = {0x650: "AXIS", 0x652: "BUTTONDOWN", 0x653: "DEVICEADDED", 0x100: "QUIT"}
 
@@ -261,20 +275,23 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
     if sdl:
         sdl.SDL_OpenGamepad.restype = ctypes.c_void_p
         sdl.SDL_OpenGamepad.argtypes = [ctypes.c_uint32]
-    css = Gtk.CssProvider()
-    css.load_from_data(CSS)
+    provider = Gtk.CssProvider()
+    provider.load_from_data(css(1.0))
     Gtk.StyleContext.add_provider_for_display(
-        Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
     ev = (ctypes.c_ubyte * 128)()
     result = {}
     loop = GLib.MainLoop()
     win = Gtk.Window(title="BC-250 upscaler")
-    win.set_default_size(900, 780)
     win.connect("realize", lambda w: tag_steam_game(w.get_surface()))
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
     for margin in ("margin_top", "margin_bottom", "margin_start", "margin_end"):
-        box.set_property(margin, 28)
-    win.set_child(box)
+        box.set_property(margin, MARGIN)
+    # Scrolls only when even the smallest text does not fit (see fit() below).
+    scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                propagate_natural_width=True, propagate_natural_height=True)
+    scroll.set_child(box)
+    win.set_child(scroll)
     t = Gtk.Label(label="Choose the upscaler for this game", xalign=0)
     t.add_css_class("title")
     box.append(t)
@@ -392,8 +409,34 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
                     poll_pad.last = st
         return True
 
+    def fit():
+        # Gaming Mode runs games (and this menu) on a screen of the game's
+        # resolution, often 1280x800 or 720p scaled up to the TV, and a HiDPI
+        # desktop (4K at 200%) halves the room again: shrink the text until the
+        # whole menu fits, so nothing is cut off at the top or bottom.
+        win.realize()
+        display = win.get_display()
+        monitor = display.get_monitor_at_surface(win.get_surface()) or display.get_monitors().get_item(0)
+        if monitor is None:
+            return
+        geometry = monitor.get_geometry()  # logical pixels, as measure() below
+        width = min(900, geometry.width - 32)
+        room = geometry.height - 48  # leave a little for a title bar
+        # Measured once at full size: the CSS takes effect only on the next
+        # frame, and text, margins and spacing all shrink about in proportion.
+        natural = box.measure(Gtk.Orientation.VERTICAL, width)[1]  # margins included
+        scale = fit_scale(natural / 0.97, room)
+        if scale < 1.0:
+            provider.load_from_data(css(scale))
+            box.set_spacing(round(8 * scale))
+            for margin in ("margin_top", "margin_bottom", "margin_start", "margin_end"):
+                box.set_property(margin, round(MARGIN * scale))
+        win.set_default_size(width, -1)
+        scroll.set_max_content_height(room)
+
     poll_pad.last = 0
     GLib.timeout_add(16, poll_pad)
+    fit()
     win.present()
     for name, r in radios:
         if r.get_active():
