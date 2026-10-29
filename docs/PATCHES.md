@@ -32,7 +32,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twenty-two BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3, `cachyos-7.3.0-2`). The RC kernel carries the same twenty-two patches (`cachyos-7.3-rc6-1`):
+The stable and BORE kernels carry these twenty-two BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3). The RC kernel carries the same twenty-two patches (7.3-rc):
 
 ```text
 0001-bc250-8core-metrics.patch

@@ -375,8 +375,8 @@ selection at build time instead of at a customer's launch.
 ## Payload
 
 The pinned third-party artifacts are mirrored in this repository's
-`bc250-fsr4-payload` release, not committed here — they are ~71 MB, and git
-keeps them forever.
+`bc250-fsr4-payload` release, not committed here — they are about 1 GB by now,
+and git keeps them forever.
 
 Mirroring is not gratuitous. OptiScaler nightlies are pruned after roughly a
 month, so a pinned nightly URL 404s within weeks, and the FSR4 provider is
@@ -405,5 +405,6 @@ with material additional functionality. Without it, games whose DLSS input path
 checks for an NVIDIA-signed library lose the OptiScaler hook entirely; the
 FSR/XeSS/Vulkan input paths and the whole ffx upscaler chain are unaffected.
 
-It is used only as a signature surrogate beside the proxy. No DLSS upscaler is
-installed, and no DLL is ever taken from a game directory.
+It is used only as a signature surrogate beside the proxy: NVIDIA's DLSS
+upscaler itself never runs (HLX DLSS in the Scaler is HelixSR's own
+implementation), and no DLL is ever taken from a game directory.

@@ -745,12 +745,10 @@ on the desktop, and it waits until you choose.
 - The variant the game is on now is pre-selected, and the frame generation box
   shows what the game really does now — including what you saved in the
   OptiScaler overlay. Pressing Start without touching it changes nothing.
-- HelixSR Scaler and FSR4 RC12 have no frame generator picked by default.
-  Turning frame generation on there also picks one: OptiFG as the input and FSR
-  frame generation as the output, unless you already picked something else in
-  the overlay. A game that got frame generation turned on without that (the
-  first Scaler 2.0 package) gets it the next time you press Start with the box
-  unticked.
+- The FreeFG entries and HelixSR Scaler start with frame generation on; FSR4
+  RC12 starts with it off. Turning it on for RC12 also picks a frame generator:
+  OptiFG as the input and FSR frame generation as the output, unless you already
+  picked something else in the overlay.
 - Choosing another upscaler starts that one fresh: its files and a new
   `OptiScaler.ini` replace the old ones, so settings saved in the overlay for the
   previous upscaler are gone.
@@ -798,7 +796,7 @@ just means OptiScaler never loads.
 This is unrelated to the `Spoofing.Dxgi` setting, despite the shared word. The
 proxy name decides which import the loader resolves to OptiScaler; `Spoofing.Dxgi`
 decides whether OptiScaler reports a spoofed GPU to the game once it is running.
-This package sets that one to `false`.
+This package seeds that one with `auto` (see below).
 
 `BC250_OPTISCALER_EXTRA` is the per-game switch that is still enforced on every
 launch. The shipped preset only seeds a prefix that has no answer of its own (see
@@ -870,7 +868,8 @@ Two follow-ups, both seen on a BC-250 in The Last of Us Part II:
 puts the FSR4 watermark on screen and writes a Proton log, which turns "FSR4
 doesn't seem to work" into something diagnosable.
 
-Without it the package writes no logs at all. That now includes fakenvapi, which
+Without it the package writes no logs, except HelixSR's own `helixsr.log`, which
+stays on because its author asks for it with every report. That includes fakenvapi, which
 logs to `fakenvapi.log` beside its own DLL by default; the package ships a
 `fakenvapi.ini` that turns it off. If you are chasing a Reflex or latency problem
 and want it back, edit that file in the prefix — it is not checksummed, so the
@@ -883,7 +882,7 @@ change sticks:
 ### Which FidelityFX bridge you get, and the alternatives
 
 The upscaler a game gets is **FreeFG + HelixSR by default**, or what you pick
-in the menu (see the next section). For the stock OptiScaler nightly, one file in the payload — the
+in the menu (see above). For the stock OptiScaler nightly, one file in the payload — the
 FidelityFX bridge, `amd_fidelityfx_upscaler_dx12.dll` — exists in five other
 pinned builds. Each package ships all of them and swaps only that file;
 `PROTON_USE_OPTISCALER` picks one per game:
@@ -932,8 +931,9 @@ already what this package enforces. To confirm which build is running, add
 `BC250_FSR4_DEBUG=1`; the watermark identifies `4.1.1r11`.
 
 **`fsr412f` is the same fork's newest bridge** ([v4.0.0-rc12](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12),
-`4.1.1r12`, by daniel-h-0), opt-in and selected by name only: the default stays
-HelixSR Scaler and every other variant keeps its own bridge. RC12 extends the
+`4.1.1r12`, by daniel-h-0), opt-in as a bridge of its own (and the upscaler of
+FreeFG's `freefg` variant): the default is FreeFG + HelixSR and every other
+variant keeps its own bridge. RC12 extends the
 RC8/RC9 shader work to the two context families RC11 left alone, the ones a
 1080p display and an 8K one pick: 34 new slots (24 distinct programs), generated
 from AMD's SDK 2.3.0 DXIL by the project's own lowering tools, giving the same
@@ -949,7 +949,7 @@ package already enforces — and the desktop client it ships in (the BC250 build
 GPL-3.0) is not part of the payload: we take the DLL zip, byte for byte the one
 the standalone RC12 release publishes (SHA256
 `646778a0d06c42bf3cdcc99f9396680f5cc4a33658b90c0889fd15751bfb800d`), and the
-packages keep the 2026-10-15 OptiScaler nightly they already ship, which the
+packages keep the OptiScaler nightly they already ship (20261025), which the
 client's own pin (20260904) predates.
 
 Two things to know about the alternatives:
@@ -988,7 +988,9 @@ with HelixSR's two upscalers in its list:
   upscaler of its own in the Insert menu's list, and it is where the Scaler starts
   (1.15 ms from 720p to 1080p in Shadow of the Tomb Raider, HLX DLSS 1.10 ms);
   a switch to HLX DLSS there is kept from then on. It also carries the
-  Direct3D 11 and Vulkan games (OptiScaler's `ffx_12` route).
+  Direct3D 11 and Vulkan games (OptiScaler's `ffx_12` route). Since HelixSR
+  3.2.0 its shaders come from AMD's FSR SDK 2.4.0 (MIT), and AMD's own FSR next
+  to it in the list is that SDK's FSR 4.1.2.
 
 HelixSR 3.x has **no frame generation of its own** any more; OptiScaler's
 is what the Scaler starts with and the menu's "Disable frame generation" box
@@ -1038,7 +1040,7 @@ SHA256 and its origin is written into the prefix
 Design and packaging details are in [docs/FSR4-PROTON.md](docs/FSR4-PROTON.md)
 and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md).
 
-### FreeFG: XeSS frame generation for the BC-250 (opt-in)
+### FreeFG: XeSS frame generation for the BC-250 (the default)
 
 `PROTON_USE_OPTISCALER=freefg %command%` selects
 [FreeFG](https://github.com/daniel-h-0/freefg) 1.1.5 by daniel-h-0. Frame
@@ -1446,6 +1448,11 @@ The BC-250 VRM and GDDR6 drivers work much the same way, except that they follow
   upscaler manifest that lets Proton load a checksum-verified FSR4 provider and
   OptiScaler from disk instead of downloading them at launch.  
   <https://github.com/daniel-h-0/bc250-fsr4-fork>
+- lonewolf0622 — DirectMesh (mesh and task shaders on the BC-250), HelixSR and
+  HelixSR Scaler.  
+  <https://github.com/lonewolf0622>
+- daniel-h-0 / fish — FreeFG, XeSS frame generation sped up for the BC-250.  
+  <https://github.com/daniel-h-0/freefg>
 - FilippoR / ViRazY - For the kernel GPU frequency ranges
 - @dejan_994 — the CH7218 DP-to-HDMI 2.1 adapter quirk: identifying the DPCD
   misreport behind the black screen at 4K120, and the original patch this
