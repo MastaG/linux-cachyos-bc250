@@ -317,6 +317,11 @@ FREEFG_LOGS = ("OptiScaler/BC250-MFG.log", "OptiScaler/BC250-XeFG-fast.log")
 # HelixSR/helixsr.dll is missing, and the HelixSR inside it is gone from the
 # package.
 RETIRED_FOLDERS = ("HelixSR-fsrfg",)
+# Files the same way: HelixSR 2.0 as OptiScaler's FidelityFX library (the
+# freefg-helixsr default and helixsr-ffx, both gone with it). The prefix's
+# OptiScaler.ini still points FfxDx12Path at that DLL and has UpscalerIndex=1,
+# so a prefix that has them is treated as a variant switch and starts fresh.
+RETIRED_FILES = ("OptiScaler/amd_fidelityfx_dx12.dll", "OptiScaler/helixsr.ini")
 
 
 def clean_other_variants(config, env, inherited):
@@ -330,7 +335,8 @@ def clean_other_variants(config, env, inherited):
 
     So every file the manifest lists for some variant but not for the selected
     one is removed, and so is every folder that only other variants use, with
-    whatever was written into it, and every folder of RETIRED_FOLDERS. Files the selected variant also has are left
+    whatever was written into it, and every folder of RETIRED_FOLDERS and file of
+    RETIRED_FILES. Files the selected variant also has are left
     to protonfixes, which replaces them. Nothing outside the payload folder is
     touched, and nothing at all when OptiScaler is off.
     """
@@ -354,6 +360,8 @@ def clean_other_variants(config, env, inherited):
     if version not in config.get("freefg", {}):
         stale |= set(FREEFG_LOGS)
     stale_folders = (folders(stale) | set(RETIRED_FOLDERS)) - folders(keep)
+    # Only the files: their folder is OptiScaler/, which every variant shares.
+    stale |= set(RETIRED_FILES) - keep
 
     root = payload.resolve()
 
@@ -608,7 +616,7 @@ def installed_variant(config, inherited):
 
 
 # The variants the menu offers, by the short names PROTON_USE_OPTISCALER takes.
-MENU_VARIANTS = ("freefg-helixsr", "freefg-hlxfsr4", "freefg", "helixsr", "fsr412f")
+MENU_VARIANTS = ("freefg-hlxfsr4", "freefg", "helixsr", "fsr412f")
 
 
 def menu_names(config):
@@ -710,6 +718,8 @@ def variant_switched(config, inherited):
     files = variant_files(config)
     if version not in files:
         return False
+    if any((payload / name).exists() for name in RETIRED_FILES if name not in files[version]):
+        return True
     for name, theirs in files.items():
         if name == version or not theirs:
             continue

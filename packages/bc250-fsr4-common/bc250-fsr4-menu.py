@@ -29,13 +29,15 @@ import sys
 
 # name, label, sub-label. The order is the order in the window.
 PRESETS = [
-    ("freefg-helixsr", "FreeFG + HelixSR", "FreeFG 1.1.5 frame generation, HelixSR 2.0.0 upscaler"),
     ("freefg-hlxfsr4", "FreeFG + HLX FSR 4", "FreeFG 1.1.5 frame generation, HelixSR 3.2.0's HLX FSR 4 upscaler"),
     ("freefg", "FreeFG + FSR4 RC12", "FreeFG 1.1.5 frame generation, FSR4 RC12 upscaler"),
     ("helixsr", "HelixSR Scaler", "HelixSR Scaler 2.1.0, HelixSR 3.2.0: HLX DLSS, or HLX FSR 4 from its menu"),
     ("fsr412f", "FSR4 RC12", "FSR4 RC12 upscaler only, no FreeFG"),
     (OFF := "off", "No upscaling", "The game as it ships: no OptiScaler, no FSR4"),
 ]
+# A choice saved by an older package that names a variant it no longer has
+# (HelixSR 2.0 went in 2026-10): what that name selects now.
+RETIRED = {"freefg-helixsr": "freefg-hlxfsr4", "helixsr-ffx": "helixsr"}
 FG_LABEL = "Disable frame generation"
 SPOOF_LABEL = "GPU spoofing (DXGI)"
 # OptiScaler's [Spoofing] Dxgi: "true or false - Default (auto) is true for
@@ -52,14 +54,12 @@ HINT = "Launch your game with PROTON_OPTISCALER_MENU=1 %command% to show this me
 #                          frame generation of its own, OptiScaler's is all there is
 #   fsr412f:               [FrameGen] Enabled + FG_WIRING, the stock nightly's keys
 FG_ON = {
-    "freefg-helixsr": {"FrameGen.Enabled": "true"},
     "freefg-hlxfsr4": {"FrameGen.Enabled": "true"},
     "freefg": {"FrameGen.Enabled": "true"},
     "helixsr": {"FrameGen.Enabled": "true"},
     "fsr412f": {"FrameGen.Enabled": "true"},
 }
 FG_OFF = {
-    "freefg-helixsr": {"FrameGen.Enabled": "false"},
     "freefg-hlxfsr4": {"FrameGen.Enabled": "false"},
     "freefg": {"FrameGen.Enabled": "false"},
     "helixsr": {"FrameGen.Enabled": "false"},
@@ -78,12 +78,11 @@ FG_WIRING = {
 UNWIRED = ("auto", "nofg")
 # What a variant does with frame generation on a fresh prefix (its seed): FreeFG
 # and the Scaler turn it on, FSR4 RC12 leaves it off.
-FRESH_ON = {"freefg-helixsr": True, "freefg-hlxfsr4": True, "freefg": True,
+FRESH_ON = {"freefg-hlxfsr4": True, "freefg": True,
             "helixsr": True, "fsr412f": False, OFF: False}
 # Keys a build's own OptiScaler.ini does not define: protonfixes refuses the
 # launch, so the menu must not offer them (the fork ini has no [HelixSR] keys).
 DEFINABLE = {
-    "freefg-helixsr": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
     "freefg-hlxfsr4": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
     "freefg": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
     "helixsr": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
@@ -451,9 +450,10 @@ def state(prefix, env=os.environ):
     path = store_path(prefix)
     store = read_store(path)
     known = {name for name, _, _ in PRESETS}
-    saved = store.get("variant") if store.get("variant") in known else None
+    saved = RETIRED.get(store.get("variant"), store.get("variant"))
+    saved = saved if saved in known else None
     installed = env.get("BC250_MENU_INSTALLED", "")
-    default = env.get("BC250_MENU_DEFAULT", "") or "freefg-helixsr"
+    default = env.get("BC250_MENU_DEFAULT", "") or "freefg-hlxfsr4"
     # A saved choice is the player's word; otherwise what the prefix holds now
     # (the launcher reads it off the payload on disk), then the last pick, then
     # the package default for a fresh prefix. No upscaling leaves the last

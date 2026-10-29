@@ -45,8 +45,8 @@ seeded like the shared preset, on its first launch only, so turning it off in
 the overlay and saving survives a restart.
 
 Enforced on every launch is what a prefix must not be left to decide: a variant's
-own wiring — the library paths that make `PROTON_USE_OPTISCALER=helixsr-ffx`
-mean something — the debug keys under `BC250_FSR4_DEBUG=1`, and
+own wiring — the HelixSR Scaler's `DLSS.HelixSR` and `HelixSR.Int8`, FreeFG's
+XeFG keys — the debug keys under `BC250_FSR4_DEBUG=1`, and
 `BC250_OPTISCALER_EXTRA`, merged last so it beats both. Every preset key is still
 checked against the ini it ships with at build time: protonfixes refuses a launch
 on a key the build does not define, so a preset that names one fails the build
@@ -101,7 +101,7 @@ writes `helixsr.log` beside its DLL (`system32/umu/HelixSR` with the
 Scaler) on every launch. That log is what its author asks for with a problem
 report, and a package that switched it off left players unable to send one.
 
-The FreeFG variants (`freefg-helixsr`, the default, `freefg-hlxfsr4` and
+The FreeFG variants (`freefg-hlxfsr4`, the default, and
 `freefg`) are the ones that also set variables outside OptiScaler's own: FreeFG's Vulkan pacing layer runs in the game
 process, so the launcher prepends its folder in the prefix to `VK_LAYER_PATH`
 and its name to `VK_INSTANCE_LAYERS`, and sets `XEFG_WAVE_CONFIG` and vkd3d's

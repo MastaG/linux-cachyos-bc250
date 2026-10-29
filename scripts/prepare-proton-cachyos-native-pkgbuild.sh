@@ -244,7 +244,7 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     f'        --fakenvapi "${{srcdir}}/{fakenvapi_asset}" \\\n'
     '        --provider "${srcdir}/amdxcffx64_v4.1.1.xz" \\\n'
     '        --ffx-sdk "${srcdir}/amd_fidelityfx_upscaler_dx12.dll" \\\n'
-    '        --ffx-sdk-default freefg-helixsr \\\n'
+    '        --ffx-sdk-default freefg-hlxfsr4 \\\n'
     '        --ffx-sdk-alt fsr411b \\\n'
     '            "${srcdir}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \\\n'
     '            "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \\\n'
@@ -260,8 +260,6 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --ffx-sdk-alt fsr411rc10 \\\n'
     '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc10.zip" \\\n'
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \\\n'
-    '        --helixsr "${srcdir}/HelixSR-2.0.0-network-fg.zip" \\\n'
-    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v2.0.0" \\\n'
     '        --helixsr-ngx "${srcdir}/HelixSR-3.2.0-network.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.0" \\\n'
     '        --helixsr-scaler "${srcdir}/HelixSR-3.2.0-Scaler-2.1.0-core.zip" \\\n'
@@ -342,11 +340,6 @@ payload_sources = [
      "e7b53b1f1aa7aa4b767c3f73e72a33a9a3c5563eefd1edf48bf165fcb0feac89", True),
     ("bc250-fsr4-dll-4.0.0-rc10.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc10.zip",
      "eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98", True),
-    # HelixSR 2.0.0 (lonewolf0622): runs NVIDIA's DLSS Model E network on D3D12
-    # (and, with helixsr-fg/, NVIDIA's DLSS frame generation). Per its author, the
-    # NVIDIA components inside it remain NVIDIA's property.
-    ("HelixSR-2.0.0-network-fg.zip", f"{payload_base}/HelixSR-2.0.0-network-fg.zip",
-     "833050356f12215da35096750e9856aa56b0e8eb746e218c5ee01be5bd9fa96f", True),
     # HelixSR 3.2.0 (lonewolf0622): HLX DLSS (HelixSR/helixsr.dll,
     # NVIDIA's DLSS Model E network, for HelixSR Scaler) and HLX FSR 4 (AMD's FSR 4
     # network on HelixSR's pipeline). Mirrored after its own setup built the network;

@@ -994,7 +994,7 @@ class SlrPackageTests(unittest.TestCase):
         }
         for name, text in templates.items():
             with self.subTest(package=name):
-                self.assertIn("--ffx-sdk-default freefg-helixsr", text)
+                self.assertIn("--ffx-sdk-default freefg-hlxfsr4", text)
                 self.assertIn("--ffx-sdk-alt fsr411b", text)
                 self.assertIn("--ffx-sdk-alt fsr412f", text)
                 self.assertIn("--ffx-sdk-alt fsr411f", text)
@@ -1008,21 +1008,21 @@ class SlrPackageTests(unittest.TestCase):
                                 "bc250-fsr4-dll-4.0.0-rc11.zip",
                                 "bc250-fsr4-dll-4.0.0-rc12.zip"):
                     self.assertIn(archive, text)
-                # FreeFG + HelixSR is the default now (owner's decision
-                # 2026-10-26), and the freefg variants take the RC12 bridge by
+                # FreeFG + HLX FSR 4 is the default now (owner's decision
+                # 2026-10-29), and the freefg variant takes the RC12 bridge by
                 # name; the older bridges stay reachable as their own variants.
-                self.assertIn('freefg-helixsr', text.split("--ffx-sdk-default", 1)[1][:22])
+                self.assertIn('freefg-hlxfsr4', text.split("--ffx-sdk-default", 1)[1][:22])
                 self.assertIn("--freefg-bridge fsr412f", text)
-                self.assertIn("--helixsr", text)
                 # FreeFG, opt-in, from its mirrored release zip.
                 self.assertIn("--freefg", text)
                 self.assertIn("freefg-1.1.5.zip", text)
                 # HelixSR 3.2 (HLX DLSS, HLX FSR 4) for the Scaler 2.1 and
-                # freefg-hlxfsr4; HelixSR 2.0 stays for freefg-helixsr.
+                # freefg-hlxfsr4. HelixSR 2.0 is gone, with the HelixSR 2.0 builder option.
                 self.assertIn("--helixsr-ngx", text)
                 self.assertIn("HelixSR-3.2.0-network.zip", text)
                 self.assertIn("HelixSR-3.2.0-Scaler-2.1.0-core.zip", text)
-                self.assertIn("HelixSR-2.0.0-network-fg.zip", text)
+                self.assertNotIn("HelixSR-2.0.0", text)
+                self.assertNotIn("--helixsr \"", text)
                 self.assertIn("--freefg-ini", text)
                 self.assertIn("54493b7795f92e2b2ef063815f62bb29e983716a27b524d19b27d5ddc473caac", text)
                 self.assertIn("367c83b81b4df66cf1c2e345ee9cd3f32f8d9998b21a0acb15f148a1f6f2da3b", text)
