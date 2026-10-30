@@ -94,9 +94,13 @@ class HelperServiceTests(unittest.TestCase):
 class LauncherTests(unittest.TestCase):
     def test_the_program_runs_from_a_copy_in_the_users_folder(self):
         pkgbuild = (PKG / "PKGBUILD.in").read_text()
-        # Upstream source is not patched: the program runs, unmodified, from a
-        # copy in the user's folder, where it can write next to itself.
+        # The program runs from a copy in the user's folder, where it can write
+        # next to itself. Upstream is changed only by whole patch files that
+        # git apply refuses on a changed context, never by text replacement.
         self.assertNotIn("_replace", pkgbuild)
+        for patch in re.findall(r"'([^']+\.patch)'", pkgbuild):
+            with self.subTest(patch=patch):
+                self.assertIn(f'git apply "$srcdir/{patch}"', pkgbuild)
         wrapper = (PKG / "kytyps5-native-wrapper.sh").read_text()
         self.assertIn("KytyPS5-Native/package", wrapper)
         self.assertIn('"$src/VERSION"', wrapper)
@@ -138,3 +142,37 @@ class ReadmeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DualSenseLevelTests(unittest.TestCase):
+    """The wrappers set a connected DualSense's speaker and haptics levels."""
+
+    def run_wrapper_levels(self, env_extra):
+        import tempfile
+        wrapper = (PKG / "kytyps5-native-wrapper.sh").read_text()
+        body = wrapper[wrapper.index("ds_levels() {"):wrapper.index("\nds_levels\n")]
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = Path(tmp)
+            log = stub / "calls"
+            (stub / "pactl").write_text(
+                "#!/bin/sh\n"
+                'if [ "$1 $2 $3" = "list sinks short" ]; then\n'
+                '  printf "77\\talsa_output.pci-0000_01_00.1.hdmi-stereo\\tPipeWire\\n"\n'
+                '  printf "225\\talsa_output.usb-Sony_Interactive_Entertainment_DualSense_Wireless_Controller-00.Direct__Direct__sink\\tPipeWire\\n"\n'
+                f'else echo "pactl $*" >> {log}; fi\n')
+            (stub / "amixer").write_text(f'#!/bin/sh\necho "amixer $*" >> {log}\n')
+            for f in ("pactl", "amixer"):
+                (stub / f).chmod(0o755)
+            env = {"PATH": f"{stub}:/usr/bin:/bin", **env_extra}
+            subprocess.run(["sh", "-c", body + "\nds_levels"], env=env, check=True)
+            return log.read_text().splitlines() if log.exists() else []
+
+    def test_speaker_50_and_haptics_90_on_the_dualsense_only(self):
+        calls = self.run_wrapper_levels({})
+        self.assertEqual(calls, ["pactl set-sink-volume alsa_output.usb-Sony_Interactive_Entertainment_"
+                                 "DualSense_Wireless_Controller-00.Direct__Direct__sink 50% 50% 90% 90%"])
+
+    def test_levels_can_be_chosen_or_left_alone(self):
+        calls = self.run_wrapper_levels({"KYTYPS5_DS_SPEAKER": "70", "KYTYPS5_DS_HAPTICS": "100"})
+        self.assertTrue(calls[0].endswith(" 70% 70% 100% 100%"))
+        self.assertEqual(self.run_wrapper_levels({"KYTYPS5_DS_SPEAKER": "off"}), [])
