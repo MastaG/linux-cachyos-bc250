@@ -81,8 +81,10 @@ source=(
     "HelixSR-3.2.0-Scaler-2.1.0-core.zip::@PAYLOAD_BASE@/HelixSR-3.2.0-Scaler-2.1.0-core.zip"
     # FreeFG @FREEFG_VERSION@ (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
-    # Runtime and GPL source companion are pinned together in freefg-upstream.json.
-    "freefg-@FREEFG_VERSION@.zip::@FREEFG_URL@"
+    # Mirrored on the payload release like every pinned archive, with its GPL
+    # source companion beside it; freefg-upstream.json pins the hash and the
+    # upstream release it was verified against.
+    "freefg-@FREEFG_VERSION@.zip::@PAYLOAD_BASE@/freefg-@FREEFG_VERSION@.zip"
     # The OptiScaler.ini of FreeFG's pinned OptiScaler build,
     # pinned by commit: the freefg variants ship this build and this ini.
     "FreeFG-OptiScaler.ini::@FREEFG_INI_URL@"

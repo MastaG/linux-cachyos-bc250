@@ -364,11 +364,11 @@ payload_sources = [
     # HelixSR 3.2.0 download: only what differs from the nightly.
     ("HelixSR-3.2.0-Scaler-2.1.0-core.zip", f"{payload_base}/HelixSR-3.2.0-Scaler-2.1.0-core.zip",
      "78e4787d35e0fa533eb73939fc4a05affc0e550d423efdc9704254a381cf7618", True),
-    # FreeFG 1.1.5 (daniel-h-0): Intel XeSS frame generation with its own BC-250
-    # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
-    # Mirrored release zip; its OptiScaler build is GPL-3.0, and the matching
-    # freefg-1.1.5-source.zip is mirrored beside it.
-    (f"freefg-{freefg_version}.zip", freefg['url'], freefg['sha256'], True),
+    # FreeFG (daniel-h-0): Intel XeSS frame generation with its own BC-250
+    # shaders and a VRR pacing layer. Mirrored release zip; its OptiScaler build
+    # is GPL-3.0, and the matching source companion is mirrored beside it.
+    # freefg-upstream.json pins the hash and the upstream release it came from.
+    (f"freefg-{freefg_version}.zip", f"{payload_base}/freefg-{freefg_version}.zip", freefg['sha256'], True),
     # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-03db4f8),
     # pinned by commit: the freefg variants ship this build and this ini.
     ("FreeFG-OptiScaler.ini", freefg['opti_ini_url'], freefg['opti_ini_sha256'], False),

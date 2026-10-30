@@ -1013,7 +1013,12 @@ class SlrPackageTests(unittest.TestCase):
                 # name; the older bridges stay reachable as their own variants.
                 self.assertIn('freefg-hlxfsr4', text.split("--ffx-sdk-default", 1)[1][:22])
                 self.assertIn("--freefg-bridge fsr412f", text)
-                # FreeFG, opt-in, from its mirrored release zip.
+                # FreeFG from its mirrored release zip, like every pinned archive:
+                # an upstream release can go away; the mirror is what makes a build
+                # reproducible. Its pin keeps the upstream URL as provenance only.
+                self.assertRegex(text, r'(@PAYLOAD_BASE@|\{payload_base\})/freefg-(@FREEFG_VERSION@|\{freefg_version\})\.zip')
+                self.assertNotIn("FREEFG_URL", text)
+                self.assertNotIn("freefg['url']", text)
                 self.assertIn("--freefg", text)
                 self.assertIn("--freefg-lock", text)
                 self.assertIn("--freefg-recipes", text)

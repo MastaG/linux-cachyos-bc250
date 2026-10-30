@@ -212,6 +212,11 @@ recorded inside the runtime, and the INI at the exact OptiScaler source commit.
 No dependency is fetched at game launch. The optional `gh` fallback handles
 release-asset download routes blocked by a GitHub proxy.
 
+The package builds fetch the runtime ZIP from the payload mirror, like every
+pinned archive, and check it against the pin; the pin's upstream URL is
+provenance. Upload the ZIP and its source companion from `--download-dir` to
+the mirror before a changed pin is built.
+
 `bc250_freefg_recipes.py` carries FreeFG's matching and wiki rules (`norm`,
 `wiki_matches`, `key_rule`, the condition evaluator, `INSTALLER_KEYS`). When the
 recipe pin moves, compare them with FreeFG's `recipes.py` and `compat.py` at the
