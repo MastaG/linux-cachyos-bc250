@@ -306,6 +306,32 @@ Each unsigned variant ships `Licenses/THIRD-PARTY-UPSCALER.txt` into the prefix
 naming the origin URL and SHA256, so an unsigned DLL is never sitting there
 unexplained.
 
+## Game presets (`../../scripts/build-game-presets.py`)
+
+Per-game OptiScaler settings are data, not package content:
+`.github/workflows/game-presets.yml` builds `game-presets.json.gz` every night
+from FreeFG's `packaging/recipes/recipes.json`, the OptiScaler wiki's git
+repository and two reference `OptiScaler.ini` files (upstream's and FreeFG's
+build, which say which section a bare wiki key belongs to), and uploads it to the
+`bc250-game-presets` release when its content changed. Nothing in the source
+fingerprint refers to it, so it never starts a package build.
+
+The launcher (`load_presets`, `find_game`, `game_preset`, `apply_game_preset`)
+downloads it at most daily into `~/.cache/bc250-fsr4/`, matches the game by Steam
+app id, `.exe` or normalised title, and on a fresh `OptiScaler.ini` merges the
+selected settings as a layer between the package seeds and the menu's choices.
+Every setting is filtered against `optiscaler_ini_keys` of the variant being
+launched, because protonfixes refuses a launch on a key that build's ini lacks,
+and against `PRESET_LOCKED` (the package's wiring). Any error in this path is
+logged and the launch goes on without a preset. `BC250_GAME_PRESETS_FILE=<path>`
+reads a local database instead, to try one before it is published.
+
+The wiki half keeps every condition it can: FreeFG's structured reading where it
+has one, otherwise the sentence around a `Key=value` span, classified as a GPU or
+an input condition or kept as text that never matches. "Matching" applies what
+has no condition or one that holds on a BC-250; "everything" ignores conditions.
+README.md, "Game presets", is the player's side.
+
 ## `../../scripts/build-fsr4-payload.py`
 
 Assembles the payload at build time and writes both the manifest and the

@@ -1,0 +1,90 @@
+name: Game presets
+
+# Builds game-presets.json.gz (scripts/build-game-presets.py) every night and
+# publishes it on its own release, bc250-game-presets, where the Proton
+# packages' launcher downloads it. It is data, outside every package and the
+# source fingerprint: a new setting reaches players the next day without a
+# Proton build, and nothing here can start one.
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/build-game-presets.py', 'tests/test_game_presets.py', '.github/workflows/game-presets.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: game-presets
+  cancel-in-progress: false
+
+env:
+  TAG: bc250-game-presets
+  ASSET: game-presets.json.gz
+
+jobs:
+  presets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.14'
+      - name: Test the builder and the launcher's side
+        run: python3 -B -m unittest tests.test_game_presets -v
+      - name: Fetch the sources
+        run: |
+          set -euo pipefail
+          mkdir -p src
+          git clone -q --depth 1 https://github.com/optiscaler/OptiScaler.wiki.git src/wiki
+          echo "WIKI_COMMIT=$(git -C src/wiki rev-parse HEAD)" >> "$GITHUB_ENV"
+          # Each by commit, so the files fetched are the ones the release names.
+          tip() { git ls-remote "https://github.com/$1.git" HEAD | cut -f1; }
+          freefg=$(tip daniel-h-0/freefg)
+          upstream=$(tip optiscaler/OptiScaler)
+          fork=$(tip daniel-h-0/OptiScaler)
+          curl -fsSL --retry 3 -o src/recipes.json \
+              "https://raw.githubusercontent.com/daniel-h-0/freefg/$freefg/packaging/recipes/recipes.json"
+          curl -fsSL --retry 3 -o src/upstream.ini \
+              "https://raw.githubusercontent.com/optiscaler/OptiScaler/$upstream/OptiScaler.ini"
+          curl -fsSL --retry 3 -o src/freefg.ini \
+              "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/$fork/OptiScaler.ini"
+          echo "FREEFG_COMMIT=$freefg" >> "$GITHUB_ENV"
+      - name: Build
+        run: |
+          python3 -B scripts/build-game-presets.py \
+              --freefg src/recipes.json --freefg-commit "$FREEFG_COMMIT" \
+              --wiki src/wiki --wiki-commit "$WIKI_COMMIT" \
+              --ini src/upstream.ini --ini src/freefg.ini \
+              --generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --output "$ASSET" 2> summary.txt
+          cat summary.txt
+      - name: Publish when the content changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sum() { python3 -B -c 'import gzip,json,sys; print(json.loads(gzip.decompress(open(sys.argv[1],"rb").read()))["content_sha256"])' "$1"; }
+          new=$(sum "$ASSET")
+          if gh release download "$TAG" --pattern "$ASSET" --output previous.gz 2>/dev/null &&
+              [ "$(sum previous.gz)" = "$new" ]; then
+            echo "unchanged ($new): nothing to publish"
+            exit 0
+          fi
+          {
+            echo "Per-game OptiScaler settings for the BC-250 Proton packages, rebuilt every night."
+            echo "The launcher downloads \`$ASSET\` (at most once a day) and applies it to a fresh prefix;"
+            echo "see packages/bc250-fsr4-common/README.md, \"Game presets\"."
+            echo
+            echo "- $(cat summary.txt)"
+            echo "- FreeFG recipes: daniel-h-0/freefg@${FREEFG_COMMIT:0:12} (MIT)"
+            echo "- OptiScaler wiki: ${WIKI_COMMIT:0:12}"
+          } > notes.md
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "BC-250 game presets" --notes-file notes.md --latest=false
+          fi
+          gh release upload "$TAG" "$ASSET" --clobber
+          gh release edit "$TAG" --notes-file notes.md

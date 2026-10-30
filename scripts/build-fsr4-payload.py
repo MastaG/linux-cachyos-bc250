@@ -21,6 +21,7 @@ import hashlib
 import json
 import lzma
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -78,6 +79,18 @@ def is_player_key(key):
     offers HLX DLSS and HLX FSR 4 side by side: enforcing its HLX FSR 4 start
     would undo a switch to HLX DLSS at every launch."""
     return key.lower().startswith(("framegen.", "upscalers."))
+
+
+def reserved_proxies(value: str, proxy: str) -> list:
+    """--reserve as a list of bare DLL names. The build's own proxy cannot be one:
+    it is what a preset falls back to when it asks for a reserved name."""
+    names = [name.strip().lower() for name in value.split(",") if name.strip()]
+    for name in names:
+        if not re.fullmatch(r"[a-z0-9_+-]+\.dll", name):
+            raise SystemExit(f"--reserve takes bare DLL names such as winmm.dll: {name!r}")
+    if proxy.lower() in names:
+        raise SystemExit(f"--reserve names the proxy itself ({proxy}); pick another --proxy")
+    return names
 
 
 def ini_keys_from_text(text: str) -> list:
@@ -702,6 +715,9 @@ def main() -> int:
     ap.add_argument("--licenses", type=Path, required=True, help="directory of license notices")
     ap.add_argument("--preset", type=Path, required=True, help="optiscaler-preset.json")
     ap.add_argument("--proxy", default="winmm.dll")
+    # DLL names a game preset may never pick, kept free for the player's own
+    # loaders (local builds: build-proton-tarball.sh --optiscaler-reserve).
+    ap.add_argument("--reserve", default="", help="comma-separated DLL names presets must not use")
     # Where the wrapper will find things, relative to the Steam tool directory.
     # protonge-latest nests GE under ge/; proton-cachyos-native is the tree itself.
     ap.add_argument("--manifest-rel", required=True,
@@ -973,6 +989,7 @@ def main() -> int:
                 "optiscaler_aliases": aliases,
                 "provider_version": args.provider_version,
                 "proxy": args.proxy,
+                "reserved_proxies": reserved_proxies(args.reserve, args.proxy),
                 "manifest": args.manifest_rel,
                 "proton": args.proton_rel,
                 "preset": preset,

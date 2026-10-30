@@ -731,6 +731,8 @@ PROTON_USE_OPTISCALER=fsr411f %command%   # the FSR4 fork's RC11 bridge instead 
 PROTON_OPTISCALER_MENU=1 %command%        # show the upscaler menu again after "Save selection"
 BC250_OPTISCALER_EXTRA="A.B=c;D.E=f"      # override individual OptiScaler settings
 PROTON_OPTISCALER_NAME=dxgi.dll %command% # load OptiScaler as dxgi instead of winmm
+BC250_GAME_PRESET=0 %command%             # no known per-game settings (see Game presets)
+BC250_GAME_PRESET=everything %command%    # apply all of this game's known settings again
 ```
 
 ### The upscaler menu
@@ -768,6 +770,51 @@ on the desktop, and it waits until you choose.
   or `~/.config/bc250-fsr4/ignore-anticheat`).
 - No display, or `python-gobject`, `gtk4` or `sdl3` missing: no menu, and the
   game starts with its current choice.
+- **Force apply known settings** appears only for a game the preset database
+  knows (next section). Ticked, it applies them again over what the prefix has
+  now: **Apply matching only** (the default) or **Apply everything**.
+
+### Game presets
+
+Known working OptiScaler settings per game are applied by themselves. They come
+from two sources, merged every night into one file on the
+[`bc250-game-presets`](https://github.com/MastaG/linux-cachyos-bc250/releases/tag/bc250-game-presets)
+release:
+
+- [FreeFG](https://github.com/daniel-h-0/freefg)'s recipes for the games its
+  maintainers tested on a BC-250, with their OptiScaler settings (including the
+  `XeFG.*` and `FrameGen.*` ones), frame-generation input and launch options
+  such as `-dx12`. These always win.
+- The [OptiScaler wiki](https://github.com/optiscaler/OptiScaler/wiki/), about
+  750 games: settings, the conditions they come with ("for DLSS inputs", "on
+  AMD/Intel"), and the DLL name OptiScaler needs where that is unusual.
+
+The launcher downloads the file at most once a day into
+`~/.cache/bc250-fsr4/game-presets.json.gz` and keeps using the old copy when it
+cannot (offline, GitHub down): a game never waits more than a few seconds for it
+and never fails to start because of it. The game is recognised by its Steam app
+id, its `.exe`, or its name.
+
+- **When:** on a fresh `OptiScaler.ini` only — a new prefix, or after switching
+  upscaler, which starts fresh anyway. After that the INI is yours: what you
+  change in the OptiScaler overlay stays. Launch options and the DLL name are
+  applied on every launch, since they live nowhere else.
+- **Matching** (the default): the tested BC-250 settings, plus the wiki's that
+  have no condition or whose condition holds here (AMD, Linux, FSR4, the
+  frame-generation input and output of the upscaler you picked). Settings
+  OptiScaler already applies by itself are left out. When the wiki's tester ran
+  OptiScaler under another DLL name than the package's `winmm.dll` (usually
+  `dxgi.dll`), that name is used; a `PROTON_OPTISCALER_NAME` you set still wins.
+- **Everything**: every setting the game has, whatever its condition (where the
+  wiki gives several values for one setting, the matching one still wins). For a
+  game that does not work with matching only. It can also apply fixes meant for
+  NVIDIA or for another input, so try it rather than start with it.
+- **Never touched**: settings this upscaler's OptiScaler does not have,
+  the package's own wiring (library paths, the upscaler, the frame-generation
+  output, logging, the overlay itself) and the frame generation on/off switch,
+  which stays the menu's.
+- What was applied is in `<compatdata>/bc250-game-preset.json` and in the game's
+  log (`bc250-fsr4: applied the matching preset for ...`).
 
 `PROTON_OPTISCALER_NAME` is for one specific symptom: FSR4 quietly does nothing
 in a game that has a mod loader, an ASI loader, or anything else of its own

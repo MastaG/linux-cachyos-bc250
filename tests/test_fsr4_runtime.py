@@ -2262,7 +2262,8 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         # Off: nothing switched, nothing written into the ini.
         self.assertEqual(menu.answer({"preset": "off", "disable_framegen": 1}, "freefg-hlxfsr4",
                                      "freefg-hlxfsr4", states),
-                         {"preset": "off", "disable_framegen": 1, "remember": 0, "switched": 0, "changed": ""})
+                         {"preset": "off", "disable_framegen": 1, "remember": 0, "switched": 0, "changed": "",
+                          "apply_preset": ""})
         # Back to the variant the files belong to: not a switch, the overlay's FG off stays.
         back = menu.answer({"preset": "freefg-hlxfsr4", "disable_framegen": 1}, "off", "freefg-hlxfsr4", states)
         self.assertEqual((back["switched"], back["changed"]), (0, ""))
@@ -2275,7 +2276,7 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         tool = Path(tempfile.mkdtemp())
         (tool / "bc250-fsr4-config.json").write_text('{"proton": "proton"}')
         seen = {}
-        with mock.patch.object(wrapper, "menu_choice", return_value=("off", {}, False)), \
+        with mock.patch.object(wrapper, "menu_choice", return_value=("off", {}, False, None)), \
                 mock.patch.object(wrapper, "game_launch", return_value=True), \
                 mock.patch.object(wrapper, "start_fresh_on_switch"), \
                 mock.patch.object(wrapper, "clean_other_variants"), \
@@ -2299,9 +2300,9 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         config = {"optiscaler_version": "v", "manifest": "m.json"}
         env = {"STEAM_COMPAT_DATA_PATH": prefix, "STEAM_COMPAT_INSTALL_PATH": str(game)}
         with mock.patch.object(wrapper, "TOOL", tool):
-            self.assertEqual(wrapper.menu_choice(config, env), (None, {}, False))
+            self.assertEqual(wrapper.menu_choice(config, env), (None, {}, False, None))
             env["BC250_FSR4_IGNORE_ANTICHEAT"] = "1"
-            self.assertEqual(wrapper.menu_choice(config, env), ("freefg", {}, False))
+            self.assertEqual(wrapper.menu_choice(config, env), ("freefg", {}, False, None))
 
     def test_the_launcher_asks_no_menu_when_the_launch_already_says(self):
         import tempfile
@@ -2309,7 +2310,7 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         for extra in ({"PROTON_USE_OPTISCALER": "freefg"}, {"PROTON_FSR4_UPGRADE": "0"}):
             self.assertEqual(
                 wrapper.menu_choice({}, dict({"STEAM_COMPAT_DATA_PATH": prefix}, **extra)),
-                (None, {}, False))
+                (None, {}, False, None))
 
 
 if __name__ == "__main__":

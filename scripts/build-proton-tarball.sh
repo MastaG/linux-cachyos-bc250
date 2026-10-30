@@ -35,6 +35,14 @@
 #
 #   scripts/build-proton-tarball.sh --suffix custom --optiscaler-proxy dxgi.dll native
 #
+# --optiscaler-reserve keeps DLL names free for your own loaders: a game preset
+# (the nightly per-game settings) that would load OptiScaler under one of them
+# gets this build's proxy instead. Comma-separated; the proxy itself cannot be
+# one. PROTON_OPTISCALER_NAME per game is not held to it.
+#
+#   scripts/build-proton-tarball.sh --suffix custom --optiscaler-proxy dxgi.dll \
+#       --optiscaler-reserve version.dll,winmm.dll native
+#
 # Custom patches: drop .patch files into
 #
 #     local-patches/proton-cachyos-native/   applied to the Proton source tree
@@ -63,6 +71,7 @@ SUFFIX=""
 OUT_DIR="${ROOT_DIR}/dist"
 REPACK_ONLY=false
 OPTISCALER_PROXY=""
+OPTISCALER_RESERVE=""
 
 usage() {
     # The header comment above is the help text, however long it grows.
@@ -77,6 +86,7 @@ while (( $# )); do
         --image)  IMAGE="${2:?--image needs a value}"; shift 2 ;;
         --repack-only) REPACK_ONLY=true; shift ;;
         --optiscaler-proxy) OPTISCALER_PROXY="${2:?--optiscaler-proxy needs a value}"; shift 2 ;;
+        --optiscaler-reserve) OPTISCALER_RESERVE="${2:?--optiscaler-reserve needs a value}"; shift 2 ;;
         -h|--help) usage 0 ;;
         native) shift ;;
         ge|both) printf 'ERROR: local builds are proton-cachyos-native-bc250 only\n' >&2
@@ -102,6 +112,24 @@ if [[ -n "$OPTISCALER_PROXY" && ! "$OPTISCALER_PROXY" =~ ^[A-Za-z0-9_+-]+\.dll$ 
     printf 'ERROR: --optiscaler-proxy must be a bare DLL name such as dxgi.dll: %s\n' \
         "$OPTISCALER_PROXY" >&2
     exit 1
+fi
+
+# Checked here too, so a typo fails now and not an hour into the build. The
+# proxy is what a reserved name falls back to, so it cannot be reserved itself.
+if [[ -n "$OPTISCALER_RESERVE" ]]; then
+    IFS=, read -r -a _reserved <<< "$OPTISCALER_RESERVE"
+    _proxy="${OPTISCALER_PROXY:-winmm.dll}"
+    for _name in "${_reserved[@]}"; do
+        if [[ ! "$_name" =~ ^[A-Za-z0-9_+-]+\.dll$ ]]; then
+            printf 'ERROR: --optiscaler-reserve takes bare DLL names such as winmm.dll: %s\n' "$_name" >&2
+            exit 1
+        fi
+        if [[ "${_name,,}" == "${_proxy,,}" ]]; then
+            printf 'ERROR: --optiscaler-reserve names the proxy itself (%s); set --optiscaler-proxy to another name\n' \
+                "$_name" >&2
+            exit 1
+        fi
+    done
 fi
 
 # Resolve the extractor before anything expensive starts. This step runs on the
@@ -173,6 +201,7 @@ else
         -e CCACHE_COMPILERCHECK=content \
         -e BC250_LOCAL_PATCHES=1 \
         -e BC250_OPTISCALER_PROXY="$OPTISCALER_PROXY" \
+        -e BC250_OPTISCALER_RESERVE="$OPTISCALER_RESERVE" \
         "$IMAGE" sleep infinity >/dev/null
 
     "${ENGINE[@]}" exec "$container" bash /workspace/scripts/local-build-inside.sh "${COMPONENTS[@]}"

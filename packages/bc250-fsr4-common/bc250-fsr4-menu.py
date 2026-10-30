@@ -45,6 +45,11 @@ SPOOF_LABEL = "GPU spoofing (DXGI)"
 # games crash with it, others only offer DLSS with it, so the player can force it.
 SPOOF = [("auto", "Auto"), ("true", "On"), ("false", "Off")]
 SAVE_LABEL = "Save selection for next time (make sure to test it first)"
+# Shown only when the launcher found this game in the preset database
+# (BC250_MENU_GAME_PRESET names it). A fresh prefix gets the matching settings
+# by itself; this applies them again over what the prefix has now.
+FORCE_LABEL = "Force apply known settings for %s"
+APPLY = [("matching", "Apply matching only"), ("everything", "Apply everything")]
 HINT = "Launch your game with PROTON_OPTISCALER_MENU=1 %command% to show this menu again."
 
 # Which keys mean "frame generation on" for each build, verified from the build's
@@ -256,7 +261,7 @@ def tag_steam_game(surface, env=os.environ):
     x11.XCloseDisplay(display)  # flushes
 
 
-def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
+def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known=""):
     try:
         sdl = ctypes.CDLL("libSDL3.so.0")
     except OSError:
@@ -342,6 +347,25 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
         if name == preselected:
             picked(r, name)
     box.append(fg)
+    force, applies = None, []
+    if known:
+        force = Gtk.CheckButton(label=FORCE_LABEL % known)
+        box.append(force)
+        apply_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        apply_row.set_margin_start(32)
+        apply_group = None
+        for value, label in APPLY:
+            a = Gtk.CheckButton(label=label)
+            if apply_group:
+                a.set_group(apply_group)
+            else:
+                apply_group = a
+            a.set_active(value == "matching")
+            applies.append((value, a))
+            apply_row.append(a)
+        apply_row.set_visible(False)
+        force.connect("toggled", lambda b: apply_row.set_visible(b.get_active()))
+        box.append(apply_row)
     keep = Gtk.CheckButton(label=SAVE_LABEL)
     keep.set_active(bool(saved_on))
     box.append(keep)
@@ -362,6 +386,8 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
         result["disable_framegen"] = int(fg.get_active())
         result["spoof"] = next((value for value, s in spoofs if s.get_active()), "auto")
         result["remember"] = int(keep.get_active())
+        result["apply_preset"] = (next((v for v, a in applies if a.get_active()), "matching")
+                                  if force is not None and force.get_active() else "")
         loop.quit()
 
     start.connect("clicked", finish)
@@ -370,7 +396,10 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
     # Own focus order for the pad: GTK's directional focus keeps a radio group's
     # focus inside the group, so the pad could not leave the four presets.
     def move(d):
-        order = [r for _, r in radios] + [s for _, s in spoofs] + [fg, keep, start]
+        extra = [force] if force is not None else []
+        if force is not None and force.get_active():
+            extra += [a for _, a in applies]
+        order = [r for _, r in radios] + [s for _, s in spoofs] + [fg, *extra, keep, start]
         cur = win.get_focus()
         while cur is not None and cur not in order:
             cur = cur.get_parent()
@@ -508,6 +537,8 @@ def answer(result, current, base, fg_states, spoof_states=None, ini_sections=Non
         "remember": int(result.get("remember", 0)),
         "switched": int(switched),
         "changed": ";".join(k + "=" + v for k, v in changed.items()),
+        # No upscaling has no OptiScaler.ini to apply settings to.
+        "apply_preset": "" if new == OFF else result.get("apply_preset", ""),
     }
 
 
@@ -539,7 +570,8 @@ def main():
         fg_states[base] = fg_on
         if base == installed:
             spoof_states[base] = spoof_state(sections)
-    result = gui(PRESETS, current, fg_states, spoof_states, saved)
+    result = gui(PRESETS, current, fg_states, spoof_states, saved,
+                 os.environ.get("BC250_MENU_GAME_PRESET", "").strip())
     if result is None:
         # No window: keep the current choice and let the game start.
         return 3

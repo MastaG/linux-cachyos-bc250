@@ -481,7 +481,7 @@ def extra_preset(value):
     return extra
 
 
-def environment(config, inherited, *, game, menu=None):
+def environment(config, inherited, *, game, menu=None, known=None):
     env = dict(inherited)
     # /usr is read-only, so Proton's own imports cannot drop __pycache__ beside
     # them. Python tolerates that silently, but saying so avoids the attempts.
@@ -554,6 +554,10 @@ def environment(config, inherited, *, game, menu=None):
     preset.update(config.get("optiscaler_variant_preset", {}).get(env["PROTON_USE_OPTISCALER"], {}))
     preset.update(seed_once(config.get("optiscaler_variant_seed", {}).get(env["PROTON_USE_OPTISCALER"], {}),
                             inherited))
+    if known:
+        # The game's known working settings (apply_game_preset): on a fresh ini
+        # or when the player forces them, over the seeds, under the menu.
+        preset.update(known)
     if menu:
         # The player chose in the menu. A decision for this game, like a launch
         # option, so it goes on top of the seed filter.
@@ -644,13 +648,16 @@ def launch_client(inherited):
 # What the menu needs from the launch when it runs outside the container.
 MENU_ENV = ("STEAM_COMPAT_DATA_PATH", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
             "XDG_RUNTIME_DIR", "SteamAppId", "SteamGameId", "PROTON_OPTISCALER_MENU",
-            "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED", "BC250_MENU_DEFAULT")
+            "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED", "BC250_MENU_DEFAULT",
+            "BC250_MENU_GAME_PRESET")
 
 
 def menu_choice(config, inherited):
     """Ask the first-launch menu which variant to run and what to change.
 
-    Returns (variant, change, switched). variant is a short name, or None when
+    Returns (variant, change, switched, force). force is "matching" or
+    "everything" when the player ticked "Force apply known settings", else None.
+    variant is a short name, or None when
     the launch already says (PROTON_USE_OPTISCALER, an anti-cheat game) or the
     prefix has no answer of its own yet. It never blocks a launch: no display, no
     gi/GTK4/SDL3, any error, and the game starts on the prefix's current variant.
@@ -659,11 +666,11 @@ def menu_choice(config, inherited):
     menu = TOOL / "bc250-fsr4-menu.py"
     prefix = inherited.get("STEAM_COMPAT_DATA_PATH", "").strip()
     if not prefix or not menu.is_file():
-        return None, {}, False
+        return None, {}, False, None
     if inherited.get("PROTON_USE_OPTISCALER", "").strip() or inherited.get("PROTON_FSR4_UPGRADE") == "0":
-        return None, {}, False
+        return None, {}, False, None
     if anticheat_reason(inherited) and not anticheat_ignored(inherited):
-        return None, {}, False
+        return None, {}, False, None
     names = menu_names(config)
     env = dict(inherited)
     env["BC250_MENU_INSTALLED"] = names.get(installed_variant(config, inherited), "")
@@ -677,7 +684,7 @@ def menu_choice(config, inherited):
     if Path("/run/pressure-vessel").is_dir():
         client = launch_client(inherited)
         if not client:
-            return None, {}, False
+            return None, {}, False, None
         command = [client, "--alongside-steam",
                    *("--pass-env=" + name for name in MENU_ENV), "--", "python3", str(menu)]
 
@@ -694,12 +701,13 @@ def menu_choice(config, inherited):
     decided = ask(["--decide"])
     current = decided.get("current") or None
     if decided.get("show") != "1":
-        return current, {}, False
+        return current, {}, False, None
     choice = ask([])
     if not choice.get("preset"):
-        return current, {}, False
+        return current, {}, False, None
     change = dict(part.split("=", 1) for part in choice.get("changed", "").split(";") if "=" in part)
-    return choice["preset"], change, choice.get("switched") == "1"
+    force = choice.get("apply_preset") if choice.get("apply_preset") in PRESET_MODES else None
+    return choice["preset"], change, choice.get("switched") == "1", force
 
 
 def variant_switched(config, inherited):
@@ -743,10 +751,321 @@ def start_fresh_on_switch(config, inherited, switched=False):
     return True
 
 
+# ------------------------------------------------------------ per-game presets
+#
+# Known working OptiScaler settings per game: FreeFG's BC-250 recipes on top of
+# the OptiScaler wiki, built every night into one file by
+# scripts/build-game-presets.py and published on its own release, so a new
+# setting never waits for (or triggers) a Proton build. Data only: it can set
+# keys this build's OptiScaler.ini defines, a proxy name and launch options,
+# never a file or a library. Nothing here may stop a game from starting.
+
+PRESETS_URL = ("https://github.com/MastaG/linux-cachyos-bc250/releases/download/"
+               "bc250-game-presets/game-presets.json.gz")
+# A day between checks: the file changes at most nightly, and a launch should
+# not wait on the network more often than that.
+PRESETS_MAX_AGE = 24 * 3600
+PRESETS_TIMEOUT = 3
+PRESET_MODES = ("matching", "everything")
+# The per-prefix record of what was applied, beside the menu's own file.
+PRESET_RECORD = "bc250-game-preset.json"
+# Package wiring a preset never changes, whatever its source: the libraries and
+# plugins the payload points at, which upscaler and output a variant uses, the
+# player's frame-generation switch, logging, and the overlay that changes it all.
+PRESET_LOCKED = ("libraries.", "plugins.", "upscalers.", "log.", "menu.",
+                 "framegen.fgoutput", "framegen.enabled", "fsr.upscalerindex")
+# FreeFG's BC-250 recipes were tested with their own library paths (Cyberpunk's
+# own libxess.dll), so for them only those are allowed.
+PRESET_TESTED_LIBRARIES = ("libraries.xesspath",)
+
+
+def presets_cache(inherited):
+    base = inherited.get("XDG_CACHE_HOME", "").strip()
+    if not base and inherited.get("HOME", "").strip():
+        base = str(Path(inherited["HOME"]) / ".cache")
+    return Path(base) / "bc250-fsr4" / "game-presets.json.gz" if base else None
+
+
+def parse_presets(body):
+    import gzip
+    data = json.loads(gzip.decompress(body))
+    if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("games"), list):
+        raise ValueError("not a game preset database")
+    return data
+
+
+def read_presets(path):
+    return parse_presets(path.read_bytes())
+
+
+def load_presets(inherited, now=None):
+    """The preset database: the cached copy, refreshed at most once a day.
+
+    A failed download keeps the cached copy, and no copy at all means no
+    presets; either way the launch goes on. BC250_GAME_PRESETS_FILE reads a
+    local file instead (testing a database before it is published)."""
+    import time
+    local = inherited.get("BC250_GAME_PRESETS_FILE", "").strip()
+    if local:
+        return read_presets(Path(local))
+    cache = presets_cache(inherited)
+    if cache is None:
+        return None
+    now = time.time() if now is None else now
+    try:
+        fresh = now - cache.stat().st_mtime < PRESETS_MAX_AGE
+    except OSError:
+        fresh = False
+    if not fresh:
+        try:
+            import urllib.request
+            with urllib.request.urlopen(PRESETS_URL, timeout=PRESETS_TIMEOUT) as response:
+                body = response.read(16 << 20)
+            parse_presets(body)  # never replace a good copy with a broken one
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            temporary = cache.with_suffix(".part")
+            temporary.write_bytes(body)
+            temporary.replace(cache)
+        except Exception as error:  # the network, a proxy, a broken file: all the same here
+            sys.stderr.write("bc250-fsr4: game presets not refreshed (" + str(error) + ")\n")
+            try:
+                os.utime(cache)  # the next try is tomorrow, not the next launch
+            except OSError:
+                pass
+    try:
+        return read_presets(cache)
+    except (OSError, ValueError, EOFError):
+        return None
+
+
+def steam_title(inherited):
+    """The game's name from Steam's appmanifest, beside the install folder."""
+    install = inherited.get("STEAM_COMPAT_INSTALL_PATH", "").strip()
+    appid = inherited.get("SteamAppId", "").strip()
+    if not install or not appid.isdigit():
+        return None
+    manifest = Path(install).parent.parent / ("appmanifest_" + appid + ".acf")
+    try:
+        found = re.search(r'^\s*"name"\s*"(.*)"\s*$', manifest.read_text(errors="replace"), re.M)
+    except OSError:
+        return None
+    return found.group(1) if found else None
+
+
+def norm_title(title):
+    """As scripts/build-game-presets.py norm(): the two must agree."""
+    title = re.sub(r"[™®©'’`]", "", title.lower()).replace("&", " and ")
+    return " ".join(re.sub(r"[^0-9a-z]+", " ", title).split())
+
+
+def find_game(presets, arguments, inherited):
+    """This launch's entry: by Steam app id, then the .exe, then the title."""
+    games = presets.get("games", [])
+    appid = inherited.get("SteamAppId", "").strip()
+    if appid not in ("", "0"):
+        for game in games:
+            if appid in game.get("match", {}).get("steam", []):
+                return game
+    exe = next((Path(a.replace("\\", "/")).name.lower() for a in arguments[1:]
+                if a.lower().endswith(".exe")), None)
+    if exe:
+        for game in games:
+            if exe in game.get("match", {}).get("exe", []):
+                return game
+    title = steam_title(inherited)
+    if title:
+        key = norm_title(title)
+        for game in games:
+            if key in game.get("match", {}).get("title", []):
+                return game
+    return None
+
+
+def variant_context(config, version, settings):
+    """What this launch is, in the vocabulary of the wiki's conditions."""
+    seeded = {**config.get("optiscaler_variant_preset", {}).get(version, {}),
+              **config.get("optiscaler_variant_seed", {}).get(version, {})}
+    names = {k.lower(): v for k, v in seeded.items() if v is not None}
+    return {
+        "gpu": "amd", "os": "linux", "upscaler": "fsr4",
+        "fg_output": str(names.get("framegen.fgoutput", "fsrfg")).lower(),
+        "fg_input": str(settings.get("framegen.fginput", names.get("framegen.fginput", "upscaler"))).lower(),
+        "variant": menu_names(config).get(version, version),
+    }
+
+
+def condition_met(when, context):
+    """True when every condition holds for this launch. A condition this does not
+    know (a game patch, a mod, "if it crashes") is not met: "everything" is how a
+    player applies those."""
+    for key, value in (when or {}).items():
+        value = str(value).lower()
+        if key == "gpu":
+            if not re.search(r"\bamd\b", value) or "without" in value:
+                return False
+        elif key in ("os", "upscaler", "fg_output", "fg_input"):
+            if context[key] not in re.split(r"[\s,/]+", value):
+                return False
+        else:
+            return False
+    return True
+
+
+def game_preset(config, version, game, mode):
+    """(settings, launch options, proxy) a preset gives this variant.
+
+    "matching": FreeFG's BC-250 settings, and the wiki's that are unconditional or
+    whose condition holds here (AMD, Linux, FSR4, this variant's frame-gen input
+    and output), leaving out what OptiScaler already applies itself.
+    "everything": every setting the game has, conditions ignored, but where
+    several values are given for one key the one that matches here wins.
+    Either way only keys this build's OptiScaler.ini defines -- protonfixes
+    refuses a launch on any other -- and never the package's wiring."""
+    defined = {key.lower(): key for key in config.get("optiscaler_ini_keys", {}).get(version, [])}
+    avoid = {key.lower() for key in game.get("avoid", [])}
+    variant = menu_names(config).get(version, version)
+    candidates = {}
+    for item in game.get("settings", []):
+        key, value = item.get("key", ""), str(item.get("value", ""))
+        lower = key.lower()
+        tested = item.get("source") == "bc250"
+        if lower not in defined or lower in avoid or ";" in value or "\n" in value:
+            continue
+        if lower.startswith(PRESET_LOCKED) and not (tested and lower in PRESET_TESTED_LIBRARIES):
+            continue
+        if item.get("variants") and variant not in item["variants"]:
+            continue
+        candidates.setdefault(lower, []).append(item)
+    chosen = {}
+    # FreeFG's frame-gen input decides the context the wiki's conditions see.
+    context = variant_context(config, version, {
+        k: v[0]["value"] for k, v in candidates.items()
+        if k == "framegen.fginput" and v[0].get("source") == "bc250"})
+
+    def rank(item):
+        if item.get("source") == "bc250":
+            return 0
+        if item.get("auto"):
+            return 3  # OptiScaler sets it itself
+        return 1 if condition_met(item.get("when"), context) else 2
+
+    for lower, items in candidates.items():
+        best = min(items, key=rank)
+        if mode == "everything" or rank(best) < 2:
+            chosen[defined[lower]] = str(best["value"])
+    arguments = [a["arg"] for a in game.get("launch_args", [])
+                 if a.get("source") == "bc250" or mode == "everything"
+                 or condition_met(a.get("when"), context)]
+    # The wiki's Filename row names what its tester confirmed working. The
+    # package's winmm.dll is only the name the first BC-250 build happened to
+    # use, so when the page does not list it, the first name it does list wins
+    # -- unless this build reserves that name (reserved_proxy()).
+    proxies = game.get("proxy", [])
+    proxy = None
+    if proxies and config.get("proxy", "").lower() not in proxies:
+        proxy = next((name for name in proxies if reserved_proxy(config, name) is None), None)
+    return chosen, arguments, proxy
+
+
+def reserved_proxy(config, name):
+    """None when a preset may load OptiScaler as `name` in this build, else name.
+
+    A local build can keep DLL names for the player's own loaders
+    (build-proton-tarball.sh --optiscaler-reserve version.dll,winmm.dll): a
+    preset that asks for one of them gets the build's own proxy instead. Only
+    presets are held to this; PROTON_OPTISCALER_NAME is the player's own word."""
+    reserved = {n.lower() for n in config.get("reserved_proxies", [])}
+    return name if name and name.lower() in reserved else None
+
+
+def preset_record_path(inherited):
+    data = inherited.get("STEAM_COMPAT_DATA_PATH", "").strip()
+    return Path(data) / PRESET_RECORD if data else None
+
+
+def read_preset_record(inherited):
+    path = preset_record_path(inherited)
+    try:
+        record = json.loads(path.read_text()) if path else None
+    except (OSError, ValueError):
+        return None
+    return record if isinstance(record, dict) else None
+
+
+def describe_game(game):
+    tested = "tested on a BC-250" if game.get("bc250") else "from the OptiScaler wiki"
+    return game.get("title", "this game") + " (" + tested + ")"
+
+
+def apply_game_preset(config, version, presets, arguments, inherited, force=None):
+    """This launch's preset layer, its launch options and proxy name.
+
+    Applied in full on a fresh OptiScaler.ini -- a new prefix, or a variant
+    switch, which starts fresh -- in the mode the prefix last used ("matching"
+    unless the player forced "everything"), and whenever the player forces it.
+    Otherwise the INI keeps what it has, player edits included, and only the
+    launch options and proxy name, which live nowhere else, are applied again.
+    Returns ({}, [], None) whenever anything is missing or wrong."""
+    nothing = ({}, [], None)
+    choice = (inherited.get("BC250_GAME_PRESET", "") or "").strip().lower()
+    if choice == "0" or version in ("0", "") or presets is None:
+        return nothing
+    force = force or (choice if choice in PRESET_MODES else None)
+    game = find_game(presets, arguments, inherited)
+    if game is None:
+        return nothing
+    record = read_preset_record(inherited)
+    if record and record.get("title") != game.get("title"):
+        record = None
+    ini = prefix_ini(inherited)
+    fresh = ini is not None and not ini.is_file()
+    if force or fresh:
+        mode = force or (record or {}).get("mode", "matching")
+        if mode not in PRESET_MODES:
+            mode = "matching"
+        settings, launch, proxy = game_preset(config, version, game, mode)
+        record = {"title": game.get("title"), "mode": mode, "variant": version,
+                  "database": presets.get("content_sha256"), "settings": settings,
+                  "launch_args": launch, "proxy": proxy}
+        path = preset_record_path(inherited)
+        if path:
+            path.write_text(json.dumps(record, indent=1) + "\n")
+        sys.stderr.write("bc250-fsr4: applied the " + mode + " preset for " + describe_game(game)
+                         + ": " + (", ".join(k + "=" + v for k, v in settings.items()) or "no INI keys")
+                         + (" " + " ".join(launch) if launch else "") + "\n")
+        return settings, launch, proxy
+    if not record:
+        return nothing
+    # A key the variant enforces every launch would undo the preset's value at
+    # the next start; those few go in again. Everything else stays as the ini has it.
+    enforced = {k.lower() for k in config.get("optiscaler_variant_preset", {}).get(version, {})}
+    defined = {k.lower() for k in config.get("optiscaler_ini_keys", {}).get(version, [])}
+    again = {k: v for k, v in record.get("settings", {}).items() if k.lower() in enforced & defined}
+    return again, list(record.get("launch_args", [])), record.get("proxy")
+
+
+def with_launch_options(arguments, extra):
+    """Proton's arguments with the preset's game options appended once."""
+    if not extra or not arguments or arguments[0] not in ("run", "waitforexitandrun"):
+        return arguments
+    have = {a.lower() for a in arguments[2:]}
+    return arguments + [a for a in extra if a.lower() not in have]
+
+
 def main():
     config = json.loads((TOOL / "bc250-fsr4-config.json").read_text())
     game = game_launch(sys.argv[1:], os.environ)
-    variant, change, menu_switched = menu_choice(config, os.environ) if game else (None, {}, False)
+    presets, found = None, None
+    if game:
+        try:
+            presets = load_presets(os.environ)
+            found = find_game(presets, sys.argv[1:], os.environ) if presets else None
+        except Exception as error:
+            sys.stderr.write("bc250-fsr4: game presets unavailable (" + str(error) + ")\n")
+    os.environ.pop("BC250_MENU_GAME_PRESET", None)
+    if found is not None:
+        os.environ["BC250_MENU_GAME_PRESET"] = describe_game(found)
+    variant, change, menu_switched, force = menu_choice(config, os.environ) if game else (None, {}, False, None)
     if variant == "off":
         # The menu's "No upscaling" is the documented opt-out: no FSR4 provider,
         # and so no OptiScaler either (see environment()).
@@ -757,6 +1076,27 @@ def main():
     if game:
         start_fresh_on_switch(config, os.environ, menu_switched)
     env = environment(config, os.environ, game=game, menu=change)
+    arguments = sys.argv[1:]
+    if found is not None:
+        # After the switch check, which decides whether the ini starts fresh,
+        # and after environment(), which decides the variant that runs.
+        try:
+            layer, launch, proxy = apply_game_preset(
+                config, env.get("PROTON_USE_OPTISCALER", "0"), presets, arguments, os.environ, force)
+        except Exception as error:
+            sys.stderr.write("bc250-fsr4: game preset not applied (" + str(error) + ")\n")
+            layer, launch, proxy = {}, [], None
+        if reserved_proxy(config, proxy):
+            # A record written before the name was reserved.
+            proxy = None
+        if proxy and not os.environ.get("PROTON_OPTISCALER_NAME", "").strip():
+            os.environ["PROTON_OPTISCALER_NAME"] = proxy
+        if layer or proxy:
+            if any(k.lower() == "framegen.fginput" for k in layer):
+                # The menu's FG wiring is a default, not the player's pick.
+                change = {k: v for k, v in change.items() if k.lower() != "framegen.fginput"}
+            env = environment(config, os.environ, game=game, menu=change, known=layer)
+        arguments = with_launch_options(arguments, launch)
     if game:
         # Before Proton runs protonfixes, which then installs the selected
         # variant over a folder with no other variant's files in it.
@@ -764,7 +1104,7 @@ def main():
     # Replace this process so Steam keeps the pid it started and every inherited
     # descriptor, exactly as if it had run Proton directly.
     proton = str(TOOL / config["proton"])
-    os.execve(proton, [proton, *sys.argv[1:]], env)
+    os.execve(proton, [proton, *arguments], env)
 
 if __name__ == "__main__":
     try:

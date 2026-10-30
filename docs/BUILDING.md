@@ -261,6 +261,12 @@ Options and environment:
                             winmm.dll; dxgi.dll is the usual alternative). A real build
                             only. The same can be chosen per game at launch with
                             PROTON_OPTISCALER_NAME, without rebuilding
+--optiscaler-reserve LIST   comma-separated DLL names game presets may not load
+                            OptiScaler as, kept for your own loaders (for example
+                            version.dll,winmm.dll with --optiscaler-proxy dxgi.dll). A
+                            preset asking for one gets the build's proxy instead; other
+                            names it asks for still apply, and PROTON_OPTISCALER_NAME
+                            is not held to the list. Cannot include the proxy itself
 --repack-only               skip the container and re-wrap the package the last build
                             left in out/repo. It repacks that package as it is, so a fix
                             made to the scripts since then is not picked up
