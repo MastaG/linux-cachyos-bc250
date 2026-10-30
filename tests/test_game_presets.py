@@ -109,6 +109,8 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(builder.norm("Assassin’s Creed® Mirage"), builder.norm("Assassins Creed Mirage"))
         self.assertEqual(builder.norm("Atelier & Co."), "atelier and co")
         self.assertEqual(builder.norm("Grand Theft Auto V"), wrapper.norm_title("Grand Theft Auto V"))
+        self.assertEqual(builder.norm("God of War Ragnarök"), "god of war ragnarok")
+        self.assertEqual(wrapper.norm_title("God of War Ragnarök"), "god of war ragnarok")
 
     def test_bc250_settings_win_over_the_wiki(self):
         games = {}

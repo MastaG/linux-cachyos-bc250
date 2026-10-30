@@ -33,6 +33,7 @@ import hashlib
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 SCHEMA = 1
@@ -53,6 +54,9 @@ VARIANTS = {"hlx-fsr4": ["freefg-hlxfsr4"], "helixsr": ["helixsr"]}
 def norm(title):
     """A title as every source is matched on: no marks, no punctuation, lower case."""
     title = re.sub(r"[™®©'’`]", "", title.lower()).replace("&", " and ")
+    # Ragnarök and Ragnarok are one game: fold accents to their letter.
+    title = "".join(c for c in unicodedata.normalize("NFKD", title)
+                    if not unicodedata.combining(c))
     return " ".join(re.sub(r"[^0-9a-z]+", " ", title).split())
 
 

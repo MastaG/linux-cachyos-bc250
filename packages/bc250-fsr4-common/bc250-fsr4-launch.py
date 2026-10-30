@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import sys
+import unicodedata
 from pathlib import Path
 
 TOOL = Path(__file__).resolve().parent
@@ -855,6 +856,9 @@ def steam_title(inherited):
 def norm_title(title):
     """As scripts/build-game-presets.py norm(): the two must agree."""
     title = re.sub(r"[™®©'’`]", "", title.lower()).replace("&", " and ")
+    # Ragnarök and Ragnarok are one game: fold accents to their letter.
+    title = "".join(c for c in unicodedata.normalize("NFKD", title)
+                    if not unicodedata.combining(c))
     return " ".join(re.sub(r"[^0-9a-z]+", " ", title).split())
 
 
