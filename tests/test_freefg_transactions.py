@@ -36,18 +36,22 @@ class TransactionTests(unittest.TestCase):
         self.args = ['waitforexitandrun', '/Games/Echo Point Nova/Greylock-Win64-Shipping.exe']
         self.base = 'ge-proton'
         self.change = None
-        self.fail = None
+        self.stage_failure = None
+        # What the menu answers (variant, change, switched); menu_env is what it was given.
+        self.menu = (None, {}, False)
+        self.menu_env = None
+
 
     def launch(self, **env):
         inherited = {**self.env, **env}
         module = self.upscalers_module(self.base)
         original = module.setup_upscalers
-        if self.fail:
+        if self.stage_failure:
             # Only fail inside the staging recursion, after it writes something.
             def setup(features, effective, compat, prefix):
                 if 'BC250_FREEFG_PLAN' not in effective:
                     (Path(prefix) / 'partial-update').write_text('partial')
-                    raise RuntimeError(self.fail)
+                    raise RuntimeError(self.stage_failure)
                 return original(features, effective, compat, prefix)
             module.setup_upscalers = setup
         def run(proton, arguments, effective, lock):
@@ -61,8 +65,12 @@ class TransactionTests(unittest.TestCase):
             if self.change:
                 self.change()
             return 0
+        def menu(config, launch, menu_tool=None):
+            self.menu_env = launch
+            variant, change, switched = self.menu
+            return variant, dict(change), switched
         with mock.patch.object(wrapper, 'TOOL', self.work), \
-             mock.patch.object(wrapper, 'menu_choice', return_value=(None, {}, False)), \
+             mock.patch.object(wrapper, 'menu_choice', side_effect=menu), \
              mock.patch.object(wrapper, 'supervised', side_effect=run), \
              mock.patch.object(module.urllib.request, 'urlopen', side_effect=AssertionError('Network forbidden')):
             return wrapper.managed_launch(self.config, self.args, inherited)
@@ -146,8 +154,8 @@ class TransactionTests(unittest.TestCase):
         before = self.ini().read_bytes()
         tracked = (self.compat / 'upscaler_files').read_bytes()
         dll = (self.ini().parent / 'winmm.dll').read_bytes()
-        self.fail = 'injected staging failure'
-        with self.assertRaisesRegex(RuntimeError, self.fail):
+        self.stage_failure = 'injected staging failure'
+        with self.assertRaisesRegex(RuntimeError, self.stage_failure):
             self.launch(PROTON_USE_OPTISCALER='altbridge')
         self.assertEqual(before, self.ini().read_bytes())
         self.assertEqual(tracked, (self.compat / 'upscaler_files').read_bytes())
@@ -249,7 +257,7 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(self.ini().read_bytes(), before)
 
     def test_session_lock_is_released_after_exception(self):
-        self.fail = 'failure'
+        self.stage_failure = 'failure'
         with self.assertRaises(RuntimeError):
             self.launch()
         with state.Session(self.prefix, self.compat):
@@ -414,6 +422,58 @@ sys.exit(99)
         env = {'BC250_MENU_GAME': 'steam:1836730', 'BC250_MENU_INI': str(saved),
                'BC250_MENU_DEFAULT': 'freefg', 'BC250_MENU_INSTALLED': ''}
         self.assertFalse(menu.state(str(self.compat), env)[2])
+
+
+    def test_variant_switch_leaves_the_previous_variants_wiring_behind(self):
+        self.launch()
+        # Saved in this variant's overlay: an output and an upscaler it ships.
+        self.edit('FrameGen.FGOutput', 'fsrfg')
+        self.edit('Upscalers.Dx12Upscaler', 'xess')
+        self.edit('XeFG.InterpolationCount', '3')
+        self.launch()
+        self.assertEqual(self.setting('FrameGen.FGOutput'), 'fsrfg')
+        # Off and back again is not a switch.
+        self.launch(PROTON_USE_OPTISCALER='0')
+        self.launch()
+        self.assertEqual(self.setting('Upscalers.Dx12Upscaler'), 'xess')
+        self.launch(PROTON_USE_OPTISCALER='altbridge')
+        self.assertEqual(self.setting('FrameGen.FGOutput'), 'auto')
+        self.assertEqual(self.setting('Upscalers.Dx12Upscaler'), 'auto')
+        self.assertEqual(self.setting('XeFG.InterpolationCount'), '3')
+        self.assertEqual(self.setting('FrameGen.Enabled'), 'true')
+
+    def test_package_update_of_the_same_variant_keeps_its_wiring(self):
+        self.launch(PROTON_USE_OPTISCALER='altbridge')
+        self.edit('FrameGen.FGOutput', 'fsrfg')
+        self.launch(PROTON_USE_OPTISCALER='altbridge')
+        # A new nightly renames every pinned version; the variant is still altbridge.
+        manifest = json.loads((self.work / 'manifest.json').read_text())
+        manifest['optiscaler'][1]['version'] = 'test-opti-alt-next'
+        (self.work / 'manifest.json').write_text(json.dumps(manifest))
+        self.config['optiscaler_aliases']['altbridge'] = 'test-opti-alt-next'
+        self.config['optiscaler_ini_keys']['test-opti-alt-next'] = self.config['optiscaler_ini_keys']['test-opti-alt']
+        self.launch(PROTON_USE_OPTISCALER='altbridge')
+        self.assertEqual(self.setting('FrameGen.FGOutput'), 'fsrfg')
+
+    def test_first_managed_launch_keeps_this_launchs_menu_choice(self):
+        # Every existing prefix is adopted on its first managed launch; the menu
+        # choice made on that launch must not be replaced by the INI it adopts.
+        self.ini().parent.mkdir(parents=True)
+        self.ini().write_bytes(STUB_INI.replace(b'Enabled=auto', b'Enabled=true'))
+        self.menu = (None, {'FrameGen.Enabled': 'false'}, False)
+        self.launch()
+        self.assertEqual(self.setting('FrameGen.Enabled'), 'false')
+
+    def test_managed_menu_wires_the_frame_generation_it_turns_on(self):
+        menu = fixtures.load_script('tested_menu_wiring', COMMON / 'bc250-fsr4-menu.py')
+        # FSR4 RC12 generates nothing with Enabled alone: FGInput/FGOutput default to nofg.
+        result = menu.answer({'preset': 'fsr412f', 'disable_framegen': 0}, 'fsr412f', 'fsr412f',
+                             {'fsr412f': False}, ini_sections={}, managed=True)
+        self.assertEqual(result['changed'], 'FrameGen.Enabled=true;FrameGen.FGInput=upscaler;FrameGen.FGOutput=fsrfg')
+        # On a switch the box shows the game's carried-over choice; it is what starts.
+        result = menu.answer({'preset': 'fsr412f', 'disable_framegen': 0}, 'freefg', 'freefg',
+                             {'freefg': True, 'fsr412f': True}, managed=True)
+        self.assertEqual(result['changed'], 'FrameGen.Enabled=true;FrameGen.FGInput=upscaler;FrameGen.FGOutput=fsrfg')
 
 
 class CachyOSTransactionTests(TransactionTests):

@@ -40,17 +40,22 @@ The effective settings order is:
 package defaults → applicable recipe → saved player edits → launch options
 ```
 
-Saved overlay changes, menu FG-off choices, unknown INI keys, comments and
-newline style survive variant switches. Explicit `BC250_OPTISCALER_EXTRA` and
+Saved overlay changes, menu FG on/off choices, unknown INI keys, comments and
+newline style survive variant switches. Frame-generation wiring and the upscaler
+pick (`FrameGen.*` other than `Enabled`, `Upscalers.*`) are the exception: they
+name a generator or upscaler of the variant they were saved in, so a switch to
+another variant drops them, as a switch reset the whole INI before. Switching to
+No upscaling and back is not a switch. Explicit `BC250_OPTISCALER_EXTRA` and
 debug settings apply for that launch; removing them reveals the saved setting
 again. A changed package default updates a key only while it remains owned by
 the integration. Saving the same value that was already present is not an
 observable edit; use an explicit launch option when that distinction matters.
 
 An existing prefix is adopted conservatively: its current INI values, including
-`auto`, initially count as player choices. Use the recommendation action to
-allow managed defaults and recipe values to replace those keys. Unreadable or
-ambiguous INIs stop the launch instead of being reset.
+`auto`, initially count as player choices; a menu choice made on that first
+launch still wins. Use the recommendation action to allow managed defaults and
+recipe values to replace those keys. Unreadable or ambiguous INIs stop the
+launch instead of being reset.
 
 ## Identity and recipe limits
 

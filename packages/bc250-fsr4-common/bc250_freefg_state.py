@@ -194,6 +194,23 @@ def merge_ini(template, desired, overrides, previous=""):
     return result
 
 
+def variant_scoped(key):
+    """A choice that means something only in the variant it was made in: frame-gen
+    wiring and the upscaler pick (build-fsr4-payload.py's player keys). An FGOutput
+    or Dx12Upscaler saved in one variant names a generator or upscaler another
+    variant may not ship. Frame generation on/off stays the game's own choice."""
+    key = key.lower()
+    return key.startswith(('framegen.', 'upscalers.')) and key != 'framegen.enabled'
+
+
+def leave_variant(profile):
+    """Drop a game's variant-scoped overrides when it starts another variant, as a
+    switch started fresh before; the player's other edits stay."""
+    for settings in profile.get('overrides', {}).values():
+        for key in [key for key in settings if variant_scoped(key)]:
+            del settings[key]
+
+
 def capture(profile, texts):
     """Observe edits, including deletions, against what the last launch wrote."""
     overrides = profile.setdefault('overrides', {})
@@ -457,13 +474,31 @@ class Session:
         write_json(self.root / 'state.json', self.state)
         return {**self.status(key), 'pending': action, 'applies': 'next game launch'}
 
-    def plan(self, tool, config, game, version, provider, desired, explicit, recipe, retained=None):
+    def last_variant(self, profile):
+        """The newest generation this game ran with OptiScaler on, or None: No
+        upscaling and back is not a switch."""
+        for generation in reversed(profile.get('history', [])):
+            record = read_generation(self.root, generation)
+            if record['version'] != '0':
+                return record
+        return None
+
+    def plan(self, tool, config, game, version, provider, desired, explicit, recipe, retained=None, installed=None):
         profile = self.profile(game['key'])
         if not profile['history']:
             legacy = not self.state.get('active') and self.targets[0].exists()
             if legacy:
                 texts = ini_files(self.targets[0])
-                profile['overrides'] = {name: values(text) for name, text in texts.items()}
+                adopted = {name: values(text) for name, text in texts.items()}
+                if installed != version:
+                    # The INI belongs to another variant (or an older package's):
+                    # its wiring stays behind, as at any switch.
+                    adopted = {name: {k: v for k, v in settings.items() if not variant_scoped(k)}
+                               for name, settings in adopted.items()}
+                # This launch's menu choice is newer than anything the INI holds.
+                chosen = profile.get('overrides', {})
+                profile['overrides'] = {name: {**adopted.get(name, {}), **chosen.get(name, {})}
+                                        for name in set(adopted) | set(chosen)}
                 profile['last'] = texts
                 baseline = self.root / 'baseline'
                 if not baseline.exists():

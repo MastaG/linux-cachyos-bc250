@@ -629,6 +629,15 @@ def menu_names(config):
     return {aliases[name]: name for name in MENU_VARIANTS if name in aliases}
 
 
+def variant_identity(config, version):
+    """Which variant a pinned version of config is, stable across package updates:
+    its menu name, else the short names that select it. Every nightly renames the
+    versions themselves; a retired name selects its successor only as an alias."""
+    names = tuple(sorted(name for name, pinned in config.get("optiscaler_aliases", {}).items()
+                         if pinned == version))
+    return menu_names(config).get(version) or names or version
+
+
 # Where Steam Linux Runtime's pressure-vessel keeps its client inside the
 # container, and beside the runtime outside it.
 LAUNCH_CLIENT = "steam-runtime-launch-client"
@@ -785,7 +794,8 @@ def managed_launch(config, arguments, inherited):
 
 
 def _managed_launch(config, arguments, inherited):
-    from bc250_freefg_state import Session, INI, read_json, atomic, merge_ini, read_generation, verify_bundle
+    from bc250_freefg_state import (Session, INI, read_json, atomic, merge_ini, read_generation, verify_bundle,
+                                    leave_variant)
     import bc250_freefg_recipes as recipes
     global TOOL
     original_tool = TOOL
@@ -905,6 +915,13 @@ def _managed_launch(config, arguments, inherited):
             if pinned:
                 desired = pinned['desired'][INI]
                 recommendation = pinned['recipe']
+            # Another variant leaves the last one's wiring behind; a package update of
+            # the same variant does not. Before this launch's menu choices, which
+            # belong to the variant picked now.
+            last = session.last_variant(profile)
+            if last and variant_identity(read_json(session.root / 'bundles' / last['bundle'] / 'config.json'),
+                                         last['version']) != variant_identity(config, version):
+                leave_variant(profile)
             if change:
                 profile.setdefault('overrides', {}).setdefault(INI, {}).update({k.lower(): v for k, v in change.items()})
             explicit = extra_preset(inherited.get('BC250_OPTISCALER_EXTRA', ''))
@@ -915,7 +932,8 @@ def _managed_launch(config, arguments, inherited):
             if unknown:
                 raise RuntimeError('Unsupported OptiScaler settings: ' + ', '.join(sorted(unknown)))
             plan = session.plan(TOOL, config, identity, version, provider, desired, explicit, recommendation,
-                                retained=pinned['bundle'] if pinned else None)
+                                retained=pinned['bundle'] if pinned else None,
+                                installed=installed_variant(config, inherited))
             env['BC250_FREEFG_PLAN'] = str(plan)
             env['BC250_FREEFG_MODULE'] = str(original_tool / 'bc250_freefg_state.py')
             env['PROTON_OPTISCALER_CONFIG'] = ''

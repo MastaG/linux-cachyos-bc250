@@ -542,8 +542,13 @@ def answer(result, current, base, fg_states, spoof_states=None, ini_sections=Non
     if managed and new != OFF:
         # Recipe/default wiring is handled by the transaction. Merely opening
         # the menu must not turn the generic input into a saved player override.
+        # Two exceptions: a variant the menu wires itself (FG_WIRING) generates
+        # nothing with Enabled alone, and on a switch the box shows this game's
+        # carried-over choice, which reaches the new variant only as an override.
+        wiring = {key: value for key, value in changed.items() if key in FG_WIRING.get(new, {})}
         changed = ({'FrameGen.Enabled': 'true' if is_on else 'false'}
-                   if is_on != fg_states.get(new, False) else {})
+                   if is_on != fg_states.get(new, False) or switched else {})
+        changed.update(wiring)
     spoof = result.get("spoof", "auto")
     if new != OFF and spoof != (spoof_states or {}).get(new, "auto"):
         changed["Spoofing.Dxgi"] = spoof
