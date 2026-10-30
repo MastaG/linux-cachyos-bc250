@@ -273,9 +273,9 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.0" \\\n'
     '        --helixsr-scaler "${srcdir}/HelixSR-3.2.0-Scaler-2.1.0-core.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.0" \\\n'
-    '        --freefg "${srcdir}/freefg-1.1.5.zip" \\\n'
-    '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.1.5" \\\n'
-    '        --freefg-ini "${srcdir}/OptiScaler-bc250-03db4f8.ini" \\\n'
+    '        --freefg "${srcdir}/freefg-1.1.6.zip" \\\n'
+    '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.1.6" \\\n'
+    '        --freefg-ini "${srcdir}/OptiScaler-bc250-25db192.ini" \\\n'
     '        --freefg-bridge fsr412f \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
@@ -359,17 +359,17 @@ payload_sources = [
     # HelixSR 3.2.0 download: only what differs from the nightly.
     ("HelixSR-3.2.0-Scaler-2.1.0-core.zip", f"{payload_base}/HelixSR-3.2.0-Scaler-2.1.0-core.zip",
      "78e4787d35e0fa533eb73939fc4a05affc0e550d423efdc9704254a381cf7618", True),
-    # FreeFG 1.1.5 (daniel-h-0): Intel XeSS frame generation with its own BC-250
+    # FreeFG 1.1.6 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
     # Mirrored release zip; its OptiScaler build is GPL-3.0, and the matching
-    # freefg-1.1.5-source.zip is mirrored beside it.
-    ("freefg-1.1.5.zip", f"{payload_base}/freefg-1.1.5.zip",
-     "367c83b81b4df66cf1c2e345ee9cd3f32f8d9998b21a0acb15f148a1f6f2da3b", True),
-    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-03db4f8),
+    # freefg-1.1.6-source.zip is mirrored beside it.
+    ("freefg-1.1.6.zip", f"{payload_base}/freefg-1.1.6.zip",
+     "4facc961b6f60336e038549dbecfeab36f0af9ab176d07147a42521e06a3c39e", True),
+    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-25db192),
     # pinned by commit: the freefg variants ship this build and this ini.
-    ("OptiScaler-bc250-03db4f8.ini",
-     "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/d191284afa25968f8ae709e70ccd7a8701003ec8/OptiScaler.ini",
-     "54493b7795f92e2b2ef063815f62bb29e983716a27b524d19b27d5ddc473caac", False),
+    ("OptiScaler-bc250-25db192.ini",
+     "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/25db192b1c1ebf42ae7cd6615bc6288b39121c5b/OptiScaler.ini",
+     "e08ac5e1de899bce37710ffe82f6dfc6e31edfa7febb11a8a9db4ac8dac41e95", False),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),

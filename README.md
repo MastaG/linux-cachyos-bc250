@@ -936,14 +936,14 @@ pinned builds. Each package ships all of them and swaps only that file;
 `PROTON_USE_OPTISCALER` picks one per game:
 
 ```text
-                                          # (unset) FreeFG 1.1.5 + HelixSR 3.2.0's HLX FSR 4 — the default
+                                          # (unset) FreeFG 1.1.6 + HelixSR 3.2.0's HLX FSR 4 — the default
 PROTON_USE_OPTISCALER=optiscaler %command%  # stock OptiScaler nightly with the fsr411f bridge
 PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork RC11, 4.1.1r11 — the default until HelixSR
 PROTON_USE_OPTISCALER=fsr412f %command%   # the same fork's RC12, 4.1.1r12 — newest bridge, opt-in
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
 PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR Scaler 2.1.0 with HelixSR 3.2.0 (HLX DLSS, HLX FSR 4)
-PROTON_USE_OPTISCALER=freefg %command%    # FreeFG 1.1.5 with the fork's RC12 bridge
+PROTON_USE_OPTISCALER=freefg %command%    # FreeFG 1.1.6 with the fork's RC12 bridge
 PROTON_USE_OPTISCALER=fsr411rc9 %command%  # the older RC9 build
 PROTON_USE_OPTISCALER=fsr411rc10 %command% # the older RC10 build
 ```
@@ -1087,7 +1087,7 @@ and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md)
 ### FreeFG: XeSS frame generation for the BC-250 (the default)
 
 `PROTON_USE_OPTISCALER=freefg %command%` selects
-[FreeFG](https://github.com/daniel-h-0/freefg) 1.1.5 by daniel-h-0. Frame
+[FreeFG](https://github.com/daniel-h-0/freefg) 1.1.6 by daniel-h-0. Frame
 generation is Intel's XeSS FG (XeFG): Intel's unmodified runtime generates the
 frames, and FreeFG's wrapper runs part of its GPU work with FreeFG's own
 shaders, which are faster on the BC-250 (its author measured +21% in Cyberpunk
@@ -1137,8 +1137,8 @@ Spider-Man 2 and Shadow of the Tomb Raider. Its logs, `BC250-MFG.log` and
 FreeFG problems [to FreeFG](https://github.com/daniel-h-0/freefg/issues). The
 package ships FreeFG's release files unchanged, pinned by SHA256: its
 OptiScaler build (GPL-3.0; source at
-[daniel-h-0/OptiScaler](https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-03db4f8),
-and `freefg-1.1.5-source.zip` is mirrored beside the package inputs), its
+[daniel-h-0/OptiScaler](https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-25db192),
+and `freefg-1.1.6-source.zip` is mirrored beside the package inputs), its
 wrapper, shaders and layer (MIT). Intel's XeFG and XeLL runtimes are the ones in
 the pinned OptiScaler nightly, byte-identical to what FreeFG pins.
 

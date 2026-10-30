@@ -72,14 +72,14 @@ source=(
     # HelixSR 3.2.0 download: its OptiScaler.dll and OptiScaler.ini, its OptiPatcher
     # and AMD's FSR SDK 2.4.0 DLL it keeps as .amd.dll. Everything else is the nightly.
     "HelixSR-3.2.0-Scaler-2.1.0-core.zip::@PAYLOAD_BASE@/HelixSR-3.2.0-Scaler-2.1.0-core.zip"
-    # FreeFG 1.1.5 (daniel-h-0): Intel XeSS frame generation with its own BC-250
+    # FreeFG 1.1.6 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
     # Mirrored release zip; its OptiScaler build is GPL-3.0, and the matching
-    # freefg-1.1.5-source.zip is mirrored beside it.
-    "freefg-1.1.5.zip::@PAYLOAD_BASE@/freefg-1.1.5.zip"
-    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-03db4f8),
+    # freefg-1.1.6-source.zip is mirrored beside it.
+    "freefg-1.1.6.zip::@PAYLOAD_BASE@/freefg-1.1.6.zip"
+    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-25db192),
     # pinned by commit: the freefg variants ship this build and this ini.
-    "OptiScaler-bc250-03db4f8.ini::https://raw.githubusercontent.com/daniel-h-0/OptiScaler/d191284afa25968f8ae709e70ccd7a8701003ec8/OptiScaler.ini"
+    "OptiScaler-bc250-25db192.ini::https://raw.githubusercontent.com/daniel-h-0/OptiScaler/25db192b1c1ebf42ae7cd6615bc6288b39121c5b/OptiScaler.ini"
     "@FAKENVAPI_ASSET@::@FAKENVAPI_URL@"
     "nvngx_dlss.dll::https://raw.githubusercontent.com/NVIDIA/DLSS/a291cc7d2cc642a51566f3dfd5376f635cd1b284/lib/Windows_x86_64/rel/nvngx_dlss.dll"
     '0001-pinned-upscaler-manifest.patch'
@@ -104,7 +104,7 @@ noextract=(
     'bc250-fsr4-dll-4.0.0-rc10.zip'
     'HelixSR-3.2.0-network.zip'
     'HelixSR-3.2.0-Scaler-2.1.0-core.zip'
-    'freefg-1.1.5.zip'
+    'freefg-1.1.6.zip'
 )
 
 sha256sums=(
@@ -120,8 +120,8 @@ sha256sums=(
     'eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98'
     '558a205f5464abbb7b92916431accd9f68c02c87aec8e1b0f931ed8e4990e292'
     '78e4787d35e0fa533eb73939fc4a05affc0e550d423efdc9704254a381cf7618'
-    '367c83b81b4df66cf1c2e345ee9cd3f32f8d9998b21a0acb15f148a1f6f2da3b'
-    '54493b7795f92e2b2ef063815f62bb29e983716a27b524d19b27d5ddc473caac'
+    '4facc961b6f60336e038549dbecfeab36f0af9ab176d07147a42521e06a3c39e'
+    'e08ac5e1de899bce37710ffe82f6dfc6e31edfa7febb11a8a9db4ac8dac41e95'
     '@FAKENVAPI_SHA256@'
     'be6e434a94ca32499515eb62ca0e6c274526055d568d0426e4c652dcdfb6ee6e'
     '@SHA_PATCH@'
@@ -200,9 +200,9 @@ build() {
             "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.0" \
         --helixsr-scaler "$srcdir/HelixSR-3.2.0-Scaler-2.1.0-core.zip" \
             "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.0" \
-        --freefg "$srcdir/freefg-1.1.5.zip" \
-            "https://github.com/daniel-h-0/freefg/releases/tag/v1.1.5" \
-        --freefg-ini "$srcdir/OptiScaler-bc250-03db4f8.ini" \
+        --freefg "$srcdir/freefg-1.1.6.zip" \
+            "https://github.com/daniel-h-0/freefg/releases/tag/v1.1.6" \
+        --freefg-ini "$srcdir/OptiScaler-bc250-25db192.ini" \
         --freefg-bridge fsr412f \
         --dlss "$srcdir/nvngx_dlss.dll" \
         --licenses "$srcdir" \

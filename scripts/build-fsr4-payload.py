@@ -875,12 +875,20 @@ def main() -> int:
                           "the same build FreeFG ships")]
             if helixsr_ngx:
                 _, _, hlx, helix_notices = helixsr_ngx
+                # HLX FSR 4 hands what its own runtime does not cover to AMD's
+                # FidelityFX DLL beside it (<name>.amd.dll); without one it
+                # logs "HLX FSR 4 only" and has no fallback. The Scaler's copy is
+                # the one from the same HelixSR download, as FreeFG 1.1.6 ships it.
+                amd = "OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"
+                fallback = {amd: scaler_files[amd]} if args.helixsr_scaler and amd in scaler_files else {}
                 upscalers.append((
-                    FREEFG_HLXFSR4_NAME, hlx, {}, {}, helix_notices, "HelixSR",
+                    FREEFG_HLXFSR4_NAME, hlx, fallback, {}, helix_notices, "HelixSR",
                     f"HLX FSR 4 from HelixSR (origin: {args.helixsr_ngx[1]}, SHA256 "
                     f"{digest(hlx)}), AMD's FSR 4 network on HelixSR's own pipeline, with "
                     "shaders built from AMD's FSR SDK (MIT, see HelixSR's "
-                    "THIRD_PARTY_NOTICES.md)"))
+                    "THIRD_PARTY_NOTICES.md)"
+                    + (f"; {amd} is AMD's FidelityFX DLL from HelixSR's download, its "
+                       "fallback for what HLX FSR 4 does not cover" if fallback else "")))
             for name, ffx_sdk, upscaler_files, upscaler_preset, upscaler_notices, \
                     notice_prefix, upscaler_text in upscalers:
                 # freefg-hlxfsr4 is the packages' default (owner's decision,
@@ -911,7 +919,7 @@ def main() -> int:
                         shutil.copy2(path, merged / (notice_prefix + "-" + path.name))
                 provenance = (
                     f"{args.proxy} in this directory is FreeFG's build of OptiScaler (GPL-3.0; "
-                    "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-03db4f8 "
+                    "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-25db192 "
                     f"and {Path(args.freefg[0]).name.removesuffix('.zip')}-source.zip "
                     "beside FreeFG's release), NOT the stock "
                     "OptiScaler nightly.\n\n"

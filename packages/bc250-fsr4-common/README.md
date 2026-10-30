@@ -226,11 +226,14 @@ picks one:
   `helixsr.ini` and its log at run time, so those are not pinned.
 - **`freefg-hlxfsr4`** (the default since 2026-10-29) — the FreeFG tree (below) with HLX FSR 4 as the
   FidelityFX upscaler in place of RC12, built whenever `--freefg` and
-  `--helixsr-ngx` are both given. Nothing else differs; the shared
+  `--helixsr-ngx` are both given. With `--helixsr-scaler`, AMD's FidelityFX DLL
+  from the same HelixSR download sits beside it as
+  `amd_fidelityfx_upscaler_dx12.amd.dll`, HLX FSR 4's fallback for what its own
+  runtime does not cover. Nothing else differs; the shared
   `UpscalerIndex = 0` selects HLX FSR 4 (checked on a BC-250 in Shadow of the
   Tomb Raider: 720p → 1080p in 1.17 ms).
 - **`freefg`** — opt-in, built with `--freefg` from FreeFG's release zip
-  (mirrored unchanged as `freefg-1.1.5.zip`, its GPL source zip beside it).
+  (mirrored unchanged as `freefg-1.1.6.zip`, its GPL source zip beside it).
   [FreeFG](https://github.com/daniel-h-0/freefg) speeds up Intel's XeSS frame
   generation on the BC-250. The tree is the nightly's with FreeFG's OptiScaler
   build as the proxy, the RC12 bridge (`--freefg-bridge fsr412f`, what FreeFG

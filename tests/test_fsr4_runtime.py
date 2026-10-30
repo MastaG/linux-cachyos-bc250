@@ -1781,6 +1781,12 @@ class PresetTests(unittest.TestCase):
         default = config["optiscaler_version"]
         self.assertEqual(aliases["freefg-hlxfsr4"], default)
         self.assertIn("OptiScaler/libxess_fg.dll", self.trees[default])
+        # AMD's own FidelityFX DLL beside HLX FSR 4, its fallback; plain freefg
+        # (the RC12 bridge) has none.
+        self.assertEqual(self.trees[default]["OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"],
+                         self.SCALER_AMD_DLL)
+        self.assertNotIn("OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll",
+                         self.trees[aliases["freefg"]])
         # The others stay reachable by name, each its own version.
         for name in ("freefg", "helixsr", "fsr412f" if "fsr412f" in aliases else "fsr411f"):
             self.assertNotEqual(aliases[name], default, name)

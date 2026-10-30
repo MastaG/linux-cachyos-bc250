@@ -680,6 +680,16 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - FSR4 and OptiScaler are on by default. They remain launch options, so
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- **New: FreeFG [1.1.6](https://github.com/daniel-h-0/freefg/releases/tag/v1.1.6).** Its OptiScaler
+  build (fork tag \`bc250-25db192\`) merges OptiScaler's October 29 nightly and recognises HLX FSR 4,
+  leaving HLX's own exposure handling in place where the previous build replaced it. FreeFG's frame
+  generation, shaders and layer are unchanged. FreeFG + HLX FSR 4 now ships AMD's FidelityFX DLL
+  beside HLX FSR 4 as its fallback for what HLX does not cover, as HelixSR Scaler and FreeFG do.
+- **New: per-game presets.** On a game's first start the launcher applies known-good OptiScaler
+  settings for it from a database rebuilt every night from the OptiScaler wiki and FreeFG's BC-250
+  recipes (the \`bc250-game-presets\` release). The menu offers **Force apply known settings** when
+  the game is in it; \`BC250_GAME_PRESET=0 %command%\` turns presets off. See the README's
+  "Game presets".
 - **Changed: the default is now FreeFG + HLX FSR 4** (\`PROTON_USE_OPTISCALER=freefg-hlxfsr4\`):
   FreeFG's frame generation with HelixSR 3.2.0's HLX FSR 4 as the upscaler, which in testing looked
   as good as HelixSR 2.0.0 and is HelixSR's recommended FSR 3.1 drop-in. HelixSR 2.0.0 has left the
