@@ -36,6 +36,8 @@ jobs:
       - name: Test the builder and the launcher's side
         run: python3 -B -m unittest tests.test_game_presets -v
       - name: Fetch the sources
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p src
@@ -44,6 +46,13 @@ jobs:
           # Each by commit, so the files fetched are the ones the release names.
           tip() { git ls-remote "https://github.com/$1.git" HEAD | cut -f1; }
           freefg=$(tip daniel-h-0/freefg)
+          # FreeFG's newest release, a preview too, when it is ahead of main:
+          # 1.2.0-preview's recipes carry the store-checked Steam ids main lacks.
+          release=$(gh api repos/daniel-h-0/freefg/releases -q '.[0].tag_name')
+          tagged=$(gh api "repos/daniel-h-0/freefg/commits/$release" -q .sha)
+          if [ "$(gh api "repos/daniel-h-0/freefg/compare/$freefg...$tagged" -q .status)" = ahead ]; then
+            freefg=$tagged
+          fi
           upstream=$(tip optiscaler/OptiScaler)
           fork=$(tip daniel-h-0/OptiScaler)
           curl -fsSL --retry 3 -o src/recipes.json \
