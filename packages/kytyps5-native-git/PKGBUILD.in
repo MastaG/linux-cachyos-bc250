@@ -37,8 +37,7 @@ depends=('qt6-base' 'vulkan-icd-loader' 'libx11' 'libxext' 'libxcursor' 'libxi'
          'alsa-lib' 'dbus' 'systemd-libs' 'hicolor-icon-theme')
 makedepends=('git' 'cmake' 'ninja' 'clang' 'lld' 'glslang' 'python' 'pkgconf'
              'wayland-protocols' 'libxtst' 'mesa')
-optdepends=('xdotool: Steam shortcuts through kytyps5-run'
-            'xorg-xprop: Steam shortcuts through kytyps5-run'
+optdepends=('xorg-xprop: Steam shortcuts through kytyps5-run'
             'alsa-utils: a DualSense speaker at full mixer level (amixer)')
 provides=("$_name")
 conflicts=("$_name")

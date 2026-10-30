@@ -1280,7 +1280,9 @@ self-updater: `pacman -Syu` updates it.
 Tested on a BC-250 (2026-10-29, upstream release `KytyPS5-Native-2026-10-29-b9a29ef`):
 installs cleanly, creates no group and enables nothing, the launcher and
 `kyty_emulator` start, the helper serves its socket to members of `render` and
-refuses everyone else. Not yet tested there: a game.
+refuses everyone else. On 2026-10-30 ASTRO BOT played from a Steam shortcut in
+Gaming Mode (VRAM 512 MB, steps 1-3), in HDR, with a USB DualSense's motion,
+haptics, adaptive triggers and speaker.
 
 What you need besides the package:
 
@@ -1291,6 +1293,13 @@ What you need besides the package:
 - **No PS5 firmware, BIOS or keys.** KytyPS5, which this fork builds on, implements
   the PS5's system libraries itself; the only modules it loads are the ones a game
   ships in its own `sce_module/` folder.
+- **VRAM set to 512 MB** in the BIOS for the larger games (Gran Turismo 7, ASTRO
+  BOT): the rest of the 16 GB is then RAM the game needs. On the modded P3.00
+  "Chipset Menu" BIOS: Chipset > GFX Configuration > UMA Frame Buffer Size >
+  512M. On the stock BIOS, without flashing:
+  `sudo ./bc250memcfg UMA_SIZE 512` with
+  [bc250_memcfg](https://github.com/fanoush/bc250_memcfg), then reboot.
+  `cat /sys/class/drm/card*/device/mem_info_vram_total` shows 536870912 after it.
 - **Memory:** 14 GiB of GTT for the larger games (step 1). Gran Turismo 7 uses
   about 12.6 of the board's 14.8 GB, so close other programs; a Steam shortcut
   (step 3) unloads Steam itself while the game runs.
@@ -1378,7 +1387,21 @@ To undo: `sudo systemctl disable --now kyty-lodhw.service` and
   give it the game folder as launch option: `"/path/to/game"`. Optional:
   `--keep-steam` after the folder keeps Steam running during the game (by
   default it is unloaded to free 2-3 GB of RAM for large games). It needs
-  `xdotool` and `xorg-xprop`: `sudo pacman -S xdotool xorg-xprop`.
+  `xorg-xprop`: `sudo pacman -S xorg-xprop`.
+- **Turn Steam Input off for that shortcut** (its controller settings in Steam).
+  With Steam Input on, Kyty sees only Steam's virtual pad: no motion controls,
+  haptics, adaptive triggers or controller speaker.
+- **HDR** is automatic from a Steam shortcut: with Steam's HDR on (Settings >
+  Display), the runner starts Kyty in HDR10 and the game offers its HDR
+  options; with it off, SDR as before. On the KDE desktop, turn HDR on in the
+  launcher's settings for the game (KDE's own HDR on).
+- **A USB DualSense** gets its own levels each time a game starts: speaker 50%,
+  haptics 90%, the controller's mixer 100% (a new controller otherwise sits at
+  40% and 80%, far quieter than on a PS5). Other levels for one shortcut:
+  `KYTYPS5_DS_SPEAKER=70 KYTYPS5_DS_HAPTICS=100 %command% "/path/to/game"`;
+  `KYTYPS5_DS_SPEAKER=off` leaves the levels alone. `amixer` (`alsa-utils`) sets
+  the mixer. With `bc250-dual-audio`, version 0.17 or newer is needed for the
+  haptics to reach the controller.
 - Upstream's Decky plugin is for SteamOS and installs its own copy of Kyty; it
   is not needed with this package.
 
