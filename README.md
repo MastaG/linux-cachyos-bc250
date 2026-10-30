@@ -1072,10 +1072,12 @@ frame generation on with XeFG output at 2×, borderless instead of exclusive
 fullscreen (XeFG does not interpolate in exclusive fullscreen), Reflex forced on
 for XeLL, and OptiFG as the input (`FrameGen.FGInput=upscaler`, which works in
 any game whose upscaler OptiScaler sees). FreeFG's own installer picks the input
-per game from its recipes. The Proton adapter now imports applicable curated
-recipes from a pinned upstream snapshot, including FG-input and provider fixes.
-Saved player choices and explicit launch options take precedence:
-
+per game from its recipes, and the packages now read the same pinned catalogue
+at launch: a recipe verified on a BC-250 sets its FG input and keys, OptiScaler's
+own fix for a game is no longer overruled by the shared preset, and an FG input
+the OptiScaler wiki reports broken in a game starts frame generation off. The
+menu says what applies to the game and what the wiki advises. Saved player
+choices and explicit launch options take precedence:
 
 ```text
 BC250_OPTISCALER_EXTRA="FrameGen.FGInput=dlssg" PROTON_USE_OPTISCALER=freefg %command%

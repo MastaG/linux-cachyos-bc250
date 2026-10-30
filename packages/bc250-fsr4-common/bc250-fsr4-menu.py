@@ -312,6 +312,11 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
         summary.add_css_class('hint')
         box.append(summary)
         box.append(Gtk.LinkButton(uri='https://github.com/daniel-h-0/freefg', label='FreeFG project and releases'))
+    # What the FreeFG recipes and the OptiScaler wiki say about this game.
+    for line in filter(None, os.environ.get('BC250_MENU_ADVICE', '').split('\n')):
+        advice = Gtk.Label(label=line, xalign=0, wrap=True)
+        advice.add_css_class('hint')
+        box.append(advice)
     radios, group = [], None
     for name, label, sub in preset_names:
         r = Gtk.CheckButton()

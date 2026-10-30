@@ -18,7 +18,17 @@ Proton/provider combination.
 
 The existing launch menu still chooses the upscaler, GPU spoofing and FG on/off.
 It now keeps choices per game, shows the FreeFG version and recipe revision,
-and links to the FreeFG project. After the first managed launch it also offers:
+and links to the FreeFG project. A few lines under that say what the catalogue
+does for this game, for example:
+
+```text
+Verified on BC-250: RoboCop: Rogue City (DLSS FG input; generates)
+Guided by the OptiScaler wiki: Neverness to Everness (NTE)
+OptiScaler wiki (God of War Ragnarok, matched by name only) reports problems with OptiFG input; ...
+Left to OptiScaler’s own fix for this game: Hotfix.RestoreComputeSignature
+```
+
+After the first managed launch it also offers:
 
 - **Use recommended integration settings**: adopt the current package/recipe
   values for managed keys. Other settings remain yours. This does not alter
@@ -37,7 +47,7 @@ not Proton, Wine, Mesa or the kernel.
 The effective settings order is:
 
 ```
-package defaults → applicable recipe → saved player edits → launch options
+package defaults → catalogue for this game → saved player edits → launch options
 ```
 
 Saved overlay changes, menu FG on/off choices, unknown INI keys, comments and
@@ -57,6 +67,46 @@ launch still wins. Use the recommendation action to allow managed defaults and
 recipe values to replace those keys. Unreadable or ambiguous INIs stop the
 launch instead of being reset.
 
+## How the catalogue tempers the default
+
+These packages give every game the same default; FreeFG's installer configures
+a game its user picked. The pinned catalogue holds three kinds of per-game
+evidence, applied in the order of FreeFG's `compat.py`:
+
+| Layer | Source | Applied here |
+| --- | --- | --- |
+| Curated recipe | 19 rows observed on a BC-250 | Input, keys and DX12 argument, with `generates`/`gameplay` evidence |
+| OptiScaler's own fixes | `quirk_keys`, `leave_auto`: 218 executables, from the shipped OptiScaler build | The key is left `auto`, where the fix acts |
+| Reviewed wiki item | `promoted`: 6 items | Its key, on a strong match whose conditions hold here |
+| Wiki veto | `fg_advice` broken/avoid | Frame generation starts off when the default input is reported broken, on a strong match |
+| Other wiki items | 758 OptiScaler wiki entries | Advice in the menu and launch log |
+
+The asymmetry is deliberate. Nobody chose this default per game, so evidence
+that it is wrong for a game removes it; evidence gathered on other hardware
+(mostly Windows and NVIDIA) never adds a setting by itself. A preferred input,
+a DX12 launch option, a proxy name or a listed setting is shown with the launch
+option that tries it.
+
+OptiScaler applies a per-game fix only while its key is `auto`. The shared
+preset writes `Hotfix.RestoreComputeSignature=false` and
+`Hotfix.ExtendedStateRestore=false`, which the shipped `OptiScaler.ini`
+documents as what `auto` means anyway, so their only effect was to switch off
+OptiScaler's fix for the 15 executables that have one: Monster Hunter Wilds,
+Rise and Stories 3, Dragon's Dogma 2, Resident Evil 9 Requiem, Pragmata,
+Onimusha: Way of the Sword, Kunitsu-Gami, Dead Rising Deluxe Remaster and 007
+First Light, with demos (several fixes apply to non-NVIDIA GPUs only). For those
+executables the key is left `auto`. FreeFG's own installer keys
+(`XeFG.ForceBorderless` and the FG wiring) are not given back: FreeFG writes
+them regardless, for measured reasons. The package's documented
+`Spoofing.VulkanExtensionSpoofing=false` also stands; where OptiScaler's fix
+for a game would turn it on, the launch log says so and how to try it.
+
+A strong match is FreeFG's: a store ID, or the executable together with the
+game's title or one of its folders. Wiki entries carry titles and executable
+names but no store IDs, so the title comes from Steam's appmanifest for the
+running AppID. A title alone (697 of the 758 entries name no executable) is a
+weak match and only advises. A curated recipe outranks every wiki layer.
+
 ## Identity and recipe limits
 
 Real Steam AppIDs are used directly. Heroic/Lutris users can specify a store
@@ -70,8 +120,10 @@ BC250_FREEFG_GAME_ID=steam:1836730
 The accepted forms are `steam:ID`, `gog:ID`, and `epic:NAME`. Without a real
 store ID, the adapter requires both a recognized executable and a matching
 installation-directory name. A shortcut's generated Steam ID and `umu-0` are
-not catalogue identities. Unknown titles retain the package defaults;
-ambiguous matches stop with an error.
+not catalogue identities. Unknown titles retain the package defaults, and so
+does an ambiguous match, with the reason in the launch log. A launch with
+neither a store ID nor an `.exe` (a `.bat`, for one) keeps one identity for its
+prefix; no game is refused for want of a name.
 
 Only curated rows with `generates` or `gameplay` evidence are applied
 automatically. The current upstream snapshot has 19 curated rows, 13 with that
@@ -159,6 +211,11 @@ unchanged. Runtime refreshes verify GitHub's asset digests, the source hash
 recorded inside the runtime, and the INI at the exact OptiScaler source commit.
 No dependency is fetched at game launch. The optional `gh` fallback handles
 release-asset download routes blocked by a GitHub proxy.
+
+`bc250_freefg_recipes.py` carries FreeFG's matching and wiki rules (`norm`,
+`wiki_matches`, `key_rule`, the condition evaluator, `INSTALLER_KEYS`). When the
+recipe pin moves, compare them with FreeFG's `recipes.py` and `compat.py` at the
+new commit.
 
 Review the pin and recipe diff, run `python3 -B -m unittest discover -s tests`,
 then build all affected packages and perform runtime qualification before

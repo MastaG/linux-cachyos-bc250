@@ -659,7 +659,7 @@ MENU_ENV = ("STEAM_COMPAT_DATA_PATH", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"
             "XDG_RUNTIME_DIR", "SteamAppId", "SteamGameId", "PROTON_OPTISCALER_MENU",
             "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED", "BC250_MENU_DEFAULT",
             "BC250_MENU_GAME", "BC250_MENU_INI", "BC250_MENU_RECORD", "BC250_MENU_LEGACY",
-            "BC250_MENU_ROLLBACK", "BC250_MENU_PINNED", "BC250_MENU_MANAGED")
+            "BC250_MENU_ROLLBACK", "BC250_MENU_PINNED", "BC250_MENU_MANAGED", "BC250_MENU_ADVICE")
 
 
 def menu_choice(config, inherited, menu_tool=None):
@@ -829,23 +829,36 @@ def _managed_launch(config, arguments, inherited):
             count = sum(len(settings) for settings in profile.get('overrides', {}).values())
             launch['BC250_MENU_RECORD'] = ('FreeFG ' + upstream['runtime']['version'] + ' · recipes ' +
                                            upstream['recipes']['commit'][:8] + ' · ' + str(count) + ' saved overrides')
+            catalog = recipes.load(TOOL / 'freefg-recipes.json', upstream['recipes']['sha256'])
+
+            def baseline(version):
+                # What a variant writes before any recipe; seed_once is not re-run
+                # against another game's live INI in a shared prefix.
+                values = {**config['preset'], **config.get('optiscaler_variant_preset', {}).get(version, {}),
+                          **config.get('optiscaler_variant_seed', {}).get(version, {})}
+                return {k: v for k, v in values.items() if v is not None}
+
+            def recommend(version):
+                return recipes.recommendation(catalog, identity, config.get('freefg_recipe_providers', {}).get(version),
+                                              config['optiscaler_ini_keys'][version], baseline(version))
+
+            # The menu states what the catalogue does to this game before the player
+            # picks: the package default's recommendation, or any FreeFG variant's.
+            preview_version = config['optiscaler_version']
+            advised = next((v for v in (preview_version, *config.get('freefg', {})) if v in config.get('freefg', {})), None)
+            preview_recipe = recommend(advised) if advised else None
+            if preview_recipe:
+                launch['BC250_MENU_ADVICE'] = '\n'.join(preview_recipe['summary'])
             own_ini = session.root / 'menu-profile.ini'
             text = profile.get('last', {}).get(INI)
             if text is None and not session.state.get('active'):
                 existing = prefix_ini(inherited)
                 text = existing.read_text() if existing and existing.is_file() else ''
             if not text and not pinned:
-                preview_version = config['optiscaler_version']
-                preview = {**config['preset'],
-                           **config.get('optiscaler_variant_preset', {}).get(preview_version, {}),
-                           **config.get('optiscaler_variant_seed', {}).get(preview_version, {})}
-                if preview_version in config.get('freefg', {}):
-                    catalog = recipes.load(TOOL / 'freefg-recipes.json', upstream['recipes']['sha256'])
-                    preview_recipe = recipes.recommendation(catalog, identity,
-                        config.get('freefg_recipe_providers', {}).get(preview_version),
-                        config['optiscaler_ini_keys'][preview_version])
+                preview = baseline(preview_version)
+                if preview_recipe and advised == preview_version:
                     preview.update(preview_recipe['settings'])
-                text = merge_ini('', {k: v for k, v in preview.items() if v is not None}, {})
+                text = merge_ini('', preview, {})
             if pinned:
                 text = merge_ini(pinned['templates'].get(INI, ''), pinned['desired'].get(INI, {}),
                                  profile.get('overrides', {}).get(INI, {}), text or '')
@@ -897,19 +910,11 @@ def _managed_launch(config, arguments, inherited):
                     env['BC250_FREEFG_PLAN'] = str(plan)
                     env['BC250_FREEFG_MODULE'] = str(original_tool / 'bc250_freefg_state.py')
                 return supervised(proton, arguments, env, session.fd)
-            # Do not re-run seed_once against another game's live INI. The
-            # transaction merges this baseline against this game's saved edits.
-            desired = {**config['preset'],
-                       **config.get('optiscaler_variant_preset', {}).get(version, {}),
-                       **config.get('optiscaler_variant_seed', {}).get(version, {})}
-            desired = {k: v for k, v in desired.items() if v is not None}
+            # The transaction merges this baseline against this game's saved edits.
+            desired = baseline(version)
             recommendation = {'settings': {}, 'arguments': [], 'notes': [], 'applicable': False}
             if version in config.get('freefg', {}):
-                upstream = config['freefg_upstream']
-                catalog = recipes.load(TOOL / 'freefg-recipes.json', upstream['recipes']['sha256'])
-                provider_name = config.get('freefg_recipe_providers', {}).get(version)
-                recommendation = recipes.recommendation(catalog, identity, provider_name,
-                                                       config['optiscaler_ini_keys'][version])
+                recommendation = recommend(version)
                 recommendation['source'] = upstream['recipes']['url']
                 desired.update(recommendation['settings'])
             if pinned:

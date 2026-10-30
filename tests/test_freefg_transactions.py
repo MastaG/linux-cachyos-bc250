@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -40,7 +41,6 @@ class TransactionTests(unittest.TestCase):
         # What the menu answers (variant, change, switched); menu_env is what it was given.
         self.menu = (None, {}, False)
         self.menu_env = None
-
 
     def launch(self, **env):
         inherited = {**self.env, **env}
@@ -423,6 +423,66 @@ sys.exit(99)
                'BC250_MENU_DEFAULT': 'freefg', 'BC250_MENU_INSTALLED': ''}
         self.assertFalse(menu.state(str(self.compat), env)[2])
 
+    def steam_game(self, appid, name, exe):
+        """A Steam game in this test's own library, named as Steam records it, on a
+        FreeFG variant so the catalogue applies."""
+        library = self.work / 'steamapps'
+        folder = library / 'common' / exe.split('/')[0]
+        folder.mkdir(parents=True, exist_ok=True)
+        (library / f'appmanifest_{appid}.acf').write_text(f'"AppState"\n{{\n\t"appid"\t\t"{appid}"\n\t"name"\t\t"{name}"\n}}\n')
+        self.env.update(SteamAppId=appid, SteamGameId=appid, STEAM_COMPAT_INSTALL_PATH=str(folder))
+        self.args = ['waitforexitandrun', str(library / 'common' / exe)]
+        self.config['freefg'] = {'test-opti': {}}
+        self.config['freefg_recipe_providers'] = {'test-opti': 'hlx-fsr4'}
+
+    def define(self, text):
+        """The default build with these OptiScaler.ini lines added; the package
+        reports the keys of the INI it places in its archive."""
+        files = dict(self.files, **{'OptiScaler.ini': self.files['OptiScaler.ini'] + text})
+        archive = self.work / 'artifacts/opti.tar.xz'
+        with tarfile.open(archive, 'w:xz') as output:
+            for name, data in files.items():
+                member = tarfile.TarInfo(name)
+                member.size = len(data)
+                output.addfile(member, io.BytesIO(data))
+        manifest = json.loads((self.work / 'manifest.json').read_text())
+        manifest['optiscaler'][0]['zip_sha256_hash'] = state.digest(archive)
+        (self.work / 'manifest.json').write_text(json.dumps(manifest))
+        section = None
+        for line in text.decode().splitlines():
+            if line.startswith('['):
+                section = line.strip('[]')
+            elif '=' in line:
+                self.config['optiscaler_ini_keys']['test-opti'].append(section + '.' + line.split('=', 1)[0])
+
+    def test_package_preset_leaves_optiscalers_own_fix_for_the_game(self):
+        # OptiScaler restores the compute signature for these RE Engine games on
+        # non-NVIDIA GPUs, but only while the key says auto. The shared preset's
+        # explicit false, which auto already means, switched that fix off.
+        self.define(b'[Hotfix]\nRestoreComputeSignature=auto\n')
+        self.config['preset']['Hotfix.RestoreComputeSignature'] = 'false'
+        self.steam_game('4000001', 'Monster Hunter Wilds', 'MonsterHunterWilds/MonsterHunterWilds.exe')
+        self.launch()
+        self.assertEqual(self.setting('Hotfix.RestoreComputeSignature'), 'auto')
+        self.assertIn('Hotfix.RestoreComputeSignature', self.menu_env['BC250_MENU_ADVICE'])
+        # Another game in the same prefix, with no such fix, keeps the package value.
+        self.steam_game('4000002', 'Some Other Game', 'Other/Other.exe')
+        self.launch()
+        self.assertEqual(self.setting('Hotfix.RestoreComputeSignature'), 'false')
+
+    def test_input_the_wiki_reports_broken_starts_frame_generation_off(self):
+        self.steam_game('4000003', 'Neverness to Everness', 'NTE/Client/Binaries/Win64/HTGame.exe')
+        self.launch()
+        self.assertEqual(self.setting('FrameGen.Enabled'), 'false')
+        self.assertIn('reports OptiFG input broken', self.menu_env['BC250_MENU_ADVICE'])
+        with state.Session(self.prefix, self.compat) as session:
+            self.assertEqual(session.status('steam:4000003')['details']['recipe']['tier'], 'C')
+        # The player's choice in the menu still wins, and is kept.
+        self.menu = (None, {'FrameGen.Enabled': 'true'}, False)
+        self.launch()
+        self.menu = (None, {}, False)
+        self.launch()
+        self.assertEqual(self.setting('FrameGen.Enabled'), 'true')
 
     def test_variant_switch_leaves_the_previous_variants_wiring_behind(self):
         self.launch()
@@ -488,6 +548,17 @@ class RecipeTests(unittest.TestCase):
         self.catalog = recipes.load(COMMON / 'freefg-recipes.json', pin['recipes']['sha256'])
         self.keys = {'FrameGen.FGInput', 'FrameGen.FGOutput', 'FrameGen.Enabled', 'Spoofing.Dxgi',
                      'Inputs.EnableFfxInputs', 'Inputs.EnableDlssInputs', 'FrameGen.DisableHudless', 'fakenvapi.ForceReflex'}
+        # The package's FreeFG default, which the catalogue tempers per game.
+        self.package = {'FrameGen.Enabled': 'true', 'FrameGen.FGInput': 'upscaler', 'FrameGen.FGOutput': 'xefg'}
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.library = Path(temporary.name) / 'steamapps'
+
+    def steam(self, appid, name, exe):
+        """The identity of a Steam game whose appmanifest names it."""
+        (self.library / 'common').mkdir(parents=True, exist_ok=True)
+        (self.library / f'appmanifest_{appid}.acf').write_text(f'"AppState"\n{{\n\t"appid"\t\t"{appid}"\n\t"name"\t\t"{name}"\n}}\n')
+        return recipes.identity({'SteamAppId': appid}, ['waitforexitandrun', str(self.library / 'common' / exe)])
 
     def test_real_identity_and_generic_shortcut_do_not_cross_match(self):
         game = recipes.identity({'SteamAppId': '1836730'}, ['run', '/Games/Echo Point Nova/Greylock-Win64-Shipping.exe'])
@@ -546,3 +617,71 @@ class RecipeTests(unittest.TestCase):
             result = recipes.recommendation(self.catalog, game, 'hlx-fsr4', self.keys)
             if result['applicable']:
                 self.assertIn(result['evidence'], recipes.QUALIFIED)
+
+    def test_wiki_titles_come_from_steams_record_of_the_game(self):
+        # Wiki entries name titles and executables, never store IDs.
+        game = self.steam('2322010', 'God of War Ragnarök', 'GoWR/GoWR.exe')
+        self.assertIn('god of war ragnarok', game['titles'])
+        self.assertEqual([(w['title'], s) for w, s in recipes.wiki_matches(self.catalog, game)],
+                         [('God of War Ragnarok', 'weak')])
+        bare = recipes.identity({'SteamAppId': '2322010'}, ['run', '/Games/GoWR/GoWR.exe'])
+        self.assertEqual(bare['titles'], [])
+
+    def test_optiscalers_own_fix_for_a_game_outranks_the_package_default(self):
+        package = {**self.package, 'Hotfix.RestoreComputeSignature': 'false', 'XeFG.ForceBorderless': 'true',
+                   'Spoofing.VulkanExtensionSpoofing': 'false'}
+        keys = self.keys | set(package)
+        wilds = self.steam('2246340', 'Monster Hunter Wilds', 'MHWilds/MonsterHunterWilds.exe')
+        result = recipes.recommendation(self.catalog, wilds, 'hlx-fsr4', keys, package)
+        self.assertEqual(result['settings'], {'Hotfix.RestoreComputeSignature': 'auto'})
+        # FreeFG's installer keys stand: it measured ForceBorderless under Proton.
+        exe = next(exe for exe, fixes in self.catalog['quirk_keys'].items() if 'XeFG.ForceBorderless' in fixes)
+        result = recipes.recommendation(self.catalog, self.steam('4000004', 'X', 'X/' + exe), 'fsr4', keys, package)
+        self.assertNotIn('XeFG.ForceBorderless', result['settings'])
+        # A value this package keeps for a reason of its own is reported, not changed.
+        result = recipes.recommendation(self.catalog, self.steam('1086940', "Baldur's Gate 3", 'BG3/bin/bg3.exe'),
+                                        'fsr4', keys, package)
+        self.assertNotIn('Spoofing.VulkanExtensionSpoofing', result['settings'])
+        self.assertTrue(any('VulkanExtensionSpoofing' in note for note in result['notes']))
+        # Without the package's values there is nothing to give back.
+        self.assertEqual(recipes.recommendation(self.catalog, wilds, 'hlx-fsr4', keys)['settings'], {})
+
+    def test_wiki_changes_settings_only_on_freefgs_strong_match(self):
+        keys = self.keys | {'Hotfix.ColorResourceBarrier'}
+        nte = self.steam('4000001', 'Neverness to Everness', 'NTE/Client/Binaries/Win64/HTGame.exe')
+        result = recipes.recommendation(self.catalog, nte, 'hlx-fsr4', keys, self.package)
+        self.assertEqual((result['tier'], result['settings']), ('C', {'FrameGen.Enabled': 'false'}))
+        rebirth = self.steam('4000002', 'FINAL FANTASY VII REBIRTH', 'FF7R/End/Binaries/Win64/ff7rebirth_.exe')
+        result = recipes.recommendation(self.catalog, rebirth, 'hlx-fsr4', keys, self.package)
+        self.assertEqual((result['tier'], result['settings']), ('C', {'Hotfix.ColorResourceBarrier': '4'}))
+        # The same titles without their executable are advice only.
+        for appid, name in (('4000001', 'Neverness to Everness'), ('4000002', 'FINAL FANTASY VII REBIRTH')):
+            result = recipes.recommendation(self.catalog, self.steam(appid, name, 'Other/Launcher.exe'), 'hlx-fsr4',
+                                            keys, self.package)
+            self.assertEqual((result['tier'], result['settings']), ('D', {}))
+        # A curated recipe decides the input itself.
+        robocop = self.steam('1681430', 'RoboCop: Rogue City', 'RoboCop/RoboCop/Binaries/Win64/RoboCop-Win64-Shipping.exe')
+        result = recipes.recommendation(self.catalog, robocop, 'hlx-fsr4', self.keys, self.package)
+        self.assertEqual((result['tier'], result['settings']['FrameGen.FGInput']), ('A', 'dlssg'))
+
+    def test_wiki_preferences_are_advice(self):
+        # FreeFG's Cyberpunk recipe is verified for the GOG edition only.
+        game = self.steam('1091500', 'Cyberpunk 2077', 'Cyberpunk 2077/bin/x64/Cyberpunk2077.exe')
+        result = recipes.recommendation(self.catalog, game, 'hlx-fsr4', self.keys, self.package)
+        self.assertEqual((result['title'], result['settings']), (None, {}))
+        self.assertTrue(any('FrameGen.FGInput=dlssg' in line for line in result['summary']))
+        unknown = recipes.recommendation(self.catalog, self.steam('4000005', 'Some Indie Game', 'Indie/Indie.exe'),
+                                         'hlx-fsr4', self.keys, self.package)
+        self.assertEqual((unknown['tier'], unknown['settings']), ('D', {}))
+
+    def test_a_launch_without_an_executable_keeps_one_identity_for_its_prefix(self):
+        game = recipes.identity({'UMU_ID': 'umu-0', 'WINEPREFIX': '/prefixes/lutris'}, ['waitforexitandrun', 'setup.bat'])
+        self.assertTrue(game['key'].startswith('prefix:'))
+        self.assertEqual(recipes.recommendation(self.catalog, game, 'fsr4', self.keys)['settings'], {})
+
+    def test_an_ambiguous_identity_keeps_the_defaults(self):
+        self.catalog['verified'].append(copy.deepcopy(self.catalog['verified'][0]))
+        game = recipes.identity({'SteamAppId': '3404260'}, ['run', 'game.exe'])
+        result = recipes.recommendation(self.catalog, game, 'fsr4', self.keys)
+        self.assertEqual(result['settings'], {})
+        self.assertTrue(any('Ambiguous' in note for note in result['notes']))

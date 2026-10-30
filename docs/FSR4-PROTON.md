@@ -26,9 +26,14 @@ from a prior launch. Explicit `PROTON_USE_OPTISCALER` choices remain available;
 prefix payloads and saves are preserved. Steam utility calls use the local
 manifest with both upgrades disabled, including when game settings are inherited.
 
-The managed launcher now merges package defaults, applicable FreeFG recipes,
-saved player edits and explicit launch options in that order. Variant switches
-preserve per-game INI values and comments. Existing prefixes keep their current
+The managed launcher now merges package defaults, what the pinned FreeFG
+catalogue says about the game, saved player edits and explicit launch options
+in that order. The catalogue tempers the one default every game gets: a curated
+BC-250 recipe sets its input and keys, OptiScaler's own fix for the game keeps
+its key at `auto`, and an FG input the OptiScaler wiki reports broken starts
+frame generation off; the rest of the wiki is advice in the menu. Variant
+switches preserve per-game INI values and comments, except the previous
+variant's FG wiring and upscaler pick. Existing prefixes keep their current
 settings until the player chooses **Use recommended integration settings**.
 A malformed INI or modified managed DLL stops the transaction without replacing
 it. See [FreeFG recipes and recovery](FREEFG-RECOVERY.md) for the menu actions,
