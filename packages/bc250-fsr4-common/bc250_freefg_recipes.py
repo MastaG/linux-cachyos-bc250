@@ -16,30 +16,25 @@ advice, unless a curated BC-250 recipe or a reviewed (promoted) wiki item
 carries it, as in FreeFG.
 """
 import hashlib
+import importlib.util
 import json
 import re
 import unicodedata
+import freefg_compat as compat
 from pathlib import Path
 
 QUALIFIED = {'generates', 'gameplay'}
 INPUTS = {'upscaler', 'dlssg', 'fsrfg', 'fsrfg30'}
 SCHEMA = 1
 
-# From FreeFG's compat.py at the pinned commit; keep them alike when it moves.
-INPUT_NAMES = {'upscaler': 'OptiFG', 'dlssg': 'DLSS FG', 'fsrfg': 'FSR 3.1 FG', 'fsrfg30': 'FSR 3.0 FG',
-               'native-xefg': 'native XeSS FG', 'nukems': "Nukem's dlssg-to-fsr3", 'native-fsrfg': "the game's own FSR FG"}
-INSTALLER_KEYS = {'Upscalers.Dx12Upscaler', 'FSR.UpscalerIndex', 'FSR.Fsr4ForceModel', 'FSR.Fsr4EnableWatermark',
-                  'FrameGen.Enabled', 'fakenvapi.UseFakenvapi', 'FrameGen.FGInput', 'FrameGen.FGOutput',
-                  'Libraries.XeFGPath', 'Libraries.XeLLPath', 'XeFG.ForceBorderless', 'Plugins.LoadAsiPlugins',
-                  'XeFG.InterpolationCount', 'FrameGen.DisableHudless', 'fakenvapi.ForceReflex', 'XeFG.XeFGModel'}
-NOTE_KEYS = {'reason', 'purpose', 'note', 'autoapplied_since', 'value', 'feature'}
-GENERIC_EXES = {'game.exe', 'launcher.exe', 'start.exe', 'main.exe', 'app.exe', 'bin.exe', 'client.exe', 'play.exe',
-                'client-win64-shipping.exe', 'medium-win64-shipping.exe', 'game-win64-shipping.exe', 'project-win64-shipping.exe'}
-DX12_ARGS = ('-dx12', '-d3d12', '-force-d3d12')
+# The policy itself is an unchanged, checksum-pinned FreeFG source module.
+INPUT_NAMES = compat.INPUT_NAMES
+INSTALLER_KEYS = compat.INSTALLER_KEYS
+NOTE_KEYS = compat.NOTE_KEYS
+GENERIC_EXES = compat.GENERIC_EXES
+DX12_ARGS = compat.DX12_ARGS
 TIER_NAMES = {'A': 'Verified on BC-250', 'C': 'Automatic, guided by the OptiScaler wiki', 'D': 'Automatic (no recipe)'}
-# What every wiki condition is evaluated against: FreeFG's DEFAULT_CONTEXT, with
-# this package's proxy.
-CONTEXT = dict(gpu='amd', os='linux', api='dx12', fg_output='xefg', upscaler='fsr4', proxy='winmm.dll')
+CONTEXT = dict(compat.DEFAULT_CONTEXT, proxy='winmm.dll')
 
 # FreeFG's installer writes its own keys whatever a quirk says (XeFG.ForceBorderless
 # was measured), so they are never given back to one.
@@ -52,6 +47,27 @@ PACKAGE_DECISIONS = {
 # The names OptiScaler loads as (docs/FSR4-PROTON.md); wiki entries also list .asi
 # loaders and prose.
 PROXIES = ('dxgi.dll', 'winmm.dll', 'version.dll', 'dbghelp.dll', 'd3d12.dll', 'wininet.dll', 'winhttp.dll')
+
+
+def load_planner(tool, pin):
+    """Load the exact upstream planner, including a retained rollback copy."""
+    if not pin:
+        return compat  # generations created before a separate planner was pinned
+    path = Path(tool) / 'freefg_compat.py'
+    if hashlib.sha256(path.read_bytes()).hexdigest() != pin['sha256']:
+        raise ValueError('FreeFG planner checksum differs from its package pin')
+    spec = importlib.util.spec_from_file_location('freefg_pinned_' + pin['sha256'], path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if module.WIKI_PLAN_FORMAT != pin['format']:
+        raise ValueError('Unsupported FreeFG planner format')
+    return module
+
+
+def select_wiki(plan, selected, confirmed, expected, planner=compat):
+    if not expected or plan['digest'] != expected:
+        raise ValueError('Wiki settings preview changed; review the current plan before applying')
+    return planner.select_wiki_settings(plan, selected, confirmed)
 
 
 def load(path, expected):
@@ -111,8 +127,8 @@ def steam_name(env, path, appid):
 def identity(env, arguments):
     """A real store ID wins; shortcut/umu-0 identities need executable context.
 
-    OptiScaler wiki entries name titles and executables, never store IDs, so the
-    title comes from Steam's own record of the AppID, as in FreeFG. A launch with
+    Most OptiScaler wiki entries name titles and executables; reviewed store IDs
+    identify some. Otherwise the title comes from Steam's own record of the AppID, as in FreeFG. A launch with
     neither a store ID nor an executable keeps one identity for its prefix and the
     package defaults: a game is never refused for want of a name.
     """
@@ -162,149 +178,21 @@ def match(catalog, game):
     return found[0] if found else None
 
 
+def shared_identity(game):
+    ids = dict(exe=game.get('exe', ''), titles=game.get('titles', []), folders=game.get('folders', []),
+               steam=[], gog=[], epic=[])
+    if game.get('store'):
+        ids[game['store']] = [game['appid']]
+    return ids
+
+
 def wiki_matches(catalog, game):
-    """[(wiki entry, 'strong' | 'weak')], as FreeFG's compat.wiki_matches: strong is a
-    store ID, or the executable together with the title or one of the game's folders;
-    weak is the title alone, or a non-generic executable alone."""
-    out = []
-    ids = {game['store']: {game['appid']}} if game['store'] else {}
-    names = set(game['folders']) | set(game.get('titles', []))
-    for entry in catalog.get('wiki', []):
-        spec = entry.get('match', {})
-        by_id = any(ids.get(store, set()) & set(spec.get(store, [])) for store in ('steam', 'gog', 'epic'))
-        by_exe = bool(game['exe']) and game['exe'] in spec.get('exe', [])
-        if by_id or (by_exe and set(spec.get('title', [])) & names):
-            out.append((entry, 'strong'))
-        elif set(spec.get('title', [])) & set(game.get('titles', [])) or (by_exe and game['exe'] not in GENERIC_EXES):
-            out.append((entry, 'weak'))
-    return out
+    return compat.wiki_matches(catalog, shared_identity(game))
 
 
-# FreeFG's compat.key_rule: why its RULES.md keeps a key out of automatic writes.
-S1 = re.compile(r'^(fsr\.fsrnonlinear|fsr\.dlssreactivemaskbias|sharpness\.|cas\.|upscaleratio\.|outputscaling\.|mipmap\.|'
-                r'anisotropy\.|qualityoverrides\.|drs\.|hdr\.|initflags\.autoexposure)')
-
-
-def key_rule(key, value):
-    """(class, reason) for a key FreeFG never writes automatically, or (None, None)."""
-    k, v = key.lower(), str(value).strip().lower()
-    if k == 'framegen.fgoutput':
-        return ('redundant', 'the installer writes FGOutput=xefg') if v == 'xefg' else ('blocked', 'F0: XeFG is always the generator')
-    if k == 'xefg.forceborderless' and v == 'true':
-        return 'redundant', 'the installer writes ForceBorderless=true'
-    if k == 'xefg.xefgmodel' and v == 'default':
-        return 'redundant', 'the installer writes XeFGModel=default'
-    if k in OWNED:
-        return 'installer', 'the installer and verified recipes choose this key'
-    if k.startswith('optifg.hudfix') or k == 'optifg.hudlimit':
-        return 'blocked', 'H1: HUDFix is never switched on automatically'
-    if k == 'spoofing.dxgi':
-        return 'blocked', 'D1: OptiScaler\'s own per-game fixes cover the confirmed cases'
-    if k.startswith('fakenvapi.') or 'reflex' in k or k.startswith('nvapi.'):
-        return 'blocked', 'R1: the installer\'s Reflex policy stands'
-    if S1.match(k):
-        return 'blocked', 'S1: quality and colour settings are suggestions'
-    if k.startswith('upscalers.') or k.startswith('fsr.fsr4') or k == 'fsr.upscalerindex':
-        return 'installer', 'the output upscaler is the installer\'s choice'
-    if k in ('spoofing.spoofedvendorid', 'spoofing.spoofeddeviceid', 'spoofing.spoofedgpuname'):
-        return 'policy', 'spoofing another GPU turns off this build\'s BC-250 path'
-    if k.startswith('v-sync.') or k.startswith('framerate.'):
-        return 'policy', 'V-Sync and frame-rate overrides interact with the pacing layer'
-    if k.startswith(('fsrfg.', 'dlssg.', 'nvngxfg.')):
-        return 'never', 'settings of a frame-generation output this build never uses (F0)'
-    if k.startswith('menu.shortcutkey'):
-        return 'human', 'a personal preference'
-    if k.startswith('plugins.loadreshade') or 'luma' in k:
-        return 'human', 'needs another mod (ReShade or Luma)'
-    if k.startswith('log.'):
-        return 'never', 'logging'
-    return None, None
-
-
-def condition(key, value, ctx):
-    """FreeFG's compat._condition: True, False (with why) or None (unknown here)."""
-    v = str(value).strip().lower()
-    if key in NOTE_KEYS:
-        return True, None
-    if key == 'gpu':
-        if re.search(r'rdna ?[34]|9070|7900|7800|7600|\brx 9|\brx 7', v):
-            return False, 'other AMD GPUs (RDNA 3/4)'
-        if re.search(r'not nvidia|non-nvidia|\bamd\b|radeon|dp4a|steam deck|\brdna\b', v):
-            return True, None
-        if re.search(r'nvidia|gtx|rtx', v):
-            return False, 'NVIDIA GPUs only'
-        if re.search(r'intel|\barc\b', v):
-            return False, 'Intel GPUs only'
-        return None, None
-    if key == 'os':
-        if re.search(r'linux|proton|steam ?os|steam deck', v):
-            return True, None
-        if re.search(r'windows|\bw1[01]\b|win1[01]', v):
-            return False, 'Windows only'
-        return None, None
-    if key == 'fg_output':
-        return (True, None) if v == ctx.get('fg_output', 'xefg') else (False, 'another frame-generation output (F0)')
-    if key == 'fg':
-        return False, 'another frame generation (F0)'
-    if key == 'fg_input':
-        chosen = ctx.get('fg_input')
-        parts = {p.strip() for p in re.split(r'[/,]| or ', v.removeprefix('not ')) if p.strip()}
-        parts = {'upscaler' if p in ('optifg', 'opti') else p for p in parts}
-        if parts & {'nukems', 'native-fsrfg'} and not parts & {'upscaler', 'dlssg', 'fsrfg', 'fsrfg30', 'native-xefg'}:
-            return False, 'an FG input this build never uses (F0)'
-        if chosen is None or not parts & {'upscaler', 'dlssg', 'fsrfg', 'fsrfg30', 'native-xefg'}:
-            return None, None
-        hit = chosen in parts
-        if v.startswith('not '):
-            return (not hit), (None if not hit else f'not with {INPUT_NAMES.get(chosen, chosen)}')
-        return hit, (None if hit else f'only with {", ".join(sorted(INPUT_NAMES.get(p, p) for p in parts))}')
-    if key in ('upscaler', 'upscaler_output'):
-        mine = ctx.get('upscaler', 'fsr4')
-        if mine in v:
-            return True, None
-        if re.search(r'fsr ?4|helix|dlss|xess|fsr ?3|fsr ?2', v):
-            return False, f'another output upscaler ({value})'
-        return None, None
-    if key == 'optiscaler':
-        if re.fullmatch(r'0\.[0-8](\.\d+)*|before 0\.9|0\.7\.\d+', v):
-            return False, f'OptiScaler {value} (older than the shipped build)'
-        return True, None
-    if key == 'api':
-        if re.search(r'dx12|d3d12|directx 12', v):
-            return True, None
-        if re.search(r'dx11|d3d11|vulkan|opengl|dx9', v):
-            return False, f'{value} (this build runs in DirectX 12)'
-        return None, None
-    if key in ('platform', 'store', 'launcher'):
-        if re.search(r'xbox|game ?pass|ms store|microsoft store', v):
-            return False, 'the Xbox / Game Pass build'
-        store = (ctx.get('store') or '').lower()
-        if store and store in v:
-            return True, None
-        return None, None
-    if key == 'engine':
-        engine = (ctx.get('engine') or '').lower()
-        if engine and (engine in v or (engine == 'unreal' and re.search(r'\bue\d?\b|unreal', v))):
-            return True, None
-        return (False, f'the {value} engine') if engine and engine != 'unknown' else (None, None)
-    if key == 'condition' and re.fullmatch(r'xefg( output)?', v):
-        return True, None
-    return None, None
-
-
-def evaluate(when, ctx):
-    """(result, reasons) as FreeFG's compat.evaluate: True when every condition holds
-    here, False when one never does, None when one cannot be known before the game runs."""
-    unknown, false = [], []
-    for key, value in (when or {}).items():
-        result, why = condition(key, value, ctx)
-        if result is False:
-            false.append(why or f'{key} {value}')
-        elif result is None:
-            unknown.append(f'{key}: {value}')
-    if false:
-        return False, false
-    return (None, unknown) if unknown else (True, [])
+key_rule = compat.key_rule
+evaluate = compat.evaluate
+condition = compat._condition
 
 
 def _curated(row, provider, supported, result):
@@ -356,7 +244,7 @@ def _set(settings, package, key, value):
     settings[spelling] = value
 
 
-def recommendation(catalog, game, provider, supported_keys, package=None):
+def recommendation(catalog, game, provider, supported_keys, package=None, *, current=None, context=None, optiscaler_commit=None, planner=compat, display_current=None):
     """What the catalogue changes for this game, in FreeFG's layer order (compat.py).
 
     package is what this launch writes otherwise. A curated recipe with gameplay
@@ -366,16 +254,19 @@ def recommendation(catalog, game, provider, supported_keys, package=None):
     and an input the wiki reports broken here turns frame generation off. Those need
     FreeFG's strong match. Every other wiki item is advice, in notes and summary.
     """
+    current_values = current or {}
     package = {k.lower(): (k, str(v)) for k, v in (package or {}).items() if v is not None}
     supported = {s.lower() for s in supported_keys}
     result = dict(title=None, evidence=None, settings={}, arguments=[], notes=[], summary=[], game_settings=[],
                   applicable=False, executables=[], tier='D', tier_name=TIER_NAMES['D'], wiki=[], quirks={})
     notes, settings = result['notes'], result['settings']
+    ambiguous = False
     try:
         row = match(catalog, game)
     except ValueError as error:
         # Never a refused launch: the defaults apply and the reason is reported.
         row = None
+        ambiguous = True
         notes.append(str(error) + ' (BC250_FREEFG_GAME_ID); using the selected variant’s defaults.')
     if row:
         result.update(title=row['title'], evidence=row.get('evidence'), executables=row.get('match', {}).get('exe', []))
@@ -386,13 +277,24 @@ def recommendation(catalog, game, provider, supported_keys, package=None):
     recipe_keys = {key.lower() for key in settings}
     exe, wiki = game.get('exe', ''), wiki_matches(catalog, game)
     result['wiki'] = [dict(title=w['title'], strength=s, pages=w.get('pages', [])) for w, s in wiki]
-    ctx = dict(CONTEXT, store=game.get('store') or None)
+    ctx = dict(CONTEXT, store=game.get('store') or None,
+               upscaler='helixsr' if provider in ('hlx-dlss', 'helixsr') else 'fsr4')
+    ctx.update(context or {})
+    if ambiguous:
+        result['summary'] = ['Ambiguous game identity; package defaults retained.']
+        result['wiki_plan'] = planner.wiki_plan({}, shared_identity(game), ctx, supported_keys=supported_keys)
+        return result
+    compatible = set((catalog.get('sources') or {}).get('optiscaler_compatible_commits', []))
+    compatible.add((catalog.get('sources') or {}).get('optiscaler_pinned'))
+    quirk_current = optiscaler_commit is None or optiscaler_commit in compatible
+
     applied = []
 
     # OptiScaler's own fixes for this executable (FreeFG Q1, leave_auto): a fix acts
     # only while its key is auto, and the shared preset's explicit values (false,
     # which OptiScaler's auto already means) would otherwise switch it off.
-    quirks = (catalog.get('quirk_keys') or {}).get(exe, {})
+    quirks = (catalog.get('quirk_keys') or {}).get(exe, {}) if quirk_current else {}
+    if not quirk_current:notes.append('Runtime quirk data is not verified for this OptiScaler source; no automatic quirk overrides were added.')
     for key, value in sorted(quirks.items()):
         low, theirs = key.lower(), str(value).split('@', 1)[0].lower()
         mine = package.get(low)
@@ -406,7 +308,7 @@ def recommendation(catalog, game, provider, supported_keys, package=None):
             result['quirks'][key] = value
             notes.append(f'Left {key} to OptiScaler’s own fix for this game ({key}={value}); '
                          f'the package value {mine[1]} would switch it off.')
-    for item in (catalog.get('leave_auto') or {}).get(exe, []):
+    for item in (catalog.get('leave_auto') or {}).get(exe, []) if quirk_current else ():
         low, mine = item['key'].lower(), package.get(item['key'].lower())
         if low not in recipe_keys and low in supported and mine and mine[1].lower() != 'auto':
             _set(settings, package, item['key'], 'auto')
@@ -415,25 +317,24 @@ def recommendation(catalog, game, provider, supported_keys, package=None):
     current = {k.lower(): v for k, v in settings.items()}
     here = str(current.get('framegen.fginput') or package.get('framegen.fginput', ('', 'upscaler'))[1]).lower()
     fg_on = str(current.get('framegen.enabled') or package.get('framegen.enabled', ('', 'false'))[1]).lower() == 'true'
-    vetoes, weak = {}, {}
-    for w, strength in wiki:
-        for a in w.get('fg_advice', []):
-            unless = {k: v for k, v in (a.get('when') or {}).items() if k != 'fg_input'}
-            if a['advice'] in ('broken', 'avoid') and evaluate(unless, ctx)[0] is True:
-                (vetoes if strength == 'strong' else weak).setdefault(a['input'], w['title'])
+    ctx.setdefault('fg_input', here)
+    ctx.setdefault('fg_output', current.get('framegen.fgoutput') or package.get('framegen.fgoutput', ('', 'xefg'))[1])
+    here = str(ctx['fg_input']).lower()
+    plan = planner.wiki_plan(catalog, shared_identity(game), ctx, supported_keys=supported_keys,
+                            current=current_values, recipe_ini=settings, optiscaler_commit=optiscaler_commit)
+    automatic_settings = plan['automatic']
+    if display_current is not None:
+        plan = planner.wiki_plan(catalog, shared_identity(game), ctx, supported_keys=supported_keys,
+                                current=display_current, recipe_ini=settings, optiscaler_commit=optiscaler_commit)
+    result['wiki_plan'] = plan
+    vetoes, weak = plan['vetoes'], plan['weak_vetoes']
     automatic = not result['applicable']
     if automatic and row is None:
-        # Promoted wiki items (FreeFG layer 5): reviewed for automatic use, a strong
-        # match whose conditions hold here, never a key a fix or the rules keep.
-        for w, strength in wiki:
-            for item in w.get('promoted', []) if strength == 'strong' else ():
-                key, low = item['key'], item['key'].lower()
-                if (evaluate(item.get('when'), ctx)[0] is True and key not in quirks and low not in current
-                        and key_rule(key, item['value'])[0] is None and low in supported):
-                    _set(settings, package, key, str(item['value']))
-                    current[low] = str(item['value'])
-                    applied.append(f'{key}={item["value"]}')
-                    notes.append(f'OptiScaler wiki ({w["title"]}), reviewed for automatic use: {key}={item["value"]}.')
+        for key, value in automatic_settings.items():
+            _set(settings, package, key, value)
+            applied.append(f'{key}={value}')
+            notes.append(f'Reviewed OptiScaler wiki setting: {key}={value}.')
+    notes.extend(item['text'] for item in plan['requirements'])
     if automatic and fg_on and here in vetoes:
         # The input every game gets by default is reported broken here (FreeFG V1).
         _set(settings, package, 'FrameGen.Enabled', 'false')

@@ -71,7 +71,7 @@ def archive_manifest(data):
         return json.loads(archive.read(entry))
 
 
-def validate(lock, recipes):
+def validate(lock, recipes, planner=None):
     if lock.get('schema') != 1 or lock.get('adapter') != 1:
         raise ValueError('Unsupported FreeFG dependency schema')
     runtime, recipe = lock['runtime'], lock['recipes']
@@ -91,6 +91,14 @@ def validate(lock, recipes):
         raise ValueError('OptiScaler INI needs its own immutable source pin')
     if sha(recipes) != recipe['sha256']:
         raise ValueError('Recipe snapshot differs from its dependency pin')
+    if lock.get('planner'):
+        pin = lock['planner']
+        if pin.get('format') != 1 or pin.get('file') != 'freefg_compat.py' or not COMMIT.fullmatch(pin['commit']):
+            raise ValueError('Unsupported shared planner pin')
+        if pin['url'] != RAW + '/' + pin['commit'] + '/packaging/compat.py' or not SHA.fullmatch(pin['sha256']):
+            raise ValueError('Planner needs an immutable FreeFG source pin')
+        if planner is not None and sha(planner) != pin['sha256']:
+            raise ValueError('Shared planner differs from its dependency pin')
     data = json.loads(recipes)
     if data.get('schema') != 1 or not isinstance(data.get('verified'), list):
         raise ValueError('Unsupported recipe schema')
@@ -145,7 +153,9 @@ def main(argv=None):
     common = args.root / 'packages/bc250-fsr4-common'
     pin_path, recipe_path = common / 'freefg-upstream.json', common / 'freefg-recipes.json'
     lock, recipes = json.loads(pin_path.read_text()), recipe_path.read_bytes()
-    validate(lock, recipes)
+    planner_path = common / 'freefg_compat.py'
+    planner = planner_path.read_bytes() if lock.get('planner') else None
+    validate(lock, recipes, planner)
     if args.runtime_version:
         refresh_runtime(lock, args.runtime_version, args.download_dir)
     if args.recipes_commit:
@@ -154,7 +164,13 @@ def main(argv=None):
         url = RAW + '/' + args.recipes_commit + '/packaging/recipes/recipes.json'
         recipes = fetch(url)
         lock['recipes'].update(commit=args.recipes_commit, url=url, sha256=sha(recipes))
-    data = validate(lock, recipes)
+        planner_url = RAW + '/' + args.recipes_commit + '/packaging/compat.py'
+        planner = fetch(planner_url)
+        if b'WIKI_PLAN_FORMAT = 1' not in planner:
+            raise ValueError('Recipe revision lacks the supported shared planner API')
+        lock['planner'] = dict(format=1, commit=args.recipes_commit, url=planner_url, sha256=sha(planner), file='freefg_compat.py',
+                               license='MIT', notice=lock['recipes']['notice'])
+    data = validate(lock, recipes, planner)
     if args.shell:
         if args.runtime_version or args.recipes_commit:
             raise ValueError('--shell cannot refresh dependencies')
@@ -168,6 +184,7 @@ def main(argv=None):
             # A partial write fails closed at the checksum gate. No installed
             # package or prefix is touched; git records both reviewable changes.
             recipe_path.write_bytes(recipes)
+            if planner is not None:planner_path.write_bytes(planner)
             pin_path.write_text(json.dumps(lock, indent=2) + '\n')
         print(json.dumps(lock, indent=2))
     else:

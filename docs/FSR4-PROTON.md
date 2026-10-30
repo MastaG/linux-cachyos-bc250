@@ -31,7 +31,8 @@ catalogue says about the game, saved player edits and explicit launch options
 in that order. The catalogue tempers the one default every game gets: a curated
 BC-250 recipe sets its input and keys, OptiScaler's own fix for the game keeps
 its key at `auto`, and an FG input the OptiScaler wiki reports broken starts
-frame generation off; the rest of the wiki is advice in the menu. Variant
+frame generation off. Other usable wiki INI values can be selected in the menu,
+with source links and condition confirmation; remaining items stay advisory. Variant
 switches preserve per-game INI values and comments, except the previous
 variant's FG wiring and upscaler pick. Existing prefixes keep their current
 settings until the player chooses **Use recommended integration settings**.

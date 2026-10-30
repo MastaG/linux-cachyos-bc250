@@ -690,6 +690,7 @@ def main() -> int:
                          "with FreeFG's BC-250 shaders and VRR pacing layer), "
                          "and 'freefg-hlxfsr4' with HLX FSR 4 when --helixsr-ngx "
                          "is given")
+    ap.add_argument("--freefg-planner", type=Path, help="unchanged FreeFG compatibility planner source")
     ap.add_argument("--freefg-lock", type=Path, help="pinned upstream runtime and recipe identity")
     ap.add_argument("--freefg-recipes", type=Path, help="unchanged upstream recipe snapshot")
     ap.add_argument("--freefg-ini", type=Path,
@@ -739,6 +740,8 @@ def main() -> int:
                                (args.freefg_recipes, upstream['recipes']['sha256'])):
             if digest(path) != expected:
                 raise ValueError('FreeFG input differs from its dependency pin: ' + str(path))
+        if upstream.get('planner') and (not args.freefg_planner or digest(args.freefg_planner) != upstream['planner']['sha256']):
+            raise ValueError('Shared FreeFG planner differs from its dependency pin')
         if json.loads(args.freefg_recipes.read_text()).get('schema') != 1:
             raise ValueError('Unsupported recipe schema')
 

@@ -114,6 +114,7 @@ python3 - \
     "${FSR4_PAYLOAD_SHA256[SHA_FREEFG_RECIPES_ADAPTER]}" \
     "${FSR4_PAYLOAD_SHA256[SHA_FREEFG_PIN]}" \
     "${FSR4_PAYLOAD_SHA256[SHA_FREEFG_RECIPES]}" \
+    "${FSR4_PAYLOAD_SHA256[SHA_FREEFG_COMPAT]}" \
     "$ROOT_DIR/packages/bc250-fsr4-common/freefg-upstream.json" <<'PY'
 from pathlib import Path
 import re
@@ -123,7 +124,7 @@ import sys
  opti_version, fakenvapi_asset, fakenvapi_url, fakenvapi_sha, payload_base,
  sha_patch, sha_launch, sha_menu, sha_builder, sha_preset, sha_shim, proxy) = sys.argv[1:21]
 upstream_n = int(upstream_n)
-sha_state, sha_adapter, sha_pin, sha_recipes, freefg_pin = sys.argv[21:26]
+sha_state, sha_adapter, sha_pin, sha_recipes, sha_compat, freefg_pin = sys.argv[21:27]
 import json
 freefg = json.loads(Path(freefg_pin).read_text())['runtime']
 freefg_version = freefg['version']
@@ -277,6 +278,7 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     f'            "https://github.com/daniel-h-0/freefg/releases/tag/v{freefg_version}" \\\n'
     '        --freefg-ini "${srcdir}/FreeFG-OptiScaler.ini" \\\n'
     '        --freefg-bridge fsr412f \\\n'
+    '        --freefg-planner "${srcdir}/freefg_compat.py" \\\n'
     '        --freefg-lock "${srcdir}/freefg-upstream.json" --freefg-recipes "${srcdir}/freefg-recipes.json" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
@@ -292,6 +294,7 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '    install -Dm644 "${srcdir}/bc250-fsr4-menu.py" bc250-fsr4-menu.py\n'
     '    install -Dm644 "${srcdir}/bc250_freefg_state.py" bc250_freefg_state.py\n'
     '    install -Dm644 "${srcdir}/bc250_freefg_recipes.py" bc250_freefg_recipes.py\n'
+    '    install -Dm644 "${srcdir}/freefg_compat.py" freefg_compat.py\n'
     '    install -Dm644 "${srcdir}/freefg-upstream.json" freefg-upstream.json\n'
     '    install -Dm644 "${srcdir}/freefg-recipes.json" freefg-recipes.json\n'
     "\n"
@@ -386,6 +389,7 @@ local_sources = [
     ("bc250-fsr4-menu.py", sha_menu),
     ("bc250_freefg_state.py", sha_state),
     ("bc250_freefg_recipes.py", sha_adapter),
+    ("freefg_compat.py", sha_compat),
     ("freefg-upstream.json", sha_pin),
     ("freefg-recipes.json", sha_recipes),
     ("build-fsr4-payload.py", sha_builder),

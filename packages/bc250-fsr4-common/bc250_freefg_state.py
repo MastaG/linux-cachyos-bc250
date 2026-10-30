@@ -268,6 +268,9 @@ def verify_bundle(root, identity):
         raise ValueError('Retained manifest/config differs from its package identity')
     if record.get('upstream') and digest(plain(path / 'freefg-recipes.json')) != record['upstream']['recipes']['sha256']:
         raise ValueError('Retained recipe snapshot differs from its package identity')
+    planner = (record.get('upstream') or {}).get('planner')
+    if planner and digest(plain(path / 'freefg_compat.py')) != planner['sha256']:
+        raise ValueError('Retained planner differs from its package identity')
     return path
 
 
@@ -310,6 +313,11 @@ def retain_bundle(root, tool, config, version, provider):
             if digest(source) != upstream['recipes']['sha256']:
                 raise ValueError('Recipe data differs from package pin')
             clone(source, stage / 'freefg-recipes.json')
+            if upstream.get('planner'):
+                source = Path(tool) / 'freefg_compat.py'
+                if digest(source) != upstream['planner']['sha256']:
+                    raise ValueError('Planner differs from package pin')
+                clone(source, stage / 'freefg_compat.py')
         retained = copy.deepcopy(config)
         retained['manifest'] = 'manifest.json'
         write_json(stage / 'manifest.json', selected)
@@ -475,13 +483,31 @@ class Session:
         return {**self.status(key), 'pending': action, 'applies': 'next game launch'}
 
     def last_variant(self, profile):
-        """The newest generation this game ran with OptiScaler on, or None: No
-        upscaling and back is not a switch."""
+        """Last actually used OptiScaler generation, including revisited generations.
+
+        History contains unique generations, not a chronological launch log.
+        Reading it backwards after A → B → A would incorrectly keep finding B.
+        """
+        for identity in (profile.get('current'), profile.get('last_opti')):
+            if identity:
+                record = read_generation(self.root, identity)
+                if record['version'] != '0':
+                    return record
+        # Compatibility with records written before last_opti was recorded.
         for generation in reversed(profile.get('history', [])):
             record = read_generation(self.root, generation)
             if record['version'] != '0':
                 return record
         return None
+
+    def select_wiki(self, key, choice):
+        """Save an already validated explicit choice; staging applies it next launch."""
+        profile = self.profile(key)
+        profile.setdefault('overrides', {}).setdefault(INI, {}).update(
+            {key.lower(): value for key, value in choice['settings'].items()})
+        profile['wiki_settings'] = choice
+        write_json(self.root / 'state.json', self.state)
+        return {**self.status(key), 'pending': 'wiki-settings', 'applies': 'next game launch'}
 
     def plan(self, tool, config, game, version, provider, desired, explicit, recipe, retained=None, installed=None):
         profile = self.profile(game['key'])
@@ -643,8 +669,12 @@ def stage_setup(setup, compat_config, env, compat_dir, prefix_dir):
             write_json(saved / 'record.json', record)
         if generation not in profile['history']:
             profile['history'].append(generation)
+        last_opti = session.last_variant(profile)
+        if last_opti:
+            profile['last_opti'] = object_id(last_opti)
         profile['current'] = generation
         if opti_enabled:
+            profile['last_opti'] = generation
             profile['applied'] = {name: values(text) for name, text in texts.items()}
             profile['last'] = texts
             session.state['active'] = plan['game']['key']

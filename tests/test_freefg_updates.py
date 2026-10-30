@@ -27,6 +27,15 @@ class Updates(unittest.TestCase):
         with mock.patch.object(updater, 'fetch', side_effect=AssertionError('Network forbidden')):
             self.assertEqual(len(updater.validate(self.pin, self.recipes)['verified']), 19)
 
+    def test_shared_planner_checksum_and_immutable_identity(self):
+        planner = (COMMON / 'freefg_compat.py').read_bytes()
+        updater.validate(self.pin, self.recipes, planner)
+        with self.assertRaisesRegex(ValueError, 'planner'):
+            updater.validate(self.pin, self.recipes, planner + b' ')
+        self.pin['planner']['url'] = self.pin['planner']['url'].replace(self.pin['planner']['commit'], 'main')
+        with self.assertRaisesRegex(ValueError, 'immutable'):
+            updater.validate(self.pin, self.recipes, planner)
+
     def test_changed_recipes_fail_checksum_gate(self):
         with self.assertRaisesRegex(ValueError, 'snapshot'):
             updater.validate(self.pin, self.recipes + b' ')
@@ -98,7 +107,7 @@ class Updates(unittest.TestCase):
                                   capture_output=True, text=True, check=True)
             paths = {Path(path).name for path in done.stdout.splitlines()}
             for name in ('bc250_freefg_state.py', 'bc250_freefg_recipes.py', 'freefg-upstream.json',
-                         'freefg-recipes.json', 'update-freefg.py'):
+                         'freefg-recipes.json', 'freefg_compat.py', 'update-freefg.py'):
                 self.assertIn(name, paths)
 
     def test_retained_recipe_notice_is_present(self):

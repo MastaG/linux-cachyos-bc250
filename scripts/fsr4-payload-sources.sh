@@ -40,6 +40,7 @@ stage_fsr4_payload_sources() {
         [SHA_MENU]="$common/bc250-fsr4-menu.py"
         [SHA_FREEFG_STATE]="$common/bc250_freefg_state.py"
         [SHA_FREEFG_RECIPES_ADAPTER]="$common/bc250_freefg_recipes.py"
+        [SHA_FREEFG_COMPAT]="$common/freefg_compat.py"
         [SHA_FREEFG_PIN]="$common/freefg-upstream.json"
         [SHA_FREEFG_RECIPES]="$common/freefg-recipes.json"
         [SHA_PAYLOAD_BUILDER]="$root/scripts/build-fsr4-payload.py"
@@ -75,6 +76,7 @@ fsr4_payload_source_paths() {
         "$root/packages/bc250-fsr4-common/bc250-fsr4-menu.py" \
         "$root/packages/bc250-fsr4-common/bc250_freefg_state.py" \
         "$root/packages/bc250-fsr4-common/bc250_freefg_recipes.py" \
+        "$root/packages/bc250-fsr4-common/freefg_compat.py" \
         "$root/packages/bc250-fsr4-common/freefg-upstream.json" \
         "$root/packages/bc250-fsr4-common/freefg-recipes.json" \
         "$root/packages/bc250-fsr4-common/optiscaler-preset.json" \

@@ -24,7 +24,7 @@ does for this game, for example:
 ```text
 Verified on BC-250: RoboCop: Rogue City (DLSS FG input; generates)
 Guided by the OptiScaler wiki: Neverness to Everness (NTE)
-OptiScaler wiki (God of War Ragnarok, matched by name only) reports problems with OptiFG input; ...
+OptiScaler wiki (God of War Ragnarok) reports OptiFG input broken: frame generation starts off
 Left to OptiScaler’s own fix for this game: Hotfix.RestoreComputeSignature
 ```
 
@@ -67,10 +67,45 @@ launch still wins. Use the recommendation action to allow managed defaults and
 recipe values to replace those keys. Unreadable or ambiguous INIs stop the
 launch instead of being reset.
 
+## Optional wiki INI prefills
+
+The **Wiki settings** expander shows the selected FreeFG variant's proposed INI
+values, current values, sources and conditions. Nothing starts selected. Select
+the values to save for this game, then start it; the existing prefix transaction
+applies them. Switching variants clears the selections so they cannot silently
+move to another provider. Saved overlay/menu choices and explicit launch options
+still take precedence over defaults.
+
+Unknown symptoms and title-only matches require confirmation of the displayed
+conditions. Known wrong conditions, missing dependencies, unsupported keys,
+conflicting applicable sources, recipe/runtime-owned keys and generator policy
+are not selectable. Dependencies and other requirements remain visible. Selecting
+a quality preference is an explicit player choice, not an automatic recommendation.
+The adapter passes the effective FG input/output, provider, API, loader and
+available dependency paths to the upstream planner. No game configuration file,
+anti-cheat setting or graphics-quality preset is changed automatically.
+
+After one managed launch, the CLI can preview and save the same choices:
+
+```sh
+BC250_FREEFG_GAME_ID=steam:1836730 ./proton freefg-wiki-plan
+BC250_FREEFG_GAME_ID=steam:1836730 ./proton freefg-wiki-apply \
+  --wiki-setting ROW_ID --wiki-plan-digest DIGEST [--wiki-confirm ROW_ID]
+```
+
+Use the normal `STEAM_COMPAT_DATA_PATH` or `WINEPREFIX` environment. Repeat the
+setting/confirmation options for multiple rows. The digest is from the displayed
+plan; changed plans refuse. The CLI saves per-game overrides for the next launch
+and does not start Proton or modify the currently installed payload. It uses that
+game's retained catalogue/planner and variant, including a pending rollback.
+Selections record source provenance. They are player overrides, so they survive
+payload rollback just like later overlay edits; remove or change them in the
+OptiScaler menu or through an explicit launch override as appropriate.
+
 ## How the catalogue tempers the default
 
 These packages give every game the same default; FreeFG's installer configures
-a game its user picked. The pinned catalogue holds three kinds of per-game
+a game its user picked. The pinned catalogue holds per-game
 evidence, applied in the order of FreeFG's `compat.py`:
 
 | Layer | Source | Applied here |
@@ -79,13 +114,13 @@ evidence, applied in the order of FreeFG's `compat.py`:
 | OptiScaler's own fixes | `quirk_keys`, `leave_auto`: 218 executables, from the shipped OptiScaler build | The key is left `auto`, where the fix acts |
 | Reviewed wiki item | `promoted`: 6 items | Its key, on a strong match whose conditions hold here |
 | Wiki veto | `fg_advice` broken/avoid | Frame generation starts off when the default input is reported broken, on a strong match |
-| Other wiki items | 758 OptiScaler wiki entries | Advice in the menu and launch log |
+| Other wiki items | 761 entries, including 295 INI instructions in total | Selectable prefills where applicable; otherwise source-backed advice |
 
 The asymmetry is deliberate. Nobody chose this default per game, so evidence
 that it is wrong for a game removes it; evidence gathered on other hardware
 (mostly Windows and NVIDIA) never adds a setting by itself. A preferred input,
-a DX12 launch option, a proxy name or a listed setting is shown with the launch
-option that tries it.
+a DX12 launch option or a proxy name stays advisory. An applicable listed INI
+setting can be selected explicitly through the shared planner.
 
 OptiScaler applies a per-game fix only while its key is `auto`. The shared
 preset writes `Hotfix.RestoreComputeSignature=false` and
@@ -102,10 +137,12 @@ them regardless, for measured reasons. The package's documented
 for a game would turn it on, the launch log says so and how to try it.
 
 A strong match is FreeFG's: a store ID, or the executable together with the
-game's title or one of its folders. Wiki entries carry titles and executable
-names but no store IDs, so the title comes from Steam's appmanifest for the
-running AppID. A title alone (697 of the 758 entries name no executable) is a
-weak match and only advises. A curated recipe outranks every wiki layer.
+game's title or one of its folders. The October 30 review adds official Steam
+identities for all five games covered by the six promoted values, plus Ragnarök's
+broken-input warning. Other entries use Steam's appmanifest title and executable
+context. A title alone is weak: it cannot automatically write a value, but an
+explicit prefill is available after confirming the game and conditions. Curated
+recipes and known runtime fixes outrank wiki prefills.
 
 ## Identity and recipe limits
 
@@ -195,9 +232,12 @@ not an automatic downgrade of unrelated Proton state.
 [`freefg-upstream.json`](../packages/bc250-fsr4-common/freefg-upstream.json) is
 the dependency record consumed by all three package builders. It pins the
 runtime ZIP, matching GPL source companion, OptiScaler INI, and an unchanged
-recipe snapshot at an exact FreeFG commit. The recipe's MIT notice is retained
-in the same record. The initial runtime stays at MastaG's 1.1.5; recipes are
-imported from FreeFG 1.1.6. This PR does not silently promote a different runtime.
+recipe snapshot and `compat.py` planner at exact FreeFG commits, with SHA-256
+checks. The MIT notice is retained in the same record. The runtime stays at
+MastaG's 1.1.5; the refreshed catalogue/planner are commit `a7ebfe3`, prepared for
+FreeFG 1.2.0. The 19 curated BC-250 rows are unchanged. No different runtime is
+promoted. The catalogue's OptiScaler quirk effects were checked against both the
+1.1.5 and 1.1.6 source builds.
 
 Check the committed inputs without network access:
 
@@ -213,8 +253,8 @@ python3 scripts/update-freefg.py --runtime-version 1.1.6 \
 ```
 
 Remove `--dry-run` to update the dependency record in the checkout. A recipe-only
-refresh uses `--recipes-commit FULL_40_CHARACTER_COMMIT`; the runtime pin stays
-unchanged. Runtime refreshes verify GitHub's asset digests, the source hash
+refresh uses `--recipes-commit FULL_40_CHARACTER_COMMIT` and fetches the matching
+shared planner, retaining both unchanged. The runtime pin stays unchanged. Runtime refreshes verify GitHub's asset digests, the source hash
 recorded inside the runtime, and the INI at the exact OptiScaler source commit.
 No dependency is fetched at game launch. The optional `gh` fallback handles
 release-asset download routes blocked by a GitHub proxy.
@@ -224,10 +264,11 @@ pinned archive, and check it against the pin; the pin's upstream URL is
 provenance. Upload the ZIP and its source companion from `--download-dir` to
 the mirror before a changed pin is built.
 
-`bc250_freefg_recipes.py` carries FreeFG's matching and wiki rules (`norm`,
-`wiki_matches`, `key_rule`, the condition evaluator, `INSTALLER_KEYS`). When the
-recipe pin moves, compare them with FreeFG's `recipes.py` and `compat.py` at the
-new commit.
+`freefg_compat.py` is the unchanged upstream planner, not a second policy
+implementation. `bc250_freefg_recipes.py` translates its results into prefix
+settings and package-specific defaults. Retained bundles include both the
+catalogue and planner, and verify them before use. A changed planner format or
+recipe schema requires adapter review.
 
 Review the pin and recipe diff, run `python3 -B -m unittest discover -s tests`,
 then build all affected packages and perform runtime qualification before

@@ -88,6 +88,7 @@ source=(
     'bc250-fsr4-menu.py'
     'bc250_freefg_state.py'
     'bc250_freefg_recipes.py'
+    'freefg_compat.py'
     'freefg-upstream.json'
     'freefg-recipes.json'
     'build-fsr4-payload.py'
@@ -134,6 +135,7 @@ sha256sums=(
     '@SHA_MENU@'
     '@SHA_FREEFG_STATE@'
     '@SHA_FREEFG_RECIPES_ADAPTER@'
+    '@SHA_FREEFG_COMPAT@'
     '@SHA_FREEFG_PIN@'
     '@SHA_FREEFG_RECIPES@'
     '@SHA_PAYLOAD_BUILDER@'
@@ -213,6 +215,7 @@ build() {
             "https://github.com/daniel-h-0/freefg/releases/tag/v@FREEFG_VERSION@" \
         --freefg-ini "$srcdir/FreeFG-OptiScaler.ini" \
         --freefg-bridge fsr412f \
+        --freefg-planner "$srcdir/freefg_compat.py" \
         --freefg-lock "$srcdir/freefg-upstream.json" --freefg-recipes "$srcdir/freefg-recipes.json" \
         --dlss "$srcdir/nvngx_dlss.dll" \
         --licenses "$srcdir" \
@@ -235,6 +238,7 @@ package() {
     install -Dm644 "$srcdir/bc250-fsr4-menu.py" "$_tool/bc250-fsr4-menu.py"
     install -Dm644 "$srcdir/bc250_freefg_state.py" "$_tool/bc250_freefg_state.py"
     install -Dm644 "$srcdir/bc250_freefg_recipes.py" "$_tool/bc250_freefg_recipes.py"
+    install -Dm644 "$srcdir/freefg_compat.py" "$_tool/freefg_compat.py"
     install -Dm644 "$srcdir/freefg-upstream.json" "$_tool/freefg-upstream.json"
     install -Dm644 "$srcdir/freefg-recipes.json" "$_tool/freefg-recipes.json"
 

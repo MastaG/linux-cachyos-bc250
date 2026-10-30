@@ -29,7 +29,7 @@ class TransactionTests(unittest.TestCase):
         self.config['proton'] = 'unused-proton'
         self.config['preset']['FrameGen.Enabled'] = 'true'
         self.config['freefg_upstream'] = json.loads((COMMON / 'freefg-upstream.json').read_text())
-        for name in ('freefg-recipes.json', 'bc250_freefg_state.py'):
+        for name in ('freefg-recipes.json', 'freefg_compat.py', 'bc250_freefg_state.py'):
             shutil.copy2(COMMON / name, self.work / name)
         self.env = {'SteamAppId': '1836730', 'SteamGameId': '1836730',
                     'STEAM_COMPAT_DATA_PATH': str(self.compat), 'WINEPREFIX': str(self.prefix),
@@ -41,6 +41,7 @@ class TransactionTests(unittest.TestCase):
         # What the menu answers (variant, change, switched); menu_env is what it was given.
         self.menu = (None, {}, False)
         self.menu_env = None
+        self.menu_edit = None
 
     def launch(self, **env):
         inherited = {**self.env, **env}
@@ -67,6 +68,7 @@ class TransactionTests(unittest.TestCase):
             return 0
         def menu(config, launch, menu_tool=None):
             self.menu_env = launch
+            if self.menu_edit:self.menu_edit()
             variant, change, switched = self.menu
             return variant, dict(change), switched
         with mock.patch.object(wrapper, 'TOOL', self.work), \
@@ -87,6 +89,152 @@ class TransactionTests(unittest.TestCase):
     def action(self, action, appid='1836730'):
         with state.Session(self.prefix, self.compat) as session:
             return session.action('steam:' + appid, action)
+
+    def wiki_fixture(self, when=None):
+        self.config['freefg'] = {'test-opti': {}}
+        self.config['freefg_recipe_providers'] = {'test-opti': 'fsr4'}
+        data = json.loads((self.work / 'freefg-recipes.json').read_text())
+        # Use the real prefix/Proton setup, with a small reviewable wiki fixture.
+        data['wiki'] = [dict(title='Echo Point Nova', match={'steam': ['1836730']},
+                            pages=['https://github.com/optiscaler/OptiScaler/wiki/Echo-Point-Nova'],
+                            ini=[dict(key='Spoofing.Dxgi', value='true', when=when or {})])]
+        raw = json.dumps(data).encode()
+        (self.work / 'freefg-recipes.json').write_bytes(raw)
+        self.config['freefg_upstream']['recipes']['sha256'] = fixtures.sha256(raw)
+
+    def wiki_preview(self):
+        plans = json.loads(self.menu_env['BC250_MENU_WIKI_PLAN'])
+        variant, plan = next(iter(plans.items()))
+        row = next(row for row in plan['rows'] if row['key'] == 'Spoofing.Dxgi')
+        return variant, plan, row
+
+    def wiki_command(self, command, *options):
+        from contextlib import redirect_stdout
+        output = io.StringIO()
+        with mock.patch.object(wrapper, 'TOOL', self.work), redirect_stdout(output):
+            wrapper.managed_launch(self.config, ['freefg-' + command, *options],
+                                  {**self.env, 'BC250_FREEFG_GAME_ID': 'steam:1836730'})
+        return json.loads(output.getvalue())
+
+    def test_wiki_prefill_menu_writes_actual_ini_and_keeps_other_choices(self):
+        self.wiki_fixture()
+        self.launch()
+        self.edit('XeFG.InterpolationCount', '3')
+        self.launch()
+        variant, plan, row = self.wiki_preview()
+        self.assertEqual(row['action'], 'prefill')
+        self.assertEqual(row['current'], 'false')
+        self.menu = (None, {'__wiki_selection__': dict(variant=variant, selected=[row['id']], confirmed=[], digest=plan['digest'])}, False)
+        self.launch()
+        self.assertEqual(self.setting('Spoofing.Dxgi'), 'true')
+        self.assertEqual(self.setting('XeFG.InterpolationCount'), '3')
+        profile = state.read_json(self.prefix / '.bc250-freefg/state.json')['games']['steam:1836730']
+        self.assertEqual(profile['wiki_settings']['selected'][0]['source']['title'], 'Echo Point Nova')
+        self.menu = (None, {}, False)
+        self.launch(SteamAppId='222', SteamGameId='222')
+        self.assertEqual(self.setting('Spoofing.Dxgi'), 'false')
+        self.launch()
+        self.assertEqual(self.setting('Spoofing.Dxgi'), 'true')
+
+    def test_wiki_condition_confirmation_and_stale_menu_are_checked(self):
+        self.wiki_fixture({'symptom': 'white screen'})
+        self.launch()
+        variant, plan, row = self.wiki_preview()
+        choice = dict(variant=variant, selected=[row['id']], confirmed=[], digest=plan['digest'])
+        self.menu = (None, {'__wiki_selection__': choice}, False)
+        before = self.ini().read_bytes()
+        with self.assertRaisesRegex(ValueError, 'confirm'):
+            self.launch()
+        self.assertEqual(self.ini().read_bytes(), before)
+        choice['confirmed'] = [row['id']]
+        self.launch()
+        self.assertEqual(self.setting('Spoofing.Dxgi'), 'true')
+        with self.assertRaisesRegex(ValueError, 'preview changed'):
+            self.launch()  # the old preview still says current=false
+
+    def test_wiki_menu_refuses_changes_made_while_it_is_open(self):
+        self.wiki_fixture()
+        self.launch()
+        variant, plan, row = self.wiki_preview()
+        self.menu = (None, {'__wiki_selection__': dict(variant=variant, selected=[row['id']], confirmed=[], digest=plan['digest'])}, False)
+        self.menu_edit = lambda: self.edit('Spoofing.Dxgi', 'auto')
+        with self.assertRaisesRegex(ValueError, 'while the menu was open'):
+            self.launch()
+        self.assertEqual(self.setting('Spoofing.Dxgi'), 'auto')
+
+    def test_wiki_cli_saves_for_next_launch_and_retains_old_planner(self):
+        self.wiki_fixture()
+        self.launch()
+        before = self.ini().read_bytes()
+        plan = self.wiki_command('wiki-plan')
+        row = next(r for r in plan['rows'] if r['key'] == 'Spoofing.Dxgi')
+        result = self.wiki_command('wiki-apply', '--wiki-setting', row['id'], '--wiki-plan-digest', plan['digest'])
+        self.assertEqual(result['applies'], 'next game launch')
+        self.assertEqual(self.ini().read_bytes(), before)
+        self.launch()
+        self.assertEqual(self.setting('Spoofing.Dxgi'), 'true')
+        # CLI reads the retained generation's planner/catalogue, even if the
+        # currently installed package has acquired different source bytes.
+        (self.work / 'freefg_compat.py').write_text('not Python')
+        self.assertTrue(self.wiki_command('wiki-plan')['rows'])
+        with self.assertRaisesRegex(ValueError, 'planner checksum'):
+            self.launch()
+
+    def test_wiki_menu_rejects_wrong_variant_and_known_missing_dependency(self):
+        game = self.work / 'game/Echo.exe'
+        game.parent.mkdir()
+        game.write_bytes(b'MZ')
+        self.args = ['run', str(game)]
+        self.wiki_fixture({'required_file': 'D3D12_Optiscaler/D3D12Core.dll'})
+        self.launch()
+        variant, plan, row = self.wiki_preview()
+        self.assertEqual(row['action'], 'inapplicable')
+        choice = dict(variant=variant, selected=[row['id']], confirmed=[row['id']], digest=plan['digest'])
+        self.menu = (None, {'__wiki_selection__': choice}, False)
+        with self.assertRaisesRegex(ValueError, 'required file'):
+            self.launch()
+        choice['variant'] = 'another'
+        with self.assertRaisesRegex(ValueError, 'another variant'):
+            self.launch()
+
+    def test_wiki_cli_keeps_known_renderer_context(self):
+        self.wiki_fixture({'api': 'dx12'})
+        self.args += ['-dx11']
+        self.launch()
+        plan = self.wiki_command('wiki-plan')
+        self.assertEqual(plan['context']['api'], 'dx11')
+        self.assertEqual(plan['rows'][0]['action'], 'inapplicable')
+
+    def test_all_reviewed_store_id_fixes_reach_the_real_ini(self):
+        self.define(b'[Hotfix]\nColorResourceBarrier=auto\nMotionVectorResourceBarrier=auto\n'
+                    b'[OptiFG]\nResourceBlocking=auto\n[InitFlags]\nDisplayResolution=auto\n')
+        catalog = json.loads((COMMON / 'freefg-recipes.json').read_text())
+        applied = 0
+        for row in catalog['wiki']:
+            if not row.get('promoted'):
+                continue
+            self.steam_game(row['match']['steam'][0], row['title'], 'Unrecognized/Launcher.exe')
+            self.launch()
+            for item in row['promoted']:
+                self.assertEqual(self.setting(item['key']), item['value'], row['title'])
+                applied += 1
+        self.assertEqual(applied, 6)
+        # A stored player value still wins on the next ordinary launch.
+        self.edit('Hotfix.ColorResourceBarrier', '8')
+        self.launch()
+        self.assertEqual(self.setting('Hotfix.ColorResourceBarrier'), '8')
+
+    def test_wiki_conditions_follow_player_input_and_proxy(self):
+        self.wiki_fixture({'fg_input': 'dlssg', 'proxy': 'dxgi.dll'})
+        self.launch()
+        self.assertEqual(self.wiki_preview()[2]['action'], 'inapplicable')
+        self.launch(BC250_OPTISCALER_EXTRA='FrameGen.FGInput=dlssg', PROTON_OPTISCALER_NAME='dxgi.dll')
+        variant, plan, row = self.wiki_preview()
+        self.assertEqual(plan['context']['fg_input'], 'dlssg')
+        self.assertEqual(row['action'], 'prefill')
+        self.assertEqual(self.setting('FrameGen.FGInput'), 'dlssg')
+        self.launch()
+        self.assertEqual(self.wiki_preview()[2]['action'], 'inapplicable')
 
     def test_default_on_and_overlay_off_survives(self):
         self.launch()
@@ -535,6 +683,26 @@ sys.exit(99)
                              {'freefg': True, 'fsr412f': True}, managed=True)
         self.assertEqual(result['changed'], 'FrameGen.Enabled=true;FrameGen.FGInput=upscaler;FrameGen.FGOutput=fsrfg')
 
+    def test_returning_to_an_older_generation_keeps_new_input_edits(self):
+        self.launch()
+        self.launch(PROTON_USE_OPTISCALER='altbridge')
+        self.launch()
+        self.edit('FrameGen.FGInput', 'dlssg')
+        self.launch()
+        self.assertEqual(self.setting('FrameGen.FGInput'), 'dlssg')
+        self.launch(PROTON_USE_OPTISCALER='0')
+        self.launch()
+        self.assertEqual(self.setting('FrameGen.FGInput'), 'dlssg')
+
+    def test_pinned_rollback_keeps_new_input_edits_on_later_launches(self):
+        self.launch()
+        self.launch(PROTON_USE_OPTISCALER='altbridge')
+        self.action('rollback')
+        self.launch()
+        self.edit('FrameGen.FGInput', 'dlssg')
+        self.launch()
+        self.assertEqual(self.setting('FrameGen.FGInput'), 'dlssg')
+
 
 class CachyOSTransactionTests(TransactionTests):
     def setUp(self):
@@ -619,11 +787,11 @@ class RecipeTests(unittest.TestCase):
                 self.assertIn(result['evidence'], recipes.QUALIFIED)
 
     def test_wiki_titles_come_from_steams_record_of_the_game(self):
-        # Wiki entries name titles and executables, never store IDs.
+        # The reviewed store identity strengthens the Steam title match.
         game = self.steam('2322010', 'God of War Ragnarök', 'GoWR/GoWR.exe')
         self.assertIn('god of war ragnarok', game['titles'])
         self.assertEqual([(w['title'], s) for w, s in recipes.wiki_matches(self.catalog, game)],
-                         [('God of War Ragnarok', 'weak')])
+                         [('God of War Ragnarok', 'strong')])
         bare = recipes.identity({'SteamAppId': '2322010'}, ['run', '/Games/GoWR/GoWR.exe'])
         self.assertEqual(bare['titles'], [])
 

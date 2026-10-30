@@ -385,6 +385,54 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
             button.connect('clicked', lambda _button, action=action: (result.update(action=action), finish()))
             box.append(button)
             recovery.append(button)
+    wiki_plans = json.loads(os.environ.get('BC250_MENU_WIKI_PLAN') or '{}')
+    wiki_controls = {}
+    wiki_sections = {}
+    for variant, plan in wiki_plans.items():
+        if not plan.get('rows') and not plan.get('requirements'):
+            continue
+        expander = Gtk.Expander(label='Wiki settings — optional INI prefills')
+        details = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        details.append(Gtk.Label(label='Select only the settings you want to save for this game. These values apply when the game starts.', xalign=0, wrap=True))
+        for requirement in plan.get('requirements', []):
+            details.append(Gtk.Label(label=requirement['text'], xalign=0, wrap=True))
+        controls = []
+        for row in plan.get('rows', []):
+            item = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+            current = row.get('current') if row.get('current') is not None else 'auto'
+            label = f"{row['key']}: {current} → {row['value']}"
+            choose = Gtk.CheckButton(label=label)
+            selectable = row['action'] in ('automatic', 'prefill', 'conditional')
+            choose.set_sensitive(selectable and not row.get('confirmations'))
+            item.append(choose)
+            item.append(Gtk.Label(label=row['source']['title'] + ': ' + row['reason'], xalign=0, wrap=True))
+            confirm = None
+            if selectable and row.get('confirmations'):
+                confirm = Gtk.CheckButton(label='I confirm this game and the listed conditions apply')
+                def confirmed(button, target=choose):
+                    target.set_sensitive(button.get_active())
+                    if not button.get_active():target.set_active(False)
+                confirm.connect('toggled', confirmed)
+                item.append(confirm)
+            for url in row['source'].get('pages', []):
+                item.append(Gtk.LinkButton(uri=url, label='Source: OptiScaler wiki'))
+            details.append(item)
+            controls.append((row, choose, confirm))
+        expander.set_child(details)
+        box.append(expander)
+        wiki_controls[variant] = controls
+        wiki_sections[variant] = expander
+
+    def show_wiki(*_):
+        selected = next((name for name, radio in radios if radio.get_active()), None)
+        for variant, section in wiki_sections.items():
+            section.set_visible(variant == selected)
+            if variant != selected:
+                for row, choose, confirm in wiki_controls[variant]:
+                    choose.set_active(False)
+                    if confirm:confirm.set_active(False)
+    for name, radio in radios:radio.connect('toggled', show_wiki)
+    show_wiki()
     start = Gtk.Button(label="Start game")
     start.add_css_class("suggested-action")
     box.append(start)
@@ -399,6 +447,13 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
         result["disable_framegen"] = int(fg.get_active())
         result["spoof"] = next((value for value, s in spoofs if s.get_active()), "auto")
         result["remember"] = int(keep.get_active())
+        selected = result.get('preset')
+        rows = wiki_controls.get(selected, [])
+        chosen = [row['id'] for row, check, confirm in rows if check.get_active()]
+        if chosen:
+            result['wiki'] = dict(variant=selected, selected=chosen,
+                confirmed=[row['id'] for row, check, confirm in rows if check.get_active() and confirm and confirm.get_active()],
+                digest=wiki_plans[selected]['digest'])
         loop.quit()
 
     start.connect("clicked", finish)
@@ -407,7 +462,14 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
     # Own focus order for the pad: GTK's directional focus keeps a radio group's
     # focus inside the group, so the pad could not leave the four presets.
     def move(d):
-        order = [r for _, r in radios] + [s for _, s in spoofs] + [fg, keep, *recovery, start]
+        wiki_focus = []
+        for variant, section in wiki_sections.items():
+            if section.get_visible():
+                wiki_focus.append(section)
+                if section.get_expanded():
+                    for row, choose, confirm in wiki_controls[variant]:
+                        wiki_focus.extend(widget for widget in (confirm, choose) if widget and widget.get_sensitive())
+        order = [r for _, r in radios] + [s for _, s in spoofs] + [fg, keep, *recovery, *wiki_focus, start]
         cur = win.get_focus()
         while cur is not None and cur not in order:
             cur = cur.get_parent()
@@ -563,6 +625,7 @@ def answer(result, current, base, fg_states, spoof_states=None, ini_sections=Non
         "remember": int(result.get("remember", 0)),
         "switched": int(switched),
         "changed": ";".join(k + "=" + v for k, v in changed.items()),
+        **({'wiki': json.dumps(result['wiki'], separators=(',', ':'))} if result.get('wiki') else {}),
     }
 
 

@@ -280,7 +280,10 @@ Saved settings are separated by logical game identity even in a shared prefix.
 unchanged; provider-specific settings and supported launch arguments are
 translated for this layout. It applies FreeFG's layers in FreeFG's order
 (curated recipe, OptiScaler's own fixes, reviewed wiki items, wiki vetoes) and
-its strong-match rule; every other OptiScaler wiki item is advice. Runtime archives, configuration and recipe identity
+its strong-match rule. The checksum-pinned `freefg_compat.py` is the unchanged
+upstream planner; applicable INI prefills are selectable in the native menu or
+CLI with source/condition checks. Remaining wiki items stay advisory. Runtime
+archives, configuration, planner and recipe identity
 are retained for rollback, and a rollback pin survives package updates.
 See [FreeFG recipes and recovery](../../docs/FREEFG-RECOVERY.md) for the settings
 precedence, conservative legacy adoption, update commands and draft limits.

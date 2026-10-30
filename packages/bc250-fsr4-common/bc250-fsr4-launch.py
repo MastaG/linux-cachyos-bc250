@@ -659,7 +659,7 @@ MENU_ENV = ("STEAM_COMPAT_DATA_PATH", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"
             "XDG_RUNTIME_DIR", "SteamAppId", "SteamGameId", "PROTON_OPTISCALER_MENU",
             "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED", "BC250_MENU_DEFAULT",
             "BC250_MENU_GAME", "BC250_MENU_INI", "BC250_MENU_RECORD", "BC250_MENU_LEGACY",
-            "BC250_MENU_ROLLBACK", "BC250_MENU_PINNED", "BC250_MENU_MANAGED", "BC250_MENU_ADVICE")
+            "BC250_MENU_ROLLBACK", "BC250_MENU_PINNED", "BC250_MENU_MANAGED", "BC250_MENU_ADVICE", "BC250_MENU_WIKI_PLAN")
 
 
 def menu_choice(config, inherited, menu_tool=None):
@@ -717,6 +717,8 @@ def menu_choice(config, inherited, menu_tool=None):
     if not choice.get("preset"):
         return current, {}, False
     change = dict(part.split("=", 1) for part in choice.get("changed", "").split(";") if "=" in part)
+    if choice.get('wiki'):
+        change['__wiki_selection__'] = json.loads(choice['wiki'])
     return choice["preset"], change, choice.get("switched") == "1"
 
 
@@ -795,7 +797,7 @@ def managed_launch(config, arguments, inherited):
 
 def _managed_launch(config, arguments, inherited):
     from bc250_freefg_state import (Session, INI, read_json, atomic, merge_ini, read_generation, verify_bundle,
-                                    leave_variant)
+                                    leave_variant, values, variant_scoped, ini_files)
     import bc250_freefg_recipes as recipes
     global TOOL
     original_tool = TOOL
@@ -810,14 +812,21 @@ def _managed_launch(config, arguments, inherited):
     if action and not inherited.get('BC250_FREEFG_GAME_ID'):
         raise RuntimeError('Recovery commands require BC250_FREEFG_GAME_ID=steam:ID, gog:ID or epic:NAME')
     with Session(prefix, compat) as session:
-        if action:
+        if action and action not in ('wiki-plan', 'wiki-apply'):
             print(json.dumps(session.action(identity['key'], action), indent=2))
             return 0
         profile = session.profile(identity['key'])
         pinned = None
+        if action in ('wiki-plan', 'wiki-apply') and not profile.get('current'):
+            raise RuntimeError('Launch this game once before reviewing wiki settings')
         if profile.get('pin'):
             pinned = read_generation(session.root, profile['pin'])
             TOOL = verify_bundle(session.root, pinned['bundle'])
+            config = read_json(TOOL / 'config.json')
+        if action in ('wiki-plan', 'wiki-apply'):
+            active = pinned or read_generation(session.root, profile['current'])
+            identity = active['game']
+            TOOL = verify_bundle(session.root, active['bundle'])
             config = read_json(TOOL / 'config.json')
         try:
             launch = dict(inherited)
@@ -830,6 +839,7 @@ def _managed_launch(config, arguments, inherited):
             launch['BC250_MENU_RECORD'] = ('FreeFG ' + upstream['runtime']['version'] + ' · recipes ' +
                                            upstream['recipes']['commit'][:8] + ' · ' + str(count) + ' saved overrides')
             catalog = recipes.load(TOOL / 'freefg-recipes.json', upstream['recipes']['sha256'])
+            planner = recipes.load_planner(TOOL, upstream.get('planner'))
 
             def baseline(version):
                 # What a variant writes before any recipe; seed_once is not re-run
@@ -839,8 +849,66 @@ def _managed_launch(config, arguments, inherited):
                 return {k: v for k, v in values.items() if v is not None}
 
             def recommend(version):
-                return recipes.recommendation(catalog, identity, config.get('freefg_recipe_providers', {}).get(version),
-                                              config['optiscaler_ini_keys'][version], baseline(version))
+                provider = config.get('freefg_recipe_providers', {}).get(version)
+                common = dict(optiscaler_commit=upstream['runtime'].get('optiscaler_commit'), planner=planner)
+                first = recipes.recommendation(catalog, identity, provider,
+                    config['optiscaler_ini_keys'][version], baseline(version), **common)
+                own = dict(profile.get('overrides', {}).get(INI, {}))
+                last = session.last_variant(profile)
+                if last and variant_identity(read_json(session.root / 'bundles' / last['bundle'] / 'config.json'),
+                                             last['version']) != variant_identity(config, version):
+                    own = {k: v for k, v in own.items() if not variant_scoped(k)}
+                if not profile.get('current') and not session.state.get('active'):
+                    legacy = prefix_ini(inherited)
+                    if legacy and legacy.is_file():
+                        own = {**values(legacy.read_text()), **own}
+                effective = {k.lower(): v for k, v in {**baseline(version), **first['settings']}.items()}
+                effective.update(own)
+                effective.update({k.lower(): v for k, v in extra_preset(inherited.get('BC250_OPTISCALER_EXTRA', '')).items()})
+                context = dict(fg_input=effective.get('framegen.fginput', 'upscaler'),
+                               fg_output=effective.get('framegen.fgoutput', 'xefg'),
+                               proxy=proxy_name(inherited.get('PROTON_OPTISCALER_NAME'), config['proxy']))
+                if context['fg_input'] == 'auto':context['fg_input'] = None
+                if context['fg_output'] == 'auto':context['fg_output'] = 'xefg'
+                # Only an explicit renderer flag makes the API known here. The
+                # variant's normal DirectX12 path is the default otherwise.
+                flags = {str(arg).lower() for arg in arguments}
+                context['api'] = ('dx11' if flags & {'-dx11', '-d3d11'} else
+                                  'vulkan' if '-vulkan' in flags else 'dx12')
+                if action in ('wiki-plan', 'wiki-apply'):
+                    known = active.get('recipe', {}).get('wiki_plan', {}).get('context', {})
+                    for key in ('api', 'proxy'):
+                        if key in known:context[key] = known[key]
+                required = {str(item.get('when', {}).get('required_file')) for row in catalog.get('wiki', [])
+                            for item in row.get('ini', []) if item.get('when', {}).get('required_file')}
+                game_path = Path(identity.get('path') or '.')
+                if game_path.is_file():
+                    context['files'] = [name for name in required if (game_path.parent / name).is_file()]
+                return recipes.recommendation(catalog, identity, provider, config['optiscaler_ini_keys'][version],
+                    baseline(version), current={**own, **extra_preset(inherited.get('BC250_OPTISCALER_EXTRA', ''))},
+                    display_current=effective, context=context, **common)
+
+            if action in ('wiki-plan', 'wiki-apply'):
+                version = active['version']
+                if version not in config.get('freefg', {}):
+                    raise RuntimeError('Wiki INI settings require a FreeFG variant')
+                preview = recommend(version)['wiki_plan']
+                if action == 'wiki-plan':
+                    print(json.dumps(preview, indent=2))
+                else:
+                    import argparse
+                    parser = argparse.ArgumentParser(prog='freefg-wiki-apply')
+                    parser.add_argument('--wiki-setting', action='append', required=True)
+                    parser.add_argument('--wiki-confirm', action='append', default=[])
+                    parser.add_argument('--wiki-plan-digest', required=True)
+                    selected = parser.parse_args(arguments[1:])
+                    choice = recipes.select_wiki(preview, selected.wiki_setting, selected.wiki_confirm,
+                                                 selected.wiki_plan_digest, planner)
+                    print(json.dumps(session.select_wiki(identity['key'], choice), indent=2))
+                return 0
+
+            wiki_previews = {menu_names(config).get(v, v): recommend(v)['wiki_plan'] for v in config.get('freefg', {})}
+            launch['BC250_MENU_WIKI_PLAN'] = json.dumps(wiki_previews, separators=(',', ':'))
 
             # The menu states what the catalogue does to this game before the player
             # picks: the package default's recommendation, or any FreeFG variant's.
@@ -884,7 +952,9 @@ def _managed_launch(config, arguments, inherited):
                     requested = '0'
                 if requested not in ('0', pinned['version']):
                     raise RuntimeError('This game is pinned by rollback; run freefg-update before selecting another payload')
+            menu_observed = ini_files(session.targets[0])
             variant, change, _ = menu_choice(config, launch, menu_tool=original_tool)
+            wiki_choice = change.pop('__wiki_selection__', None)
             action = change.pop('__freefg_action__', None)
             if action:
                 session.action(identity['key'], action)
@@ -927,6 +997,22 @@ def _managed_launch(config, arguments, inherited):
             if last and variant_identity(read_json(session.root / 'bundles' / last['bundle'] / 'config.json'),
                                          last['version']) != variant_identity(config, version):
                 leave_variant(profile)
+            if wiki_choice:
+                if ini_files(session.targets[0]) != menu_observed:
+                    raise ValueError('Wiki settings preview changed while the menu was open; review it again')
+                name = menu_names(config).get(version, version)
+                if wiki_choice.get('variant') != name or name not in wiki_previews:
+                    raise ValueError('Wiki selection belongs to another variant; review it again')
+                choice = recipes.select_wiki(wiki_previews[name], wiki_choice.get('selected', []),
+                    wiki_choice.get('confirmed', []), wiki_choice.get('digest'), planner)
+                # Verify again after the menu: dependencies or player settings may
+                # have changed while it was open. Current launch choices are applied
+                # below and never erase unselected settings.
+                recipes.select_wiki(recommend(version)['wiki_plan'], wiki_choice.get('selected', []),
+                    wiki_choice.get('confirmed', []), wiki_choice.get('digest'), planner)
+                profile.setdefault('overrides', {}).setdefault(INI, {}).update(
+                    {k.lower(): v for k, v in choice['settings'].items()})
+                profile['wiki_settings'] = choice
             if change:
                 profile.setdefault('overrides', {}).setdefault(INI, {}).update({k.lower(): v for k, v in change.items()})
             explicit = extra_preset(inherited.get('BC250_OPTISCALER_EXTRA', ''))
