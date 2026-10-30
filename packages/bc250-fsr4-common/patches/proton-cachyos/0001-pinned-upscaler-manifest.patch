@@ -1,6 +1,6 @@
 --- a/upscalers.py
 +++ b/upscalers.py
-@@ -20,6 +20,90 @@
+@@ -20,11 +20,103 @@
  
  __manifest_url = 'https://loathingkernel.github.io/proton-upscalers/manifest.json'
  __manifest_json: Union[dict, None] = None
@@ -91,21 +91,19 @@
  
  
  def __get_manifest() -> dict:
-@@ -27,6 +111,14 @@
+     global __manifest_json
      if __manifest_json is not None:
-         return __manifest_json
- 
++        return __manifest_json
++
 +    if __manifest_path is not None:
 +        with __manifest_path.open(encoding='utf-8') as manifest_fd:
 +            manifest = json.load(manifest_fd)
 +        if not isinstance(manifest, dict):
 +            raise RuntimeError('Pinned upscaler manifest must be a JSON object')
 +        __manifest_json = manifest
-+        return __manifest_json
-+
+         return __manifest_json
+ 
      cache_dir = config.path.cache_dir.joinpath('upscalers')
-     cache_dir.mkdir(parents=True, exist_ok=True)
-     cached_manifest = cache_dir.joinpath('manifest.json')
 @@ -56,6 +148,13 @@
  @lru_cache(16)
  def __get_dll_manifest(upscaler: str, version: str = 'default') -> dict:
@@ -141,19 +139,19 @@
      try:
          tracked_items = __get_tracked_items(compat_dir, section)
          # test if new files and their attributes exist in the tracking file
-@@ -324,6 +430,12 @@
+@@ -323,6 +429,12 @@
+     except Exception as e:
          log.warn(str(e))
          return False
- 
++
 +    if __manifest_path is not None:
 +        for name, checksum in remote_item['sha256_hash'].items():
 +            if not __sha256_matches(Path(prefix_dir, path, name), checksum):
 +                log.warn(f'Pinned SHA256 mismatch or missing file: {name}')
 +                return False
-+
+ 
      dst_hashes = {}
      for dst in tracked_items:
-         target = os.path.join(prefix_dir, dst)
 @@ -417,7 +529,12 @@
          raise e
  
@@ -214,13 +212,14 @@
      log.info(f'Setting up optiscaler version "{version}".')
      download_component("optiscaler", compat_dir, prefix_dir, version)
      enabled = check_component("optiscaler", compat_dir, prefix_dir, version, ignore_version=True)
+-
+-    if enabled and env.get('PROTON_OPTISCALER_STREAMLINE', '0') != '0':
 +    if __manifest_path is not None and not enabled:
 +        raise RuntimeError(f'Pinned OptiScaler {version} failed validation; refusing launch')
 +    if __manifest_path is not None:
 +        path, item = __get_opti_files(version)
 +        __expose_proxy(prefix_dir, path, item, env.get('PROTON_OPTISCALER_NAME', 'dxgi.dll'))
- 
--    if enabled and env.get('PROTON_OPTISCALER_STREAMLINE', '0') != '0':
++
 +    # Streamline is not part of a pinned manifest, and nothing unpinned is fetched.
 +    if enabled and __manifest_path is None and env.get('PROTON_OPTISCALER_STREAMLINE', '0') != '0':
          streamline_version = get_version(env, 'PROTON_OPTISCALER_STREAMLINE', 'default')
@@ -247,10 +246,19 @@
  
          with open(ini, 'w') as ini_fd:
              parser.write(ini_fd)
-@@ -698,6 +831,23 @@
+@@ -698,6 +831,32 @@
  
      usage: setup_upscalers(g_session.compat_config, g_session.env, g_compatdata.base_dir, g_compatdata.prefix_dir)
      """
++    if env.get('BC250_FREEFG_PLAN'):
++        # The package launcher holds a prefix session lock. Preparation happens
++        # in a disposable prefix; the adapter commits only verified payloads.
++        import importlib.util
++        spec = importlib.util.spec_from_file_location('bc250_freefg_state', env['BC250_FREEFG_MODULE'])
++        adapter = importlib.util.module_from_spec(spec)
++        spec.loader.exec_module(adapter)
++        return adapter.stage_setup(setup_upscalers, compat_config, env, compat_dir, prefix_dir)
++
 +    global __manifest_path, __manifest_json
 +    manifest_path = env.get('PROTON_UPSCALER_MANIFEST')
 +    selected_path = Path(manifest_path) if manifest_path is not None else None
@@ -271,7 +279,7 @@
      dlss_version = get_version(env, 'PROTON_DLSS_UPGRADE', 'default')
      xess_version = get_version(env, 'PROTON_XESS_UPGRADE', 'default')
  
-@@ -713,14 +863,28 @@
+@@ -713,14 +872,28 @@
  
      upscaler_replace = set()
      upscalers = (
@@ -304,7 +312,7 @@
      for upscaler in upscalers:
          name, version, enabled = upscaler
          if enabled and setup_upscaler(name, compat_dir, prefix_dir, version):
-@@ -730,8 +894,8 @@
+@@ -730,8 +903,8 @@
      if 'optiscaler' in compat_config:
          if setup_optiscaler(env, compat_dir, prefix_dir, optiscaler_version):
              log.info('OptiScaler enabled.')

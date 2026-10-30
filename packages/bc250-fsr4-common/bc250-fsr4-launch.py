@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: MIT
 """Point Proton at this tool's pinned FSR4 payload, then hand the process over.
 
-Steam runs a sibling shim, which runs this file; this file execve()s the real
-Proton. The indirection exists so the environment can be prepared without
-patching Proton's own launcher.
+Steam runs a sibling shim, which runs this file. Managed game launches retain
+a prefix lease while supervising Proton; utility calls execve() it directly.
+The environment is prepared without patching Proton's own launcher.
 
 The two packages lay their tool directory out differently -- protonge-latest
 keeps GE under `ge/`, while proton-cachyos-native is the Proton tree itself --
@@ -22,6 +22,8 @@ import os
 import re
 import shutil
 import sys
+import signal
+import subprocess
 from pathlib import Path
 
 TOOL = Path(__file__).resolve().parent
@@ -50,6 +52,8 @@ UNSHIPPED = (
 # the prefix. See proxy_name().
 OWNED = (
     "PROTON_UPSCALER_MANIFEST",
+    "BC250_FREEFG_PLAN",
+    "BC250_FREEFG_MODULE",
     "PROTON_OPTISCALER_NAME",
     "PROTON_OPTISCALER_CONFIG",
     "WINE_OPTISCALER_NAME",
@@ -625,6 +629,15 @@ def menu_names(config):
     return {aliases[name]: name for name in MENU_VARIANTS if name in aliases}
 
 
+def variant_identity(config, version):
+    """Which variant a pinned version of config is, stable across package updates:
+    its menu name, else the short names that select it. Every nightly renames the
+    versions themselves; a retired name selects its successor only as an alias."""
+    names = tuple(sorted(name for name, pinned in config.get("optiscaler_aliases", {}).items()
+                         if pinned == version))
+    return menu_names(config).get(version) or names or version
+
+
 # Where Steam Linux Runtime's pressure-vessel keeps its client inside the
 # container, and beside the runtime outside it.
 LAUNCH_CLIENT = "steam-runtime-launch-client"
@@ -644,10 +657,12 @@ def launch_client(inherited):
 # What the menu needs from the launch when it runs outside the container.
 MENU_ENV = ("STEAM_COMPAT_DATA_PATH", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
             "XDG_RUNTIME_DIR", "SteamAppId", "SteamGameId", "PROTON_OPTISCALER_MENU",
-            "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED", "BC250_MENU_DEFAULT")
+            "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED", "BC250_MENU_DEFAULT",
+            "BC250_MENU_GAME", "BC250_MENU_INI", "BC250_MENU_RECORD", "BC250_MENU_LEGACY",
+            "BC250_MENU_ROLLBACK", "BC250_MENU_PINNED", "BC250_MENU_MANAGED", "BC250_MENU_ADVICE", "BC250_MENU_WIKI_PLAN")
 
 
-def menu_choice(config, inherited):
+def menu_choice(config, inherited, menu_tool=None):
     """Ask the first-launch menu which variant to run and what to change.
 
     Returns (variant, change, switched). variant is a short name, or None when
@@ -656,7 +671,7 @@ def menu_choice(config, inherited):
     gi/GTK4/SDL3, any error, and the game starts on the prefix's current variant.
     """
     import subprocess
-    menu = TOOL / "bc250-fsr4-menu.py"
+    menu = (menu_tool or TOOL) / "bc250-fsr4-menu.py"
     prefix = inherited.get("STEAM_COMPAT_DATA_PATH", "").strip()
     if not prefix or not menu.is_file():
         return None, {}, False
@@ -666,7 +681,8 @@ def menu_choice(config, inherited):
         return None, {}, False
     names = menu_names(config)
     env = dict(inherited)
-    env["BC250_MENU_INSTALLED"] = names.get(installed_variant(config, inherited), "")
+    env["BC250_MENU_INSTALLED"] = (inherited.get('BC250_MENU_INSTALLED', '') if inherited.get('BC250_MENU_GAME')
+                                   else names.get(installed_variant(config, inherited), ""))
     env["BC250_MENU_DEFAULT"] = names.get(config["optiscaler_version"], "")
     # The SLR and GE packages run this inside Steam Linux Runtime 4
     # ("require_tool_appid" 4183110), which has no python-gobject and no GTK4.
@@ -693,12 +709,16 @@ def menu_choice(config, inherited):
 
     decided = ask(["--decide"])
     current = decided.get("current") or None
-    if decided.get("show") != "1":
+    if decided.get("show") != "1" or inherited.get("BC250_FREEFG_SKIP_MENU") == "1":
         return current, {}, False
     choice = ask([])
+    if choice.get('action') in ('rollback', 'update', 'recommend'):
+        return None, {'__freefg_action__': choice['action']}, False
     if not choice.get("preset"):
         return current, {}, False
     change = dict(part.split("=", 1) for part in choice.get("changed", "").split(";") if "=" in part)
+    if choice.get('wiki'):
+        change['__wiki_selection__'] = json.loads(choice['wiki'])
     return choice["preset"], change, choice.get("switched") == "1"
 
 
@@ -743,9 +763,288 @@ def start_fresh_on_switch(config, inherited, switched=False):
     return True
 
 
+def supervised(proton, arguments, env, lock):
+    """Keep the shared-prefix lease through Proton, including launch failures."""
+    child = subprocess.Popen([proton, *arguments], env=env, pass_fds=(lock,))
+    previous = {}
+    def forward(signum, frame):
+        try:
+            child.send_signal(signum)
+        except ProcessLookupError:
+            pass
+    try:
+        for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            previous[signum] = signal.signal(signum, forward)
+        result = child.wait()
+        return result if result >= 0 else 128 - result
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+class _MenuAction(Exception):
+    pass
+
+
+def managed_launch(config, arguments, inherited):
+    try:
+        return _managed_launch(config, arguments, inherited)
+    except _MenuAction:
+        # The action is saved under the lease. Reopen with the selected bundle
+        # after releasing it; the second pass does not reopen the menu.
+        return _managed_launch(config, arguments, {**inherited, 'BC250_FREEFG_SKIP_MENU': '1'})
+
+
+def _managed_launch(config, arguments, inherited):
+    from bc250_freefg_state import (Session, INI, read_json, atomic, merge_ini, read_generation, verify_bundle,
+                                    leave_variant, values, variant_scoped, ini_files)
+    import bc250_freefg_recipes as recipes
+    global TOOL
+    original_tool = TOOL
+    proton = str(original_tool / config['proton'])
+    payload = payload_dir(inherited)
+    if payload is None:
+        raise RuntimeError('Managed payloads require WINEPREFIX or STEAM_COMPAT_DATA_PATH')
+    prefix = payload.parents[3]
+    compat = Path(inherited.get('STEAM_COMPAT_DATA_PATH') or prefix.parent)
+    identity = recipes.identity(inherited, arguments)
+    action = arguments[0].removeprefix('freefg-') if arguments and arguments[0].startswith('freefg-') else None
+    if action and not inherited.get('BC250_FREEFG_GAME_ID'):
+        raise RuntimeError('Recovery commands require BC250_FREEFG_GAME_ID=steam:ID, gog:ID or epic:NAME')
+    with Session(prefix, compat) as session:
+        if action and action not in ('wiki-plan', 'wiki-apply'):
+            print(json.dumps(session.action(identity['key'], action), indent=2))
+            return 0
+        profile = session.profile(identity['key'])
+        pinned = None
+        if action in ('wiki-plan', 'wiki-apply') and not profile.get('current'):
+            raise RuntimeError('Launch this game once before reviewing wiki settings')
+        if profile.get('pin'):
+            pinned = read_generation(session.root, profile['pin'])
+            TOOL = verify_bundle(session.root, pinned['bundle'])
+            config = read_json(TOOL / 'config.json')
+        if action in ('wiki-plan', 'wiki-apply'):
+            active = pinned or read_generation(session.root, profile['current'])
+            identity = active['game']
+            TOOL = verify_bundle(session.root, active['bundle'])
+            config = read_json(TOOL / 'config.json')
+        try:
+            launch = dict(inherited)
+            # The GUI uses this game's record even when another game last used
+            # the shared prefix. Legacy prefix-wide choices migrate once.
+            launch['BC250_MENU_GAME'] = identity['key']
+            launch['BC250_MENU_LEGACY'] = '1' if not session.state.get('active') else '0'
+            upstream = config['freefg_upstream']
+            count = sum(len(settings) for settings in profile.get('overrides', {}).values())
+            launch['BC250_MENU_RECORD'] = ('FreeFG ' + upstream['runtime']['version'] + ' · recipes ' +
+                                           upstream['recipes']['commit'][:8] + ' · ' + str(count) + ' saved overrides')
+            catalog = recipes.load(TOOL / 'freefg-recipes.json', upstream['recipes']['sha256'])
+            planner = recipes.load_planner(TOOL, upstream.get('planner'))
+
+            def baseline(version):
+                # What a variant writes before any recipe; seed_once is not re-run
+                # against another game's live INI in a shared prefix.
+                values = {**config['preset'], **config.get('optiscaler_variant_preset', {}).get(version, {}),
+                          **config.get('optiscaler_variant_seed', {}).get(version, {})}
+                return {k: v for k, v in values.items() if v is not None}
+
+            def recommend(version):
+                provider = config.get('freefg_recipe_providers', {}).get(version)
+                common = dict(optiscaler_commit=upstream['runtime'].get('optiscaler_commit'), planner=planner)
+                first = recipes.recommendation(catalog, identity, provider,
+                    config['optiscaler_ini_keys'][version], baseline(version), **common)
+                own = dict(profile.get('overrides', {}).get(INI, {}))
+                last = session.last_variant(profile)
+                if last and variant_identity(read_json(session.root / 'bundles' / last['bundle'] / 'config.json'),
+                                             last['version']) != variant_identity(config, version):
+                    own = {k: v for k, v in own.items() if not variant_scoped(k)}
+                if not profile.get('current') and not session.state.get('active'):
+                    legacy = prefix_ini(inherited)
+                    if legacy and legacy.is_file():
+                        own = {**values(legacy.read_text()), **own}
+                effective = {k.lower(): v for k, v in {**baseline(version), **first['settings']}.items()}
+                effective.update(own)
+                effective.update({k.lower(): v for k, v in extra_preset(inherited.get('BC250_OPTISCALER_EXTRA', '')).items()})
+                context = dict(fg_input=effective.get('framegen.fginput', 'upscaler'),
+                               fg_output=effective.get('framegen.fgoutput', 'xefg'),
+                               proxy=proxy_name(inherited.get('PROTON_OPTISCALER_NAME'), config['proxy']))
+                if context['fg_input'] == 'auto':context['fg_input'] = None
+                if context['fg_output'] == 'auto':context['fg_output'] = 'xefg'
+                # Only an explicit renderer flag makes the API known here. The
+                # variant's normal DirectX12 path is the default otherwise.
+                flags = {str(arg).lower() for arg in arguments}
+                context['api'] = ('dx11' if flags & {'-dx11', '-d3d11'} else
+                                  'vulkan' if '-vulkan' in flags else 'dx12')
+                if action in ('wiki-plan', 'wiki-apply'):
+                    known = active.get('recipe', {}).get('wiki_plan', {}).get('context', {})
+                    for key in ('api', 'proxy'):
+                        if key in known:context[key] = known[key]
+                required = {str(item.get('when', {}).get('required_file')) for row in catalog.get('wiki', [])
+                            for item in row.get('ini', []) if item.get('when', {}).get('required_file')}
+                game_path = Path(identity.get('path') or '.')
+                if game_path.is_file():
+                    context['files'] = [name for name in required if (game_path.parent / name).is_file()]
+                return recipes.recommendation(catalog, identity, provider, config['optiscaler_ini_keys'][version],
+                    baseline(version), current={**own, **extra_preset(inherited.get('BC250_OPTISCALER_EXTRA', ''))},
+                    display_current=effective, context=context, **common)
+
+            if action in ('wiki-plan', 'wiki-apply'):
+                version = active['version']
+                if version not in config.get('freefg', {}):
+                    raise RuntimeError('Wiki INI settings require a FreeFG variant')
+                preview = recommend(version)['wiki_plan']
+                if action == 'wiki-plan':
+                    print(json.dumps(preview, indent=2))
+                else:
+                    import argparse
+                    parser = argparse.ArgumentParser(prog='freefg-wiki-apply')
+                    parser.add_argument('--wiki-setting', action='append', required=True)
+                    parser.add_argument('--wiki-confirm', action='append', default=[])
+                    parser.add_argument('--wiki-plan-digest', required=True)
+                    selected = parser.parse_args(arguments[1:])
+                    choice = recipes.select_wiki(preview, selected.wiki_setting, selected.wiki_confirm,
+                                                 selected.wiki_plan_digest, planner)
+                    print(json.dumps(session.select_wiki(identity['key'], choice), indent=2))
+                return 0
+
+            wiki_previews = {menu_names(config).get(v, v): recommend(v)['wiki_plan'] for v in config.get('freefg', {})}
+            launch['BC250_MENU_WIKI_PLAN'] = json.dumps(wiki_previews, separators=(',', ':'))
+
+            # The menu states what the catalogue does to this game before the player
+            # picks: the package default's recommendation, or any FreeFG variant's.
+            preview_version = config['optiscaler_version']
+            advised = next((v for v in (preview_version, *config.get('freefg', {})) if v in config.get('freefg', {})), None)
+            preview_recipe = recommend(advised) if advised else None
+            if preview_recipe:
+                launch['BC250_MENU_ADVICE'] = '\n'.join(preview_recipe['summary'])
+            own_ini = session.root / 'menu-profile.ini'
+            text = profile.get('last', {}).get(INI)
+            if text is None and not session.state.get('active'):
+                existing = prefix_ini(inherited)
+                text = existing.read_text() if existing and existing.is_file() else ''
+            if not text and not pinned:
+                preview = baseline(preview_version)
+                if preview_recipe and advised == preview_version:
+                    preview.update(preview_recipe['settings'])
+                text = merge_ini('', preview, {})
+            if pinned:
+                text = merge_ini(pinned['templates'].get(INI, ''), pinned['desired'].get(INI, {}),
+                                 profile.get('overrides', {}).get(INI, {}), text or '')
+            atomic(own_ini, (text or '').encode())
+            launch['BC250_MENU_INI'] = str(own_ini)
+            if profile.get('current'):
+                current = read_generation(session.root, profile['current'])
+                old_config = read_json(session.root / 'bundles' / current['bundle'] / 'config.json')
+                launch['BC250_MENU_INSTALLED'] = menu_names(old_config).get(current['version'], '')
+            elif not session.state.get('active'):
+                launch['BC250_MENU_INSTALLED'] = menu_names(config).get(installed_variant(config, inherited), '')
+            else:
+                launch['BC250_MENU_INSTALLED'] = ''
+            if pinned:
+                launch['BC250_MENU_INSTALLED'] = menu_names(config).get(pinned['version'], '')
+            launch['BC250_MENU_MANAGED'] = '1' if profile.get('current') else '0'
+            history = profile.get('history', [])
+            launch['BC250_MENU_ROLLBACK'] = '1' if profile.get('current') in history and history.index(profile['current']) > 0 else '0'
+            launch['BC250_MENU_PINNED'] = '1' if pinned else '0'
+            if pinned:
+                requested = optiscaler_version(config, launch.get('PROTON_USE_OPTISCALER', pinned['version']))
+                if inherited.get('PROTON_FSR4_UPGRADE') == '0' and not inherited.get('PROTON_USE_OPTISCALER'):
+                    requested = '0'
+                if requested not in ('0', pinned['version']):
+                    raise RuntimeError('This game is pinned by rollback; run freefg-update before selecting another payload')
+            menu_observed = ini_files(session.targets[0])
+            variant, change, _ = menu_choice(config, launch, menu_tool=original_tool)
+            wiki_choice = change.pop('__wiki_selection__', None)
+            action = change.pop('__freefg_action__', None)
+            if action:
+                session.action(identity['key'], action)
+                raise _MenuAction()
+            if pinned:
+                if variant and variant != 'off' and optiscaler_version(config, variant) != pinned['version']:
+                    raise RuntimeError('Resume package updates before selecting another payload')
+                launch['PROTON_USE_OPTISCALER'] = requested
+                if inherited.get('PROTON_FSR4_UPGRADE') != '0':
+                    launch['PROTON_FSR4_UPGRADE'] = pinned['provider']
+            if variant == 'off':
+                launch['PROTON_FSR4_UPGRADE'] = '0'
+                launch['PROTON_USE_OPTISCALER'] = '0'
+            elif variant:
+                launch['PROTON_USE_OPTISCALER'] = variant
+            env = environment(config, launch, game=True)
+            version, provider = env['PROTON_USE_OPTISCALER'], env['PROTON_FSR4_UPGRADE']
+            if version == '0':
+                if provider != '0':
+                    plan = session.plan(TOOL, config, identity, version, provider, {}, {},
+                                        {'settings': {}, 'arguments': [], 'notes': [], 'applicable': False},
+                                        retained=pinned['bundle'] if pinned else None)
+                    env['BC250_FREEFG_PLAN'] = str(plan)
+                    env['BC250_FREEFG_MODULE'] = str(original_tool / 'bc250_freefg_state.py')
+                return supervised(proton, arguments, env, session.fd)
+            # The transaction merges this baseline against this game's saved edits.
+            desired = baseline(version)
+            recommendation = {'settings': {}, 'arguments': [], 'notes': [], 'applicable': False}
+            if version in config.get('freefg', {}):
+                recommendation = recommend(version)
+                recommendation['source'] = upstream['recipes']['url']
+                desired.update(recommendation['settings'])
+            if pinned:
+                desired = pinned['desired'][INI]
+                recommendation = pinned['recipe']
+            # Another variant leaves the last one's wiring behind; a package update of
+            # the same variant does not. Before this launch's menu choices, which
+            # belong to the variant picked now.
+            last = session.last_variant(profile)
+            if last and variant_identity(read_json(session.root / 'bundles' / last['bundle'] / 'config.json'),
+                                         last['version']) != variant_identity(config, version):
+                leave_variant(profile)
+            if wiki_choice:
+                if ini_files(session.targets[0]) != menu_observed:
+                    raise ValueError('Wiki settings preview changed while the menu was open; review it again')
+                name = menu_names(config).get(version, version)
+                if wiki_choice.get('variant') != name or name not in wiki_previews:
+                    raise ValueError('Wiki selection belongs to another variant; review it again')
+                choice = recipes.select_wiki(wiki_previews[name], wiki_choice.get('selected', []),
+                    wiki_choice.get('confirmed', []), wiki_choice.get('digest'), planner)
+                # Verify again after the menu: dependencies or player settings may
+                # have changed while it was open. Current launch choices are applied
+                # below and never erase unselected settings.
+                recipes.select_wiki(recommend(version)['wiki_plan'], wiki_choice.get('selected', []),
+                    wiki_choice.get('confirmed', []), wiki_choice.get('digest'), planner)
+                profile.setdefault('overrides', {}).setdefault(INI, {}).update(
+                    {k.lower(): v for k, v in choice['settings'].items()})
+                profile['wiki_settings'] = choice
+            if change:
+                profile.setdefault('overrides', {}).setdefault(INI, {}).update({k.lower(): v for k, v in change.items()})
+            explicit = extra_preset(inherited.get('BC250_OPTISCALER_EXTRA', ''))
+            if inherited.get('BC250_FSR4_DEBUG') == '1':
+                explicit.update({'Log.LogToFile': 'true', 'FSR.Fsr4EnableWatermark': 'true'})
+            supported = {key.lower() for key in config['optiscaler_ini_keys'][version]}
+            unknown = [key for key in {*desired, *explicit} if key.lower() not in supported]
+            if unknown:
+                raise RuntimeError('Unsupported OptiScaler settings: ' + ', '.join(sorted(unknown)))
+            plan = session.plan(TOOL, config, identity, version, provider, desired, explicit, recommendation,
+                                retained=pinned['bundle'] if pinned else None,
+                                installed=installed_variant(config, inherited))
+            env['BC250_FREEFG_PLAN'] = str(plan)
+            env['BC250_FREEFG_MODULE'] = str(original_tool / 'bc250_freefg_state.py')
+            env['PROTON_OPTISCALER_CONFIG'] = ''
+            if profile['adopted']:
+                arguments = recipes.launch_arguments(arguments, recommendation, identity)
+            for note in recommendation.get('notes', []):
+                sys.stderr.write('bc250-freefg: ' + note + '\n')
+            if pinned:
+                sys.stderr.write('bc250-freefg: rollback generation pinned; freefg-update returns to packaged updates\n')
+            return supervised(proton, arguments, env, session.fd)
+        finally:
+            TOOL = original_tool
+
+
 def main():
     config = json.loads((TOOL / "bc250-fsr4-config.json").read_text())
     game = game_launch(sys.argv[1:], os.environ)
+    managed_action = sys.argv[1:2] and sys.argv[1].startswith('freefg-')
+    if config.get('freefg_upstream') and (game or managed_action):
+        return managed_launch(config, sys.argv[1:], os.environ)
     variant, change, menu_switched = menu_choice(config, os.environ) if game else (None, {}, False)
     if variant == "off":
         # The menu's "No upscaling" is the documented opt-out: no FSR4 provider,
@@ -769,5 +1068,5 @@ def main():
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, ValueError, KeyError, RuntimeError) as error:
+    except (OSError, ValueError, KeyError, RuntimeError, configparser.Error) as error:
         raise SystemExit("BC250 FSR4: " + str(error))

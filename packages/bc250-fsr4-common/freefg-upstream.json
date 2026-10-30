@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "runtime": {
+    "version": "1.1.5",
+    "url": "https://github.com/daniel-h-0/freefg/releases/download/v1.1.5/freefg-1.1.5.zip",
+    "sha256": "367c83b81b4df66cf1c2e345ee9cd3f32f8d9998b21a0acb15f148a1f6f2da3b",
+    "source_url": "https://github.com/daniel-h-0/freefg/releases/download/v1.1.5/freefg-1.1.5-source.zip",
+    "source_sha256": "b87a04451e787f0b60bca6daa2b44982156089a6fabe801258ea20a82ee3ff43",
+    "opti_ini_url": "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/d191284afa25968f8ae709e70ccd7a8701003ec8/OptiScaler.ini",
+    "opti_ini_sha256": "54493b7795f92e2b2ef063815f62bb29e983716a27b524d19b27d5ddc473caac",
+    "optiscaler_commit": "03db4f8692878e65748769ebe583c053cae96360"
+  },
+  "recipes": {
+    "commit": "a7ebfe3d9ca4e33b8e4ab4c7f01baf5d5de4db6d",
+    "url": "https://raw.githubusercontent.com/daniel-h-0/freefg/a7ebfe3d9ca4e33b8e4ab4c7f01baf5d5de4db6d/packaging/recipes/recipes.json",
+    "sha256": "a5a18ffecd6ea43f0408f5927bba47d9aceab291db9eb9c0ad7e47398a2fa7ae",
+    "schema": 1,
+    "file": "freefg-recipes.json",
+    "license": "MIT",
+    "notice": "MIT License\n\nCopyright (c) 2026 FreeFG contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.\n"
+  },
+  "adapter": 1,
+  "planner": {
+    "format": 1,
+    "commit": "a7ebfe3d9ca4e33b8e4ab4c7f01baf5d5de4db6d",
+    "url": "https://raw.githubusercontent.com/daniel-h-0/freefg/a7ebfe3d9ca4e33b8e4ab4c7f01baf5d5de4db6d/packaging/compat.py",
+    "sha256": "93ed14750a59afde5ec4955ce178e4e781405c57e36014562355529f8dcdd1fa",
+    "license": "MIT",
+    "file": "freefg_compat.py",
+    "notice": "MIT License\n\nCopyright (c) 2026 FreeFG contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.\n"
+  }
+}
