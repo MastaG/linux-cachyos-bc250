@@ -171,6 +171,13 @@ can be large; this initial implementation retains generations until explicitly
 removed outside the tool and has no automatic pruning. Do not remove the state
 while a game is running or while a journal exists.
 
+Every managed launch stages, verifies and commits the whole payload, even when
+nothing changed. With a 96 MiB test payload on ext4, an unchanged launch read
+about ten times and wrote about three times the payload's size, in 1.5 to 2.6
+seconds; on btrfs and XFS the copies are reflinks, so mostly the reads remain.
+Staging only a changed payload, and journalling only the INIs otherwise, would
+remove most of that cost.
+
 A prefix-wide lease lasts until the Proton child exits. A second launch using
 this integration in the same prefix refuses to change files while the first
 runs; separate prefixes are independent. The supervisor forwards termination
