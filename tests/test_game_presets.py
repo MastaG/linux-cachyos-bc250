@@ -112,6 +112,16 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(builder.norm("God of War Ragnarök"), "god of war ragnarok")
         self.assertEqual(wrapper.norm_title("God of War Ragnarök"), "god of war ragnarok")
 
+    def test_wiki_rows_bring_their_store_ids(self):
+        games = {}
+        builder.from_freefg(games, {"wiki": [{"title": "God of War Ragnarok", "match": {
+            "title": ["god of war ragnarok"], "steam": ["2322010"], "exe": ["GoWR.exe"]},
+            "ini": [{"key": "Spoofing.Dxgi", "value": "false"}]}]}, {"dxgi": "Spoofing.Dxgi"}, [])
+        game = builder.finish(games)[0]
+        self.assertEqual(game["match"]["steam"], ["2322010"])
+        self.assertEqual(game["match"]["exe"], ["gowr.exe"])
+        self.assertIs(wrapper.find_game({"games": [game]}, [], {"SteamAppId": "2322010"}), game)
+
     def test_bc250_settings_win_over_the_wiki(self):
         games = {}
         entry = builder.entry(games, "Test Game")

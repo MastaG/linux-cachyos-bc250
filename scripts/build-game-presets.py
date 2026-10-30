@@ -210,14 +210,19 @@ def add_arg(game, arg, source, when=None):
         game["launch_args"].append(item)
 
 
+def add_match(game, row):
+    """A row's store ids and executables; titles are matched by entry()."""
+    for kind in ("steam", "exe", "gog", "epic"):
+        values = [str(v).lower() if kind == "exe" else str(v) for v in row.get("match", {}).get(kind, [])]
+        if values:
+            game["match"].setdefault(kind, [])
+            game["match"][kind] += [v for v in values if v not in game["match"][kind]]
+
+
 def from_freefg(games, recipes, keys, dropped):
     for row in recipes.get("verified", []) + recipes.get("community", []):
         game = entry(games, row["title"])
-        for kind in ("steam", "exe", "gog", "epic"):
-            values = [str(v).lower() if kind == "exe" else str(v) for v in row.get("match", {}).get(kind, [])]
-            if values:
-                game["match"].setdefault(kind, [])
-                game["match"][kind] += [v for v in values if v not in game["match"][kind]]
+        add_match(game, row)
         game["bc250"] = {k: row[k] for k in ("status", "route", "evidence", "observed", "note", "manual_steps",
                                               "pending_verification") if row.get(k) not in (None, [], "")}
         for key, value in row.get("ini", {}).items():
@@ -234,6 +239,8 @@ def from_freefg(games, recipes, keys, dropped):
             game["notes"].append(dict(source="bc250", game_setting=setting))
     for wiki in recipes.get("wiki", []):
         game = entry(games, wiki["title"])
+        # Since FreeFG 1.2.0 the wiki rows carry Steam ids it checked against the store.
+        add_match(game, wiki)
         for t in wiki.get("match", {}).get("title", []):
             if t not in game["match"]["title"]:
                 game["match"]["title"].append(t)
