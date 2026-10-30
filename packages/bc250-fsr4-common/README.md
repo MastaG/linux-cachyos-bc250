@@ -250,8 +250,8 @@ picks one:
   against the hash in FreeFG's `dependencies.json`: the wrapper checks it too,
   at load, and leaves XeFG unavailable on a mismatch, which a player would only
   see as no frame generation. `BC250-XeFG/settings.ini` is left out, because
-  the wrapper reads it beside the game's `.exe`. The variant preset is what
-  FreeFG's installer writes for its OptiScaler route at 2× (`FrameGen.Enabled =
+  the wrapper reads it beside the game's `.exe`. The variant uses FreeFG's
+  OptiScaler route at 2×, with frame generation initially off (`FrameGen.Enabled =
   false` initially, `FGInput = upscaler`, `FGOutput = xefg`, `XeFG.InterpolationCount = 1`,
   `XeFG.ForceBorderless = true`, `fakenvapi.ForceReflex = 2`; the menu enables FG
   when selected). For the GTA V Enhanced Social Club crash, see the
