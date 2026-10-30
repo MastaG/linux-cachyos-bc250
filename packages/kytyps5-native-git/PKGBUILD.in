@@ -16,11 +16,10 @@
 # - The system Qt instead of a bundled copy; no kyty_updater (the package
 #   manager updates it), no install-helper.sh (kyty-lodhw.service is shipped
 #   here, not enabled: the README says how).
-# - Two changes on top of upstream, until upstream carries them: the Steam
-#   runner starts Kyty with --hdr when gamescope outputs HDR
-#   (kytyps5-run-gamescope-hdr.patch), and the wrappers set a connected
-#   DualSense's speaker and haptics levels before a start (WirePlumber gives a
-#   new controller 40% and its mixer sits at 80%, far below a PS5).
+# - The wrappers set a connected DualSense's speaker and haptics levels before
+#   a start (WirePlumber gives a new controller 40% and its mixer sits at 80%,
+#   far below a PS5). Upstream's runner starts Kyty in HDR when gamescope
+#   outputs HDR since its release faf53a5 (our PR #5).
 # - Nothing on the system is changed on install, not even a new group: the
 #   kernel options, the helper service and the render group membership are
 #   the owner's choice, documented in the README ("KytyPS5-Native").
@@ -47,10 +46,8 @@ options=('!lto' '!debug')
 source=("$_name::git+https://github.com/superkeka/KytyPS5-Native.git#commit=@KYTY_COMMIT@"
         'kytyps5-native-wrapper.sh'
         'kytyps5-native.desktop'
-        'kyty-lodhw.service'
-        'kytyps5-run-gamescope-hdr.patch')
+        'kyty-lodhw.service')
 sha256sums=('SKIP'
-            'SKIP'
             'SKIP'
             'SKIP'
             'SKIP')
@@ -66,11 +63,6 @@ pkgver() {
 prepare() {
     cd "$_name"
     git submodule update --init --recursive --depth 1
-    # Until upstream has it (the same commit, offered there): HDR from Steam
-    # shortcuts when gamescope outputs HDR. git apply refuses a changed
-    # context, so an upstream rewrite of those lines stops the build here
-    # instead of shipping a runner without it.
-    git apply "$srcdir/kytyps5-run-gamescope-hdr.patch"
 }
 
 build() {
