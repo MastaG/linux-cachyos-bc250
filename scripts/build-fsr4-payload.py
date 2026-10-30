@@ -690,6 +690,8 @@ def main() -> int:
                          "with FreeFG's BC-250 shaders and VRR pacing layer), "
                          "and 'freefg-hlxfsr4' with HLX FSR 4 when --helixsr-ngx "
                          "is given")
+    ap.add_argument("--freefg-lock", type=Path, help="pinned upstream runtime and recipe identity")
+    ap.add_argument("--freefg-recipes", type=Path, help="unchanged upstream recipe snapshot")
     ap.add_argument("--freefg-ini", type=Path,
                     help="OptiScaler.ini of FreeFG's OptiScaler build (its fork's tree at "
                          "the tagged commit); the nightly's is older than that build")
@@ -724,6 +726,21 @@ def main() -> int:
     # FreeFG's Vulkan layer, by pinned version: the launcher points the loader
     # at it in the prefix when that version is selected.
     freefg_layers = {}
+    recipe_providers = {}
+    upstream = None
+    if args.freefg_lock or args.freefg_recipes:
+        if not (args.freefg_lock and args.freefg_recipes and args.freefg and args.freefg_ini):
+            raise ValueError('FreeFG integration needs runtime, INI, lock and recipes together')
+        upstream = json.loads(args.freefg_lock.read_text())
+        if upstream.get('schema') != 1 or upstream.get('adapter') != 1:
+            raise ValueError('Unsupported FreeFG upstream pin schema')
+        for path, expected in ((Path(args.freefg[0]), upstream['runtime']['sha256']),
+                               (args.freefg_ini, upstream['runtime']['opti_ini_sha256']),
+                               (args.freefg_recipes, upstream['recipes']['sha256'])):
+            if digest(path) != expected:
+                raise ValueError('FreeFG input differs from its dependency pin: ' + str(path))
+        if json.loads(args.freefg_recipes.read_text()).get('schema') != 1:
+            raise ValueError('Unsupported recipe schema')
 
     # SIGNED_NAME is what the AMD-signed bridge is called once something else is
     # the default. It has to be reachable by name either way: a player comparing
@@ -874,6 +891,7 @@ def main() -> int:
                            else args.optiscaler_version + "-" + name)
                 aliases[name] = version
                 variant_presets[version] = {**FREEFG_PRESET, **upscaler_preset}
+                recipe_providers[version] = 'hlx-fsr4' if name == FREEFG_HLXFSR4_NAME else 'fsr4'
                 freefg_layers[version] = {
                     "layer": FREEFG_LAYER,
                     "layer_dir": f"{FREEFG_FOLDER}/layer",
@@ -895,7 +913,7 @@ def main() -> int:
                         shutil.copy2(path, merged / (notice_prefix + "-" + path.name))
                 provenance = (
                     f"{args.proxy} in this directory is FreeFG's build of OptiScaler (GPL-3.0; "
-                    "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-03db4f8 "
+                    "source: https://github.com/daniel-h-0/OptiScaler; exact source in the FreeFG source companion "
                     f"and {Path(args.freefg[0]).name.removesuffix('.zip')}-source.zip "
                     "beside FreeFG's release), NOT the stock "
                     "OptiScaler nightly.\n\n"
@@ -991,6 +1009,7 @@ def main() -> int:
                 "optiscaler_ini_keys": ini_keys_map,
                 # Paths below the payload folder (system32/umu in the prefix).
                 "freefg": freefg_layers,
+                **({"freefg_upstream": upstream, "freefg_recipe_providers": recipe_providers} if upstream else {}),
             },
             indent=2,
         )

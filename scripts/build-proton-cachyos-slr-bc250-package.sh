@@ -60,6 +60,7 @@ printf '    %s (%s)\n' "$FAKENVAPI_TAG" "$FAKENVAPI_ASSET"
 
 # The proton-cachyos-rooted patch: this tree is CachyOS's, not GE's.
 stage_fsr4_payload_sources "$ROOT_DIR" "$BUILD_DIR" proton-cachyos
+eval "$(freefg_upstream_vars "$ROOT_DIR")"
 cp -- "$PKG_DIR/ntsync.conf" "$BUILD_DIR/"
 FSR4_PAYLOAD_SHA256[SHA_NTSYNC]="$(sha256sum < "$PKG_DIR/ntsync.conf" | awk '{print $1}')"
 
@@ -82,6 +83,11 @@ render() {
         [OPTISCALER_VERSION]="$OPTISCALER_VERSION"
         [PAYLOAD_BASE]="$BC250_FSR4_PAYLOAD_BASE"
         [PKGREL]="$BC250_PKGREL"
+        [FREEFG_VERSION]="$FREEFG_VERSION"
+        [FREEFG_URL]="$FREEFG_URL"
+        [FREEFG_SHA256]="$FREEFG_SHA256"
+        [FREEFG_INI_URL]="$FREEFG_INI_URL"
+        [FREEFG_INI_SHA256]="$FREEFG_INI_SHA256"
     )
     for key in "${!FSR4_PAYLOAD_SHA256[@]}"; do
         values[$key]="${FSR4_PAYLOAD_SHA256[$key]}"
