@@ -33,6 +33,7 @@ PRESETS = [
     ("freefg", "FreeFG + FSR4 RC12", "FreeFG 1.1.6 frame generation, FSR4 RC12 upscaler"),
     ("helixsr", "HelixSR Scaler", "HelixSR Scaler 2.1.0, HelixSR 3.2.0: HLX DLSS, or HLX FSR 4 from its menu"),
     ("fsr412f", "FSR4 RC12", "FSR4 RC12 upscaler only, no FreeFG"),
+    ("hlxfsr4", "HLX FSR 4", "HelixSR 3.2.0's HLX FSR 4 upscaler only, no FreeFG"),
     (OFF := "off", "No upscaling", "The game as it ships: no OptiScaler, no FSR4"),
 ]
 # A choice saved by an older package that names a variant it no longer has
@@ -57,18 +58,20 @@ HINT = "Launch your game with PROTON_OPTISCALER_MENU=1 %command% to show this me
 #   freefg*:               [FrameGen] Enabled (+ FGOutput=xefg, that is the wiring)
 #   helixsr (the Scaler):  [FrameGen] Enabled + FG_WIRING -- HelixSR 3.x has no
 #                          frame generation of its own, OptiScaler's is all there is
-#   fsr412f:               [FrameGen] Enabled + FG_WIRING, the stock nightly's keys
+#   fsr412f, hlxfsr4:      [FrameGen] Enabled + FG_WIRING, the stock nightly's keys
 FG_ON = {
     "freefg-hlxfsr4": {"FrameGen.Enabled": "true"},
     "freefg": {"FrameGen.Enabled": "true"},
     "helixsr": {"FrameGen.Enabled": "true"},
     "fsr412f": {"FrameGen.Enabled": "true"},
+    "hlxfsr4": {"FrameGen.Enabled": "true"},
 }
 FG_OFF = {
     "freefg-hlxfsr4": {"FrameGen.Enabled": "false"},
     "freefg": {"FrameGen.Enabled": "false"},
     "helixsr": {"FrameGen.Enabled": "false"},
     "fsr412f": {"FrameGen.Enabled": "false"},
+    "hlxfsr4": {"FrameGen.Enabled": "false"},
 }
 # Enabled alone does nothing in these builds: FGInput and FGOutput both default
 # (auto) to nofg. FreeFG gets its wiring from its variant preset; these get it
@@ -79,6 +82,7 @@ FG_OFF = {
 FG_WIRING = {
     "helixsr": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
     "fsr412f": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
+    "hlxfsr4": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
 }
 UNWIRED = ("auto", "nofg")
 # What a variant does with frame generation on a fresh prefix (its seed): every
@@ -86,7 +90,7 @@ UNWIRED = ("auto", "nofg")
 # (owner's decision, 2026-10-30), so the box shows the prefix's own answer from
 # then on, the overlay's FG mode included.
 FRESH_ON = {"freefg-hlxfsr4": False, "freefg": False,
-            "helixsr": False, "fsr412f": False, OFF: False}
+            "helixsr": False, "fsr412f": False, "hlxfsr4": False, OFF: False}
 # Keys a build's own OptiScaler.ini does not define: protonfixes refuses the
 # launch, so the menu must not offer them (the fork ini has no [HelixSR] keys).
 DEFINABLE = {
@@ -94,6 +98,7 @@ DEFINABLE = {
     "freefg": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
     "helixsr": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
     "fsr412f": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
+    "hlxfsr4": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
 }
 
 

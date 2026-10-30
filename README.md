@@ -738,8 +738,8 @@ BC250_GAME_PRESET=everything %command%    # apply all of this game's known setti
 ### The upscaler menu
 
 Every game launch first shows a small menu: the upscaler (FreeFG + HLX FSR 4,
-the default; FreeFG + FSR4 RC12; HelixSR Scaler; FSR4 RC12 alone; No
-upscaling), **GPU spoofing**, **Enable frame generation**, and **Save selection
+the default; FreeFG + FSR4 RC12; HelixSR Scaler; FSR4 RC12 alone; HLX FSR 4
+alone; No upscaling), **GPU spoofing**, **Enable frame generation**, and **Save selection
 for next time**.
 It works with a controller (Steam Controller, PS5 pad; D-pad or stick to move, A
 to select, Start to start the game), with mouse and keyboard, in Gaming Mode and
@@ -944,6 +944,7 @@ pinned builds. Each package ships all of them and swaps only that file;
 PROTON_USE_OPTISCALER=optiscaler %command%  # stock OptiScaler nightly with the fsr411f bridge
 PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork RC11, 4.1.1r11 — the default until HelixSR
 PROTON_USE_OPTISCALER=fsr412f %command%   # the same fork's RC12, 4.1.1r12 — newest bridge, opt-in
+PROTON_USE_OPTISCALER=hlxfsr4 %command%   # HelixSR 3.2.0's HLX FSR 4 alone, no FreeFG (AMD's FSR as its fallback)
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
 PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR Scaler 2.1.0 with HelixSR 3.2.0 (HLX DLSS, HLX FSR 4)

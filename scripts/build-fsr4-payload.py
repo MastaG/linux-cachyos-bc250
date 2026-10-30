@@ -230,6 +230,9 @@ FREEFG_NAME = "freefg"
 # FreeFG with HLX FSR 4 (HelixSR 3.0) as its FidelityFX upscaler, in the place
 # the RC12 bridge has in "freefg".
 FREEFG_HLXFSR4_NAME = "freefg-hlxfsr4"
+# HLX FSR 4 alone on the stock OptiScaler nightly, as FSR4 RC12 is the RC12 bridge
+# alone: no FreeFG (requested by a user, 2026-10-30).
+HLXFSR4_NAME = "hlxfsr4"
 # Variants an older package had, and the variant each name now selects, so a
 # launch option or a saved menu choice that names one keeps working. Both were
 # HelixSR 2.0 (HLX DLSS in an FSR 3.1 DLL), dropped once HLX FSR 4 had proved as
@@ -768,7 +771,8 @@ def main() -> int:
         name for name, _, _ in args.ffx_sdk_alt
     } | ({HELIXSR_NAME} if args.helixsr_scaler else set()) \
       | ({FREEFG_NAME} if args.freefg else set()) \
-      | ({FREEFG_HLXFSR4_NAME} if args.freefg and args.helixsr_ngx else set()):
+      | ({FREEFG_HLXFSR4_NAME} if args.freefg and args.helixsr_ngx else set()) \
+      | ({HLXFSR4_NAME} if args.helixsr_ngx else set()):
         raise SystemExit(
             f"ERROR: --ffx-sdk-default names no variant: {args.ffx_sdk_default!r}")
 
@@ -800,7 +804,7 @@ def main() -> int:
 
         for name, path, origin in args.ffx_sdk_alt:
             if name in ("", "default", "1", "0", SIGNED_NAME, HELIXSR_NAME,
-                        FREEFG_NAME, FREEFG_HLXFSR4_NAME, "optiscaler",
+                        FREEFG_NAME, FREEFG_HLXFSR4_NAME, HLXFSR4_NAME, "optiscaler",
                         *RETIRED_VARIANTS) or name in aliases:
                 raise SystemExit(f"ERROR: unusable variant name: {name!r}")
             source = Path(path)
@@ -870,6 +874,34 @@ def main() -> int:
                 f"{SCALER_FOLDER}/helixsr.ini": ini,
             }
             variants.append((hlx, version, provenance, merged, extra))
+
+        if helixsr_ngx:
+            # The stock nightly with HLX FSR 4 as its FidelityFX upscaler, and
+            # AMD's FidelityFX DLL from the same HelixSR download beside it as its
+            # fallback when the Scaler brings one (as in freefg-hlxfsr4).
+            _, _, hlx, helix_notices = helixsr_ngx
+            amd = "OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"
+            fallback = ({amd: scaler_files[amd]} if args.helixsr_scaler and amd in scaler_files
+                        else None)
+            is_default = args.ffx_sdk_default == HLXFSR4_NAME
+            version = (args.optiscaler_version if is_default
+                       else args.optiscaler_version + "-" + HLXFSR4_NAME)
+            aliases[HLXFSR4_NAME] = version
+            merged = staging / "hlxfsr4-notices"
+            merged.mkdir()
+            for path in sorted(helix_notices.iterdir()):
+                shutil.copy2(path, merged / ("HelixSR-" + path.name))
+            provenance = (
+                "amd_fidelityfx_upscaler_dx12.dll in this directory is HLX FSR 4 from "
+                f"HelixSR (origin: {args.helixsr_ngx[1]}, SHA256 {digest(hlx)}): AMD's FSR 4 "
+                "network on HelixSR's own pipeline, with shaders built from AMD's FSR SDK "
+                "(MIT, see HelixSR's THIRD_PARTY_NOTICES.md), on the stock OptiScaler nightly"
+                + ("; OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll is AMD's FidelityFX DLL "
+                   "from HelixSR's download, its fallback for what HLX FSR 4 does not cover"
+                   if fallback else "") + ".\n"
+                + ("This package ships it by default.\n" if is_default else
+                   f"Selected explicitly by PROTON_USE_OPTISCALER={HLXFSR4_NAME}.\n"))
+            variants.append((hlx, version, provenance, merged, fallback))
 
         if args.freefg:
             freefg, freefg_notices = freefg_from(

@@ -1808,6 +1808,35 @@ class PresetTests(unittest.TestCase):
             for values in layer.values():
                 self.assertNotIn("Spoofing.Dxgi", values)
 
+    def test_hlxfsr4_is_hlx_fsr4_on_the_stock_nightly(self):
+        # A user's request (2026-10-30): HLX FSR 4 alone, as FSR4 RC12 is the RC12
+        # bridge alone, without FreeFG.
+        config, bridges = self.build_payload("freefg-hlxfsr4", scaler=True, freefg={})
+        version = config["optiscaler_aliases"]["hlxfsr4"]
+        self.assertNotEqual(version, config["optiscaler_version"])
+        tree = self.trees[version]
+        self.assertEqual(bridges[version], self.HLX_FSR4)
+        self.assertEqual(tree["OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"], self.SCALER_AMD_DLL)
+        # The stock nightly's OptiScaler, none of FreeFG's files or the Scaler's.
+        self.assertNotIn(tree["winmm.dll"], (self.FREEFG_OPTI, self.SCALER_DLL))
+        self.assertNotIn("OptiScaler/bc250_xefg_original.dll", tree)
+        self.assertNotIn(version, config["freefg"])
+        # Frame generation off and wired for OptiFG into FSR FG, like RC12.
+        self.assertEqual(config["optiscaler_variant_seed"][version],
+                         {"FrameGen.Enabled": "false", "FrameGen.FGInput": "upscaler",
+                          "FrameGen.FGOutput": "fsrfg"})
+        notices = {n.rsplit("/", 1)[1] for n in tree if n.startswith(f"Licenses/{version}/")}
+        self.assertIn("HelixSR-LICENSE", notices)
+        # The menu offers it.
+        self.assertEqual(wrapper.menu_names(config)[version], "hlxfsr4")
+
+    def test_hlxfsr4_can_be_the_default_and_needs_helixsr(self):
+        config, bridges = self.build_payload("hlxfsr4", scaler=True)
+        self.assertEqual(config["optiscaler_aliases"]["hlxfsr4"], config["optiscaler_version"])
+        self.assertEqual(bridges[config["optiscaler_version"]], self.HLX_FSR4)
+        config, _ = self.build_payload("fsr411f")
+        self.assertNotIn("hlxfsr4", config["optiscaler_aliases"])
+
     def test_freefg_without_its_ini_fails_the_build(self):
         with tempfile.TemporaryDirectory() as temporary:
             work = Path(temporary)

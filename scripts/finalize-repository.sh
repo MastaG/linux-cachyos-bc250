@@ -680,6 +680,9 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - FSR4 and OptiScaler are on by default. They remain launch options, so
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- **New: HLX FSR 4 alone** (\`PROTON_USE_OPTISCALER=hlxfsr4\`, and in the menu): HelixSR 3.2.0's HLX
+  FSR 4 on the stock OptiScaler nightly, without FreeFG, as FSR4 RC12 is the RC12 bridge alone. AMD's
+  own FSR sits beside it as the fallback. A user's request.
 - **Changed: frame generation starts off, in every upscaler.** The menu's box is now **Enable frame
   generation**. A new game (or one switched to another upscaler) gets \`FrameGen.Enabled=false\` in its
   \`OptiScaler.ini\`, FreeFG and HelixSR Scaler included, which started with it on before. The generator
