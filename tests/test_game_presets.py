@@ -122,6 +122,32 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(game["match"]["exe"], ["gowr.exe"])
         self.assertIs(wrapper.find_game({"games": [game]}, [], {"SteamAppId": "2322010"}), game)
 
+    def test_our_own_bc250_results_win_over_the_wiki(self):
+        games = {}
+        builder.from_freefg(games, {"wiki": [{"title": "Shadow of the Tomb Raider",
+            "ini": [{"key": "Spoofing.Dxgi", "value": "false", "when": {"gpu": "amd/intel"}}]}]}, {"dxgi": "Spoofing.Dxgi"}, [])
+        builder.from_overrides(games, {"schema": 1, "games": [{"title": "Shadow of the Tomb Raider",
+            "match": {"steam": ["750920"]}, "settings": {"Spoofing.Dxgi": "true"}, "tested": "t"}]},
+            {"dxgi": "Spoofing.Dxgi"})
+        game = builder.finish(games)[0]
+        self.assertEqual([(s["key"], s["value"], s["source"]) for s in game["settings"]],
+                         [("Spoofing.Dxgi", "true", "bc250")])
+        self.assertEqual(game["match"]["steam"], ["750920"])
+        self.assertIn("tested on a BC-250", wrapper.describe_game(game))
+        with self.assertRaises(SystemExit):  # a typo never reaches players
+            builder.from_overrides({}, {"schema": 1, "games": [{"title": "x", "settings": {"Spoofing.Dxgii": "1"}}]},
+                                   {"dxgi": "Spoofing.Dxgi"})
+
+    def test_the_overrides_file_names_only_keys_optiscaler_has(self):
+        data = json.loads((ROOT / "scripts/game-presets-bc250.json").read_text())
+        keys = builder.reference_keys([ROOT / "tests/fixtures/OptiScaler.ini"]) if (ROOT / "tests/fixtures/OptiScaler.ini").exists() else None
+        for row in data["games"]:
+            self.assertTrue(row["match"].get("steam") or row["match"].get("exe"), row["title"])
+            for key in row["settings"]:
+                self.assertRegex(key, r"^[A-Za-z0-9]+\.[A-Za-z0-9]+$")
+                if keys is not None:
+                    self.assertIsNotNone(builder.canonical(keys, key), key)
+
     def test_bc250_settings_win_over_the_wiki(self):
         games = {}
         entry = builder.entry(games, "Test Game")

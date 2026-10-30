@@ -316,6 +316,21 @@ def from_wiki(games, folder, keys, dropped):
                 add_setting(game, full, value, "wiki", when, auto, scraped=True)
 
 
+def from_overrides(games, overrides, keys):
+    """Our own BC-250 results (scripts/game-presets-bc250.json): they count as tested on a BC-250, so they win."""
+    if overrides.get("schema") != 1:
+        raise SystemExit("unexpected BC-250 overrides schema: %r" % overrides.get("schema"))
+    for row in overrides.get("games", []):
+        game = entry(games, row["title"])
+        add_match(game, row)
+        for key, value in row.get("settings", {}).items():
+            full = canonical(keys, key)
+            if not full:
+                raise SystemExit(f"{row['title']}: {key} is in no reference OptiScaler.ini")
+            add_setting(game, full, value, "bc250")
+        game.setdefault("bc250", {}).update({k: row[k] for k in ("tested", "note") if row.get(k)})
+
+
 def finish(games):
     """Verified settings win: a wiki item for a key FreeFG set on a BC-250 goes."""
     out = []
@@ -336,6 +351,7 @@ def main():
     ap.add_argument("--wiki", type=Path, required=True, help="a checkout of OptiScaler.wiki.git")
     ap.add_argument("--wiki-commit", required=True)
     ap.add_argument("--ini", type=Path, action="append", required=True, help="a reference OptiScaler.ini")
+    ap.add_argument("--overrides", type=Path, help="our own BC-250 results, scripts/game-presets-bc250.json")
     ap.add_argument("--generated", required=True, help="build time, ISO 8601")
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
@@ -347,6 +363,8 @@ def main():
     games, dropped = {}, []
     from_freefg(games, recipes, keys, dropped)
     from_wiki(games, args.wiki, keys, dropped)
+    if args.overrides:
+        from_overrides(games, json.loads(args.overrides.read_text()), keys)
     data = dict(schema=SCHEMA,
                 sources=dict(freefg=dict(commit=args.freefg_commit, url="https://github.com/daniel-h-0/freefg",
                                          license="MIT", wiki_snapshot=recipes.get("sources", {}).get("wiki")),

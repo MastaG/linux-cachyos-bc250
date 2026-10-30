@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['scripts/build-game-presets.py', 'tests/test_game_presets.py', '.github/workflows/game-presets.yml']
+    paths: ['scripts/build-game-presets.py', 'scripts/game-presets-bc250.json', 'tests/test_game_presets.py', '.github/workflows/game-presets.yml']
 
 permissions:
   contents: write
@@ -68,6 +68,7 @@ jobs:
               --freefg src/recipes.json --freefg-commit "$FREEFG_COMMIT" \
               --wiki src/wiki --wiki-commit "$WIKI_COMMIT" \
               --ini src/upstream.ini --ini src/freefg.ini \
+              --overrides scripts/game-presets-bc250.json \
               --generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               --output "$ASSET" 2> summary.txt
           cat summary.txt

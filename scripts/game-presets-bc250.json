@@ -1,0 +1,19 @@
+{
+ "schema": 1,
+ "about": "Settings tested on a BC-250 with these packages. scripts/build-game-presets.py applies them on top of FreeFG's recipes and the OptiScaler wiki, and they win over both.",
+ "games": [
+  {
+   "title": "Shadow of the Tomb Raider",
+   "match": {
+    "steam": [
+     "750920"
+    ]
+   },
+   "settings": {
+    "Spoofing.Dxgi": "true"
+   },
+   "tested": "2026-10-30, cachyosusb-x8664: DLSS input with FSR4 RC12, 1280x720 to 1920x1080 at ~144 fps; with its graphics settings reset the game picks DLSS Quality itself",
+   "note": "The wiki's Dxgi=false with XeSS input crashes on a BC-250 inside amd_fidelityfx_upscaler_dx12.dll (every FSR 4 variant, stock nightly 08e13adf and FreeFG's build). Spoofing gives DLSS input, which works. Two warnings at start stay (no display adapter, old driver: the game looks the GPU up by PCI id where OptiScaler does not spoof); OK continues. Spoofing.Registry, Spoofing.User32 and SpoofedGPUName did not remove them."
+  }
+ ]
+}
