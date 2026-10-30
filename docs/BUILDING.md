@@ -297,6 +297,13 @@ a third of the memory cap in gigabytes, so `BC250_BUILD_MEMORY` is what sizes it
 Both variables are repository variables, not workflow constants; check
 `gh variable list` before assuming the defaults above are in force.
 
+A runner can carry its own limits, which win over the repository variables:
+`BC250_RUNNER_BUILD_MEMORY` and `BC250_RUNNER_BUILD_CPUS` in the runner's
+environment (its `.env` file next to `run.sh`, or `Environment=` in the unit
+or container that runs it). A host that shares its RAM and cores with other
+work needs tight caps; a dedicated build machine does not. The first step of
+the build logs which runner it is and the limits it applies.
+
 The build runs in an Arch container, but the repacking at the end runs on the
 host, so the host needs `bsdtar` — or GNU `tar` plus a `zstd` binary, which is
 the usual case on Fedora, where `bsdtar` is not installed by default. Both are

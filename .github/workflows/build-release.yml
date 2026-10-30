@@ -30,17 +30,18 @@ env:
   # Hard RAM ceiling for each build container this workflow starts. The runner
   # shares its host with a 32 GiB VM, and an unbounded -j32 build otherwise
   # makes the kernel OOM-kill the VM. Swap is capped to the same figure so the
-  # (RAM-backed) zram swap cannot be used to get around it. Override without a
-  # commit via the repository variable BC250_BUILD_MEMORY, e.g. 24g.
-  BC250_BUILD_MEMORY: ${{ vars.BC250_BUILD_MEMORY || '20g' }}
+  # (RAM-backed) zram swap cannot be used to get around it. Per runner, its own
+  # environment's BC250_RUNNER_BUILD_MEMORY wins (step "Build limits for this
+  # runner"); otherwise the repository variable BC250_BUILD_MEMORY, e.g. 24g.
+  BC250_BUILD_MEMORY_DEFAULT: ${{ vars.BC250_BUILD_MEMORY || '20g' }}
   # Which CPUs the component builds may use. The memory cap alone is not
   # enough: at -j32 the 20 GB ceiling is reached (peak 20G, the compile dies
   # without an error). nproc, ninja, meson and cargo all honour CPU affinity,
   # so pinning the build shrinks every one of them at once, which MAKEFLAGS
   # alone does not. The default is 6 cores with both SMT threads (this host
-  # numbers siblings n and n+16); set the repository variable BC250_BUILD_CPUS
-  # to another list, or to "all" to lift the limit.
-  BC250_BUILD_CPUS: ${{ vars.BC250_BUILD_CPUS || '0-5,16-21' }}
+  # numbered siblings n and n+16); a runner's BC250_RUNNER_BUILD_CPUS, else the
+  # repository variable BC250_BUILD_CPUS, sets another list, or "all" to lift it.
+  BC250_BUILD_CPUS_DEFAULT: ${{ vars.BC250_BUILD_CPUS || '0-5,16-21' }}
 
 jobs:
   build:
@@ -53,6 +54,22 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      - name: Build limits for this runner
+        # A runner's own environment wins (its .env file, or Environment= in
+        # its container unit): BC250_RUNNER_BUILD_MEMORY and
+        # BC250_RUNNER_BUILD_CPUS. A host that shares its RAM and cores (the AI
+        # server, with Strata) and a dedicated build box need different caps,
+        # which repository variables, the same for every runner, cannot give.
+        run: |
+          memory=${BC250_RUNNER_BUILD_MEMORY:-$BC250_BUILD_MEMORY_DEFAULT}
+          cpus=${BC250_RUNNER_BUILD_CPUS:-$BC250_BUILD_CPUS_DEFAULT}
+          [[ "$memory" =~ ^[0-9]+[gG]$ ]] || { echo "::error::build memory must be whole gigabytes like 20g, got: $memory"; exit 1; }
+          [[ "$cpus" == all || "$cpus" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || { echo "::error::build CPUs must be a list like 0-7,24-31 or all, got: $cpus"; exit 1; }
+          echo "BC250_BUILD_MEMORY=$memory" >> "$GITHUB_ENV"
+          echo "BC250_BUILD_CPUS=$cpus" >> "$GITHUB_ENV"
+          from_memory=${BC250_RUNNER_BUILD_MEMORY:+runner} from_cpus=${BC250_RUNNER_BUILD_CPUS:+runner}
+          echo "runner $RUNNER_NAME: build memory $memory (${from_memory:-repository/default}), CPUs $cpus (${from_cpus:-repository/default})"
 
       - name: Ensure gh CLI is available
         # The ghcr.io/actions/actions-runner base image does not ship gh.
