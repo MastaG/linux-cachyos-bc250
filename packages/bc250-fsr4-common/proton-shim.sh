@@ -4,8 +4,8 @@
 # protonge-latest-bc250 installs it as "proton" (GE itself lives under ge/),
 # proton-cachyos-native-bc250 as "bc250-fsr4-proton" beside the Proton launcher
 # it was built with. Either way it runs the wrapper, which selects the pinned
-# FSR4 payload and then execve()s the real proton, so Steam still ends up
-# supervising exactly one process.
+# FSR4 payload and supervises the real Proton while holding a prefix lease.
+# Utility calls still replace the wrapper process directly.
 #
 # -B matters: /usr is read-only, and Python would otherwise try to write
 # __pycache__ next to files pacman owns.

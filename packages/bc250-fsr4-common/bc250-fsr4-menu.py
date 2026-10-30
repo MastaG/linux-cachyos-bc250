@@ -24,6 +24,8 @@ timeout: the menu waits for a choice. Never block a launch.
 import configparser
 import ctypes
 import json
+import hashlib
+import tempfile
 import os
 import sys
 
@@ -90,11 +92,22 @@ DEFINABLE = {
 }
 
 
-def store_path(prefix_path):
-    """The per-prefix choice file. Under the prefix, not in the payload folder
-    that protonfixes manages."""
+def store_path(prefix_path, env=None):
+    """Per-game choices for managed launches; retain the legacy prefix fallback."""
     if not prefix_path:
         return None
+    env = os.environ if env is None else env
+    key = env.get('BC250_MENU_GAME')
+    if key:
+        name = hashlib.sha256(key.encode()).hexdigest()
+        folder = os.path.join(prefix_path, 'bc250-fsr4-games')
+        if os.path.islink(folder):
+            raise OSError('Refusing linked per-game menu directory')
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, name + '.json')
+        if os.path.islink(path):
+            raise OSError('Refusing linked per-game menu record')
+        return path
     return os.path.join(prefix_path, "bc250-fsr4-menu.json")
 
 
@@ -294,6 +307,11 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
     t = Gtk.Label(label="Choose the upscaler for this game", xalign=0)
     t.add_css_class("title")
     box.append(t)
+    if os.environ.get('BC250_MENU_RECORD'):
+        summary = Gtk.Label(label=os.environ['BC250_MENU_RECORD'], xalign=0, wrap=True)
+        summary.add_css_class('hint')
+        box.append(summary)
+        box.append(Gtk.LinkButton(uri='https://github.com/daniel-h-0/freefg', label='FreeFG project and releases'))
     radios, group = [], None
     for name, label, sub in preset_names:
         r = Gtk.CheckButton()
@@ -309,6 +327,8 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
         else:
             group = r
         r.set_active(name == preselected)
+        if os.environ.get('BC250_MENU_PINNED') == '1' and name not in (preselected, OFF):
+            r.set_sensitive(False)
         radios.append((name, r))
         box.append(r)
     box.append(Gtk.Separator())
@@ -348,6 +368,18 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
     h = Gtk.Label(label=HINT, xalign=0, wrap=True)
     h.add_css_class("hint")
     box.append(h)
+    recovery = []
+    if os.environ.get('BC250_MENU_MANAGED') == '1':
+        actions = [('recommend', 'Use recommended integration settings')]
+        if os.environ.get('BC250_MENU_ROLLBACK') == '1':
+            actions.append(('rollback', 'Use previous version'))
+        if os.environ.get('BC250_MENU_PINNED') == '1':
+            actions.append(('update', 'Resume package updates'))
+        for action, label in actions:
+            button = Gtk.Button(label=label)
+            button.connect('clicked', lambda _button, action=action: (result.update(action=action), finish()))
+            box.append(button)
+            recovery.append(button)
     start = Gtk.Button(label="Start game")
     start.add_css_class("suggested-action")
     box.append(start)
@@ -370,7 +402,7 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
     # Own focus order for the pad: GTK's directional focus keeps a radio group's
     # focus inside the group, so the pad could not leave the four presets.
     def move(d):
-        order = [r for _, r in radios] + [s for _, s in spoofs] + [fg, keep, start]
+        order = [r for _, r in radios] + [s for _, s in spoofs] + [fg, keep, *recovery, start]
         cur = win.get_focus()
         while cur is not None and cur not in order:
             cur = cur.get_parent()
@@ -447,8 +479,10 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on):
 
 def state(prefix, env=os.environ):
     """The prefix's current variant and its real frame-generation state."""
-    path = store_path(prefix)
+    path = store_path(prefix, env)
     store = read_store(path)
+    if not store and env.get('BC250_MENU_LEGACY') == '1':
+        store = read_store(os.path.join(prefix, 'bc250-fsr4-menu.json'))
     known = {name for name, _, _ in PRESETS}
     saved = RETIRED.get(store.get("variant"), store.get("variant"))
     saved = saved if saved in known else None
@@ -458,11 +492,17 @@ def state(prefix, env=os.environ):
     # (the launcher reads it off the payload on disk), then the last pick, then
     # the package default for a fresh prefix. No upscaling leaves the last
     # variant's files where they were, so only the pick itself can say it.
-    if saved and (store.get("remember") or saved == OFF):
+    if env.get('BC250_MENU_PINNED') == '1' and installed in known and saved != OFF:
+        current = installed
+    elif saved and (store.get("remember") or saved == OFF):
         current = saved
     else:
         current = installed if installed in known else saved or default
-    ini = os.path.join(prefix, "pfx", "drive_c", "windows", "system32", "umu", "OptiScaler.ini")
+    ini = env.get("BC250_MENU_INI") or os.path.join(prefix, "pfx", "drive_c", "windows", "system32", "umu", "OptiScaler.ini")
+    if env.get('BC250_MENU_GAME') and current in FG_ON:
+        saved_fg = read_ini_sections(ini).get('framegen', {}).get('enabled', 'auto').lower()
+        if saved_fg in ('true', 'false'):
+            return store, current, saved_fg == 'true', ini
     if installed != current:
         # The prefix holds another variant (or one from an older package): the
         # launch starts it fresh, so the box shows what the fresh seed does.
@@ -482,7 +522,7 @@ def decide(prefix, env):
     return not int(store.get("remember", 0)), current, fg_on, int(store.get("remember", 0))
 
 
-def answer(result, current, base, fg_states, spoof_states=None, ini_sections=None):
+def answer(result, current, base, fg_states, spoof_states=None, ini_sections=None, managed=False):
     """What the launcher gets back for the player's pick.
 
     base is the variant the prefix's files and ini belong to: the current one, or
@@ -499,6 +539,11 @@ def answer(result, current, base, fg_states, spoof_states=None, ini_sections=Non
     changed = {} if new == OFF else change(new, fg_states.get(new, False), is_on,
                                            DEFINABLE.get(new, set()),
                                            ini_sections if new == base else {})
+    if managed and new != OFF:
+        # Recipe/default wiring is handled by the transaction. Merely opening
+        # the menu must not turn the generic input into a saved player override.
+        changed = ({'FrameGen.Enabled': 'true' if is_on else 'false'}
+                   if is_on != fg_states.get(new, False) else {})
     spoof = result.get("spoof", "auto")
     if new != OFF and spoof != (spoof_states or {}).get(new, "auto"):
         changed["Spoofing.Dxgi"] = spoof
@@ -528,8 +573,12 @@ def main():
     # A variant that starts fresh gets the shared preset's auto.
     spoof_states = {}
     installed = os.environ.get("BC250_MENU_INSTALLED", "")
-    ini = os.path.join(prefix, "pfx", "drive_c", "windows", "system32", "umu", "OptiScaler.ini")
+    ini = os.environ.get("BC250_MENU_INI") or os.path.join(prefix, "pfx", "drive_c", "windows", "system32", "umu", "OptiScaler.ini")
     sections = read_ini_sections(ini) if prefix else {}
+    if os.environ.get('BC250_MENU_GAME') and sections.get('framegen', {}).get('enabled', 'auto').lower() in ('true', 'false'):
+        # An explicit FG choice belongs to this game across variant switches.
+        enabled = sections['framegen']['enabled'].lower() == 'true'
+        fg_states.update({name: enabled for name in FG_ON})
     base = current
     if current == OFF:
         base = installed if installed in FG_ON else None
@@ -543,11 +592,22 @@ def main():
     if result is None:
         # No window: keep the current choice and let the game start.
         return 3
+    if result.get('action'):
+        print('action=' + result['action'])
+        return 0
     path = store_path(prefix)
     if path:
-        with open(path, "w") as stream:
-            json.dump({"variant": result["preset"], "remember": int(result.get("remember", 0))}, stream)
-    for key, value in answer(result, current, base, fg_states, spoof_states, sections).items():
+        with tempfile.NamedTemporaryFile(mode='w', dir=os.path.dirname(path), delete=False) as stream:
+            temporary = stream.name
+            try:
+                json.dump({"variant": result["preset"], "remember": int(result.get("remember", 0))}, stream)
+                stream.flush()
+                os.fsync(stream.fileno())
+                os.replace(temporary, path)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
+    for key, value in answer(result, current, base, fg_states, spoof_states, sections, managed=bool(os.environ.get('BC250_MENU_GAME'))).items():
         print("%s=%s" % (key, value))
     if path:
         print("store=%s" % path)

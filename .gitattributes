@@ -1,0 +1,6 @@
+
+# Unmodified, checksum-pinned upstream dependency; review the adjacent pin.
+packages/bc250-fsr4-common/freefg-recipes.json linguist-vendored
+
+# Unified-diff context lines deliberately contain a single space.
+packages/bc250-fsr4-common/patches/** whitespace=-blank-at-eol
