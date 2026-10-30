@@ -1,0 +1,23 @@
+{
+  "dll": "OptiScaler.dll",
+  "dll_sha256": "044cac6be344a6619e02af9cb0930eed4165ec606dc74486a1d28a573242ec87",
+  "dll_bytes": 29394944,
+  "source_commit": "273e8d449763d0e9e051dee831dc42badcd15d00",
+  "version_label": "273e8d449763-bc250-e3b0c442",
+  "source_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "untracked_source_paths": [],
+  "toolchain": {
+    "clang-cl": "clang version 23.1.4",
+    "lld-link": "LLD 23.1.4",
+    "llvm-rc": "Exactly one input file should be provided.",
+    "ninja": "1.13.2"
+  },
+  "msvc_version": "14.44.35207",
+  "windows_sdk_version": "10.0.26100.0",
+  "schema": 1,
+  "base_commit": "25db192b1c1ebf42ae7cd6615bc6288b39121c5b",
+  "base_source": "https://github.com/daniel-h-0/OptiScaler/tree/25db192b1c1ebf42ae7cd6615bc6288b39121c5b",
+  "patch_sha256": "f14696f3d3e6836b1e5ae19924c16dc2b92386b8039e84539f932f44a025414a",
+  "ini_sha256": "e08ac5e1de899bce37710ffe82f6dfc6e31edfa7febb11a8a9db4ac8dac41e95",
+  "base_dll_sha256": "5c7dd0f333e97f7e547a2f1873794e1ec9f59757623576cdedd6f9117577d617"
+}

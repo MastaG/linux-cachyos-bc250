@@ -252,8 +252,11 @@ picks one:
   see as no frame generation. `BC250-XeFG/settings.ini` is left out, because
   the wrapper reads it beside the game's `.exe`. The variant preset is what
   FreeFG's installer writes for its OptiScaler route at 2× (`FrameGen.Enabled =
-  true`, `FGInput = upscaler`, `FGOutput = xefg`, `XeFG.InterpolationCount = 1`,
-  `XeFG.ForceBorderless = true`, `fakenvapi.ForceReflex = 2`); `XeFGPath` and
+  false` initially, `FGInput = upscaler`, `FGOutput = xefg`, `XeFG.InterpolationCount = 1`,
+  `XeFG.ForceBorderless = true`, `fakenvapi.ForceReflex = 2`; the menu enables FG
+  when selected). For the GTA V Enhanced Social Club crash, see the
+  [tested source fix and opt-in packaging instructions](gta-v-enhanced/README.md).
+  `XeFGPath` and
   `XeLLPath` are left alone, because this OptiScaler reads `XeFGPath` into its
   XeSS library path. The config's `freefg` map, keyed by version, tells the
   launcher where the layer is, and the launcher then sets what FreeFG's

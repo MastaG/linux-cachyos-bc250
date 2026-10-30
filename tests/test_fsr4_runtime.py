@@ -364,6 +364,29 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual((umu / "winmm.dll").read_bytes(), self.files["winmm.dll"])
                 self.assertTrue((umu / "OptiScaler.ini").is_file())
 
+    def test_fixed_freefg_version_updates_and_rolls_back_an_existing_prefix(self):
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                _, original = self.add_scaler_and_freefg()
+                old = self.config["optiscaler_aliases"]["freefglike"]
+                self.launch(base, "freefglike")
+                fixed = dict(original, **{"winmm.dll": b"fixed-optiscaler" * 128})
+                new = self.add_variant("freefglike-opti-" + sha256(fixed["winmm.dll"])[:16], fixed)
+                self.config["freefg"][new] = self.config["freefg"][old]
+                self.config["optiscaler_aliases"]["freefglike"] = new
+                self.config["optiscaler_version"] = new
+                env = self.launch(base)
+                self.assertEqual(env["PROTON_USE_OPTISCALER"], new)
+                self.assertEqual((self.umu() / "winmm.dll").read_bytes(), fixed["winmm.dll"])
+                self.assertEqual((self.umu() / "OptiScaler/bc250_xefg_original.dll").read_bytes(),
+                                 original["OptiScaler/bc250_xefg_original.dll"])
+                # Removing the build-time override returns to the old version.
+                self.config["optiscaler_aliases"]["freefglike"] = old
+                self.config["optiscaler_version"] = old
+                self.launch(base)
+                self.assertEqual((self.umu() / "winmm.dll").read_bytes(), original["winmm.dll"])
+
     def test_the_selected_variants_own_files_are_left_alone(self):
         # Relaunching the same variant removes nothing, not even its logs.
         for base in BASES:
@@ -1630,8 +1653,26 @@ class PresetTests(unittest.TestCase):
                 self.SCALER_AMD_DLL)
         return path
 
+    FIXED_OPTI = b"social-club-fixed-optiscaler" * 512
+
+    def freefg_fix_inputs(self, work, record_updates=None):
+        dll = work / "fixed-OptiScaler.dll"
+        dll.write_bytes(self.FIXED_OPTI)
+        patch = work / "opti-fix.patch"
+        patch.write_bytes(b"source patch fixture\n")
+        record = work / "opti-fix.json"
+        record.write_text(json.dumps({
+            "schema": 1, "source_commit": "a" * 40, "base_commit": "b" * 40,
+            "base_source": "https://example/OptiScaler/tree/" + "b" * 40,
+            "dll_sha256": sha256(self.FIXED_OPTI), "dll_bytes": len(self.FIXED_OPTI),
+            "base_dll_sha256": sha256(self.FREEFG_OPTI),
+            "ini_sha256": sha256(self.FORK_INI), "patch_sha256": sha256(patch.read_bytes()),
+            **(record_updates or {}),
+        }))
+        return dll, record, patch
+
     def build_payload(self, default_name, scaler=False, scaler_ini=None,
-                      freefg=None, ngx=None, hlx=None, ngx_dll=None):
+                      freefg=None, ngx=None, hlx=None, ngx_dll=None, freefg_fix=None):
         with tempfile.TemporaryDirectory(prefix="payload-default-") as temporary:
             work = Path(temporary)
             archive, fork, fakenvapi, signed, provider, licenses, preset = \
@@ -1663,6 +1704,9 @@ class PresetTests(unittest.TestCase):
                 fork_ini.write_bytes(self.FORK_INI)
                 command += ["--freefg", str(self.freefg_zip(work, **freefg)),
                             "https://example/freefg", "--freefg-ini", str(fork_ini)]
+            if freefg_fix is not None:
+                command += ["--freefg-optiscaler-fix",
+                            *map(str, self.freefg_fix_inputs(work, **freefg_fix))]
             result = subprocess.run(command, capture_output=True, text=True)
             self.last_result = result
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -1682,6 +1726,60 @@ class PresetTests(unittest.TestCase):
                 bridges[entry["version"]] = data
                 self.entries = {e["version"]: e for e in manifest["optiscaler"]}
             return config, bridges
+
+    def test_explicit_fix_replaces_only_freefg_and_keeps_complete_provenance(self):
+        config, _ = self.build_payload("freefg-hlxfsr4", scaler=True, freefg={}, freefg_fix={})
+        aliases = config["optiscaler_aliases"]
+        self.assertEqual(config["optiscaler_version"], aliases["freefg-hlxfsr4"])
+        for name in ("freefg", "freefg-hlxfsr4"):
+            version = aliases[name]
+            self.assertTrue(version.endswith("-opti-" + sha256(self.FIXED_OPTI)[:16]))
+            tree = self.trees[version]
+            self.assertEqual(tree["winmm.dll"], self.FIXED_OPTI)
+            self.assertEqual(self.entries[version]["sha256_hash"]["winmm.dll"], sha256(self.FIXED_OPTI))
+            self.assertEqual(tree["OptiScaler/libxess_fg.dll"], self.FREEFG_PROXY)
+            self.assertEqual(tree["OptiScaler/bc250_xefg_original.dll"], self.INTEL_XEFG)
+            self.assertEqual(tree["OptiScaler.ini"], self.FORK_INI)
+            self.assertIn(f"Licenses/{version}/OptiScaler-fix.patch", tree)
+            self.assertIn(f"Licenses/{version}/OptiScaler-fix.json", tree)
+            notice = tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode()
+            self.assertIn("Patched commit: " + "a" * 40, notice)
+            self.assertIn("https://example/OptiScaler/tree/" + "b" * 40, notice)
+            self.assertIn(version, config["freefg"])
+            seed = config["optiscaler_variant_seed"][version]
+            self.assertEqual(seed["FrameGen.Enabled"], "false")
+            self.assertEqual(seed["FrameGen.FGOutput"], "xefg")
+        self.assertEqual(self.trees[aliases["helixsr"]]["winmm.dll"], self.SCALER_DLL)
+        self.assertEqual(self.trees[aliases["optiscaler"]]["winmm.dll"], b"p" * 2048)
+
+    def test_explicit_fix_keeps_a_non_freefg_default_unchanged(self):
+        config, _ = self.build_payload("helixsr", scaler=True, freefg={}, freefg_fix={})
+        self.assertEqual(config["optiscaler_version"], "test-opti")
+        self.assertEqual(config["optiscaler_aliases"]["helixsr"], "test-opti")
+        self.assertEqual(self.trees["test-opti"]["winmm.dll"], self.SCALER_DLL)
+        self.assertEqual(self.trees[config["optiscaler_aliases"]["freefg"]]["winmm.dll"], self.FIXED_OPTI)
+
+    def test_explicit_fix_rejects_mismatched_binary_base_ini_or_source(self):
+        for key in ("dll_sha256", "base_dll_sha256", "ini_sha256", "patch_sha256"):
+            with self.subTest(key=key):
+                with self.assertRaises(AssertionError):
+                    self.build_payload("freefg", freefg={},
+                                       freefg_fix={"record_updates": {key: "0" * 64}})
+                self.assertIn("SHA256 mismatch", self.last_result.stderr)
+
+    def test_explicit_fix_rejects_bad_record_and_size(self):
+        for key, value in (("schema", 2), ("source_commit", "not-a-commit"),
+                           ("base_source", "file:///private/source"), ("dll_bytes", 1)):
+            with self.subTest(key=key):
+                with self.assertRaises(AssertionError):
+                    self.build_payload("freefg", freefg={},
+                                       freefg_fix={"record_updates": {key: value}})
+                self.assertIn("FreeFG OptiScaler fix", self.last_result.stderr)
+
+    def test_explicit_fix_requires_freefg(self):
+        with self.assertRaises(AssertionError):
+            self.build_payload("", freefg_fix={})
+        self.assertIn("--freefg-optiscaler-fix needs --freefg", self.last_result.stderr)
 
     def test_the_shipped_default_bridge_is_the_one_that_was_asked_for(self):
         # Which DLL a player gets without setting anything is the single most

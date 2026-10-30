@@ -1,0 +1,471 @@
+From 273e8d449763d0e9e051dee831dc42badcd15d00 Mon Sep 17 00:00:00 2001
+From: Daniel <22757158+daniel-h-0@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 19:33:35 -0400
+Subject: [PATCH] Keep Social Club auxiliary swapchains out of frame generation
+
+---
+ FORK.md                                |  18 ++++
+ OptiScaler/DllNames.h                  |   5 +
+ OptiScaler/hooks/DxgiFactory_Hooks.cpp | 113 ++++++++++++++++++--
+ OptiScaler/hooks/DxgiFactory_Hooks.h   |   1 +
+ OptiScaler/hooks/Dxgi_Hooks.cpp        |  33 ++++++
+ tools/test-window-swapchain-size.py    | 136 +++++++++++++++++++++++++
+ 6 files changed, 300 insertions(+), 6 deletions(-)
+ create mode 100644 tools/test-window-swapchain-size.py
+
+diff --git a/FORK.md b/FORK.md
+index 4cdb434343753d6c900e722fd77aed336f5fb3af..1d8ab4585ace815f37be126f03436695a5901e30 100644
+--- a/FORK.md
++++ b/FORK.md
+@@ -1,5 +1,23 @@
+ # BC-250 fork of OptiScaler
+ 
++## Social Club auxiliary swapchains
++
++Social Club's D3D12 renderer creates its own swapchain in GTA V Enhanced. Passing that auxiliary swapchain to
++XeFG can replace the game's context and crash inside the Intel runtime, even with interpolation disabled.
++The existing size heuristic is insufficient: the descriptor can be 0×0 (window-derived), and the client size
++varies between systems. A local reproduction measured 119×100, outside the existing below-100-pixel cutoff.
++
++Factories created by `SocialClubD3D12Renderer.dll` now carry a private DXGI marker. The regular and DLSSG
++swapchain hooks pass marked factories through unchanged, before changing the game's FG state. DXGI owns the
++marker with its factory, so there is no stale-pointer registry to maintain. The policy does not enable factory
++wrapping, disable the Social Club renderer, or change other callers' factories. The separate existing size guard
++also resolves zero axes from the output window without rewriting the caller's descriptor.
++
++`tools/test-window-swapchain-size.py` compiles the actual guard and marker helpers with controlled API results
++under ASan/UBSan. It checks 16 size cases and ten marker/ownership cases. Runtime qualification additionally uses
++real D3D12 main/auxiliary swapchains and normal GTA Story Mode starts. Factory wrapping avoided the reproduced
++crash but stalled at initialization on the tested stack; it is not the remedy implemented here.
++
+ ## FreeFG 1.1.6 candidate
+ 
+ The candidate merges upstream `e7e3872d410f704479d94d318d68d163b6b58947` (29 October 2026) into the accepted fork.
+diff --git a/OptiScaler/DllNames.h b/OptiScaler/DllNames.h
+index d5b0b61c67cc7a4335d3dfd7d1d535b9120d1d1c..c15cb69bcab32472058de7e434c7bc0868f529c3 100644
+--- a/OptiScaler/DllNames.h
++++ b/OptiScaler/DllNames.h
+@@ -72,6 +72,11 @@ DEFINE_NAME_VECTORS(blockOverlay, "eosovh-win32-shipping",
+ 
+ inline std::vector<std::wstring> blockedDllNamesW = { L"windhawk.dll", L"mactype.dll", L"mactype64.dll", L"overlayenginex64.dll", L"overlayreleasex64.dll" };
+ 
++// Social Club owns an auxiliary D3D12 swapchain, not the game's FG output.
++// Keep this separate from skipDxgiWrapping: that list also contains DirectX
++// runtime callers and is broader than the verified auxiliary-factory policy.
++DEFINE_NAME_VECTORS(auxiliaryDxgiFactory, "socialclubd3d12renderer");
++
+ DEFINE_NAME_VECTORS(skipDxgiWrapping, "eosovh-win32-shipping",
+                                       "eosovh-win64-shipping",
+                                       "gameoverlayrenderer",
+diff --git a/OptiScaler/hooks/DxgiFactory_Hooks.cpp b/OptiScaler/hooks/DxgiFactory_Hooks.cpp
+index 1227c708160c05848e694f84c7c2a6370f5c1e9c..d6dd514eaa67bc9e661067d392440a769ef0a29c 100644
+--- a/OptiScaler/hooks/DxgiFactory_Hooks.cpp
++++ b/OptiScaler/hooks/DxgiFactory_Hooks.cpp
+@@ -20,6 +20,34 @@
+ 
+ // #define DETAILED_SC_LOGS
+ 
++// A marker on the DXGI object follows its lifetime and interface aliases. A
++// pointer registry would retain stale entries when an overlay releases a factory.
++static const GUID AuxiliaryFactoryMarker = {
++    0x7d8cb67a, 0x169b, 0x4d9e, { 0x8b, 0x5a, 0x31, 0xeb, 0x5e, 0x8c, 0x26, 0x50 }
++};
++
++void DxgiFactoryHooks::MarkAuxiliaryFactory(IUnknown* factory)
++{
++    IDXGIObject* object = nullptr;
++    if (factory == nullptr || FAILED(factory->QueryInterface(IID_PPV_ARGS(&object))))
++        return;
++
++    const UINT marker = 1;
++    const HRESULT result = object->SetPrivateData(AuxiliaryFactoryMarker, sizeof(marker), &marker);
++    object->Release();
++    if (FAILED(result))
++        LOG_WARN("Could not mark auxiliary DXGI factory: {:X}", (UINT) result);
++}
++
++static bool IsAuxiliaryFactory(IDXGIFactory* factory)
++{
++    UINT marker = 0;
++    UINT size = sizeof(marker);
++    return factory != nullptr &&
++           SUCCEEDED(factory->GetPrivateData(AuxiliaryFactoryMarker, &size, &marker)) &&
++           size == sizeof(marker) && marker == 1;
++}
++
+ #ifdef DETAILED_SC_LOGS
+ #include <magic_enum.hpp>
+ #endif
+@@ -395,9 +423,42 @@ void DxgiFactoryHooks::HookToDLSSGFactory(IDXGIFactory* pFactory)
+     DetourTransactionCommit();
+ }
+ 
++// DXGI resolves zero descriptor dimensions from the HWND. Test the same
++// effective size before letting an auxiliary window replace the FG swapchain.
++// Keep the caller's descriptor untouched for the original DXGI implementation.
++static bool IsTinyWindowSwapchain(HWND window, UINT width, UINT height)
++{
++    bool widthKnown = width != 0;
++    bool heightKnown = height != 0;
++    RECT client {};
++    if ((!widthKnown || !heightKnown) && window != nullptr && GetClientRect(window, &client))
++    {
++        if (!widthKnown)
++        {
++            width = client.right > client.left ? static_cast<UINT>(client.right - client.left) : 0;
++            widthKnown = true;
++        }
++        if (!heightKnown)
++        {
++            height = client.bottom > client.top ? static_cast<UINT>(client.bottom - client.top) : 0;
++            heightKnown = true;
++        }
++        LOG_DEBUG("Window {:X}: resolved swapchain size {}x{}", (size_t) window, width, height);
++    }
++    return (widthKnown && width < 100) || (heightKnown && height < 100);
++}
++
+ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc,
+                                           IDXGISwapChain** ppSwapChain)
+ {
++    if (IsAuxiliaryFactory(realFactory))
++    {
++        LOG_DEBUG("Auxiliary factory: preserving native swapchain");
++        ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
++        ScopedSkipParentWrapping skipParentWrapping {};
++        return o_CreateSwapChain(realFactory, pDevice, pDesc, ppSwapChain);
++    }
++
+     *ppSwapChain = nullptr;
+ 
+     if (State::Instance().vulkanCreatingSC)
+@@ -427,8 +488,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
+         return res;
+     }
+ 
+-    if ((pDesc->BufferDesc.Height != 0 && pDesc->BufferDesc.Height < 100) ||
+-        (pDesc->BufferDesc.Width != 0 && pDesc->BufferDesc.Width < 100))
++    if (IsTinyWindowSwapchain(pDesc->OutputWindow, pDesc->BufferDesc.Width, pDesc->BufferDesc.Height))
+     {
+         LOG_WARN("Overlay call!");
+ 
+@@ -751,6 +811,15 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
+                                                  const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
+                                                  IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain)
+ {
++    if (IsAuxiliaryFactory(realFactory))
++    {
++        LOG_DEBUG("Auxiliary factory: preserving native swapchain");
++        ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
++        ScopedSkipParentWrapping skipParentWrapping {};
++        return o_CreateSwapChainForHwnd(realFactory, pDevice, hWnd, pDesc, pFullscreenDesc,
++                                          pRestrictToOutput, ppSwapChain);
++    }
++
+     *ppSwapChain = nullptr;
+ 
+     static bool firstCall = static_cast<bool>(State::Instance().gameQuirks & GameQuirk::NoFSRFGFirstSwapchain);
+@@ -797,7 +866,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
+         return result;
+     }
+ 
+-    if ((pDesc->Height != 0 && pDesc->Height < 100) || (pDesc->Width != 0 && pDesc->Width < 100))
++    if (IsTinyWindowSwapchain(hWnd, pDesc->Width, pDesc->Height))
+     {
+         LOG_WARN("Overlay call!");
+         HRESULT result;
+@@ -1161,6 +1230,14 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactor
+                                                        const DXGI_SWAP_CHAIN_DESC1* pDesc,
+                                                        IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain)
+ {
++    if (IsAuxiliaryFactory(realFactory))
++    {
++        LOG_DEBUG("Auxiliary factory: preserving native swapchain");
++        ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
++        ScopedSkipParentWrapping skipParentWrapping {};
++        return o_CreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
++    }
++
+     if (State::Instance().vulkanCreatingSC)
+     {
+         LOG_WARN("Vulkan is creating swapchain!");
+@@ -1274,6 +1351,14 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactor
+ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice,
+                                                DXGI_SWAP_CHAIN_DESC* pDesc, IDXGISwapChain** ppSwapChain)
+ {
++    if (IsAuxiliaryFactory(realFactory))
++    {
++        LOG_DEBUG("Auxiliary factory: preserving native swapchain");
++        ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
++        ScopedSkipParentWrapping skipParentWrapping {};
++        return o_DLSSGCreateSwapChain(realFactory, pDevice, pDesc, ppSwapChain);
++    }
++
+     *ppSwapChain = nullptr;
+ 
+     if (State::Instance().vulkanCreatingSC)
+@@ -1303,8 +1388,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
+         return res;
+     }
+ 
+-    if ((pDesc->BufferDesc.Height != 0 && pDesc->BufferDesc.Height < 100) ||
+-        (pDesc->BufferDesc.Width != 0 && pDesc->BufferDesc.Width < 100))
++    if (IsTinyWindowSwapchain(pDesc->OutputWindow, pDesc->BufferDesc.Width, pDesc->BufferDesc.Height))
+     {
+         LOG_WARN("Overlay call!");
+ 
+@@ -1552,6 +1636,15 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
+                                                       const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
+                                                       IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain)
+ {
++    if (IsAuxiliaryFactory(realFactory))
++    {
++        LOG_DEBUG("Auxiliary factory: preserving native swapchain");
++        ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
++        ScopedSkipParentWrapping skipParentWrapping {};
++        return o_DLSSGCreateSwapChainForHwnd(realFactory, pDevice, hWnd, pDesc, pFullscreenDesc,
++                                               pRestrictToOutput, ppSwapChain);
++    }
++
+     *ppSwapChain = nullptr;
+ 
+     static bool firstCall = static_cast<bool>(State::Instance().gameQuirks & GameQuirk::NoFSRFGFirstSwapchain);
+@@ -1598,7 +1691,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
+         return result;
+     }
+ 
+-    if ((pDesc->Height != 0 && pDesc->Height < 100) || (pDesc->Width != 0 && pDesc->Width < 100))
++    if (IsTinyWindowSwapchain(hWnd, pDesc->Width, pDesc->Height))
+     {
+         LOG_WARN("Overlay call!");
+         HRESULT result;
+@@ -1874,6 +1967,14 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForCoreWindow(IDXGIFactory2* realF
+                                                             IDXGIOutput* pRestrictToOutput,
+                                                             IDXGISwapChain1** ppSwapChain)
+ {
++    if (IsAuxiliaryFactory(realFactory))
++    {
++        LOG_DEBUG("Auxiliary factory: preserving native swapchain");
++        ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
++        ScopedSkipParentWrapping skipParentWrapping {};
++        return o_DLSSGCreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
++    }
++
+     if (State::Instance().vulkanCreatingSC)
+     {
+         LOG_WARN("Vulkan is creating swapchain!");
+diff --git a/OptiScaler/hooks/DxgiFactory_Hooks.h b/OptiScaler/hooks/DxgiFactory_Hooks.h
+index b67def3606212f18e2ea7ee857d76e19160f9b9c..bf8b135715516ab5a56b190243151944f1c6b112 100644
+--- a/OptiScaler/hooks/DxgiFactory_Hooks.h
++++ b/OptiScaler/hooks/DxgiFactory_Hooks.h
+@@ -10,6 +10,7 @@ class DxgiFactoryHooks
+   public:
+     static void HookToFactory(IDXGIFactory* pFactory);
+     static void HookToDLSSGFactory(IDXGIFactory* pFactory);
++    static void MarkAuxiliaryFactory(IUnknown* factory);
+ 
+   private:
+     using PFN_EnumAdapterByGpuPreference =
+diff --git a/OptiScaler/hooks/Dxgi_Hooks.cpp b/OptiScaler/hooks/Dxgi_Hooks.cpp
+index 8a8e4183255792f5fd79f31210ec1492dd41242e..0452c63c3ec2b2f3c6f7b6f780a9241859d5cd24 100644
+--- a/OptiScaler/hooks/Dxgi_Hooks.cpp
++++ b/OptiScaler/hooks/Dxgi_Hooks.cpp
+@@ -97,6 +97,17 @@ inline static HRESULT hkCreateDXGIFactory(REFIID riid, IDXGIFactory** ppFactory)
+         return o_CreateDXGIFactory(riid, ppFactory);
+     }
+ 
++    if (CheckDllName(&caller, &auxiliaryDxgiFactoryNames))
++    {
++        const HRESULT result = o_CreateDXGIFactory(riid, ppFactory);
++        if (SUCCEEDED(result) && ppFactory != nullptr && *ppFactory != nullptr)
++        {
++            DxgiFactoryHooks::MarkAuxiliaryFactory(*ppFactory);
++            LOG_INFO("Auxiliary factory bypasses frame generation: {}", caller);
++        }
++        return result;
++    }
++
+     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() && CheckDllName(&caller, &skipDxgiWrappingNames))
+     {
+         LOG_INFO("Skipping wrapping for: {}", caller);
+@@ -160,6 +171,17 @@ inline static HRESULT hkCreateDXGIFactory1(REFIID riid, IDXGIFactory1** ppFactor
+         return o_CreateDXGIFactory1(riid, ppFactory);
+     }
+ 
++    if (CheckDllName(&caller, &auxiliaryDxgiFactoryNames))
++    {
++        const HRESULT result = o_CreateDXGIFactory1(riid, ppFactory);
++        if (SUCCEEDED(result) && ppFactory != nullptr && *ppFactory != nullptr)
++        {
++            DxgiFactoryHooks::MarkAuxiliaryFactory(*ppFactory);
++            LOG_INFO("Auxiliary factory bypasses frame generation: {}", caller);
++        }
++        return result;
++    }
++
+     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() && CheckDllName(&caller, &skipDxgiWrappingNames))
+     {
+         LOG_INFO("Skipping wrapping for: {}", caller);
+@@ -223,6 +245,17 @@ inline static HRESULT hkCreateDXGIFactory2(UINT Flags, REFIID riid, IDXGIFactory
+         return o_CreateDXGIFactory2(Flags, riid, ppFactory);
+     }
+ 
++    if (CheckDllName(&caller, &auxiliaryDxgiFactoryNames))
++    {
++        const HRESULT result = o_CreateDXGIFactory2(Flags, riid, ppFactory);
++        if (SUCCEEDED(result) && ppFactory != nullptr && *ppFactory != nullptr)
++        {
++            DxgiFactoryHooks::MarkAuxiliaryFactory(*ppFactory);
++            LOG_INFO("Auxiliary factory bypasses frame generation: {}", caller);
++        }
++        return result;
++    }
++
+     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() && CheckDllName(&caller, &skipDxgiWrappingNames))
+     {
+         LOG_INFO("Skipping wrapping for: {}", caller);
+diff --git a/tools/test-window-swapchain-size.py b/tools/test-window-swapchain-size.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..58e89acd04fb2baaf9cb6c6915f9a29e90a5b16e
+--- /dev/null
++++ b/tools/test-window-swapchain-size.py
+@@ -0,0 +1,136 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: MIT
++"""Compile the actual auxiliary-window guard against controlled HWND queries.
++
++Checks zero-axis resolution, explicit-axis precedence, the existing 100-pixel
++boundary, unknown/empty windows, and per-factory marker ownership. The GPU probe separately exercises DXGI.
++"""
++import argparse
++import os
++from pathlib import Path
++import subprocess
++import tempfile
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--source', type=Path, default=Path(__file__).resolve().parents[1])
++    args = parser.parse_args()
++    source = (args.source / 'OptiScaler/hooks/DxgiFactory_Hooks.cpp').read_text(encoding='utf-8-sig')
++    start = source.index('static bool IsTinyWindowSwapchain(')
++    end = source.index('\nHRESULT DxgiFactoryHooks::CreateSwapChain(', start)
++    guard = source[start:end]
++    factory = source[source.index('static const GUID AuxiliaryFactoryMarker'):source.index('\n#ifdef DETAILED_SC_LOGS')]
++    harness = r'''
++#include <cstdio>
++#include <cstring>
++#define LOG_DEBUG(...) ((void)0)
++#define LOG_WARN(...) ((void)0)
++using HRESULT = int;
++#define FAILED(hr) ((hr) < 0)
++#define SUCCEEDED(hr) ((hr) >= 0)
++#define IID_PPV_ARGS(ptr) 0, reinterpret_cast<void**>(ptr)
++struct GUID { unsigned int a; unsigned short b, c; unsigned char d[8]; };
++using UINT = unsigned int;
++struct RECT { long left, top, right, bottom; };
++struct Window { bool valid; RECT client; };
++using HWND = Window*;
++static int queries = 0;
++static bool GetClientRect(HWND window, RECT* rect) {
++    ++queries;
++    if (!window || !window->valid) return false;
++    *rect = window->client; return true;
++}
++struct IDXGIFactory {
++    unsigned int value = 0, length = 0;
++    int refs = 1;
++    bool queryFails = false, writeFails = false;
++    HRESULT QueryInterface(int, void** out) {
++        if (queryFails) return -1;
++        ++refs; *out = this; return 0;
++    }
++    int Release() { return --refs; }
++    HRESULT SetPrivateData(const GUID&, UINT size, const void* data) {
++        if (writeFails) return -1;
++        length = size; std::memcpy(&value, data, size); return 0;
++    }
++    HRESULT GetPrivateData(const GUID&, UINT* size, void* data) {
++        if (!length || *size < length) return -1;
++        *size = length; std::memcpy(data, &value, length); return 0;
++    }
++};
++using IDXGIObject = IDXGIFactory;
++using IUnknown = IDXGIFactory;
++struct DxgiFactoryHooks { static void MarkAuxiliaryFactory(IUnknown* factory); };
++@FACTORY@
++@GUARD@
++#define CHECK(condition) do { if (!(condition)) { std::printf("FAIL marker: %s\n", #condition); ++failures; } } while (0)
++int main() {
++    Window tiny {true, {0, 0, 111, 66}};
++    Window normal {true, {0, 0, 1280, 720}};
++    Window boundary {true, {0, 0, 100, 100}};
++    Window empty {true, {0, 0, 0, 0}};
++    Window invalid {false, {0, 0, 1, 1}};
++    struct Case { const char* name; HWND w; UINT width, height; bool tiny; int queries; };
++    Case cases[] = {
++        {"explicit tiny", &normal, 111, 66, true, 0},
++        {"explicit normal", &tiny, 1280, 720, false, 0},
++        {"resolved tiny", &tiny, 0, 0, true, 1},
++        {"resolved normal", &normal, 0, 0, false, 1},
++        {"zero height", &tiny, 1920, 0, true, 1},
++        {"zero width with explicit normal height", &tiny, 0, 720, false, 1},
++        {"zero width with explicit tiny height", &normal, 0, 66, true, 1},
++        {"explicit boundary", &tiny, 100, 100, false, 0},
++        {"below boundary", &normal, 99, 100, true, 0},
++        {"resolved boundary", &boundary, 0, 0, false, 1},
++        {"empty client", &empty, 0, 0, true, 1},
++        {"unknown window", nullptr, 0, 0, false, 0},
++        {"unknown with known small axis", nullptr, 0, 66, true, 0},
++        {"failed query", &invalid, 0, 0, false, 1},
++        {"failed query with known normal axis", &invalid, 111, 0, false, 1},
++        {"failed query with explicit tiny axis", &invalid, 66, 0, true, 1},
++    };
++    int failures = 0;
++    for (auto test : cases) {
++        queries = 0;
++        bool actual = IsTinyWindowSwapchain(test.w, test.width, test.height);
++        if (actual != test.tiny || queries != test.queries) {
++            std::printf("FAIL %s: tiny=%d queries=%d\n", test.name, actual, queries);
++            ++failures;
++        }
++    }
++    std::printf("16 auxiliary-window size cases: %s\n", failures ? "FAIL" : "PASS");
++    IDXGIFactory overlay, game, failedQuery, failedWrite, malformed;
++    CHECK(!IsAuxiliaryFactory(nullptr));
++    CHECK(!IsAuxiliaryFactory(&overlay));
++    DxgiFactoryHooks::MarkAuxiliaryFactory(nullptr);
++    DxgiFactoryHooks::MarkAuxiliaryFactory(&overlay);
++    CHECK(IsAuxiliaryFactory(&overlay));
++    CHECK(overlay.refs == 1);
++    CHECK(!IsAuxiliaryFactory(&game));
++    DxgiFactoryHooks::MarkAuxiliaryFactory(&overlay);
++    CHECK(overlay.refs == 1);
++    failedQuery.queryFails = true;
++    DxgiFactoryHooks::MarkAuxiliaryFactory(&failedQuery);
++    CHECK(!IsAuxiliaryFactory(&failedQuery) && failedQuery.refs == 1);
++    failedWrite.writeFails = true;
++    DxgiFactoryHooks::MarkAuxiliaryFactory(&failedWrite);
++    CHECK(!IsAuxiliaryFactory(&failedWrite) && failedWrite.refs == 1);
++    malformed.length = 2; malformed.value = 1;
++    CHECK(!IsAuxiliaryFactory(&malformed));
++    malformed.length = sizeof(UINT); malformed.value = 2;
++    CHECK(!IsAuxiliaryFactory(&malformed));
++    std::printf("10 factory-marker checks: %s\n", failures ? "FAIL" : "PASS");
++    return failures ? 1 : 0;
++}
++'''.replace('@GUARD@', guard).replace('@FACTORY@', factory)
++    with tempfile.TemporaryDirectory(prefix='opti-window-size-') as directory:
++        root = Path(directory)
++        (root / 'test.cpp').write_text(harness)
++        subprocess.run([os.environ.get('CXX', 'clang++'), '-std=c++20', '-fsanitize=address,undefined',
++                        str(root / 'test.cpp'), '-o', str(root / 'test')], check=True)
++        subprocess.run([str(root / 'test')], check=True)
++
++
++if __name__ == '__main__':
++    main()
+-- 
+2.56.0
+

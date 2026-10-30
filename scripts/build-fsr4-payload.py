@@ -341,6 +341,50 @@ def freefg_from(source: Path, nightly: Path, staging: Path) -> tuple[dict[str, P
     return {"opti": root / "opti/OptiScaler.dll", **files}, notices
 
 
+def freefg_optiscaler_fix(paths, original: Path, ini: Path, notices: Path) -> tuple[Path, str, str]:
+    """Verify an explicitly supplied OptiScaler fix before packaging it.
+
+    The record binds the tested DLL, its base DLL, the matching ini and the
+    source patch. It is a build input, reviewed/checksummed like the other
+    inputs, not an authenticity claim. Keep the source patch with the payload.
+    """
+    dll, record_path, patch = map(Path, paths)
+    record = json.loads(record_path.read_text())
+    if not isinstance(record, dict) or record.get("schema") != 1:
+        raise RuntimeError("unsupported FreeFG OptiScaler fix record")
+    for key, length in (("source_commit", 40), ("base_commit", 40),
+                        ("dll_sha256", 64), ("base_dll_sha256", 64),
+                        ("ini_sha256", 64), ("patch_sha256", 64)):
+        if not isinstance(record.get(key), str) or not re.fullmatch(
+                f"[0-9a-f]{{{length}}}", record[key]):
+            raise RuntimeError("invalid FreeFG OptiScaler fix field: " + key)
+    base_source = record.get("base_source", "")
+    if not isinstance(base_source, str) or not base_source.startswith("https://") or any(
+            char.isspace() for char in base_source):
+        raise RuntimeError("FreeFG OptiScaler fix needs an HTTPS base source URL")
+    for label, path, expected in (
+        ("DLL", dll, record["dll_sha256"]),
+        ("base DLL", original, record["base_dll_sha256"]),
+        ("INI", ini, record["ini_sha256"]),
+        ("source patch", patch, record["patch_sha256"]),
+    ):
+        if not path.is_file() or digest(path) != expected:
+            raise RuntimeError("FreeFG OptiScaler fix " + label + " SHA256 mismatch")
+    if type(record.get("dll_bytes")) is not int or dll.stat().st_size != record["dll_bytes"]:
+        raise RuntimeError("FreeFG OptiScaler fix DLL size mismatch")
+    shutil.copy2(record_path, notices / "OptiScaler-fix.json")
+    shutil.copy2(patch, notices / "OptiScaler-fix.patch")
+    provenance = (
+        f"OptiScaler replacement source: {base_source}\n"
+        f"Base commit: {record['base_commit']}\n"
+        f"Patched commit: {record['source_commit']}\n"
+        "Apply the accompanying OptiScaler-fix.patch to the base source; "
+        "OptiScaler-fix.json records the tested build and checksums.\n"
+        f"Source patch SHA256: {record['patch_sha256']}\n"
+    )
+    return dll, "-opti-" + record["dll_sha256"][:16], provenance
+
+
 # HelixSR's setup builds the network into the DLL. A built DLL ends with a
 # 32-byte trailer starting HXSRNET1; without that, size decides (a release DLL
 # is about 5 MB without the network and 13 MB with it), since an unbuilt one
@@ -723,6 +767,9 @@ def main() -> int:
     ap.add_argument("--freefg-ini", type=Path,
                     help="OptiScaler.ini of FreeFG's OptiScaler build (its fork's tree at "
                          "the tagged commit); the nightly's is older than that build")
+    ap.add_argument("--freefg-optiscaler-fix", nargs=3, metavar=("DLL", "RECORD", "PATCH"),
+                    help="explicit replacement for FreeFG's OptiScaler only; the JSON "
+                         "record pins the DLL, base DLL, INI and source patch by SHA256")
     ap.add_argument("--freefg-bridge", default="fsr411f",
                     help="name of the --ffx-sdk-alt bridge the FreeFG variant ships "
                          "as its FidelityFX upscaler; the packages pass fsr412f "
@@ -747,10 +794,13 @@ def main() -> int:
                     help="where to write the launch wrapper's config")
     args = ap.parse_args()
 
+    if args.freefg_optiscaler_fix and not args.freefg:
+        ap.error("--freefg-optiscaler-fix needs --freefg")
     artifacts = args.output / "artifacts"
     artifacts.mkdir(parents=True)
 
     aliases = {}
+    default_version = args.optiscaler_version
     variants = []
     # Preset entries that apply only when that pinned version is selected.
     variant_presets = {}
@@ -909,6 +959,10 @@ def main() -> int:
             if not args.freefg_ini:
                 raise SystemExit("ERROR: --freefg needs --freefg-ini (the OptiScaler.ini "
                                  "of FreeFG's OptiScaler build)")
+            fix_suffix, fix_provenance = "", ""
+            if args.freefg_optiscaler_fix:
+                freefg["opti"], fix_suffix, fix_provenance = freefg_optiscaler_fix(
+                    args.freefg_optiscaler_fix, freefg["opti"], args.freefg_ini, freefg_notices)
             if args.freefg_bridge not in bridges:
                 raise SystemExit(f"ERROR: --freefg-bridge names no --ffx-sdk-alt: "
                                  f"{args.freefg_bridge!r}")
@@ -942,6 +996,11 @@ def main() -> int:
                 is_default = name == args.ffx_sdk_default
                 version = (args.optiscaler_version if is_default
                            else args.optiscaler_version + "-" + name)
+                # protonfixes caches the installed version. A new DLL must get
+                # a new version even when the stock nightly has not changed.
+                version += fix_suffix
+                if is_default:
+                    default_version = version
                 aliases[name] = version
                 variant_presets[version] = {**FREEFG_PRESET, **upscaler_preset}
                 freefg_layers[version] = {
@@ -964,11 +1023,13 @@ def main() -> int:
                     if path.is_file():
                         shutil.copy2(path, merged / (notice_prefix + "-" + path.name))
                 provenance = (
-                    f"{args.proxy} in this directory is FreeFG's build of OptiScaler (GPL-3.0; "
-                    "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-25db192 "
-                    f"and {Path(args.freefg[0]).name.removesuffix('.zip')}-source.zip "
-                    "beside FreeFG's release), NOT the stock "
-                    "OptiScaler nightly.\n\n"
+                    (f"{args.proxy} is a patched FreeFG build of OptiScaler (GPL-3.0).\n"
+                     + fix_provenance + "\n" if fix_provenance else
+                     f"{args.proxy} in this directory is FreeFG's build of OptiScaler (GPL-3.0; "
+                     "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-25db192 "
+                     f"and {Path(args.freefg[0]).name.removesuffix('.zip')}-source.zip "
+                     "beside FreeFG's release), NOT the stock "
+                     "OptiScaler nightly.\n\n") +
                     f"Origin: {args.freefg[1]}\n"
                     f"SHA256: {digest(freefg['opti'])}\n\n"
                     "OptiScaler/libxess_fg.dll is FreeFG's wrapper (MIT), which runs part of "
@@ -1041,7 +1102,7 @@ def main() -> int:
         json.dumps(
             {
                 "schema": 1,
-                "optiscaler_version": args.optiscaler_version,
+                "optiscaler_version": default_version,
                 # Short names the wrapper resolves to a pinned version, so a
                 # tester types PROTON_USE_OPTISCALER=fsr411b rather than a
                 # version string nobody can remember.
@@ -1077,7 +1138,7 @@ def main() -> int:
     # chmod over it would strip the executable bit from proton and wine.
     for path in [args.output / "upscaler-manifest.json", args.config, *artifacts.iterdir()]:
         path.chmod(0o644)
-    print("==> pinned OptiScaler " + args.optiscaler_version
+    print("==> pinned OptiScaler " + default_version
           + " (" + str(len(entries[0]["sha256_hash"])) + " verified files)")
     for name, version in aliases.items():
         print(f"==> pinned opt-in OptiScaler variant {name!r} as {version}")
