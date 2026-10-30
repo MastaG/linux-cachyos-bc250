@@ -26,31 +26,19 @@ from a prior launch. Explicit `PROTON_USE_OPTISCALER` choices remain available;
 prefix payloads and saves are preserved. Steam utility calls use the local
 manifest with both upgrades disabled, including when game settings are inherited.
 
-The shared preset seeds a prefix and then leaves it alone. OptiScaler ships every
-key as `auto`; a key that still says `auto` is nobody's answer, so the preset
-writes those and only those, and a value that is not `auto` — ours from the first
-launch into a fresh prefix, or the player's from the OptiScaler overlay after that
-— stands. That is what lets *Save Settings* survive a restart, which it did not:
-every preset key used to be written back over on the next launch. A packaged
-OptiScaler bump re-extracts the ini, which resets it to `auto` and re-seeds, so a
-changed default reaches a fresh install and never a prefix that has decided.
-Anything unreadable keeps the whole preset, because the safe way to be wrong is a
-launch that behaves as documented.
+The managed launcher now merges package defaults, applicable FreeFG recipes,
+saved player edits and explicit launch options in that order. Variant switches
+preserve per-game INI values and comments. Existing prefixes keep their current
+settings until the player chooses **Use recommended integration settings**.
+A malformed INI or modified managed DLL stops the transaction without replacing
+it. See [FreeFG recipes and recovery](FREEFG-RECOVERY.md) for the menu actions,
+identity rules, retained generations and current qualification limits.
 
-A variant switch removes the prefix's ini before the launch reads it, and
-protonfixes copies a fresh one, so the new variant seeds from scratch rather than
-inheriting the last one's answers (FreeFG's frame generation left on for the
-default was the Ghost of Tsushima case). A variant's frame generation keys are
-seeded like the shared preset, on its first launch only, so turning it off in
-the overlay and saving survives a restart.
-
-Enforced on every launch is what a prefix must not be left to decide: a variant's
-own wiring — the HelixSR Scaler's `DLSS.HelixSR` and `HelixSR.Int8`, FreeFG's
-XeFG keys — the debug keys under `BC250_FSR4_DEBUG=1`, and
-`BC250_OPTISCALER_EXTRA`, merged last so it beats both. Every preset key is still
-checked against the ini it ships with at build time: protonfixes refuses a launch
-on a key the build does not define, so a preset that names one fails the build
-instead of a customer's game.
+The package validates default and recipe keys against the selected OptiScaler
+build. `BC250_OPTISCALER_EXTRA` and debug settings are temporary launch overrides;
+saved FG-off and scaling settings remain underneath them. The prior seed/reset
+helpers remain only for compatibility with old launch configurations that do
+not enable the managed integration.
 
 `PROTON_OPTISCALER_NAME` is the one variable in the owned set a caller may still
 supply. Everything else there addresses the pinned payload by path or by name, so

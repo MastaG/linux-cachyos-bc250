@@ -1058,9 +1058,9 @@ only the upscaler, with frame generation still XeFG:
 HelixSR 2.0.0 is no longer in the packages, and with it the `freefg-helixsr` and
 `helixsr-ffx` variants. Those names still work: `freefg-helixsr` now selects
 FreeFG + HLX FSR 4 and `helixsr-ffx` HelixSR Scaler. A game that ran FreeFG +
-HelixSR starts fresh on its next launch (its HelixSR 2.0 files and its
-`OptiScaler.ini` are removed), so settings saved in the OptiScaler overlay for
-it are reset once.
+HelixSR keeps its saved settings through the managed variant transition.
+Existing prefix values are adopted conservatively; the menu's recommendation
+action opts into the current defaults and recipe.
 
 FreeFG has optional generated-frame scaling since 1.1.4 (cheaper in 1.1.5; 50–100% or a resolution
 limit, with a choice of filters); the default, and what this package leaves it
@@ -1072,12 +1072,20 @@ frame generation on with XeFG output at 2×, borderless instead of exclusive
 fullscreen (XeFG does not interpolate in exclusive fullscreen), Reflex forced on
 for XeLL, and OptiFG as the input (`FrameGen.FGInput=upscaler`, which works in
 any game whose upscaler OptiScaler sees). FreeFG's own installer picks the input
-per game from its recipes; here a game that has DLSS or FSR frame generation can
-ask for it instead:
+per game from its recipes. The Proton adapter now imports applicable curated
+recipes from a pinned upstream snapshot, including FG-input and provider fixes.
+Saved player choices and explicit launch options take precedence:
+
 
 ```text
 BC250_OPTISCALER_EXTRA="FrameGen.FGInput=dlssg" PROTON_USE_OPTISCALER=freefg %command%
 ```
+
+[Per-game settings and rollback](docs/FREEFG-RECOVERY.md) survive package and
+variant changes. The menu links back to FreeFG and offers recommendation,
+previous-version and resume-update actions. Imported recipes do not by themselves
+qualify this different Proton/provider stack; game-setting prerequisites remain
+manual and are shown in status and diagnostics.
 
 Choose the upscaler in the game as usual, and leave the game's own frame
 generation off with the OptiFG input. It is DirectX 12 only, and only the

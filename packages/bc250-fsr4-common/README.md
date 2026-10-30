@@ -45,8 +45,7 @@ uses the copy matching its base (both proton-cachyos packages share one), and
 
 ### `patches/ge-proton/`
 
-For `protonge-latest-bc250`. This is the upstream BC-250 FSR4 work's own patch,
-unmodified: its declared base is GE-Proton11-6's `protonfixes/upscalers.py`, and
+For `protonge-latest-bc250`. Its declared base is GE-Proton11-6's `protonfixes/upscalers.py`, and
 that file in GE-Proton11-6 hashes to the `4128896c…` the patch header names.
 
 Rooted at the Proton tree (`a/protonfixes/upscalers.py`), because that package
@@ -94,9 +93,11 @@ all the integration required — no Makefile or `prepare()` changes.
 ## `bc250-fsr4-launch.py` and `proton-shim.sh`
 
 Steam runs the shim named by `toolmanifest.vdf`; the shim runs the wrapper; the
-wrapper `execve()`s the real Proton. It exists so the pinned payload can be
-selected without patching Proton's own launcher, and the `execve` means Steam
-still ends up supervising exactly one process.
+wrapper supervises the real Proton for managed game launches. It retains a
+prefix lease, forwards termination signals and returns Proton's exit status.
+Utility calls still use `execve()`. This selects the payload without patching
+Proton's own launcher. Both protonfixes patches have a staging hook into
+`bc250_freefg_state.py`; their normal path remains unchanged without the hook.
 
 The two packages lay the tool directory out differently — protonge-latest keeps
 GE under `ge/` and installs the shim as `proton`, while proton-cachyos-native
@@ -269,20 +270,18 @@ picks one:
   them aliases of `freefg-hlxfsr4` and `helixsr`, and the menu maps a saved
   choice the same way.
 
-Switching variants cleans up after the previous one. protonfixes replaces the
-payload when the version changes, but it only removes the files it checksums:
-`.ini` files and anything written at run time stay. So on every game launch the
-launcher (`clean_other_variants`) removes each file the manifest lists for some
-variant but not the selected one, every folder only other variants use (with
-whatever was written into it, such as `HelixSR/` and its logs), every folder
-of `RETIRED_FOLDERS` (folders an older package left that no manifest names any
-more: Scaler 1.1.0's `HelixSR-fsrfg/`, which Scaler 2.0 would still find), the
-files of `RETIRED_FILES` (HelixSR 2.0's `OptiScaler/amd_fidelityfx_dx12.dll` and
-`OptiScaler/helixsr.ini`; a prefix that still has them also starts fresh, since
-its `OptiScaler.ini` points `FfxDx12Path` at that DLL), and
-FreeFG's logs when FreeFG is not selected. Files the selected variant shares are
-left to protonfixes, nothing outside `system32/umu` is touched, and nothing at
-all while OptiScaler is off.
+Managed variant switches prepare a temporary payload with the actual Proton
+base's setup routine. The transaction preserves the owning game's INIs, keeps
+unknown files, and removes only unchanged files it owns. It commits the payload,
+FSR4 driver and protonfixes tracking record together under a recovery journal.
+Saved settings are separated by logical game identity even in a shared prefix.
+
+`bc250_freefg_recipes.py` adapts the pinned FreeFG catalogue. The data stays
+unchanged; provider-specific settings and supported launch arguments are
+translated for this layout. Runtime archives, configuration and recipe identity
+are retained for rollback, and a rollback pin survives package updates.
+See [FreeFG recipes and recovery](../../docs/FREEFG-RECOVERY.md) for the settings
+precedence, conservative legacy adoption, update commands and draft limits.
 
 None of the unsigned builds is a provider bump: each carries its own embedded model
 — 4.1.1b has 768 model passes against 4.0.2's 216, plus `FSR4_Int8` provider
