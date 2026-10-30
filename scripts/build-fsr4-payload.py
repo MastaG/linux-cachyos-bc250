@@ -72,6 +72,18 @@ def validate_preset(preset_path: Path, ini_path: Path, extra: dict | None = None
     return preset
 
 
+# Frame generation starts off in every variant (owner's decision, 2026-10-30): a
+# fresh prefix gets FrameGen.Enabled=false written into its ini, and the menu's
+# "Enable frame generation" box or the overlay's FG mode turns it on. Variants
+# without wiring of their own get OptiFG into FSR FG, so turning it on is all it
+# takes (FGInput and FGOutput both default to nofg). Seeded, not enforced.
+FG_DEFAULT = {
+    "FrameGen.Enabled": "false",
+    "FrameGen.FGInput": "upscaler",
+    "FrameGen.FGOutput": "fsrfg",
+}
+
+
 def is_player_key(key):
     """A frame-gen or upscaler choice: the player's to decide, so it is seeded on
     the variant's first launch only, not enforced every launch. Wiring is
@@ -191,10 +203,11 @@ SCALER_VERSION_SUFFIX = "helixsr-scaler2"
 SCALER_PRESET = {
     # HLX FSR 4 first (owner's pick, 2026-10-28: 1.15 ms in Shadow of the Tomb
     # Raider, against 1.10 ms for HLX DLSS), with OptiScaler's FSR frame
-    # generation on. Seeded, not enforced (is_player_key): HLX DLSS stays one
-    # pick away in the Insert menu, and the menu's box turns frame generation off.
+    # generation wired but off (FG_DEFAULT). Seeded, not enforced (is_player_key):
+    # HLX DLSS stays one pick away in the Insert menu, and the menu's box or the
+    # overlay's FG mode turns frame generation on.
     "Upscalers.Dx12Upscaler": "ffx",
-    "FrameGen.Enabled": "true",
+    "FrameGen.Enabled": "false",
     "FrameGen.FGInput": "upscaler",
     "FrameGen.FGOutput": "fsrfg",
     "DLSS.HelixSR": "true",
@@ -235,7 +248,8 @@ FREEFG_LAYER = "VK_LAYER_BC250_xefg_wave"
 # reads XeFGPath into its XeSS library path, and the library folder already
 # finds both.
 FREEFG_PRESET = {
-    "FrameGen.Enabled": "true",
+    # Wired for XeFG, off until the player turns it on (FG_DEFAULT).
+    "FrameGen.Enabled": "false",
     "FrameGen.FGInput": "upscaler",
     "FrameGen.FGOutput": "xefg",
     "XeFG.InterpolationCount": "1",
@@ -951,6 +965,11 @@ def main() -> int:
         for old, new in RETIRED_VARIANTS.items():
             if new in aliases:
                 aliases[old] = aliases[new]
+
+        # Every variant seeds frame generation off; one with wiring of its own
+        # (FreeFG's XeFG) keeps it.
+        for _, version, *_ in variants:
+            variant_presets[version] = {**FG_DEFAULT, **(variant_presets.get(version) or {})}
 
         entries = []
         ini_keys_map = {}

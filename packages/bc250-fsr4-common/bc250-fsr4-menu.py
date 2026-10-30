@@ -38,7 +38,7 @@ PRESETS = [
 # A choice saved by an older package that names a variant it no longer has
 # (HelixSR 2.0 went in 2026-10): what that name selects now.
 RETIRED = {"freefg-helixsr": "freefg-hlxfsr4", "helixsr-ffx": "helixsr"}
-FG_LABEL = "Disable frame generation"
+FG_LABEL = "Enable frame generation"
 SPOOF_LABEL = "GPU spoofing (DXGI)"
 # OptiScaler's [Spoofing] Dxgi: "true or false - Default (auto) is true for
 # AMD/Intel", and with no nvngx_dlss.dll in the game auto turns it off. Some
@@ -81,10 +81,12 @@ FG_WIRING = {
     "fsr412f": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
 }
 UNWIRED = ("auto", "nofg")
-# What a variant does with frame generation on a fresh prefix (its seed): FreeFG
-# and the Scaler turn it on, FSR4 RC12 leaves it off.
-FRESH_ON = {"freefg-hlxfsr4": True, "freefg": True,
-            "helixsr": True, "fsr412f": False, OFF: False}
+# What a variant does with frame generation on a fresh prefix (its seed): every
+# variant starts with it off and writes FrameGen.Enabled=false into the fresh ini
+# (owner's decision, 2026-10-30), so the box shows the prefix's own answer from
+# then on, the overlay's FG mode included.
+FRESH_ON = {"freefg-hlxfsr4": False, "freefg": False,
+            "helixsr": False, "fsr412f": False, OFF: False}
 # Keys a build's own OptiScaler.ini does not define: protonfixes refuses the
 # launch, so the menu must not offer them (the fork ini has no [HelixSR] keys).
 DEFINABLE = {
@@ -332,11 +334,11 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known=""):
     fg = Gtk.CheckButton(label=FG_LABEL)
 
     def picked(button, name):
-        # The box says "disable": ticked when frame generation is off. The
-        # prefix's own variant shows its real state; another one starts fresh,
-        # so it shows what that one seeds. No upscaling has nothing to switch.
+        # Ticked when frame generation is on. The prefix's own variant shows its
+        # real state (its ini, the overlay's FG mode and Save Settings included);
+        # another one starts fresh, with it off. No upscaling has nothing to switch.
         if button.get_active():
-            fg.set_active(not fg_states.get(name, False))
+            fg.set_active(fg_states.get(name, False))
             fg.set_sensitive(name in FG_ON)
             for value, s in spoofs:
                 s.set_active(value == spoof_states.get(name, "auto"))
@@ -383,7 +385,7 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known=""):
         for name, r in radios:
             if r.get_active():
                 result["preset"] = name
-        result["disable_framegen"] = int(fg.get_active())
+        result["enable_framegen"] = int(fg.get_active())
         result["spoof"] = next((value for value, s in spoofs if s.get_active()), "auto")
         result["remember"] = int(keep.get_active())
         result["apply_preset"] = (next((v for v, a in applies if a.get_active()), "matching")
@@ -520,7 +522,7 @@ def answer(result, current, base, fg_states, spoof_states=None, ini_sections=Non
     ini, which belongs to base.
     """
     new = result["preset"]
-    is_on = not int(result["disable_framegen"])
+    is_on = bool(int(result["enable_framegen"]))
     switched = new != OFF and new != base
     # A switch starts fresh (the launcher removes the prefix's ini and
     # protonfixes re-copies it), and fg_states holds that seed for every variant
@@ -533,7 +535,7 @@ def answer(result, current, base, fg_states, spoof_states=None, ini_sections=Non
         changed["Spoofing.Dxgi"] = spoof
     return {
         "preset": new,
-        "disable_framegen": int(result["disable_framegen"]),
+        "enable_framegen": int(result["enable_framegen"]),
         "remember": int(result.get("remember", 0)),
         "switched": int(switched),
         "changed": ";".join(k + "=" + v for k, v in changed.items()),

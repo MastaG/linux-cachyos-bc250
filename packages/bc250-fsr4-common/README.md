@@ -213,14 +213,17 @@ picks one:
   The builder refuses either one unbuilt: the network ends with the setup's
   `HXSRNET1` trailer, HLX FSR 4's shaders with `HLXFSR4D`. The variant preset is
   HelixSR's layout with HLX FSR 4 first: `Upscalers.Dx12Upscaler = ffx` and
-  OptiScaler's FSR frame generation on (`FrameGen.Enabled = true`, `FGInput =
-  upscaler`, `FGOutput = fsrfg`), all seeded once so a switch to HLX DLSS in the
-  Insert menu, or frame generation off, sticks; and enforced, `DLSS.HelixSR =
+  OptiScaler's FSR frame generation wired but off (`FrameGen.Enabled = false`,
+  `FGInput = upscaler`, `FGOutput = fsrfg`), all seeded once so a switch to HLX
+  DLSS in the Insert menu, or frame generation on, sticks; and enforced, `DLSS.HelixSR =
   true` (keeps HLX DLSS in the list) and `HelixSR.Int8 = off`. HelixSR 3.x has
   no frame generation of its own. The menu's switch is OptiScaler's
   `FrameGen.Enabled`, plus `FGInput = upscaler` and `FGOutput = fsrfg` where the
-  ini still has them auto/nofg (both default to no frame generation; FSR4 RC12
-  gets the same and starts with it off). The pinned version is `<nightly>-helixsr-scaler2`, not
+  ini still has them auto/nofg (both default to no frame generation). Every
+  variant seeds `FrameGen.Enabled = false` (FG_DEFAULT in the builder, with
+  OptiFG into FSR FG for variants without wiring of their own), so frame
+  generation starts off everywhere and the menu's "Enable frame generation"
+  box shows the prefix's own value. The pinned version is `<nightly>-helixsr-scaler2`, not
   `<nightly>-helixsr`: a prefix that ran Scaler 1.1.0 keeps that build's
   `OptiScaler.ini` until the version string changes. The Scaler writes
   `helixsr.ini` and its log at run time, so those are not pinned.

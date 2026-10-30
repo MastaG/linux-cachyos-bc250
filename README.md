@@ -739,7 +739,7 @@ BC250_GAME_PRESET=everything %command%    # apply all of this game's known setti
 
 Every game launch first shows a small menu: the upscaler (FreeFG + HLX FSR 4,
 the default; FreeFG + FSR4 RC12; HelixSR Scaler; FSR4 RC12 alone; No
-upscaling), **GPU spoofing**, **Disable frame generation**, and **Save selection
+upscaling), **GPU spoofing**, **Enable frame generation**, and **Save selection
 for next time**.
 It works with a controller (Steam Controller, PS5 pad; D-pad or stick to move, A
 to select, Start to start the game), with mouse and keyboard, in Gaming Mode and
@@ -748,10 +748,14 @@ on the desktop, and it waits until you choose.
 - The variant the game is on now is pre-selected, and the frame generation box
   shows what the game really does now — including what you saved in the
   OptiScaler overlay. Pressing Start without touching it changes nothing.
-- The FreeFG entries and HelixSR Scaler start with frame generation on; FSR4
-  RC12 starts with it off. Turning it on for RC12 also picks a frame generator:
-  OptiFG as the input and FSR frame generation as the output, unless you already
-  picked something else in the overlay.
+- Every upscaler starts with frame generation **off**: a new game, or one
+  switched to another upscaler, gets `FrameGen.Enabled=false` written into its
+  `OptiScaler.ini`. Tick **Enable frame generation** to turn it on, or turn it on
+  in the OptiScaler overlay (Insert, Frame Gen mode, *Save Settings*); either way
+  the box is ticked at the next launch, because it reads the game's own ini.
+  The generator is already wired, so nothing else needs picking: XeFG for the
+  FreeFG entries, OptiFG into FSR frame generation for HelixSR Scaler and FSR4
+  RC12, unless you picked something else in the overlay.
 - Choosing another upscaler starts that one fresh: its files and a new
   `OptiScaler.ini` replace the old ones, so settings saved in the overlay for the
   previous upscaler are gone.
@@ -1040,8 +1044,8 @@ with HelixSR's two upscalers in its list:
   to it in the list is that SDK's FSR 4.1.2.
 
 HelixSR 3.x has **no frame generation of its own** any more; OptiScaler's
-is what the Scaler starts with and the menu's "Disable frame generation" box
-turns off: OptiFG into FSR frame generation (`FrameGen.FGInput=upscaler`,
+is what the Scaler has wired, off until the menu's "Enable frame generation"
+box or the overlay turns it on: OptiFG into FSR frame generation (`FrameGen.FGInput=upscaler`,
 `FrameGen.FGOutput=fsrfg`). XeFG can
 be picked in the overlay instead. HelixSR 2.0, the last version with DLSS frame
 generation, is no longer in the packages (see the FreeFG section).
@@ -1115,7 +1119,8 @@ at, is generated frames at full output size. It is set in FreeFG's
 `settings.ini` beside the game's `.exe`, which this package does not ship.
 
 What the variant sets, as FreeFG's installer would for its OptiScaler route:
-frame generation on with XeFG output at 2×, borderless instead of exclusive
+frame generation wired for XeFG output at 2× but off until you enable it (the
+upscaler menu), borderless instead of exclusive
 fullscreen (XeFG does not interpolate in exclusive fullscreen), Reflex forced on
 for XeLL, and OptiFG as the input (`FrameGen.FGInput=upscaler`, which works in
 any game whose upscaler OptiScaler sees). FreeFG's own installer picks the input

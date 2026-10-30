@@ -1758,7 +1758,8 @@ class PresetTests(unittest.TestCase):
         preset = dict(config["optiscaler_variant_preset"][version])
         preset.update(config["optiscaler_variant_seed"][version])  # frame-gen seeds there now
         self.assertEqual(preset["FrameGen.FGOutput"], "xefg")
-        self.assertEqual(preset["FrameGen.Enabled"], "true")
+        # Wired for XeFG, off until the player turns it on (owner, 2026-10-30).
+        self.assertEqual(preset["FrameGen.Enabled"], "false")
         self.assertNotIn("FrameGen.FGOutput",
                          config["optiscaler_variant_preset"][config["optiscaler_version"]])
         layer = {
@@ -1790,7 +1791,16 @@ class PresetTests(unittest.TestCase):
         # The others stay reachable by name, each its own version.
         for name in ("freefg", "helixsr", "fsr412f" if "fsr412f" in aliases else "fsr411f"):
             self.assertNotEqual(aliases[name], default, name)
-        self.assertEqual(config["optiscaler_variant_seed"][default]["FrameGen.Enabled"], "true")
+        self.assertEqual(config["optiscaler_variant_seed"][default]["FrameGen.Enabled"], "false")
+        # Every variant, the bridges and the stock nightly included, seeds frame
+        # generation off and wired, so the menu's box or the overlay's FG mode is
+        # all it takes to turn it on.
+        for version in config["optiscaler_ini_keys"]:
+            seed = config["optiscaler_variant_seed"][version]
+            with self.subTest(version=version):
+                self.assertEqual(seed["FrameGen.Enabled"], "false")
+                self.assertNotIn(seed["FrameGen.FGInput"], ("auto", "nofg"))
+                self.assertNotIn(seed["FrameGen.FGOutput"], ("auto", "nofg"))
         self.assertIn(default, config["freefg"])
         # Spoofing is the shared preset's (auto, OptiScaler decides) and the
         # menu's; no variant forces it.
@@ -1866,7 +1876,7 @@ class PresetTests(unittest.TestCase):
         self.assertEqual(config["optiscaler_variant_preset"][default],
                          {"DLSS.HelixSR": "true", "HelixSR.Int8": "off"})
         self.assertEqual(config["optiscaler_variant_seed"][default],
-                         {"Upscalers.Dx12Upscaler": "ffx", "FrameGen.Enabled": "true",
+                         {"Upscalers.Dx12Upscaler": "ffx", "FrameGen.Enabled": "false",
                           "FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"})
         # The stock nightly and every bridge stay reachable by name, and none
         # of them carries the Scaler.
@@ -2117,9 +2127,8 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1",
                                             "BC250_MENU_INSTALLED": "helixsr"})[2], True)
         # Another variant (or an older package's) on disk: the launch starts the
-        # pick fresh, so the row shows the fresh seed, here the Scaler's on;
-        # RC12's seed is off.
-        self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1"})[2], True)
+        # pick fresh, so the row shows the fresh seed, off for every variant.
+        self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1"})[2], False)
         with open(menu.store_path(root), "w") as stream:
             stream.write('{"variant": "fsr412f", "remember": 1}')
         self.assertEqual(menu.decide(root, {"PROTON_OPTISCALER_MENU": "1"})[2], False)
@@ -2177,7 +2186,7 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         self.assertEqual(menu.change("freefg-hlxfsr4", False, True, menu.DEFINABLE["freefg-hlxfsr4"]),
                          {"FrameGen.Enabled": "true"})
         # answer() reads the prefix's ini only for the variant it belongs to.
-        pick = {"preset": "helixsr", "disable_framegen": 0}
+        pick = {"preset": "helixsr", "enable_framegen": 1}
         self.assertEqual(menu.answer(pick, "helixsr", "helixsr", {"helixsr": True}, {}, broken)["changed"],
                          "FrameGen.FGInput=upscaler;FrameGen.FGOutput=fsrfg")
         wired = menu.read_ini_sections(self.prefix(["[FrameGen]", "fginput = upscaler",
@@ -2186,18 +2195,31 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
                       menu.answer(pick, "freefg", "freefg", {"helixsr": False}, {}, wired)["changed"])
 
     def test_a_fresh_prefix_shows_what_the_variant_seeds(self):
-        # No answer in the ini yet: FreeFG and the Scaler seed frame generation on,
-        # FSR4 RC12 off, so a player who just presses Start changes nothing.
+        # No answer in the ini yet: every variant seeds frame generation off
+        # (owner, 2026-10-30), so a player who just presses Start changes nothing.
         menu = self.load()
         for lines in ([], ["[FrameGen]", "enabled = auto", "fginput = auto"]):
             sections = menu.read_ini_sections(self.prefix(lines)[1]) if lines else {}
-            self.assertEqual(menu.fg_state("freefg-hlxfsr4", sections), True)
-            self.assertEqual(menu.fg_state("freefg", sections), True)
-            self.assertEqual(menu.fg_state("helixsr", sections), True)
-            self.assertEqual(menu.fg_state("fsr412f", sections), False)
-        # The player's own answer from the overlay wins over the seed.
+            for variant in ("freefg-hlxfsr4", "freefg", "helixsr", "fsr412f"):
+                self.assertEqual(menu.fg_state(variant, sections), False, variant)
+        # The player's own answer from the overlay (its FG mode, then Save
+        # Settings) is what the box shows at the next launch.
+        sections = menu.read_ini_sections(self.prefix(["[FrameGen]", "enabled = true"])[1])
+        self.assertEqual(menu.fg_state("freefg-hlxfsr4", sections), True)
+        self.assertEqual(menu.fg_state("fsr412f", sections), True)
         sections = menu.read_ini_sections(self.prefix(["[FrameGen]", "enabled = false"])[1])
         self.assertEqual(menu.fg_state("freefg-hlxfsr4", sections), False)
+
+    def test_the_box_says_enable(self):
+        menu = self.load()
+        self.assertEqual(menu.FG_LABEL, "Enable frame generation")
+        # Ticked hands back FrameGen.Enabled=true where the prefix had it off.
+        on = menu.answer({"preset": "freefg-hlxfsr4", "enable_framegen": 1}, "freefg-hlxfsr4",
+                         "freefg-hlxfsr4", dict(menu.FRESH_ON))
+        self.assertEqual(on["changed"], "FrameGen.Enabled=true")
+        off = menu.answer({"preset": "freefg-hlxfsr4", "enable_framegen": 0}, "freefg-hlxfsr4",
+                          "freefg-hlxfsr4", {"freefg-hlxfsr4": True})
+        self.assertEqual(off["changed"], "FrameGen.Enabled=false")
 
     def test_the_prefix_variant_is_preselected_unless_a_choice_is_saved(self):
         menu = self.load()
@@ -2241,7 +2263,7 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
             sections = menu.read_ini_sections(self.prefix(lines)[1]) if lines else {}
             self.assertEqual(menu.spoof_state(sections), shown)
         fg = dict(menu.FRESH_ON)
-        pick = {"preset": "freefg-hlxfsr4", "disable_framegen": 0, "spoof": "true"}
+        pick = {"preset": "freefg-hlxfsr4", "enable_framegen": 0, "spoof": "true"}
         # The prefix already says true: Start changes nothing.
         same = menu.answer(pick, "freefg-hlxfsr4", "freefg-hlxfsr4", fg, {"freefg-hlxfsr4": "true"})
         self.assertEqual(same["changed"], "")
@@ -2249,7 +2271,7 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         on = menu.answer(pick, "freefg-hlxfsr4", "freefg-hlxfsr4", fg, {"freefg-hlxfsr4": "auto"})
         self.assertEqual(on["changed"], "Spoofing.Dxgi=true")
         # A switch starts from auto, so Off is handed over; No upscaling hands nothing.
-        off = menu.answer(dict(pick, preset="fsr412f", spoof="false", disable_framegen=1),
+        off = menu.answer(dict(pick, preset="fsr412f", spoof="false", enable_framegen=0),
                           "freefg-hlxfsr4", "freefg-hlxfsr4", fg, {"freefg-hlxfsr4": "true"})
         self.assertEqual((off["switched"], off["changed"]), (1, "Spoofing.Dxgi=false"))
         none = menu.answer(dict(pick, preset="off", spoof="false"), "freefg-hlxfsr4",
@@ -2266,15 +2288,15 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         self.assertEqual(menu.decide(root, env)[:2], (True, "off"))
         states = dict(menu.FRESH_ON, **{"freefg-hlxfsr4": False})
         # Off: nothing switched, nothing written into the ini.
-        self.assertEqual(menu.answer({"preset": "off", "disable_framegen": 1}, "freefg-hlxfsr4",
+        self.assertEqual(menu.answer({"preset": "off", "enable_framegen": 0}, "freefg-hlxfsr4",
                                      "freefg-hlxfsr4", states),
-                         {"preset": "off", "disable_framegen": 1, "remember": 0, "switched": 0, "changed": "",
+                         {"preset": "off", "enable_framegen": 0, "remember": 0, "switched": 0, "changed": "",
                           "apply_preset": ""})
         # Back to the variant the files belong to: not a switch, the overlay's FG off stays.
-        back = menu.answer({"preset": "freefg-hlxfsr4", "disable_framegen": 1}, "off", "freefg-hlxfsr4", states)
+        back = menu.answer({"preset": "freefg-hlxfsr4", "enable_framegen": 0}, "off", "freefg-hlxfsr4", states)
         self.assertEqual((back["switched"], back["changed"]), (0, ""))
         # Another variant is a switch and starts from its seed.
-        other = menu.answer({"preset": "freefg", "disable_framegen": 0}, "off", "freefg-hlxfsr4", states)
+        other = menu.answer({"preset": "freefg", "enable_framegen": 0}, "off", "freefg-hlxfsr4", states)
         self.assertEqual((other["switched"], other["changed"]), (1, ""))
 
     def test_no_upscaling_launches_with_the_documented_opt_out(self):
