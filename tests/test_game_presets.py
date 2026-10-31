@@ -138,6 +138,18 @@ class BuilderTests(unittest.TestCase):
             builder.from_overrides({}, {"schema": 1, "games": [{"title": "x", "settings": {"Spoofing.Dxgii": "1"}}]},
                                    {"dxgi": "Spoofing.Dxgi"})
 
+    def test_our_own_bc250_results_replace_freefgs_recipe_value(self):
+        games = {}
+        keys = {"requireargument": "BC250.RequireArgument", "enabled": "FrameGen.Enabled"}
+        builder.from_freefg(games, {"verified": [{"title": "Grand Theft Auto V Enhanced",
+            "match": {"steam": ["3240220"]}, "route": "opti",
+            "ini": {"FrameGen.Enabled": "true", "BC250.RequireArgument": "-nobattleye"}}]}, keys, [])
+        builder.from_overrides(games, {"schema": 1, "games": [{"title": "Grand Theft Auto V Enhanced",
+            "match": {"steam": ["3240220"]}, "settings": {"BC250.RequireArgument": "auto"}, "tested": "t"}]}, keys)
+        game = builder.finish(games)[0]
+        self.assertEqual(sorted((s["key"], s["value"]) for s in game["settings"]),
+                         [("BC250.RequireArgument", "auto"), ("FrameGen.Enabled", "true")])
+
     def test_the_overrides_file_names_only_keys_optiscaler_has(self):
         data = json.loads((ROOT / "scripts/game-presets-bc250.json").read_text())
         keys = builder.reference_keys([ROOT / "tests/fixtures/OptiScaler.ini"]) if (ROOT / "tests/fixtures/OptiScaler.ini").exists() else None

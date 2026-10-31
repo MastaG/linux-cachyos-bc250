@@ -1145,13 +1145,14 @@ time per output frame, so they suit games with headroom and a high-refresh
 display.
 
 GTA V Enhanced (Story Mode) works with FreeFG since 1.2.0: its OptiScaler keeps
-the Social Club overlay out of frame generation. The per-game presets carry
-FreeFG's GTA recipe, which turns frame generation on and sets
-`[BC250] RequireArgument=-nobattleye`: OptiScaler then only activates when the
-game is started with `-nobattleye` (add it to the launch options yourself), and
-stays a plain proxy otherwise. Accepting the anti-cheat warning for this game is
-still needed. For GTA Online, FreeFG's author advises not loading OptiScaler at
-all: start it with `PROTON_FSR4_UPGRADE=0 %command%`.
+the Social Club overlay out of frame generation. The per-game presets turn frame
+generation on for it. FreeFG's own recipe also sets
+`[BC250] RequireArgument=-nobattleye`, which keeps OptiScaler inactive unless the
+game is started with `-nobattleye`; on a BC-250 that option is not needed, so
+the presets leave it unset. The game ships BattlEye, so the launcher keeps
+OptiScaler out until you accept that for it:
+`BC250_FSR4_IGNORE_ANTICHEAT=1 %command%`. For GTA Online, keep OptiScaler out
+of it with `PROTON_FSR4_UPGRADE=0 %command%` instead.
 
 Status: experimental, though FreeFG has been in the default since 2026-10-26. Its author qualifies
 each release on a BC-250 in menus and benchmarks; here it was tried in

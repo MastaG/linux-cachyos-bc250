@@ -14,6 +14,19 @@
    },
    "tested": "2026-10-30, cachyosusb-x8664: DLSS input with FSR4 RC12, 1280x720 to 1920x1080 at ~144 fps; with its graphics settings reset the game picks DLSS Quality itself",
    "note": "The wiki's Dxgi=false with XeSS input crashes on a BC-250 inside amd_fidelityfx_upscaler_dx12.dll (every FSR 4 variant, stock nightly 08e13adf and FreeFG's build). Spoofing gives DLSS input, which works. Two warnings at start stay (no display adapter, old driver: the game looks the GPU up by PCI id where OptiScaler does not spoof); OK continues. Spoofing.Registry, Spoofing.User32 and SpoofedGPUName did not remove them."
+  },
+  {
+   "title": "Grand Theft Auto V Enhanced",
+   "match": {
+    "steam": [
+     "3240220"
+    ]
+   },
+   "settings": {
+    "BC250.RequireArgument": "auto"
+   },
+   "tested": "2026-10-31, owner: Story Mode with FreeFG 1.3.0 runs without -nobattleye; only the package's anti-cheat acceptance (BC250_FSR4_IGNORE_ANTICHEAT=1) is needed",
+   "note": "FreeFG's recipe sets RequireArgument=-nobattleye, which leaves OptiScaler a plain proxy unless the game starts with that option. Here it is unset, so OptiScaler is active on every start, GTA Online included: start Online with PROTON_FSR4_UPGRADE=0 to keep OptiScaler out of it."
   }
  ]
 }

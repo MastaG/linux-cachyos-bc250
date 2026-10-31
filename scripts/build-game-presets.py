@@ -327,6 +327,9 @@ def from_overrides(games, overrides, keys):
             full = canonical(keys, key)
             if not full:
                 raise SystemExit(f"{row['title']}: {key} is in no reference OptiScaler.ini")
+            # FreeFG's recipes are bc250 too, and the launcher takes the first
+            # bc250 value of a key: ours replaces theirs rather than joining it.
+            game["settings"] = [s for s in game["settings"] if s["key"].lower() != full.lower()]
             add_setting(game, full, value, "bc250")
         game.setdefault("bc250", {}).update({k: row[k] for k in ("tested", "note") if row.get(k)})
 
