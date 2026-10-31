@@ -54,9 +54,12 @@ jobs:
             freefg=$tagged
           fi
           upstream=$(tip optiscaler/OptiScaler)
-          fork=$(tip daniel-h-0/OptiScaler)
           curl -fsSL --retry 3 -o src/recipes.json \
               "https://raw.githubusercontent.com/daniel-h-0/freefg/$freefg/packaging/recipes/recipes.json"
+          # The OptiScaler build FreeFG's recipes are written for: its keys
+          # ([BC250] RequireArgument) are not on the fork's default branch.
+          fork=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sources"].get("optiscaler_pinned") or "")' src/recipes.json)
+          [ -n "$fork" ] || fork=$(tip daniel-h-0/OptiScaler)
           curl -fsSL --retry 3 -o src/upstream.ini \
               "https://raw.githubusercontent.com/optiscaler/OptiScaler/$upstream/OptiScaler.ini"
           curl -fsSL --retry 3 -o src/freefg.ini \
