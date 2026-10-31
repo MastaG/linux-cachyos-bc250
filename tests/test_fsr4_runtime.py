@@ -1631,7 +1631,7 @@ class PresetTests(unittest.TestCase):
         return path
 
     def build_payload(self, default_name, scaler=False, scaler_ini=None,
-                      freefg=None, ngx=None, hlx=None, ngx_dll=None):
+                      freefg=None, ngx=None, hlx=None, ngx_dll=None, mfg=False):
         with tempfile.TemporaryDirectory(prefix="payload-default-") as temporary:
             work = Path(temporary)
             archive, fork, fakenvapi, signed, provider, licenses, preset = \
@@ -1663,6 +1663,9 @@ class PresetTests(unittest.TestCase):
                 fork_ini.write_bytes(self.FORK_INI)
                 command += ["--freefg", str(self.freefg_zip(work, **freefg)),
                             "https://example/freefg", "--freefg-ini", str(fork_ini)]
+            if mfg:
+                command += ["--mfg-unlocker", *map(str, self.mfg_inputs(work)),
+                            "https://example/mfg"]
             result = subprocess.run(command, capture_output=True, text=True)
             self.last_result = result
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -1773,6 +1776,44 @@ class PresetTests(unittest.TestCase):
         default = self.trees[config["optiscaler_version"]]
         self.assertNotIn("OptiScaler/bc250_xefg_original.dll", default)
         self.assertEqual(default["OptiScaler/libxess_fg.dll"], self.INTEL_XEFG)
+
+    MFG_DLL = b"MZ" + b"mfg-unlocker" * 512
+
+    def mfg_inputs(self, work):
+        # MFG Unlocker's release zip holds the DLL alone; its license comes apart.
+        archive = work / "MFGUnlocker-v1.6.0.zip"
+        with zipfile.ZipFile(archive, "w") as z:
+            z.writestr("MFGUnlocker.dll", self.MFG_DLL)
+        license = work / "MFGUnlocker-LICENSE.txt"
+        license.write_text("MIT License\n\nCopyright (c) 2026 Michael Robles\n")
+        return archive, license
+
+    def test_mfg_unlocker_is_a_plugin_of_the_freefg_variants_only(self):
+        config, _ = self.build_payload("freefg-hlxfsr4", scaler=True, freefg={}, mfg=True)
+        aliases = config["optiscaler_aliases"]
+        for name in ("freefg", "freefg-hlxfsr4"):
+            version = aliases[name]
+            tree = self.trees[version]
+            self.assertEqual(tree["OptiScaler/plugins/MFGUnlocker.asi"], self.MFG_DLL)
+            self.assertIn("OptiScaler/plugins/MFGUnlocker.asi", self.entries[version]["sha256_hash"])
+            self.assertIn(f"Licenses/{version}/MFGUnlocker-LICENSE.txt", tree)
+            self.assertIn("MFG Unlocker", tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
+            # Intel's model, which FreeFG's shaders accelerate, in its [XeFG].
+            ini = configparser.ConfigParser()
+            ini.read_string(tree["OptiScaler.ini"].decode())
+            self.assertEqual(ini["XeFG"]["XeFGModel"], "default")
+            self.assertEqual(ini["XeFG"]["ForceBorderless"], "auto")
+            self.assertIn("XeFG.xefgmodel", config["optiscaler_ini_keys"][version])
+            # 2x is a seed: a 3x or 4x picked in OptiScaler's menu survives.
+            self.assertEqual(config["optiscaler_variant_seed"][version]["XeFG.InterpolationCount"], "1")
+            self.assertNotIn("XeFG.InterpolationCount", config["optiscaler_variant_preset"][version])
+        for name in ("helixsr", "fsr411f"):
+            self.assertNotIn("OptiScaler/plugins/MFGUnlocker.asi", self.trees[aliases[name]])
+
+    def test_mfg_unlocker_needs_freefg(self):
+        with self.assertRaises(AssertionError):
+            self.build_payload("fsr411f", mfg=True)
+        self.assertIn("--mfg-unlocker needs --freefg", self.last_result.stderr)
 
     def test_freefg_hlxfsr4_can_be_the_default(self):
         # What the three packages pass since 2026-10-29.

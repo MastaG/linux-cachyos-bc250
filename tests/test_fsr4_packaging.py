@@ -1015,7 +1015,7 @@ class SlrPackageTests(unittest.TestCase):
                 self.assertIn("--freefg-bridge fsr412f", text)
                 # FreeFG, opt-in, from its mirrored release zip.
                 self.assertIn("--freefg", text)
-                self.assertIn("freefg-1.1.6.zip", text)
+                self.assertIn("freefg-1.3.0.zip", text)
                 # HelixSR 3.2 (HLX DLSS, HLX FSR 4) for the Scaler 2.1 and
                 # freefg-hlxfsr4. HelixSR 2.0 is gone, with the HelixSR 2.0 builder option.
                 self.assertIn("--helixsr-ngx", text)
@@ -1024,8 +1024,8 @@ class SlrPackageTests(unittest.TestCase):
                 self.assertNotIn("HelixSR-2.0.0", text)
                 self.assertNotIn("--helixsr \"", text)
                 self.assertIn("--freefg-ini", text)
-                self.assertIn("e08ac5e1de899bce37710ffe82f6dfc6e31edfa7febb11a8a9db4ac8dac41e95", text)
-                self.assertIn("4facc961b6f60336e038549dbecfeab36f0af9ab176d07147a42521e06a3c39e", text)
+                self.assertIn("060d8fcfb1374f69dfbe4df6b22fed30d6349b97e9b5f6272cad9f494c440cb8", text)
+                self.assertIn("25b00f55f672b1431b4ca85e4258c3daffc498a6031fc57e61b16c86628162e9", text)
 
     def test_the_metapackage_pulls_in_all_three(self):
         pkgbuild = (ROOT / "packages/linux-cachyos-bc250-meta/PKGBUILD").read_text()

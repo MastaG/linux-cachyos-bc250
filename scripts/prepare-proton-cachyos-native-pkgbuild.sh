@@ -273,10 +273,13 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.0" \\\n'
     '        --helixsr-scaler "${srcdir}/HelixSR-3.2.0-Scaler-2.1.0-core.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.0" \\\n'
-    '        --freefg "${srcdir}/freefg-1.1.6.zip" \\\n'
-    '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.1.6" \\\n'
-    '        --freefg-ini "${srcdir}/OptiScaler-bc250-25db192.ini" \\\n'
+    '        --freefg "${srcdir}/freefg-1.3.0.zip" \\\n'
+    '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.3.0" \\\n'
+    '        --freefg-ini "${srcdir}/OptiScaler-bc250-ba0dedb.ini" \\\n'
     '        --freefg-bridge fsr412f \\\n'
+    '        --mfg-unlocker "${srcdir}/MFGUnlocker-v1.6.0.zip" \\\n'
+    '            "${srcdir}/MFGUnlocker-LICENSE-v1.6.0.txt" \\\n'
+    '            "https://github.com/dashdogy/MFG-Unlocker/releases/tag/v1.6.0" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -359,17 +362,26 @@ payload_sources = [
     # HelixSR 3.2.0 download: only what differs from the nightly.
     ("HelixSR-3.2.0-Scaler-2.1.0-core.zip", f"{payload_base}/HelixSR-3.2.0-Scaler-2.1.0-core.zip",
      "78e4787d35e0fa533eb73939fc4a05affc0e550d423efdc9704254a381cf7618", True),
-    # FreeFG 1.1.6 (daniel-h-0): Intel XeSS frame generation with its own BC-250
+    # FreeFG 1.3.0 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
     # Mirrored release zip; its OptiScaler build is GPL-3.0, and the matching
-    # freefg-1.1.6-source.zip is mirrored beside it.
-    ("freefg-1.1.6.zip", f"{payload_base}/freefg-1.1.6.zip",
-     "4facc961b6f60336e038549dbecfeab36f0af9ab176d07147a42521e06a3c39e", True),
-    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-25db192),
+    # freefg-1.3.0-source.zip is mirrored beside it.
+    ("freefg-1.3.0.zip", f"{payload_base}/freefg-1.3.0.zip",
+     "25b00f55f672b1431b4ca85e4258c3daffc498a6031fc57e61b16c86628162e9", True),
+    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-ba0dedb),
     # pinned by commit: the freefg variants ship this build and this ini.
-    ("OptiScaler-bc250-25db192.ini",
-     "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/25db192b1c1ebf42ae7cd6615bc6288b39121c5b/OptiScaler.ini",
-     "e08ac5e1de899bce37710ffe82f6dfc6e31edfa7febb11a8a9db4ac8dac41e95", False),
+    ("OptiScaler-bc250-ba0dedb.ini",
+     "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/ba0dedb4681875a1a0b88a35385d5aeb91db4063/OptiScaler.ini",
+     "060d8fcfb1374f69dfbe4df6b22fed30d6349b97e9b5f6272cad9f494c440cb8", False),
+    # MFG Unlocker 1.6.0 (dashdogy, MIT): loaded by the FreeFG variants as an
+    # OptiScaler plugin, so OptiScaler's XeFG menu offers 3x and 4x. 1.6.0 is the
+    # version FreeFG's 3x/4x checks on the BC-250 used. Mirrored release zip; its
+    # license, which the zip does not carry, pinned by the tag's commit.
+    ("MFGUnlocker-v1.6.0.zip", f"{payload_base}/MFGUnlocker-v1.6.0.zip",
+     "09b2fb936676fac1ec3db2f427ca338347c064702aa60b7cb8ba00b573657ddf", True),
+    ("MFGUnlocker-LICENSE-v1.6.0.txt",
+     "https://raw.githubusercontent.com/dashdogy/MFG-Unlocker/ded3614aa2084adb1e04765ecf8f64d33557ed61/LICENSE",
+     "433da96087fd9b91afd44c6350ca92da53167c9636a0a71e428f71036d8c372f", False),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.
     (fakenvapi_asset, fakenvapi_url, fakenvapi_sha, True),

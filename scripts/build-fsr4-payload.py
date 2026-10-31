@@ -89,8 +89,11 @@ def is_player_key(key):
     the variant's first launch only, not enforced every launch. Wiring is
     everything else. The upscaler counts since HelixSR Scaler 2.0, whose menu
     offers HLX DLSS and HLX FSR 4 side by side: enforcing its HLX FSR 4 start
-    would undo a switch to HLX DLSS at every launch."""
-    return key.lower().startswith(("framegen.", "upscalers."))
+    would undo a switch to HLX DLSS at every launch. XeFG's multiplier counts
+    since MFG Unlocker: OptiScaler's menu then offers 3x and 4x, and enforcing
+    the 2x start would undo that pick at every launch."""
+    return key.lower().startswith(("framegen.", "upscalers.")) or \
+        key.lower() == "xefg.interpolationcount"
 
 
 def reserved_proxies(value: str, proxy: str) -> list:
@@ -339,6 +342,54 @@ def freefg_from(source: Path, nightly: Path, staging: Path) -> tuple[dict[str, P
             raise RuntimeError("FreeFG archive has no " + name)
         shutil.copy2(root / name, notices / ("FreeFG-" + name))
     return {"opti": root / "opti/OptiScaler.dll", **files}, notices
+
+
+def mfg_unlocker_from(source: Path, license: Path, staging: Path) -> tuple[Path, Path]:
+    """MFG Unlocker's DLL from its release zip, as the OptiScaler plugin it runs
+    as (MFGUnlocker.asi), and a notices folder with its MIT license, which the
+    zip does not carry."""
+    unpacked = staging / "mfg-unlocker"
+    unpacked.mkdir()
+    subprocess.run(
+        ["bsdtar", "-xf", str(source), "--no-same-owner", "--no-same-permissions",
+         "-C", str(unpacked), "MFGUnlocker.dll"],
+        check=True,
+    )
+    dll = unpacked / "MFGUnlocker.dll"
+    if dll.is_symlink() or not dll.is_file() or dll.read_bytes()[:2] != b"MZ":
+        raise RuntimeError("MFG Unlocker archive has no MFGUnlocker.dll")
+    if "MIT License" not in license.read_text():
+        raise RuntimeError("MFG Unlocker's license is not its MIT license")
+    notices = staging / "mfg-unlocker-notices"
+    notices.mkdir()
+    shutil.copy2(license, notices / "MFGUnlocker-LICENSE.txt")
+    return dll, notices
+
+
+def with_xefg_model(ini: Path, staging: Path) -> Path:
+    """A copy of FreeFG's OptiScaler.ini with [XeFG] XeFGModel=default.
+
+    MFG Unlocker reads that key (no OptiScaler build does). Unset, it runs its
+    own model, on which FreeFG's shaders cover 7 of their 13 programs; FreeFG's
+    installer writes 'default' (Intel's model, which its shaders accelerate:
+    53.2 instead of 42.6 fps at 2x in its Cyberpunk 4K test). It goes into the
+    ini rather than the preset because protonfixes refuses a preset key the ini
+    does not have."""
+    lines = ini.read_text().splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if line.strip() == "[XeFG]"), None)
+    if start is None:
+        raise RuntimeError("FreeFG's OptiScaler.ini has no [XeFG] section")
+    if any(re.match(r"\s*XeFGModel\s*=", line, re.I) for line in lines):
+        raise RuntimeError("FreeFG's OptiScaler.ini already has XeFGModel; drop with_xefg_model")
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")),
+               len(lines))
+    while end > start + 1 and not lines[end - 1].strip():
+        end -= 1
+    lines[end:end] = ["\n", "; MFG Unlocker's XeFG model (bc250: Intel's, which FreeFG's shaders accelerate)\n",
+                      "XeFGModel=default\n"]
+    out = staging / "freefg-OptiScaler.ini"
+    out.write_text("".join(lines))
+    return out
 
 
 # HelixSR's setup builds the network into the DLL. A built DLL ends with a
@@ -723,6 +774,10 @@ def main() -> int:
     ap.add_argument("--freefg-ini", type=Path,
                     help="OptiScaler.ini of FreeFG's OptiScaler build (its fork's tree at "
                          "the tagged commit); the nightly's is older than that build")
+    ap.add_argument("--mfg-unlocker", nargs=3, metavar=("ARCHIVE", "LICENSE", "ORIGIN"),
+                    help="MFG Unlocker release zip, its LICENSE and the URL recorded in "
+                         "the prefix; the FreeFG variants load it as an OptiScaler "
+                         "plugin, so OptiScaler's XeFG menu offers 3x and 4x")
     ap.add_argument("--freefg-bridge", default="fsr411f",
                     help="name of the --ffx-sdk-alt bridge the FreeFG variant ships "
                          "as its FidelityFX upscaler; the packages pass fsr412f "
@@ -746,6 +801,8 @@ def main() -> int:
     ap.add_argument("--config", type=Path, required=True,
                     help="where to write the launch wrapper's config")
     args = ap.parse_args()
+    if args.mfg_unlocker and not args.freefg:
+        ap.error("--mfg-unlocker needs --freefg")
 
     artifacts = args.output / "artifacts"
     artifacts.mkdir(parents=True)
@@ -913,6 +970,12 @@ def main() -> int:
                 raise SystemExit(f"ERROR: --freefg-bridge names no --ffx-sdk-alt: "
                                  f"{args.freefg_bridge!r}")
             bridge, bridge_notices, bridge_origin = bridges[args.freefg_bridge]
+            freefg_ini, mfg = args.freefg_ini, {}
+            if args.mfg_unlocker:
+                mfg_dll, mfg_notices = mfg_unlocker_from(
+                    Path(args.mfg_unlocker[0]), Path(args.mfg_unlocker[1]), staging)
+                mfg = {"OptiScaler/plugins/MFGUnlocker.asi": mfg_dll}
+                freefg_ini = with_xefg_model(args.freefg_ini, staging)
             # Up to two upscalers: the FSR4 bridge FreeFG ships (freefg) and
             # HLX FSR 4 in its place (freefg-hlxfsr4). Frame generation stays
             # XeFG, so FreeFG's ini can ship as released.
@@ -924,7 +987,7 @@ def main() -> int:
                 # HLX FSR 4 hands what its own runtime does not cover to AMD's
                 # FidelityFX DLL beside it (<name>.amd.dll); without one it
                 # logs "HLX FSR 4 only" and has no fallback. The Scaler's copy is
-                # the one from the same HelixSR download, as FreeFG 1.1.6 ships it.
+                # the one from the same HelixSR download, as FreeFG 1.3.0 ships it.
                 amd = "OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"
                 fallback = {amd: scaler_files[amd]} if args.helixsr_scaler and amd in scaler_files else {}
                 upscalers.append((
@@ -963,9 +1026,12 @@ def main() -> int:
                 for path in sorted(upscaler_notices.rglob("*")) if upscaler_notices else []:
                     if path.is_file():
                         shutil.copy2(path, merged / (notice_prefix + "-" + path.name))
+                if mfg:
+                    for path in sorted(mfg_notices.iterdir()):
+                        shutil.copy2(path, merged / path.name)
                 provenance = (
                     f"{args.proxy} in this directory is FreeFG's build of OptiScaler (GPL-3.0; "
-                    "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-25db192 "
+                    "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-ba0dedb "
                     f"and {Path(args.freefg[0]).name.removesuffix('.zip')}-source.zip "
                     "beside FreeFG's release), NOT the stock "
                     "OptiScaler nightly.\n\n"
@@ -983,10 +1049,15 @@ def main() -> int:
                        "available by name with PROTON_USE_OPTISCALER.\n"
                        if is_default else
                        f"Selected explicitly by PROTON_USE_OPTISCALER={name}.\n")
+                    + (f"\nOptiScaler/plugins/MFGUnlocker.asi is MFG Unlocker (MIT, by "
+                       f"dashdogy), its MFGUnlocker.dll renamed as its OptiScaler plugin; "
+                       f"it lets OptiScaler's XeFG run 3x and 4x.\n"
+                       f"Origin: {args.mfg_unlocker[2]}\n"
+                       f"SHA256: {digest(mfg_dll)}\n" if mfg else "")
                 )
-                extra = {args.proxy: freefg["opti"], "OptiScaler.ini": args.freefg_ini,
+                extra = {args.proxy: freefg["opti"], "OptiScaler.ini": freefg_ini,
                          **{n: path for n, path in freefg.items() if n != "opti"},
-                         **upscaler_files}
+                         **upscaler_files, **mfg}
                 variants.append((ffx_sdk, version, provenance, merged, extra))
 
         # The stock OptiScaler nightly, selected with one name whichever variant

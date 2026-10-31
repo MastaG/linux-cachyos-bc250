@@ -236,7 +236,7 @@ picks one:
   `UpscalerIndex = 0` selects HLX FSR 4 (checked on a BC-250 in Shadow of the
   Tomb Raider: 720p → 1080p in 1.17 ms).
 - **`freefg`** — opt-in, built with `--freefg` from FreeFG's release zip
-  (mirrored unchanged as `freefg-1.1.6.zip`, its GPL source zip beside it).
+  (mirrored unchanged as `freefg-1.3.0.zip`, its GPL source zip beside it).
   [FreeFG](https://github.com/daniel-h-0/freefg) speeds up Intel's XeSS frame
   generation on the BC-250. The tree is the nightly's with FreeFG's OptiScaler
   build as the proxy, the RC12 bridge (`--freefg-bridge fsr412f`, what FreeFG
@@ -251,9 +251,13 @@ picks one:
   at load, and leaves XeFG unavailable on a mismatch, which a player would only
   see as no frame generation. `BC250-XeFG/settings.ini` is left out, because
   the wrapper reads it beside the game's `.exe`. The variant preset is what
-  FreeFG's installer writes for its OptiScaler route at 2× (`FrameGen.Enabled =
-  true`, `FGInput = upscaler`, `FGOutput = xefg`, `XeFG.InterpolationCount = 1`,
-  `XeFG.ForceBorderless = true`, `fakenvapi.ForceReflex = 2`); `XeFGPath` and
+  FreeFG's installer writes for its OptiScaler route at 2×, except that frame
+  generation starts off (`FrameGen.Enabled = false` until the menu or overlay
+  turns it on, `FGInput = upscaler`, `FGOutput = xefg`,
+  `XeFG.InterpolationCount = 1`, `XeFG.ForceBorderless = true`,
+  `fakenvapi.ForceReflex = 2`). The frame-gen keys and the multiplier are seeded
+  on the variant's first launch only, so a 3× or 4× picked in the overlay
+  stays. `XeFGPath` and
   `XeLLPath` are left alone, because this OptiScaler reads `XeFGPath` into its
   XeSS library path. The config's `freefg` map, keyed by version, tells the
   launcher where the layer is, and the launcher then sets what FreeFG's
@@ -268,6 +272,18 @@ picks one:
   the game's `.exe`; in OptiScaler's library folder nothing finds it, OptiScaler
   gets NULL for every forwarded export, and Spider-Man 2 crashed calling
   `xefgSwapChainSetLoggingCallback` while creating its swapchain.
+  With `--mfg-unlocker`, both FreeFG variants also carry
+  [MFG Unlocker](https://github.com/dashdogy/MFG-Unlocker) (MIT, by dashdogy;
+  1.6.0, the version FreeFG's 3×/4× checks on the BC-250 used) as the OptiScaler
+  plugin `OptiScaler/plugins/MFGUnlocker.asi`, loaded through the shared
+  `LoadAsiPlugins = true`. Without it Intel's runtime generates one frame per
+  real frame on this GPU; with it OptiScaler's XeFG menu offers 3× and 4×. The
+  shipped `OptiScaler.ini` gains `[XeFG] XeFGModel=default`, as FreeFG's
+  installer writes it: MFG Unlocker reads that key (OptiScaler does not), and
+  unset it runs its own model, on which FreeFG's shaders cover only 7 of their
+  13 programs. It goes into the ini rather than the preset because protonfixes
+  refuses a preset key the ini does not have. MFG Unlocker's license, which its
+  zip does not carry, is pinned by the tag's commit.
 - **Retired names** — HelixSR 2.0.0 (HLX DLSS in one FSR 3.1 DLL, used as
   OptiScaler's FidelityFX library under both names) left the packages on
   2026-10-29, and with it `freefg-helixsr` (the default until then) and

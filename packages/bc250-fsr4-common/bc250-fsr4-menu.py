@@ -29,8 +29,8 @@ import sys
 
 # name, label, sub-label. The order is the order in the window.
 PRESETS = [
-    ("freefg-hlxfsr4", "FreeFG + HLX FSR 4", "FreeFG 1.1.6 frame generation, HelixSR 3.2.0's HLX FSR 4 upscaler"),
-    ("freefg", "FreeFG + FSR4 RC12", "FreeFG 1.1.6 frame generation, FSR4 RC12 upscaler"),
+    ("freefg-hlxfsr4", "FreeFG + HLX FSR 4", "FreeFG 1.3.0 frame generation, HelixSR 3.2.0's HLX FSR 4 upscaler"),
+    ("freefg", "FreeFG + FSR4 RC12", "FreeFG 1.3.0 frame generation, FSR4 RC12 upscaler"),
     ("helixsr", "HelixSR Scaler", "HelixSR Scaler 2.1.0, HelixSR 3.2.0: HLX DLSS, or HLX FSR 4 from its menu"),
     ("fsr412f", "FSR4 RC12", "FSR4 RC12 upscaler only, no FreeFG"),
     ("hlxfsr4", "HLX FSR 4", "HelixSR 3.2.0's HLX FSR 4 upscaler only, no FreeFG"),

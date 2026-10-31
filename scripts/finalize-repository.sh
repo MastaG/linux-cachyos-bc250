@@ -680,6 +680,15 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - FSR4 and OptiScaler are on by default. They remain launch options, so
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- **New: FreeFG [1.3.0](https://github.com/daniel-h-0/freefg/releases/tag/v1.3.0).** Its OptiScaler
+  build (fork tag \`bc250-ba0dedb\`) keeps GTA V Enhanced's Social Club overlay out of frame
+  generation, which crashed FreeFG at startup there, keeps frame generation on in minimized windows,
+  and adds \`[BC250] RequireArgument\` (off unless set). FreeFG's shaders are unchanged; its wrapper and
+  pacing layer are updated.
+- **New: 3× and 4× frame generation in FreeFG**, with [MFG Unlocker](https://github.com/dashdogy/MFG-Unlocker)
+  1.6.0 by dashdogy (MIT), loaded as an OptiScaler plugin in both FreeFG variants. With frame
+  generation on, OptiScaler's overlay offers 3× and 4× as the XeFG multiplier; 2× stays the default,
+  and a multiplier you save there now survives the next launch.
 - **New: HLX FSR 4 alone** (\`PROTON_USE_OPTISCALER=hlxfsr4\`, and in the menu): HelixSR 3.2.0's HLX
   FSR 4 on the stock OptiScaler nightly, without FreeFG, as FSR4 RC12 is the RC12 bridge alone. AMD's
   own FSR sits beside it as the fallback. A user's request.
