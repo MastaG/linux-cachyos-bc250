@@ -501,8 +501,8 @@ class KernelPatchSetTests(unittest.TestCase):
     They stay separate directories because each kernel family is prepared from
     its own upstream PKGBUILD and pulled from its own CachyOS tag, and any of
     those can move independently. Since Linux 7.3 became stable -- the stable
-    and BORE PKGBUILDs build `cachyos-7.3.0-2`, the RC one `cachyos-7.3-rc6-1`
-    -- the two sets are the same twenty-two patches, so both allow-lists below
+    and BORE PKGBUILDs build `cachyos-7.3.1-1`, the RC one `cachyos-7.3-rc6-1`
+    -- the two sets are the same twenty-seven patches, so both allow-lists below
     are empty. When 7.2.5 backported the drm/gud change, the stable kernel
     stopped building because its set was missing a patch the RC set had had for
     weeks, and nothing said so until CI went red.
@@ -872,7 +872,8 @@ class KernelPatchSetTests(unittest.TestCase):
                  16: "sixteen", 17: "seventeen", 18: "eighteen",
                  19: "nineteen", 20: "twenty",
                  21: "twenty-one", 22: "twenty-two", 23: "twenty-three",
-                 24: "twenty-four"}
+                 24: "twenty-four", 25: "twenty-five", 26: "twenty-six",
+                 27: "twenty-seven"}
         return words[n]
 
 

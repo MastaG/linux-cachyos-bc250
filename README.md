@@ -1337,12 +1337,17 @@ What you need besides the package:
 |---|---|---|
 | `ttm.pages_limit=3670016` | Yes | 14 GiB GTT. Without it games over 8 GiB of guest memory (Gran Turismo 7, ASTRO BOT, My First Gran Turismo) stall while loading |
 | `amdgpu.sched_policy=2 amdgpu.vm_update_mode=0 amdgpu.cwsr_enable=0` | Recommended | Lets Kyty run the game's async compute on KFD queues. Without them games heavy on async compute (ASTRO BOT) are unplayable |
+| `amdgpu.bc250_gfx_eop_events=2` | Yes, for the native GPU backend | Lets that backend track a game's end-of-pipe completion points as KFD events. Needs a kernel from this repository (`0024-bc250-kfd-eop-events.patch`) |
 
-The three `amdgpu` options apply to **everything** on the board, not only to
-Kyty. `sched_policy=2` helps some games and hurts others (see
+`sched_policy=2`, `vm_update_mode=0` and `cwsr_enable=0` apply to **everything**
+on the board, not only to Kyty. `sched_policy=2` helps some games and hurts
+others (see
 [Optional AMDGPU scheduler tuning](#optional-amdgpu-scheduler-tuning)), and the
 [ROCm / KFD](docs/ROCM.md) TLB workaround does not operate with it. If other
-games get worse, take them out again while you are not playing PS5 games. Upstream's
+games get worse, take them out again while you are not playing PS5 games.
+`bc250_gfx_eop_events` is off by default in this repository's kernels because any
+non-zero value sends every end-of-pipe interrupt of every game on the board
+through that path, and no BC-250 board has run it yet. Upstream's
 explanation of each option, and of its own patched amdgpu (not part of this
 repository's kernels), is in `/usr/share/doc/kytyps5-native-git/bc250-amdgpu.md`.
 
@@ -1354,6 +1359,7 @@ reads). If you already added `amdgpu.sched_policy=2` for scheduler tuning, use
 ```bash
 sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 ttm.pages_limit=3670016"|' /etc/default/limine
 sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 amdgpu.sched_policy=2 amdgpu.vm_update_mode=0 amdgpu.cwsr_enable=0"|' /etc/default/limine
+sudo sed -i 's|^\(KERNEL_CMDLINE\[default\]+=".*\)"$|\1 amdgpu.bc250_gfx_eop_events=2"|' /etc/default/limine
 sudo limine-mkinitcpio
 sudo reboot
 ```
@@ -1363,16 +1369,18 @@ Check after the reboot:
 ```bash
 grep -o 'ttm.pages_limit=[0-9]*' /proc/cmdline                       # ttm.pages_limit=3670016
 cat /sys/module/amdgpu/parameters/{sched_policy,vm_update_mode,cwsr_enable}   # 2, 0, 0
+cat /sys/module/amdgpu/parameters/bc250_gfx_eop_events                # 2
 ```
 
-Kyty also checks them when a game starts from a Steam shortcut, and names the
-ones that are off in its first notification.
+Kyty also checks the GTT limit and `sched_policy` when a game starts from a
+Steam shortcut, and names the ones that are off in its first notification.
 
 To remove them again:
 
 ```bash
 sudo sed -i -e 's| ttm.pages_limit=3670016||' \
-    -e 's| amdgpu.sched_policy=2 amdgpu.vm_update_mode=0 amdgpu.cwsr_enable=0||' /etc/default/limine
+    -e 's| amdgpu.sched_policy=2 amdgpu.vm_update_mode=0 amdgpu.cwsr_enable=0||' \
+    -e 's| amdgpu.bc250_gfx_eop_events=2||' /etc/default/limine
 sudo limine-mkinitcpio
 ```
 
@@ -1709,3 +1717,8 @@ The BC-250 VRM and GDDR6 drivers work much the same way, except that they follow
   <https://gist.github.com/TeleBooth/d88ef745895d444a401d0e621de9818e>
 - Forbidden-Darkness — prebuilt BC-250 UEFI firmware bundling the 8-core unlock with the SMU telemetry patch, and the script that flashes it.  
   <https://github.com/Forbidden-Darkness/AMD-BC-250-UEFI-v2.2-Firmware-Menu-Script/releases>
+- superkeka — KytyPS5-Native and its `bc250-amdgpu` kernel work (the second gfx
+  ring, KFD EOP events, the runlist and no-HWS TLB flushes, MTYPE `C_RW_S`),
+  which this repository's kernel patches `0008-bc250-kfd-flush-tlb-by-runlist.patch`
+  and `0023`-`0027` are based on.
+  <https://github.com/superkeka/KytyPS5-Native>

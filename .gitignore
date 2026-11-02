@@ -7,3 +7,5 @@
 /local-patches/*
 !/local-patches/README.md
 __pycache__/
+# Qwen Code project settings (per-machine permissions, never shared)
+/.qwen/

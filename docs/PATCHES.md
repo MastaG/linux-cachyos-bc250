@@ -15,8 +15,18 @@ patches/linux-cachyos/
 patches/linux-cachyos-rc/
 ```
 
-`patches/linux-cachyos` is applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`, since `linux-cachyos` and `linux-cachyos-bore` are built from the same upstream source series.  
-`patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`. Since Linux 7.3 became stable both sets target the same series — the stable and BORE PKGBUILDs build `cachyos-7.3.0-2`, the RC one `cachyos-7.3-rc6-1` — so `patches/linux-cachyos` is today a copy of `patches/linux-cachyos-rc`. The directories stay separate because each kernel family is still prepared from its own upstream PKGBUILD and its own tag, and either tag can move on its own.
+`patches/linux-cachyos` is applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`, since `linux-cachyos` and `linux-cachyos-bore` are built from the same upstream source series.
+`patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`. Since Linux 7.3 became stable both sets target the same series — the stable and BORE PKGBUILDs build `cachyos-7.3.1-1`, the RC one `cachyos-7.3-rc6-1`.
+
+**Rule, until we start rebasing onto 7.4-rc1:** `patches/linux-cachyos-rc` is an exact
+byte-for-byte copy of `patches/linux-cachyos` — every change to the stable set is copied
+over in the same edit (`cp -a`), and `diff -rq patches/linux-cachyos patches/linux-cachyos-rc`
+printing nothing is the check. The RC kernel is parked in CI (`parked_kernel_rc` in the
+build workflow), so nothing builds that copy right now. The rule ends with the parking: when
+7.4-rc1 releases, regenerate the RC set against its own tag instead of trusting the copy —
+the stable set will not apply to a new RC series unchanged.
+
+The directories stay separate because each kernel family is still prepared from its own upstream PKGBUILD and its own tag, and either tag can move on its own.
 
 The two sets carry the same BC-250 patches with the same content — today the
 same count and the same file names. When a series absorbs one of our carries (or
@@ -32,7 +42,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twenty-two BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3). The RC kernel carries the same twenty-two patches (7.3-rc):
+The stable and BORE kernels carry these twenty-seven BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3.1). The RC kernel carries the same twenty-seven patches (7.3-rc):
 
 ```text
 0001-bc250-8core-metrics.patch
@@ -57,6 +67,11 @@ The stable and BORE kernels carry these twenty-two BC-250 patches in `patches/li
 0020-bc250-psp-ccp.patch
 0021-bc250-vrm-memory-hwmon.patch
 0022-ch7218-vrr-assert.patch
+0023-bc250-gfx10-second-gfx-ring.patch
+0024-bc250-kfd-eop-events.patch
+0025-bc250-kfd-nohws-vmid-flush.patch
+0026-bc250-gmc-flush-type-knob.patch
+0027-bc250-mtype-rw-c-rw-s.patch
 ```
 
 `patches/linux-cachyos-rc` is the same list, spelled out here as well because the
@@ -86,6 +101,11 @@ freezes the BC-250 and is parked in `disabled/bc250-vcn.patch` in both sets):
 0020-bc250-psp-ccp.patch
 0021-bc250-vrm-memory-hwmon.patch
 0022-ch7218-vrr-assert.patch
+0023-bc250-gfx10-second-gfx-ring.patch
+0024-bc250-kfd-eop-events.patch
+0025-bc250-kfd-nohws-vmid-flush.patch
+0026-bc250-gmc-flush-type-knob.patch
+0027-bc250-mtype-rw-c-rw-s.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -122,12 +142,28 @@ cannot drift against the others.
 Known pre-existing noise that is *not* a regression: upstream's own `dkms-clang.patch`
 applies with `offset -5` on both.
 
-Since the 2026-10-21 bump to Linux 7.3 one set serves two tags, and neither tree
-is exactly where it was generated: on `cachyos-7.3.0-2` eleven of the
-twenty-two land with an offset, on `cachyos-7.3-rc6-1` eight do — **no fuzz on
-either**, and every patched C file compiles against CachyOS's real config at
-`-O3` (checked on `cachyos-7.3.0-2`, 2026-10-21). Regenerate a patch when it
-starts needing fuzz, not merely when it moves.
+One set serves two tags, and only the tree it was generated on applies cleanly:
+`cachyos-7.3.1-1` (2026-11-02) is the base. The twenty-two patches the repository already
+carried needed nothing for it — applied to a clean `git archive cachyos-7.3.1-1` with CI's own
+`patch -Np1`, all twenty-two land with **0 offsets, 0 fuzz and 0 rejects** — so only `0008`
+changed content (it is Kyty's runlist flush now) and `0023`-`0027` are new. All twenty-seven
+land with **no offset and no fuzz**, while the same files on the parked RC tag
+`cachyos-7.3-rc6-1` put twelve hunks at an offset — **no fuzz there either**.
+Everything the series touches also compiles with the toolchain the package is built with: CI's
+`kernel-stable-PKGBUILD` passes its `BUILD_FLAGS`, for this release `CC=clang LD=ld.lld LLVM=1
+LLVM_IAS=1` (`_use_llvm_lto=thin`), and the final config CI publishes with the package says
+`CONFIG_CC_VERSION_TEXT="clang version 23.1.4"` and `CONFIG_LTO_CLANG_THIN=y`. Building
+`drivers/gpu/drm/amd/amdgpu/amdgpu.ko` with exactly those flags and that config in the Arch
+container image CI uses (`clang version 23.1.4`, `LLD 23.1.4`) compiled 1042 module objects —
+`amdgpu_ctx`, `amdgpu_trace_points`, `amdgpu_gfx`, `gfx_v10_0`, `gmc_v10_0`, `kfd_chardev`,
+`kfd_device_queue_manager`, `kfd_events`, `kfd_int_process_v10` and `kfd_svm` among them — with
+**0 errors and 0 warnings**, and the objects come out as LLVM IR, so ThinLTO was genuinely in
+effect. Linking the module's LTO objects on their own (`make CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1
+drivers/gpu/drm/amd/amdgpu/amdgpu.o`) also passes: no error, no warning, and a 730 MB ELF
+relocatable out of the ThinLTO backend in 114 s. What a single-module build cannot do is the
+standalone `scripts/Makefile.modpost` step — it has no vmlinux symbol table, so it reports the
+whole tree's exports as unresolved; CI runs that inside `make all`. Regenerate a
+patch when it starts needing fuzz, not merely when it moves.
 
 #### Disabled patches
 
@@ -165,13 +201,47 @@ This patch set contains:
 - optional full BC-250 APU telemetry through `pp_dpm_socclk` (`amdgpu.cs_full_telemetry=1`), disabled by default so the normal sysfs clock ABI is preserved;
 - the v33 merged GFX1013 PASID TLB invalidation fix;
 - the GFX1013 compute GFXOFF guard;
-- an **opt-in** KFD/HWS runlist rebuild workaround for stale ROCm compute TLB translations (`amdgpu.bc250_flush_by_runlist=1`);
+- an **opt-in** KFD/HWS runlist rebuild workaround for stale ROCm compute TLB translations (`amdgpu.bc250_flush_by_runlist`, a bitmask of the call sites: 1 = on unmap, 2 = on map, `3` = both; default 0, off). Under HWS the PASID sweep finds no VMID on this board, so the invalidation never happens; rebuilding an already-active runlist (queue preempt + VMID reassign) is the path measured to work. Sites: the KFD map and unmap ioctls and the SVM map/unmap paths. It takes `dqm_lock`, so `kfd_flush_tlb()` must never call it;
+- the same invalidation for the **no-HWS** path (`sched_policy=2`), where a process keeps one static VMID that neither the PASID sweep nor a runlist rebuild reaches: `kfd_flush_tlb()` flushes that VMID directly, as amdgpu did before PASID flushes existed (unconditional, no knob);
+- a **second gfx ring** on pipe 0, the PS5's AGR ring, opt-in with `amdgpu.bc250_gfx_queues=2` (default 1 = the stock single ring). `amdgpu_ctx` then maps ring index N to gfx ring N instead of balancing a context over both, because a PS5 title's queue is one hardware queue, and an EOP on pipe 0 checks the fences of every ring on it (queue 1's own EOP does not arrive);
+- EOP interrupts of render-node submissions delivered to the process as KFD events, which is what a PS5 title expects (`amdgpu.bc250_gfx_eop_events`, **default 0 = off**, unlike upstream's 2; `1` = on, `2` = on and an id-0 interrupt from inside an IB goes to the EOP log too). A context id with bit 27 set names the KFD event to signal; the others go to a per-process EOP log ring in the upper half of its signal page, which user space reads after registering a signal event with `AMDKFD_IOC_BC250_EOP_LOG` (ioctl number 0x80 — defined in `kfd_chardev.c` only, not in `include/uapi/linux/kfd.h`, so callers must carry the define). It ships off because with any non-zero value every end-of-pipe interrupt of every game on the board takes this path, and no BC-250 board has run it yet; Kyty's native GPU backend needs `amdgpu.bc250_gfx_eop_events=2` on the **kernel command line** (a `/etc/modprobe.d/` drop-in only applies if it was copied into the initramfs that loads `amdgpu`) — see the README's KytyPS5-Native section;
+- `amdgpu.bc250_tlb_flush_type` to force the flush type of **every** GPU TLB invalidation (default -1 = keep what the caller asked for, 0 = legacy). A heavyweight (type 2) invalidation of a KFD VMID waits for that VMID's outstanding requests and did not get its ACK while a KFD queue's GL2 flush was in flight, which stopped the KIQ and with it the GPU; our GFX1013 PASID path is forced to type 0 unconditionally, this knob covers the paths that stay heavyweight;
+- `AMDGPU_VM_MTYPE_RW` mapped to MTYPE `C_RW_S`, the cached-and-shared type the PS5 kernel gives a title's shared memory (`amdgpu.bc250_mtype_rw=0` restores the previous NC mapping);
 - a defensive AMDGPU TTM NULL-page guard so partially populated BO cleanup cannot dereference a missing page;
 - a widened Cyan Skillfish SMU SCLK range (350–2230 MHz, up from the stock 1000–2000 MHz) so userspace SMU-based governors such as [filippor/cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor/tree/smu) can drive the full clock range;
 - integration of the external `nct6687` hwmon/PWM driver;
 - integration of two external BC-250 hwmon drivers by Hexxeh (`bc250-vrm-memory-hwmon.patch` adds their Kconfig/Makefile entries; the sources are fetched at the commit of each upstream repository's highest `vX.Y.Z` release tag, by `scripts/resolve-bc250-sensor-drivers.sh`): `bc250_vrm` (VRM rail voltage/current/temperature/power over SMBus, needs a hardware modification) and `bc250_memory` (per-chip GDDR6 temperatures through the SMU, which it patches on load and which needs BIOS SMU debug access). Both carry a DMI alias that udev would load on every BC-250: `bc250_vrm` keeps it, since it binds only when a wired VRM answers, while the build removes `bc250_memory`'s, so it loads only via `/etc/modules-load.d/` or `modprobe`; see the README for enabling it;
 - an **opt-in** 40 CU unlock for the harvested shader engines (`amdgpu.bc250_cc_write_mode=3`), described below;
 - HDMI 2.1 PCON negotiation and the two on-die DCN201 DSC engines, **on by default** (`amdgpu.bc250_hdmi21=0` switches them off) — see [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below;
+
+The five GPU-side entries above (`0008` as it now stands and `0023`-`0027`) are
+our own patches, based on the features of
+`tools/bc250-amdgpu/bc250-amdgpu.patch` in
+[superkeka/KytyPS5-Native](https://github.com/superkeka/KytyPS5-Native) at
+`faf53a5`, split one patch per feature and rebased onto `cachyos-7.3.1-1`
+(upstream is credited in the [README](../README.md#credits)). That
+series was written against a SteamOS-era tree and overlaps our own carries, so
+some of its hunks are deliberately not here:
+
+- `bc250_flush_pasid_kiq` (default 1) and the `flush_pasid_uses_kiq` line it
+  gates: `0006` already routes every GFX1013 PASID flush through MMIO, and their
+  default would hand that flush back to the KIQ — exactly what `0006` exists to
+  avoid. Their own tested cmdline sets `bc250_flush_pasid_kiq=0`;
+- the wave-save-area sizing in `kfd_queue.c` (two hunks), which sizes the area
+  for the chip's 40 physical CUs instead of the 24 amdgpu enables at init. That
+  matters only with a runtime CU unlock, which none of the shipped defaults
+  turns on;
+- their `Makefile` and `amdgpu_trace.h` (`TRACE_INCLUDE_PATH .`) edits, which
+  exist to build the driver out of tree, and their `sched_policy` wording: the
+  no-HWS flush above keys on `KFD_SCHED_POLICY_NO_HWS`, which is 2, so the
+  `amdgpu.sched_policy=2` in their cmdline is what selects it.
+
+The knobs ship off or at the stock value, with one of upstream's defaults kept:
+`bc250_mtype_rw` is on, as upstream ships it, and is the only new default that changes
+behaviour for every board. `bc250_gfx_eop_events` ships off rather than at upstream's 2,
+because it is the one path that touches every game's end-of-pipe interrupts and no BC-250
+board has run it. Upstream's Kyty line is
+`options amdgpu sched_policy=2 bc250_tlb_flush_type=0 bc250_gfx_queues=2 vm_update_mode=0 bc250_flush_pasid_kiq=0 bc250_flush_by_runlist=3 gpu_recovery=0`.
 
 ## HDMI 2.1 VRR and ALLM backport (removed)
 
