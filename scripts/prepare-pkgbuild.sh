@@ -227,6 +227,43 @@ text = text.replace(config_anchor, config_replacement, 1)
 path.write_text(text, encoding="utf-8", newline="\n")
 PY
 
+# One-off, BORE only: CachyOS's "7.3: Rebase BORE" (kernel-patches f3770b16d0,
+# 2026-11-01) replaced the patch at its mutable master URL, but
+# linux-cachyos-bore/PKGBUILD still declares the b2sum of the 2026-10-21 file
+# (6847663965). That old file does not build on cachyos-7.3.1-1 (fair.c,
+# update_protect_slice), and the rebase is the fix. While upstream still
+# declares exactly that stale sum, take the rebased file from its fixed commit
+# with its own b2sum. Once upstream changes the sum this does nothing and says
+# so: then remove it.
+if [[ "$KERNEL_ID" == bore ]]; then
+    python3 - "$BUILD_DIR/PKGBUILD" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+source = '"${_patchsource}/sched/0001-bore-cachy.patch"'
+pinned = ('"https://raw.githubusercontent.com/cachyos/kernel-patches/'
+          'f3770b16d069a1bce8dfa63841042137f8b43434/7.3/sched/0001-bore-cachy.patch"')
+stale = ('04cca5d4811dce379776c124469cb69f5275e7eaa61401da9e23077d0d60d4d0'
+         '6b85b646292b6db4639541d70b4283f732b102c1168d6d29e16f8cccc695e205')
+rebased = ('355a279dea4edf0148cc6499b770bb6d07c55623ea334e6b0db52eba746454d5'
+           'afafe58bbcf357c9bc53aaa1319a610cd167dba77f6c866835077aed85a2d45c')
+
+if text.count(stale) == 0:
+    print('==> BORE override inactive: upstream no longer declares the stale '
+          '0001-bore-cachy.patch b2sum (remove the override from prepare-pkgbuild.sh)')
+    raise SystemExit(0)
+if text.count(stale) != 1 or text.count(source) != 1:
+    raise SystemExit('ERROR: BORE override expected the stale b2sum and the '
+                     '0001-bore-cachy.patch source exactly once')
+text = text.replace(source, pinned, 1).replace(stale, rebased, 1)
+path.write_text(text, encoding="utf-8", newline="\n")
+print('==> BORE override: 0001-bore-cachy.patch from kernel-patches f3770b16d0, '
+      f'b2sum {stale[:16]}... -> {rebased[:16]}...')
+PY
+fi
+
 cat > "$BUILD_DIR/bc250-build.env" <<EOF_META
 KERNEL_ID=${KERNEL_ID}
 CACHYOS_SOURCE_VARIANT=${CACHYOS_SOURCE_VARIANT}
