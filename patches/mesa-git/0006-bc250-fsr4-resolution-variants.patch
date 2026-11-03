@@ -41,7 +41,7 @@ src/amd/vulkan/radv_shader.c            | 85 +++++++++++++++++++++
 ---
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 23b9f2fda18..afef22d185b 100644
+index 70112f516ae..4bd0cf86833 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -386,7 +386,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
