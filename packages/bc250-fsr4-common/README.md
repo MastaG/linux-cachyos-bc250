@@ -37,7 +37,7 @@ written. A local-mode failure stops the launch rather than falling back to the
 network. Absent the variable, stock behaviour is unchanged.
 
 **There are two copies, because there are two different `upscalers.py` files.**
-GE-Proton ships umu-protonfixes as released with GE-Proton11-6; proton-cachyos
+GE-Proton ships umu-protonfixes as released with GE-Proton11-12; proton-cachyos
 builds its own, much later revision of that module from its protonfixes
 submodule. A patch rebased onto one does not apply to the other, so each package
 uses the copy matching its base (both proton-cachyos packages share one), and
@@ -45,9 +45,13 @@ uses the copy matching its base (both proton-cachyos packages share one), and
 
 ### `patches/ge-proton/`
 
-For `protonge-latest-bc250`. This is the upstream BC-250 FSR4 work's own patch,
-unmodified: its declared base is GE-Proton11-6's `protonfixes/upscalers.py`, and
-that file in GE-Proton11-6 hashes to the `4128896c…` the patch header names.
+For `protonge-latest-bc250`. The upstream BC-250 FSR4 work's own patch, rebased
+onto GE-Proton11-12 (GE-Proton11-6 to 11-11 shipped one unchanged file; 11-12
+reworked the module: components, streamline, file-path versions). Its declared
+base is GE-Proton11-12's `protonfixes/upscalers.py`, which hashes to the
+`fb321dc2…` the patch header names. In pinned mode it also keeps OptiScaler from
+implicitly enabling FSR4 and refuses file-path versions, as it already did for
+DLSS, XeSS and FFX3.
 
 Rooted at the Proton tree (`a/protonfixes/upscalers.py`), because that package
 applies it itself, from the extracted tarball root.

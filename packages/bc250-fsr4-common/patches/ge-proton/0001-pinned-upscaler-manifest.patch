@@ -1,8 +1,8 @@
 From: BC250 FSR4 maintainers
 Subject: [PATCH] upscalers: opt-in pinned local manifest with strict integrity
 
-Base: GE-Proton11-6 protonfixes/upscalers.py
-Base-SHA256: 4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645
+Base: GE-Proton11-12 protonfixes/upscalers.py
+Base-SHA256: fb321dc266b305020476f6e4c57b9922b8cc3fb29c2ab9c21dcebffcca055ec6
 
 PROTON_UPSCALER_MANIFEST selects an absolute local JSON manifest using the
 existing schema plus mandatory archive and critical-file SHA256 checksums.
@@ -18,7 +18,7 @@ otherwise.
 
 --- a/protonfixes/upscalers.py
 +++ b/protonfixes/upscalers.py
-@@ -20,6 +20,88 @@
+@@ -20,6 +20,90 @@ from .config import config
  
  __manifest_url = 'https://loathingkernel.github.io/proton-upscalers/manifest.json'
  __manifest_json: Union[dict, None] = None
@@ -69,6 +69,8 @@ otherwise.
 +
 +def __pinned_item(item: dict, upscaler: str) -> dict:
 +    item = item.copy()
++    # GE-Proton11-12's component code logs this field; pinned manifests need not carry it.
++    item.setdefault('file_description', upscaler)
 +    hashes = item.get('sha256_hash')
 +    if upscaler == 'optiscaler':
 +        if not isinstance(hashes, dict) or not hashes:
@@ -107,7 +109,7 @@ otherwise.
  
  
  def __get_manifest() -> dict:
-@@ -27,6 +109,14 @@
+@@ -27,6 +111,14 @@ def __get_manifest() -> dict:
      if __manifest_json is not None:
          return __manifest_json
  
@@ -122,8 +124,8 @@ otherwise.
      cache_dir = config.path.cache_dir.joinpath('upscalers')
      cache_dir.mkdir(parents=True, exist_ok=True)
      cached_manifest = cache_dir.joinpath('manifest.json')
-@@ -55,6 +145,13 @@
- 
+@@ -56,6 +148,13 @@ def __get_manifest() -> dict:
+ @lru_cache(maxsize=16)
  def __get_dll_manifest(upscaler: str, version: str = 'default') -> dict:
      dlls = __get_manifest()[upscaler]
 +    if __manifest_path is not None:
@@ -136,33 +138,43 @@ otherwise.
      dlls = tuple(filter(lambda dll: not dll['is_dev_file'], dlls))
      for dll in reversed(dlls):
          if version in dll['version']:
-@@ -202,6 +299,11 @@
-     prefix_dir: str, dst: str, remote_item: dict, tracked_item: dict, ignore_version: bool
+@@ -112,7 +211,8 @@ __version_file = 'upscaler_files'
+ def __get_entry(filepath: str, group: str, version: str) -> dict[str, dict]:
+     path = Path(version)
+     __sys32 = 'drive_c/windows/system32'
+-    if path.is_absolute() and path.is_file():
++    # A pinned manifest is the only source: a file path as version is not.
++    if __manifest_path is None and path.is_absolute() and path.is_file():
+         return {f'{__sys32}/{filepath}': __get_dll_manifest_from_path(group, path)}
+     else:
+         return {f'{__sys32}/{filepath}': __get_dll_manifest(group, version)}
+@@ -251,6 +351,11 @@ def __check_upscaler_file(
+     prefix_dir: str, dst: str, remote: dict, tracked: dict, ignore_version: bool
  ) -> bool:
      target = os.path.join(prefix_dir, dst)
 +    if __manifest_path is not None:
 +        ignore_version = False
-+        if not __sha256_matches(Path(target), remote_item['sha256_hash']):
++        if not __sha256_matches(Path(target), remote['sha256_hash']):
 +            log.warn(f'Pinned SHA256 mismatch or missing file: {dst}')
 +            return False
  
      # Before everything, check if target is a symlink
      # or the file size is unreasonably small and remove it
-@@ -301,6 +403,8 @@
-     version: the version of the optiscaler to download
+@@ -353,6 +458,8 @@ def __check_component_files(
+     version: the version of the component to download
      ignore_version: ignore version mismatch but still check if the files are present
      """
 +    if __manifest_path is not None:
 +        ignore_version = False
      try:
-         path, item = __get_opti_files(version)
-     except Exception as e:
-@@ -317,6 +421,12 @@
+         tracked_items = __get_tracked_items(compat_dir, section)
+         # test if new files and their attributes exist in the tracking file
+@@ -362,6 +469,12 @@ def __check_component_files(
          log.warn(str(e))
          return False
  
 +    if __manifest_path is not None:
-+        for name, checksum in item['sha256_hash'].items():
++        for name, checksum in remote_item['sha256_hash'].items():
 +            if not __sha256_matches(Path(prefix_dir, path, name), checksum):
 +                log.warn(f'Pinned SHA256 mismatch or missing file: {name}')
 +                return False
@@ -170,7 +182,7 @@ otherwise.
      dst_hashes = {}
      for dst in tracked_items:
          target = os.path.join(prefix_dir, dst)
-@@ -420,7 +530,12 @@
+@@ -455,7 +568,12 @@ def __download_file(url: str, dst: Path, *, checksum: Union[str, None] = None) -
          raise e
  
  
@@ -184,7 +196,7 @@ otherwise.
      item_md5 = item.get('zip_md5_hash', '')
  
      if cached_file.exists():
-@@ -433,11 +548,13 @@
+@@ -468,6 +586,8 @@ def __cached_download(item: dict, cached_file: Path) -> None:
      if not cached_file.exists():
          __download_file(item['download_url'], cached_file, checksum=item_md5)
  
@@ -192,6 +204,9 @@ otherwise.
 +
  
  def __download_extract_zip(item: dict, cache: Path, dst: Path) -> None:
+     url = item['download_url']
+@@ -477,7 +597,7 @@ def __download_extract_zip(item: dict, cache: Path, dst: Path) -> None:
+         return
      url_path = Path(unquote(urlparse(item['download_url']).path))
      cached_file = cache.joinpath(url_path.name)
 -    __cached_download(item, cached_file)
@@ -199,7 +214,7 @@ otherwise.
      dst.parent.mkdir(parents=True, exist_ok=True)
      if cached_file.suffix == '.zip':
          with zipfile.ZipFile(cached_file) as zip_fd:
-@@ -447,6 +564,8 @@
+@@ -487,6 +607,8 @@ def __download_extract_zip(item: dict, cache: Path, dst: Path) -> None:
              # this also sets the target filename
              with cached_file.open('rb') as cached_fd:
                  dst_fd.write(lzma.decompress(cached_fd.read()))
@@ -207,8 +222,8 @@ otherwise.
 +        raise RuntimeError(f'Pinned extracted-file SHA256 mismatch: {dst.name}')
  
  
- def download_upscaler(
-@@ -501,7 +620,7 @@
+ def __download_upscaler_files(
+@@ -582,7 +704,7 @@ def __download_component_files(
          cache_dir = config.path.cache_dir.joinpath('upscalers')
          cache_dir.mkdir(parents=True, exist_ok=True)
          cached_file = cache_dir.joinpath(url_path.name)
@@ -217,8 +232,8 @@ otherwise.
  
          for target in tracked_items:
              # do not remove .ini files
-@@ -543,6 +662,8 @@
-     log.info(f'Setting up {name.upper()} version {version}.')
+@@ -655,6 +777,8 @@ def setup_upscaler(
+     log.info(f'Setting up {name} version "{version}".')
      download_upscaler(name, compat_dir, prefix_dir, version)
      enabled = check_upscaler(name, compat_dir, prefix_dir, version, ignore_version=True)
 +    if __manifest_path is not None and not enabled:
@@ -226,19 +241,19 @@ otherwise.
      return enabled
  
  
-@@ -555,6 +676,11 @@
-     log.info(f'Setting up OptiScaler version "{version}".')
-     download_optiscaler(compat_dir, prefix_dir, version)
-     enabled = check_optiscaler(compat_dir, prefix_dir, version, ignore_version=True)
+@@ -667,6 +791,11 @@ def setup_optiscaler(
+     log.info(f'Setting up optiscaler version "{version}".')
+     download_component("optiscaler", compat_dir, prefix_dir, version)
+     enabled = check_component("optiscaler", compat_dir, prefix_dir, version, ignore_version=True)
 +    if __manifest_path is not None and not enabled:
 +        raise RuntimeError(f'Pinned OptiScaler {version} failed validation; refusing launch')
 +    if __manifest_path is not None:
 +        path, item = __get_opti_files(version)
 +        __expose_proxy(prefix_dir, path, item, env.get('PROTON_OPTISCALER_NAME', 'dxgi.dll'))
  
-     if enabled and (env_config := env.get('PROTON_OPTISCALER_CONFIG', '')):
-         path, _ = __get_opti_files(version)
-@@ -571,11 +697,15 @@
+     if enabled and env.get('PROTON_OPTISCALER_STREAMLINE', '0') != '0':
+         streamline_version = get_version(env, 'PROTON_OPTISCALER_STREAMLINE', 'default')
+@@ -690,11 +819,15 @@ def setup_optiscaler(
              except Exception as e:
                  log.crit(f'Malformed config "{part}"')
                  log.debug(str(e))
@@ -254,7 +269,7 @@ otherwise.
  
          with open(ini, 'w') as ini_fd:
              parser.write(ini_fd)
-@@ -622,6 +752,22 @@
+@@ -750,6 +883,25 @@ def setup_upscalers(
  
      usage: setup_upscalers(g_session.compat_config, g_session.env, g_compatdata.base_dir, g_compatdata.prefix_dir)
      """
@@ -263,6 +278,9 @@ otherwise.
 +    selected_path = Path(manifest_path) if manifest_path is not None else None
 +    if selected_path != __manifest_path or selected_path is not None:
 +        __manifest_json = None
++        # Both lookups are lru_cached and read the manifest selected here.
++        __get_dll_manifest.cache_clear()
++        __get_dll_manifest_from_path.cache_clear()
 +    __manifest_path = selected_path
 +    if __manifest_path is not None:
 +        if not __manifest_path.is_absolute():
@@ -274,10 +292,10 @@ otherwise.
 +        name in __get_manifest()
 +        for name in ('fsr_40_fg_dx12', 'fsr_40_ldr_dx12', 'fsr_40_up_dx12')
 +    )
-     dlss_version = get_version(env, 'PROTON_DLSS_UPGRADE', 'default')
-     xess_version = get_version(env, 'PROTON_XESS_UPGRADE', 'default')
+     dlss_version: str = get_version(env, 'PROTON_DLSS_UPGRADE', 'default')
+     xess_version: str = get_version(env, 'PROTON_XESS_UPGRADE', 'default')
  
-@@ -637,14 +783,28 @@
+@@ -767,14 +919,28 @@ def setup_upscalers(
  
      upscaler_replace = set()
      upscalers = (
@@ -286,7 +304,8 @@ otherwise.
 +        ('dlss', dlss_version, 'dlss' in compat_config or implicit_upgrades),
 +        ('xess', xess_version, 'xess' in compat_config or implicit_upgrades),
          # amdxcffx64 4.1.1
-         ('fsr4', fsr4_version, 'fsr4' in compat_config),
+-        ('fsr4', fsr4_version, 'fsr4' in compat_config or 'optiscaler' in compat_config),
++        ('fsr4', fsr4_version, 'fsr4' in compat_config or implicit_upgrades),
          # fidelityfx sdk
 -        ('ffx3', ffx3_version, 'ffx3' in compat_config or 'optiscaler' in compat_config),
 +        ('ffx3', ffx3_version, 'ffx3' in compat_config or implicit_upgrades),
@@ -303,13 +322,13 @@ otherwise.
 +                if name == 'OptiScaler':
 +                    __get_opti_files(version)
 +                else:
-+                    __get_upscaler_items(name, version)
++                    __get_items(name, version)
 +            except Exception as e:
 +                raise RuntimeError(f'Pinned {name} {version} failed validation; refusing launch: {e}') from e
      for upscaler in upscalers:
          name, version, enabled = upscaler
          if enabled and setup_upscaler(name, compat_dir, prefix_dir, version):
-@@ -654,8 +814,8 @@
+@@ -794,8 +960,8 @@ def setup_upscalers(
      if 'optiscaler' in compat_config:
          if setup_optiscaler(env, compat_dir, prefix_dir, optiscaler_version):
              log.info('OptiScaler enabled.')
@@ -317,6 +336,6 @@ otherwise.
 -                if ffx4_version in {'4.0.0', '4.0.1'}:
 +            if 'fsr4' in compat_config and implicit_ffx4:
 +                if __manifest_path is None and ffx4_version in {'4.0.0', '4.0.1'}:
-                     clean_upscaler('ffx4', compat_dir, prefix_dir)
+                     clean_tracked_files('ffx4', compat_dir, prefix_dir)
                  else:
                      setup_upscaler('ffx4', compat_dir, prefix_dir, ffx4_version)

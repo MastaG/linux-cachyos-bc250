@@ -22,7 +22,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = ROOT / "packages/bc250-fsr4-common"
 BASES = {
-    "ge-proton": "4128896c4134d865a290e2e8e62279d07157131b207f4bc7d29e8c873fe85645",
+    "ge-proton": "fb321dc266b305020476f6e4c57b9922b8cc3fb29c2ab9c21dcebffcca055ec6",
     "proton-cachyos": "c73c4827035f3db58088f66fb17b89f7b775616da8fb643d3b06474daa7ca911",
 }
 
@@ -63,7 +63,7 @@ class RuntimeTests(unittest.TestCase):
     def setUpClass(cls):
         cls.sources = {}
         fixtures = {
-            "ge-proton": ROOT / "tests/fixtures/ge-proton11-6-upscalers.py",
+            "ge-proton": ROOT / "tests/fixtures/ge-proton11-12-upscalers.py",
             "proton-cachyos": ROOT / "tests/fixtures/cachyos-native-upscalers.py",
         }
         for base, expected_hash in BASES.items():
@@ -786,9 +786,13 @@ class RuntimeTests(unittest.TestCase):
                 for name in (
                     "WINE_OPTISCALER_NAME",
                     "WINE_UPSCALER_REPLACE",
-                    "FSR4_UPGRADE",
                 ):
                     self.assertNotIn(name, env)
+                # The inherited "1" must not survive. GE-Proton11-12's
+                # protonfixes writes an explicit "0" when no FSR4 upgrade is
+                # set up (absent means "on by default" on some GPUs there), so
+                # off is absent or "0".
+                self.assertIn(env.get("FSR4_UPGRADE"), (None, "0"))
                 self.assertEqual(
                     {
                         str(p): p.read_bytes()
