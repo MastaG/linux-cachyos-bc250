@@ -27,6 +27,10 @@ export _processor_opt="$PROCESSOR_OPT"
 export KCFLAGS="${KCFLAGS:+${KCFLAGS} }-mtune=${CPU_TUNE}"
 export MAKEFLAGS="${MAKEFLAGS:--j$(nproc)}"
 
+# CachyOS's LTO kernels may need a newer pahole than Arch has; the minimum is
+# read from this PKGBUILD and pahole is taken from CachyOS only when needed.
+sudo "${ROOT_DIR}/scripts/install-kernel-build-deps.sh" "$BUILD_DIR/PKGBUILD"
+
 # A fresh CI user has no personal OpenPGP keyring. Source integrity remains
 # enforced by the upstream PKGBUILD's BLAKE2 checksums.
 makepkg --syncdeps --noconfirm --cleanbuild --clean --skippgpcheck

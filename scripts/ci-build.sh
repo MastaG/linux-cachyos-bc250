@@ -123,15 +123,6 @@ chmod 0440 /etc/sudoers.d/builder
 chown -R builder:builder /workspace
 
 
-# CachyOS's LTO kernels need a newer pahole than Arch may have; fetch it from
-# CachyOS when so. Fail soft like the Proton step below, so Mesa and the rest
-# still build and publish.
-if [[ "$BUILD_KERNEL_STABLE" == true || "$BUILD_KERNEL_RC" == true || "$BUILD_KERNEL_BORE" == true ]]; then
-    if ! /workspace/scripts/install-kernel-build-deps.sh; then
-        printf '::warning title=Kernel build dependencies unavailable::could not install pahole>=1:1.32-2; the kernels will fail to build\n'
-    fi
-fi
-
 # proton-cachyos-native's makedepends include two AUR-only packages that a
 # vanilla Arch container cannot resolve. Only fetch them when that component is
 # actually being built, and fail soft -- warn and continue, so the other
