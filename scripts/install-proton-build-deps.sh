@@ -28,6 +28,9 @@ set -Eeuo pipefail
 
 REPO="${CACHYOS_GENERIC_REPO:-https://mirror.cachyos.org/repo/x86_64/cachyos}"
 PACKAGES=(afdko mingw-w64-tools python-ufonormalizer)
+# With arguments it fetches those packages instead, the same way and with the
+# same checks (install-kernel-build-deps.sh uses that for pahole).
+(( $# == 0 )) || PACKAGES=("$@")
 
 command -v bsdtar >/dev/null 2>&1 || {
     printf 'ERROR: bsdtar is required to read the package database\n' >&2
@@ -93,6 +96,8 @@ done
 # One transaction, so pacman resolves afdko against python-ufonormalizer here
 # and everything else from Arch.
 pacman -U --noconfirm "${downloaded[@]}"
+
+(( $# == 0 )) || { printf '==> Installed from CachyOS: %s\n' "${PACKAGES[*]}"; exit 0; }
 
 missing=()
 for binary in makeotf otf2otc gendef genidl genpeimg; do
