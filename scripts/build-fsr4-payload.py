@@ -233,15 +233,27 @@ FREEFG_NAME = "freefg"
 # FreeFG with HLX FSR 4 (HelixSR 3.0) as its FidelityFX upscaler, in the place
 # the RC12 bridge has in "freefg".
 FREEFG_HLXFSR4_NAME = "freefg-hlxfsr4"
+# FreeFG with HLX DLSS (HelixSR 3.x's helixsr.dll) as its DX12 upscaler, the way
+# FreeFG's own installer sets up "--upscaler hlx-dlss": the DLL in FreeFG's
+# OptiScaler custom-provider folder custom/hlx-dlss/dlss/ and
+# [Upscalers] Dx12Upscaler=hlx-dlss. The folder name is the identity FreeFG's
+# OptiScaler checks to pass HLX DLSS its input API. The RC12 bridge stays in the
+# FidelityFX slot for the Direct3D 11 and Vulkan games (requested by a user,
+# 2026-11-03, after HelixSR 2.0 and with it "freefg-helixsr" were retired).
+FREEFG_HLXDLSS_NAME = "freefg-hlxdlss"
+HLXDLSS_FOLDER = "OptiScaler/custom/hlx-dlss/dlss"
 # HLX FSR 4 alone on the stock OptiScaler nightly, as FSR4 RC12 is the RC12 bridge
 # alone: no FreeFG (requested by a user, 2026-10-30).
 HLXFSR4_NAME = "hlxfsr4"
 # Variants an older package had, and the variant each name now selects, so a
 # launch option or a saved menu choice that names one keeps working. Both were
 # HelixSR 2.0 (HLX DLSS in an FSR 3.1 DLL), dropped once HLX FSR 4 had proved as
-# good in FreeFG on the BC-250 (owner, 2026-10-29): "freefg-helixsr" (the
-# default until then) is FreeFG + HLX FSR 4, "helixsr-ffx" HelixSR Scaler.
-RETIRED_VARIANTS = {"freefg-helixsr": "freefg-hlxfsr4", "helixsr-ffx": "helixsr"}
+# good in FreeFG on the BC-250 (owner, 2026-10-29): "helixsr-ffx" is HelixSR
+# Scaler, and "freefg-helixsr" (the default until then) FreeFG + HLX DLSS since
+# that came back (owner, 2026-11-03: closest to what the name was; a choice saved
+# with it moves from HLX FSR 4 to HLX DLSS, accepted). It was FreeFG + HLX FSR 4
+# from 2026-10-29 to then.
+RETIRED_VARIANTS = {"freefg-helixsr": "freefg-hlxdlss", "helixsr-ffx": "helixsr"}
 FREEFG_FOLDER = "OptiScaler/BC250-XeFG"
 FREEFG_LAYER = "VK_LAYER_BC250_xefg_wave"
 # What FreeFG's installer writes for its OptiScaler route at 2x (install.py
@@ -510,6 +522,34 @@ def helixsr_ngx_from(source: Path, staging: Path) -> tuple[Path, Path, Path, Pat
     return dll, ini, hlx, notices
 
 
+def helixsr_ini_int8_off(ini: Path, staging: Path) -> Path:
+    """A copy of HelixSR's helixsr.ini with [Upscaling] Int8 = off.
+
+    The BC-250 has no fast int8 path (owner's ruling, 2026-10-26). The Scaler
+    writes this from OptiScaler.ini's [HelixSR]; FreeFG's OptiScaler does not,
+    and HelixSR reads helixsr.ini beside its DLL, so the FreeFG variant ships it
+    set. Exactly one Int8 line in [Upscaling] is required, so a reworded release
+    fails the build instead of shipping "auto".
+    """
+    text = ini.read_bytes().decode("utf-8")
+    lines = text.splitlines(keepends=True)
+    section, hits = None, []
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            section = stripped[1:-1].strip()
+        elif section == "Upscaling" and stripped.split("=", 1)[0].strip() == "Int8" and "=" in stripped:
+            hits.append(index)
+    if len(hits) != 1:
+        raise RuntimeError("helixsr.ini must have exactly one [Upscaling] Int8 line")
+    line = lines[hits[0]]
+    ending = line[len(line.rstrip("\r\n")):]
+    lines[hits[0]] = "Int8 = off" + ending
+    out = staging / "freefg-hlxdlss-helixsr.ini"
+    out.write_bytes("".join(lines).encode("utf-8"))
+    return out
+
+
 def seed_fakenvapi_settings(extracted: Path) -> Path | None:
     """Stop fakenvapi logging on every launch, unless it brought its own settings.
 
@@ -759,7 +799,8 @@ def main() -> int:
                     help="HelixSR 3.0 or later release zip (after its setup: "
                          "HelixSR/helixsr.dll and HLX-FSR4/) and the URL recorded "
                          "in the prefix; HLX DLSS and HLX FSR 4 for the 'helixsr' "
-                         "variant, and HLX FSR 4 for 'freefg-hlxfsr4'")
+                         "variant, HLX FSR 4 for 'freefg-hlxfsr4' and HLX DLSS "
+                         "for 'freefg-hlxdlss'")
     ap.add_argument("--helixsr-scaler", nargs=2, metavar=("ARCHIVE", "ORIGIN"),
                     help="HelixSR Scaler 2.0 or later archive (OptiScaler.dll, "
                          "OptiScaler.ini, Licenses/, OptiScaler/) and the URL "
@@ -769,8 +810,8 @@ def main() -> int:
                     help="FreeFG release zip and the URL recorded in the prefix; adds "
                          "the opt-in 'freefg' variant (Intel XeFG frame generation "
                          "with FreeFG's BC-250 shaders and VRR pacing layer), "
-                         "and 'freefg-hlxfsr4' with HLX FSR 4 when --helixsr-ngx "
-                         "is given")
+                         "and 'freefg-hlxfsr4' (HLX FSR 4) and 'freefg-hlxdlss' "
+                         "(HLX DLSS) when --helixsr-ngx is given")
     ap.add_argument("--freefg-ini", type=Path,
                     help="OptiScaler.ini of FreeFG's OptiScaler build (its fork's tree at "
                          "the tagged commit); the nightly's is older than that build")
@@ -828,7 +869,7 @@ def main() -> int:
         name for name, _, _ in args.ffx_sdk_alt
     } | ({HELIXSR_NAME} if args.helixsr_scaler else set()) \
       | ({FREEFG_NAME} if args.freefg else set()) \
-      | ({FREEFG_HLXFSR4_NAME} if args.freefg and args.helixsr_ngx else set()) \
+      | ({FREEFG_HLXFSR4_NAME, FREEFG_HLXDLSS_NAME} if args.freefg and args.helixsr_ngx else set()) \
       | ({HLXFSR4_NAME} if args.helixsr_ngx else set()):
         raise SystemExit(
             f"ERROR: --ffx-sdk-default names no variant: {args.ffx_sdk_default!r}")
@@ -861,7 +902,8 @@ def main() -> int:
 
         for name, path, origin in args.ffx_sdk_alt:
             if name in ("", "default", "1", "0", SIGNED_NAME, HELIXSR_NAME,
-                        FREEFG_NAME, FREEFG_HLXFSR4_NAME, HLXFSR4_NAME, "optiscaler",
+                        FREEFG_NAME, FREEFG_HLXFSR4_NAME, FREEFG_HLXDLSS_NAME,
+                        HLXFSR4_NAME, "optiscaler",
                         *RETIRED_VARIANTS) or name in aliases:
                 raise SystemExit(f"ERROR: unusable variant name: {name!r}")
             source = Path(path)
@@ -998,6 +1040,19 @@ def main() -> int:
                     "THIRD_PARTY_NOTICES.md)"
                     + (f"; {amd} is AMD's FidelityFX DLL from HelixSR's download, its "
                        "fallback for what HLX FSR 4 does not cover" if fallback else "")))
+                hlx_dlss, helix_ini, _, _ = helixsr_ngx
+                upscalers.append((
+                    FREEFG_HLXDLSS_NAME, bridge,
+                    {f"{HLXDLSS_FOLDER}/helixsr.dll": hlx_dlss,
+                     f"{HLXDLSS_FOLDER}/helixsr.ini": helixsr_ini_int8_off(helix_ini, staging)},
+                    {"Upscalers.Dx12Upscaler": "hlx-dlss"}, helix_notices, "HelixSR",
+                    f"the {args.freefg_bridge} FSR4 bridge (origin: {bridge_origin}), for "
+                    "the Direct3D 11 and Vulkan games; the DX12 upscaler is HLX DLSS, "
+                    f"{HLXDLSS_FOLDER}/helixsr.dll from HelixSR (origin: {args.helixsr_ngx[1]}, "
+                    f"SHA256 {digest(hlx_dlss)}), NVIDIA's DLSS network as DirectX 12 compute "
+                    "shaders, built by HelixSR's own setup script from NVIDIA's DLSS DLL; per "
+                    "its author that network remains the property of NVIDIA and is not "
+                    "covered by HelixSR's licence. helixsr.ini beside it has Int8 = off"))
             for name, ffx_sdk, upscaler_files, upscaler_preset, upscaler_notices, \
                     notice_prefix, upscaler_text in upscalers:
                 # freefg-hlxfsr4 is the packages' default (owner's decision,

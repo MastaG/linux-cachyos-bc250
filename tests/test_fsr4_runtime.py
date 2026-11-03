@@ -1775,7 +1775,8 @@ class PresetTests(unittest.TestCase):
             "wave_config": "OptiScaler/BC250-XeFG/shaders/waves.txt",
             "dll_path": "C:\\windows\\system32\\umu\\OptiScaler"}
         hlx = config["optiscaler_aliases"]["freefg-hlxfsr4"]
-        self.assertEqual(config["freefg"], {version: layer, hlx: layer})
+        hlx_dlss = config["optiscaler_aliases"]["freefg-hlxdlss"]
+        self.assertEqual(config["freefg"], {version: layer, hlx: layer, hlx_dlss: layer})
         # The default is untouched.
         default = self.trees[config["optiscaler_version"]]
         self.assertNotIn("OptiScaler/bc250_xefg_original.dll", default)
@@ -1852,6 +1853,35 @@ class PresetTests(unittest.TestCase):
         for layer in (config["optiscaler_variant_seed"], config["optiscaler_variant_preset"]):
             for values in layer.values():
                 self.assertNotIn("Spoofing.Dxgi", values)
+
+    def test_freefg_hlxdlss_is_hlx_dlss_in_freefgs_custom_provider_folder(self):
+        # A user's request (2026-11-03): FreeFG with HLX DLSS, laid out as FreeFG's
+        # own installer does for --upscaler hlx-dlss.
+        config, _ = self.build_payload("freefg-hlxfsr4", scaler=True, freefg={})
+        aliases = config["optiscaler_aliases"]
+        version = aliases["freefg-hlxdlss"]
+        tree = self.trees[version]
+        self.assertNotEqual(version, config["optiscaler_version"])
+        # helixsr.dll in the folder FreeFG's OptiScaler scans; the folder name is
+        # what makes it hand HLX DLSS the game's input API.
+        dll = "OptiScaler/custom/hlx-dlss/dlss/helixsr.dll"
+        self.assertEqual(tree[dll], self.trees[aliases["helixsr"]]["HelixSR/helixsr.dll"])
+        self.assertIn(dll, self.entries[version]["sha256_hash"])
+        ini = configparser.ConfigParser()
+        ini.read_string(tree["OptiScaler/custom/hlx-dlss/dlss/helixsr.ini"].decode())
+        self.assertEqual(ini["Upscaling"]["Int8"], "off")
+        # FreeFG's proxy and wrapper, the RC12 bridge for DX11/Vulkan, as in freefg.
+        plain = self.trees[aliases["freefg"]]
+        for name in ("OptiScaler/libxess_fg.dll", "OptiScaler/amd_fidelityfx_upscaler_dx12.dll"):
+            self.assertEqual(tree[name], plain[name], name)
+        # A seed like every upscaler choice: a switch in OptiScaler's overlay stays.
+        self.assertEqual(config["optiscaler_variant_seed"][version]["Upscalers.Dx12Upscaler"], "hlx-dlss")
+        self.assertNotIn("Upscalers.Dx12Upscaler", config["optiscaler_variant_preset"][version])
+        self.assertIn("HLX DLSS", tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
+        self.assertTrue(any(name.startswith(f"Licenses/{version}/HelixSR-") for name in tree))
+        # Only this variant has the folder.
+        for name in ("freefg", "freefg-hlxfsr4", "helixsr"):
+            self.assertNotIn(dll, self.trees[aliases[name]], name)
 
     def test_hlxfsr4_is_hlx_fsr4_on_the_stock_nightly(self):
         # A user's request (2026-10-30): HLX FSR 4 alone, as FSR4 RC12 is the RC12
@@ -2004,11 +2034,12 @@ class PresetTests(unittest.TestCase):
 
     def test_the_helixsr_2_names_select_their_successors(self):
         # freefg-helixsr and helixsr-ffx went with HelixSR 2.0 (2026-10-29); a
-        # launch option or saved choice that names one gets FreeFG + HLX FSR 4 or
-        # HelixSR Scaler, and no variant ships HelixSR 2.0's files any more.
+        # launch option or saved choice that names one gets FreeFG + HLX DLSS (since
+        # 2026-11-03; FreeFG + HLX FSR 4 before) or HelixSR Scaler, and no variant
+        # ships HelixSR 2.0's files any more.
         config, _ = self.build_payload("freefg-hlxfsr4", scaler=True, freefg={})
         aliases = config["optiscaler_aliases"]
-        self.assertEqual(aliases["freefg-helixsr"], config["optiscaler_version"])
+        self.assertEqual(aliases["freefg-helixsr"], aliases["freefg-hlxdlss"])
         self.assertEqual(aliases["helixsr-ffx"], aliases["helixsr"])
         for version, tree in self.trees.items():
             self.assertNotIn("OptiScaler/amd_fidelityfx_dx12.dll", tree, version)
@@ -2312,7 +2343,7 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         # it selects what took that variant's place, saved as before.
         with open(menu.store_path(root), "w") as stream:
             stream.write('{"variant": "freefg-helixsr", "remember": 1}')
-        self.assertEqual(menu.decide(root, env)[:2], (False, "freefg-hlxfsr4"))
+        self.assertEqual(menu.decide(root, env)[:2], (False, "freefg-hlxdlss"))
 
     def test_the_installed_variant_comes_from_protonfixes_record(self):
         import tempfile

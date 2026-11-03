@@ -48,7 +48,10 @@ DX12_ARGS = {"-dx12", "-d3d12", "-force-d3d12"}
 # needs an ASI loader, so neither is offered.
 PROXIES = {"dxgi.dll", "winmm.dll", "version.dll", "dbghelp.dll", "winhttp.dll", "wininet.dll"}
 # FreeFG's names for the variants a verified row's upscaler_ini addresses -> ours.
-VARIANTS = {"hlx-fsr4": ["freefg-hlxfsr4"], "helixsr": ["helixsr"]}
+# FreeFG's "helixsr" is its HLX DLSS route (an alias of hlx-dlss there), so it is
+# freefg-hlxdlss here as well as the HelixSR Scaler, whose DLSS upscaler it is.
+VARIANTS = {"hlx-fsr4": ["freefg-hlxfsr4"], "helixsr": ["helixsr", "freefg-hlxdlss"],
+            "hlx-dlss": ["freefg-hlxdlss", "helixsr"]}
 
 
 def norm(title):

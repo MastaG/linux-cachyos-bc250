@@ -167,7 +167,7 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
-### The variants: `freefg-hlxfsr4` (default), `helixsr`, `optiscaler`, `freefg`, `fsr412f`, `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
+### The variants: `freefg-hlxfsr4` (default), `freefg-hlxdlss`, `helixsr`, `optiscaler`, `freefg`, `fsr412f`, `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
 
 OptiScaler loads two separate things: `amdxcffx64.dll`, the FSR4 provider our
 patched RADV drives, and `amd_fidelityfx_upscaler_dx12.dll`, the FidelityFX
@@ -239,6 +239,17 @@ picks one:
   runtime does not cover. Nothing else differs; the shared
   `UpscalerIndex = 0` selects HLX FSR 4 (checked on a BC-250 in Shadow of the
   Tomb Raider: 720p → 1080p in 1.17 ms).
+- **`freefg-hlxdlss`** — the FreeFG tree with HLX DLSS, built whenever `--freefg`
+  and `--helixsr-ngx` are both given, laid out as FreeFG's installer does for
+  `--upscaler hlx-dlss` (its `hlx.py`): HelixSR's `helixsr.dll` in
+  `OptiScaler/custom/hlx-dlss/dlss/` and `[Upscalers] Dx12Upscaler=hlx-dlss`, a
+  seed like every upscaler key. FreeFG's OptiScaler takes a folder under
+  `custom/` with a `dlss/` DLL as a DLSS provider, and the name `hlx-dlss` is what
+  makes it pass HLX DLSS the game's input API. `helixsr.ini` beside the DLL is
+  HelixSR's own with `[Upscaling] Int8 = off` (no Scaler writes it here). The
+  RC12 bridge stays in the FidelityFX slot for Direct3D 11 and Vulkan games. FreeFG
+  1.3.0 pins HelixSR 3.1.0 for this; the packages use 3.2.0, whose HLX DLSS is
+  3.1.0's apart from a GTX 16 kernel.
 - **`freefg`** — opt-in, built with `--freefg` from FreeFG's release zip
   (mirrored unchanged as `freefg-1.3.0.zip`, its GPL source zip beside it).
   [FreeFG](https://github.com/daniel-h-0/freefg) speeds up Intel's XeSS frame
@@ -292,8 +303,8 @@ picks one:
   OptiScaler's FidelityFX library under both names) left the packages on
   2026-10-29, and with it `freefg-helixsr` (the default until then) and
   `helixsr-ffx`. Both names stay valid: the builder's `RETIRED_VARIANTS` makes
-  them aliases of `freefg-hlxfsr4` and `helixsr`, and the menu maps a saved
-  choice the same way.
+  them aliases of `freefg-hlxdlss` (since 2026-11-03; `freefg-hlxfsr4` before)
+  and `helixsr`, and the menu maps a saved choice the same way.
 
 Switching variants cleans up after the previous one. protonfixes replaces the
 payload when the version changes, but it only removes the files it checksums:

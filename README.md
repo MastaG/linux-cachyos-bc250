@@ -738,8 +738,8 @@ BC250_GAME_PRESET=everything %command%    # apply all of this game's known setti
 ### The upscaler menu
 
 Every game launch first shows a small menu: the upscaler (FreeFG + HLX FSR 4,
-the default; FreeFG + FSR4 RC12; HelixSR Scaler; FSR4 RC12 alone; HLX FSR 4
-alone; No upscaling), **GPU spoofing**, **Enable frame generation**, and **Save selection
+the default; FreeFG + HLX DLSS; FreeFG + FSR4 RC12; HelixSR Scaler; FSR4 RC12
+alone; HLX FSR 4 alone; No upscaling), **GPU spoofing**, **Enable frame generation**, and **Save selection
 for next time**.
 It works with a controller (Steam Controller, PS5 pad; D-pad or stick to move, A
 to select, Start to start the game), with mouse and keyboard, in Gaming Mode and
@@ -945,6 +945,7 @@ PROTON_USE_OPTISCALER=optiscaler %command%  # stock OptiScaler nightly with the 
 PROTON_USE_OPTISCALER=fsr411f %command%   # BC-250 FSR4 fork RC11, 4.1.1r11 — the default until HelixSR
 PROTON_USE_OPTISCALER=fsr412f %command%   # the same fork's RC12, 4.1.1r12 — newest bridge, opt-in
 PROTON_USE_OPTISCALER=hlxfsr4 %command%   # HelixSR 3.2.0's HLX FSR 4 alone, no FreeFG (AMD's FSR as its fallback)
+PROTON_USE_OPTISCALER=freefg-hlxdlss %command%  # FreeFG 1.3.0 + HelixSR 3.2.0's HLX DLSS
 PROTON_USE_OPTISCALER=signed %command%    # AMD's signed 4.0.2 bridge
 PROTON_USE_OPTISCALER=fsr411b %command%   # third-party 4.1.1b, RDNA2 ghosting fix
 PROTON_USE_OPTISCALER=helixsr %command%   # HelixSR Scaler 2.1.0 with HelixSR 3.2.0 (HLX DLSS, HLX FSR 4)
@@ -1059,6 +1060,7 @@ PROTON_USE_OPTISCALER=optiscaler %command%   # the stock OptiScaler nightly with
 PROTON_USE_OPTISCALER=fsr411f %command%      # (and signed, fsr411b, fsr411rc9, fsr411rc10) other bridge DLLs
 PROTON_USE_OPTISCALER=freefg %command%       # FreeFG: Intel XeSS frame generation, sped up for the BC-250 (below)
 PROTON_USE_OPTISCALER=freefg-hlxfsr4 %command%  # FreeFG's frame generation with HLX FSR 4 (the default)
+PROTON_USE_OPTISCALER=freefg-hlxdlss %command%  # FreeFG's frame generation with HLX DLSS
 ```
 
 Switching between them is safe: on a game launch the wrapper removes every
@@ -1106,10 +1108,18 @@ only the upscaler, with frame generation still XeFG:
   in Shadow of the Tomb Raider 3.0.0's took 1.17 ms from 720p to 1080p, against
   3.6 ms for RC11 measured there earlier, and in testing it looked as good as
   HelixSR 2.0.0 (HLX DLSS in an FSR 3.1 DLL), the default before it.
+- `freefg-hlxdlss` ("FreeFG + HLX DLSS" in the menu): HelixSR 3.2.0's HLX DLSS,
+  NVIDIA's DLSS network as DirectX 12 compute shaders, set up the way FreeFG's own
+  installer does for `--upscaler hlx-dlss` (FreeFG 1.3.0 supports it). Pick DLSS,
+  FSR or XeSS in the game; OptiScaler hands the frames to HLX DLSS in Direct3D 12
+  games, while Direct3D 11 and Vulkan games keep FreeFG's FSR4 RC12. HelixSR's
+  int8 path is off, as in HelixSR Scaler. Not yet tested on a BC-250.
 
 HelixSR 2.0.0 is no longer in the packages, and with it the `freefg-helixsr` and
-`helixsr-ffx` variants. Those names still work: `freefg-helixsr` now selects
-FreeFG + HLX FSR 4 and `helixsr-ffx` HelixSR Scaler. A game that ran FreeFG +
+`helixsr-ffx` variants; FreeFG with HLX DLSS is back as `freefg-hlxdlss`, on
+HelixSR 3.2.0. The old names still work: `freefg-helixsr` selects FreeFG + HLX
+DLSS again (it selected FreeFG + HLX FSR 4 from 2026-10-29 to 2026-11-03) and
+`helixsr-ffx` HelixSR Scaler. A game that ran FreeFG +
 HelixSR starts fresh on its next launch (its HelixSR 2.0 files and its
 `OptiScaler.ini` are removed), so settings saved in the OptiScaler overlay for
 it are reset once.

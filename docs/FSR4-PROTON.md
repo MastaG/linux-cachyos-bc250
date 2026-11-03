@@ -101,7 +101,7 @@ writes `helixsr.log` beside its DLL (`system32/umu/HelixSR` with the
 Scaler) on every launch. That log is what its author asks for with a problem
 report, and a package that switched it off left players unable to send one.
 
-The FreeFG variants (`freefg-hlxfsr4`, the default, and
+The FreeFG variants (`freefg-hlxfsr4`, the default, `freefg-hlxdlss` and
 `freefg`) are the ones that also set variables outside OptiScaler's own: FreeFG's Vulkan pacing layer runs in the game
 process, so the launcher prepends its folder in the prefix to `VK_LAYER_PATH`
 and its name to `VK_INSTANCE_LAYERS`, and sets `XEFG_WAVE_CONFIG` and vkd3d's

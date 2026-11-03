@@ -681,6 +681,11 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - FSR4 and OptiScaler are on by default. They remain launch options, so
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- **New: FreeFG + HLX DLSS** (\`PROTON_USE_OPTISCALER=freefg-hlxdlss\`, also in the menu): FreeFG's
+  frame generation with HelixSR 3.2.0's HLX DLSS as the Direct3D 12 upscaler, set up as FreeFG's own
+  installer does for HLX DLSS. Direct3D 11 and Vulkan games keep FSR4 RC12. Not yet tested on a BC-250.
+  The old name \`freefg-helixsr\` (and a menu choice saved with it) now selects this instead of
+  FreeFG + HLX FSR 4.
 - **New: FreeFG [1.3.0](https://github.com/daniel-h-0/freefg/releases/tag/v1.3.0).** Its OptiScaler
   build (fork tag \`bc250-ba0dedb\`) keeps GTA V Enhanced's Social Club overlay out of frame
   generation, which crashed FreeFG at startup there, keeps frame generation on in minimized windows,
