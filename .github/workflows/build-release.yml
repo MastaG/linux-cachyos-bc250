@@ -61,11 +61,36 @@ jobs:
         # BC250_RUNNER_BUILD_CPUS. A host that shares its RAM and cores (the AI
         # server, with Strata) and a dedicated build box need different caps,
         # which repository variables, the same for every runner, cannot give.
+        #
+        # BC250_RUNNER_BUILD_MEMORY=auto (the AI server, where Strata holds most
+        # of the RAM): the limit is what the host has free when the job starts
+        # (MemAvailable) minus a 2 GiB margin, and the build gets one CPU per
+        # 1.5 GiB of it, at most the pinned CPUs. Fewer CPUs is what shrinks make,
+        # ninja and the kernel's LTO link alike, since they all size themselves by
+        # nproc. Below 4 GiB the job stops here instead of the host's OOM killer
+        # stopping it later (2026-11-02: a 12g build with ~5 GiB free was killed
+        # by a global OOM). Previous packages are kept either way.
         run: |
           memory=${BC250_RUNNER_BUILD_MEMORY:-$BC250_BUILD_MEMORY_DEFAULT}
           cpus=${BC250_RUNNER_BUILD_CPUS:-$BC250_BUILD_CPUS_DEFAULT}
-          [[ "$memory" =~ ^[0-9]+[gG]$ ]] || { echo "::error::build memory must be whole gigabytes like 20g, got: $memory"; exit 1; }
           [[ "$cpus" == all || "$cpus" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || { echo "::error::build CPUs must be a list like 0-7,24-31 or all, got: $cpus"; exit 1; }
+          if [[ "$memory" == auto ]]; then
+            avail_kib=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+            gib=$(( avail_kib / 1048576 - 2 ))
+            (( gib >= 4 )) || { echo "::error title=Not enough free RAM::$RUNNER_NAME has $(( avail_kib / 1048576 )) GiB available; a build needs at least 6 (4 + 2 margin). Previous packages are kept."; exit 1; }
+            memory=${gib}g
+            if [[ "$cpus" == all ]]; then cpu_list=($(seq 0 $(( $(nproc) - 1 )))); else
+              cpu_list=(); IFS=, read -ra parts <<< "$cpus"
+              for part in "${parts[@]}"; do
+                if [[ "$part" == *-* ]]; then cpu_list+=($(seq "${part%-*}" "${part#*-}")); else cpu_list+=("$part"); fi
+              done
+            fi
+            jobs=$(( gib * 2 / 3 )); (( jobs >= 1 )) || jobs=1
+            (( jobs <= ${#cpu_list[@]} )) || jobs=${#cpu_list[@]}
+            cpus=$(IFS=,; echo "${cpu_list[*]:0:jobs}")
+            echo "auto: $(( avail_kib / 1048576 )) GiB available -> limit ${memory}, ${jobs} CPU(s)"
+          fi
+          [[ "$memory" =~ ^[0-9]+[gG]$ ]] || { echo "::error::build memory must be whole gigabytes like 20g or auto, got: $memory"; exit 1; }
           echo "BC250_BUILD_MEMORY=$memory" >> "$GITHUB_ENV"
           echo "BC250_BUILD_CPUS=$cpus" >> "$GITHUB_ENV"
           from_memory=${BC250_RUNNER_BUILD_MEMORY:+runner} from_cpus=${BC250_RUNNER_BUILD_CPUS:+runner}
