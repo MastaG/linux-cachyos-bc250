@@ -191,7 +191,7 @@ prepare_replacement = '''    done
     install -Dm644 ../nct6687.c drivers/hwmon/nct6687.c
 
     echo "Installing pinned BC-250 VRM and GDDR6 hwmon sources..."
-    for _bc250_src in bc250_vrm.c bc250_memory.c bc250_smu.c bc250_smu.h bc250_smu_patch.c; do
+    for _bc250_src in bc250_vrm_core.c nct6687_smbus.c nct6687_smbus.h bc250_memory.c bc250_smu.c bc250_smu.h bc250_smu_patch.c; do
         install -Dm644 "../$_bc250_src" "drivers/hwmon/$_bc250_src"
     done
     # bc250_memory is opt-in (it patches the SMU on load): drop its DMI alias so

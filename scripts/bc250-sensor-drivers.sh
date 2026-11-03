@@ -8,7 +8,7 @@
 #   bc250_sensor_drivers_resolve            # fills BC250_{VRM,MEMORY}_{COMMIT,TAG} if unset
 #   bc250_sensor_drivers_fetch <dest-dir>   # downloads every source file into <dest-dir>
 
-BC250_SENSOR_VRM_FILES=(bc250_vrm.c)
+BC250_SENSOR_VRM_FILES=(bc250_vrm_core.c nct6687_smbus.c nct6687_smbus.h)
 BC250_SENSOR_MEMORY_FILES=(bc250_memory.c bc250_smu.c bc250_smu.h bc250_smu_patch.c)
 
 bc250_sensor_drivers_resolve() {

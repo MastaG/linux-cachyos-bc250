@@ -88,13 +88,13 @@ All three kernels contain the external `nct6687` driver as an in-tree-built modu
 
 All three kernels also include two BC-250 sensor drivers by Hexxeh. Neither needs a separate package or DKMS.
 
-##### VRM telemetry (`bc250_vrm`): on by default, needs a hardware mod
+##### VRM telemetry (`bc250_vrm`): on by default
 
 Reads the CPU and GPU rail voltage, current, temperature and power, plus the 12 V input, from the board's VRM controller.
 
-- **It only works after a small hardware modification** that wires the VRM controller's SMBus lines. See the driver's upstream repository, [Hexxeh/bc250-vrm-dkms](https://github.com/Hexxeh/bc250-vrm-dkms), and its [wiring guide](https://github.com/onlinermm/BC250-Telemetry/blob/main/hardware.md).
-- **Nothing to enable.** The module loads automatically on every BC-250. Without the wiring it finds no VRM and stays out of the way: no extra entry in `sensors`, no errors.
-- **To check it after doing the mod:** `sensors bc250_vrm-*` should list `CPU VRM Temp`, `GPU VRM Temp` and the rest.
+- **No hardware modification needed** since the driver's v1.1.0: it reads the VRM through the SMBus master of the board's NCT6687 Super I/O chip, next to the `nct6687` fan and temperature driver (each uses its own port of the chip). Older versions needed wired SMBus lines. Upstream: [Hexxeh/bc250-vrm-dkms](https://github.com/Hexxeh/bc250-vrm-dkms).
+- **Nothing to enable.** The module loads automatically on every BC-250.
+- **To check it:** `sensors bc250_vrm-*` should list `CPU VRM Temp`, `GPU VRM Temp` and the rest.
 
 ##### GDDR6 memory temperatures (`bc250_memory`): off by default
 

@@ -57,7 +57,8 @@ for module in bc250_vrm bc250_memory; do
         exit 1
     fi
 done
-# bc250_vrm loads automatically (DMI alias kept; it binds only to a wired VRM);
+# bc250_vrm loads automatically (DMI alias kept; it reads the VRM through the
+# NCT6687's SMBus master, so every board has it);
 # bc250_memory is opt-in, so prepare() strips its DMI alias. Check the built
 # modules themselves: a modprobe.d blacklist is not the mechanism (it would
 # also stop /etc/modules-load.d from loading the module).
@@ -148,7 +149,7 @@ cp -- "$BUILD_DIR/PKGBUILD" "$OUT_DIR/kernel-${KERNEL_ID}-PKGBUILD"
 cp -- "$BUILD_DIR/.SRCINFO" "$OUT_DIR/kernel-${KERNEL_ID}.SRCINFO"
 cp -- "$final_config" "$OUT_DIR/kernel-${KERNEL_ID}-config"
 cp -- "$BUILD_DIR/nct6687.c" "$OUT_DIR/nct6687.c"
-for file in bc250_vrm.c bc250_memory.c bc250_smu.c bc250_smu.h bc250_smu_patch.c; do
+for file in bc250_vrm_core.c nct6687_smbus.c nct6687_smbus.h bc250_memory.c bc250_smu.c bc250_smu.h bc250_smu_patch.c; do
     cp -- "$BUILD_DIR/$file" "$OUT_DIR/$file"
 done
 
