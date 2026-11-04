@@ -1052,6 +1052,13 @@ box or the overlay turns it on: OptiFG into FSR frame generation (`FrameGen.FGIn
 be picked in the overlay instead. HelixSR 2.0, the last version with DLSS frame
 generation, is no longer in the packages (see the FreeFG section).
 
+On a BC-250, a good starting point is 1440p output, medium to high settings and
+HLX DLSS at Quality, so the game renders at 960p. That usually runs well enough
+that frame generation is not needed, which saves its latency. The overlay's
+"FRAME GEN: NOT INSTALLED" refers to HelixSR's own frame generation (gone since
+3.0), not to OptiScaler's. When OptiScaler's frame generation is on, leave the
+game's own frame generation off, so only one of them runs.
+
 The Scaler brings its own OptiScaler build, so the stock nightly and the other
 DLLs are separate choices, one launch option away:
 
