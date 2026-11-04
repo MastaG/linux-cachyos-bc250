@@ -5,18 +5,29 @@
 Under KFD hardware scheduling on GFX1013, the normal gfx10 PASID TLB flush can fail to find a VMID because the HWS path does not populate the `ATC_VMID*_PASID_MAPPING` table used by that flush. Rebuilding an active HWS runlist has been measured to clear the stale translation state and is therefore provided as an experimental workaround.
 
 The workaround is **disabled by default** and restricted to PCI device `0x13FE` with GFX IP `10.1.3`. It also refuses to run under non-HWS scheduling or MES.  
-Enable it at boot only for ROCm/KFD testing:
+`bc250_flush_by_runlist` is a bitmask of the sites where the runlist is rebuilt:
+
+| Value | Rebuild on |
+|---|---|
+| `0` | nowhere (default) |
+| `1` | unmap: the KFD unmap ioctl and SVM unmap |
+| `2` | map: the KFD map ioctl and SVM map |
+| `3` | both (recommended) |
+
+The map side matters: with the rebuild only on unmap, a fresh mapping can still be read through a stale translation, so a kernel returns wrong data from its second dispatch onward with no error ([akandr/bc250-rocm](https://github.com/akandr/bc250-rocm)). Enable it at boot only for ROCm/KFD testing:
 
 ```text
-amdgpu.bc250_flush_by_runlist=1
+amdgpu.bc250_flush_by_runlist=3
 ```
 
 Or enable/disable it at runtime while HWS is already active:
 
 ```bash
-echo 1 | sudo tee /sys/module/amdgpu/parameters/bc250_flush_by_runlist
+echo 3 | sudo tee /sys/module/amdgpu/parameters/bc250_flush_by_runlist
 echo 0 | sudo tee /sys/module/amdgpu/parameters/bc250_flush_by_runlist
 ```
+
+The other half of the fix, not sending the PASID TLB flush through the KIQ, needs no parameter here: `0006-gfx1013-pasid-tlb-invalidation.patch` always routes GFX1013's PASID flushes over MMIO (`flush_pasid_uses_kiq = false` on GC 10.1.3), and also issues them as a semaphore-guarded type-0 invalidation on the GFX hub. That is what `amdgpu.bc250_flush_pasid_kiq=0` selects in other trees ([ROCm/TheRock#9221](https://github.com/ROCm/TheRock/issues/9221)); the boot log shows `GFX1013/BC-250: using MMIO PASID TLB flushes`.
 
 The helper only rebuilds an already-active runlist, preserving the scheduler state instead of accidentally activating an inactive runlist.  
 Because the mechanism depends on the hardware scheduler, it is a no-op with `amdgpu.sched_policy=2`; use the normal `sched_policy=0` when testing this ROCm workaround.
