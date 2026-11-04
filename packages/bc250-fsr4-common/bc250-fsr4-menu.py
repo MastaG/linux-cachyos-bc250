@@ -232,6 +232,21 @@ def fit_scale(natural_height, room):
 EVENTS = {0x650: "AXIS", 0x652: "BUTTONDOWN", 0x653: "DEVICEADDED", 0x100: "QUIT"}
 
 
+def steam_game_id(env=os.environ):
+    """The app id to tag the window with, or 0 when the launch carries none.
+
+    Steam's ids come first; they are what Steam set for this launch. A umu
+    launcher (Heroic, Lutris, a non-Steam shortcut) overwrites both with its
+    GAMEID, which is usually not a number ("umu-default", "umu-0"), so a
+    launcher that knows its shortcut id can pass it in STEAM_GAME instead.
+    """
+    for name in ("SteamAppId", "SteamGameId", "STEAM_GAME"):
+        value = (env.get(name) or "").strip()
+        if value.isdigit():
+            return int(value)
+    return 0
+
+
 def tag_steam_game(surface, env=os.environ):
     """Mark the menu's X11 window as the game's, as Steam's overlay does for the game.
 
@@ -241,10 +256,7 @@ def tag_steam_game(surface, env=os.environ):
     --alongside-steam), without that preload, so in Gaming Mode the window stayed
     hidden behind the launch spinner. Harmless on a desktop.
     """
-    try:
-        appid = int(env.get("SteamAppId") or env.get("SteamGameId") or 0)
-    except ValueError:
-        appid = 0
+    appid = steam_game_id(env)
     if not appid:
         return
     try:

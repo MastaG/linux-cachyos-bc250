@@ -648,9 +648,9 @@ def launch_client(inherited):
 
 # What the menu needs from the launch when it runs outside the container.
 MENU_ENV = ("STEAM_COMPAT_DATA_PATH", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
-            "XDG_RUNTIME_DIR", "SteamAppId", "SteamGameId", "PROTON_OPTISCALER_MENU",
-            "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED", "BC250_MENU_DEFAULT",
-            "BC250_MENU_GAME_PRESET")
+            "XDG_RUNTIME_DIR", "SteamAppId", "SteamGameId", "STEAM_GAME",
+            "PROTON_OPTISCALER_MENU", "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED",
+            "BC250_MENU_DEFAULT", "BC250_MENU_GAME_PRESET")
 
 
 def menu_choice(config, inherited):

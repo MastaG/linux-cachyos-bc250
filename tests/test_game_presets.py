@@ -470,6 +470,21 @@ class MenuTests(unittest.TestCase):
     def test_the_launcher_passes_the_game_to_the_menu(self):
         self.assertIn("BC250_MENU_GAME_PRESET", wrapper.MENU_ENV)
 
+    def test_the_launcher_passes_the_tagging_id_to_the_menu(self):
+        self.assertIn("STEAM_GAME", wrapper.MENU_ENV)
+
+    def test_the_menu_tags_with_steam_ids_and_falls_back_to_steam_game(self):
+        # A real Steam launch: Steam set the ids, so they win.
+        self.assertEqual(menu.steam_game_id({"SteamAppId": "242050", "STEAM_GAME": "1"}), 242050)
+        self.assertEqual(menu.steam_game_id({"SteamGameId": "242050", "STEAM_GAME": "1"}), 242050)
+        # A umu launcher overwrote both ids with its GAMEID; the launcher's
+        # STEAM_GAME is the only number left to tag the window with.
+        self.assertEqual(menu.steam_game_id(
+            {"SteamAppId": "umu-default", "SteamGameId": "umu-default",
+             "STEAM_GAME": "3843878394"}), 3843878394)
+        self.assertEqual(menu.steam_game_id({"SteamAppId": "0", "SteamGameId": "0"}), 0)
+        self.assertEqual(menu.steam_game_id({}), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
