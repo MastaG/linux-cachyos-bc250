@@ -237,12 +237,13 @@ def steam_game_id(env=os.environ):
 
     Steam's ids come first; they are what Steam set for this launch. A umu
     launcher (Heroic, Lutris, a non-Steam shortcut) overwrites both with its
-    GAMEID, which is usually not a number ("umu-default", "umu-0"), so a
+    GAMEID, which is usually not a number ("umu-default", "umu-0"), and Steam
+    sets SteamAppId=0 for a non-Steam shortcut, so a 0 is skipped too and a
     launcher that knows its shortcut id can pass it in STEAM_GAME instead.
     """
     for name in ("SteamAppId", "SteamGameId", "STEAM_GAME"):
         value = (env.get(name) or "").strip()
-        if value.isdigit():
+        if value.isdigit() and int(value):
             return int(value)
     return 0
 

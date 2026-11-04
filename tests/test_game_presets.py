@@ -483,6 +483,9 @@ class MenuTests(unittest.TestCase):
             {"SteamAppId": "umu-default", "SteamGameId": "umu-default",
              "STEAM_GAME": "3843878394"}), 3843878394)
         self.assertEqual(menu.steam_game_id({"SteamAppId": "0", "SteamGameId": "0"}), 0)
+        # Steam sets SteamAppId=0 for a non-Steam shortcut: a 0 is no id, so
+        # the launcher's STEAM_GAME still counts.
+        self.assertEqual(menu.steam_game_id({"SteamAppId": "0", "STEAM_GAME": "123"}), 123)
         self.assertEqual(menu.steam_game_id({}), 0)
 
 
