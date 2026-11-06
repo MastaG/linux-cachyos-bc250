@@ -19,10 +19,10 @@ Based on KytyPS5-Native's bc250-amdgpu patch (faf53a5).
  1 file changed, 15 insertions(+)
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-index adb90b07aff6..5ae0e326115f 100644
+index 4cf9fb9fc9f2..3c437404baee 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-@@ -51,6 +51,18 @@
+@@ -52,6 +52,18 @@
  #include "athub_v2_0.h"
  #include "athub_v2_1.h"
  
@@ -41,7 +41,7 @@ index adb90b07aff6..5ae0e326115f 100644
  static int gmc_v10_0_ecc_interrupt_state(struct amdgpu_device *adev,
  					 struct amdgpu_irq_src *src,
  					 unsigned int type,
-@@ -251,6 +263,9 @@ static void gmc_v10_0_flush_gpu_tlb_internal(struct amdgpu_device *adev,
+@@ -252,6 +264,9 @@ static void gmc_v10_0_flush_gpu_tlb_internal(struct amdgpu_device *adev,
  	    flush_type == 2)
  		flush_type = 0;
  

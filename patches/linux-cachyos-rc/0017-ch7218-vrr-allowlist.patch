@@ -23,10 +23,10 @@ intended signal.
 ---
 
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
-index ced8b3d2d762..8ce014104df0 100644
+index 41e52c54156e..7f456565b0e7 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
-@@ -1650,6 +1650,7 @@ STATIC_IFN_KUNIT const uint32_t dm_freesync_pcon_whitelist[] = {
+@@ -1703,6 +1703,7 @@ STATIC_IFN_KUNIT const uint32_t dm_freesync_pcon_whitelist[] = {
  	DP_BRANCH_DEVICE_ID_90CC24,
  	DP_BRANCH_DEVICE_ID_001CF8,
  	DP_BRANCH_DEVICE_ID_001FF2,

@@ -1,8 +1,8 @@
 diff --git a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-index c70657bc089b..adb90b07aff6 100644
+index 490b4c4eb662..4cf9fb9fc9f2 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-@@ -232,12 +232,14 @@ static bool gmc_v10_0_get_atc_vmid_pasid_mapping_info(
+@@ -233,12 +233,14 @@ static bool gmc_v10_0_get_atc_vmid_pasid_mapping_info(
   *
   * Flush the TLB for the requested page table.
   */
@@ -21,7 +21,7 @@ index c70657bc089b..adb90b07aff6 100644
  	/* Use register 17 for GART */
  	const unsigned int eng = 17;
  	unsigned char hub_ip = 0;
-@@ -245,6 +247,14 @@ static void gmc_v10_0_flush_gpu_tlb(struct amdgpu_device *adev, uint32_t vmid,
+@@ -246,6 +248,14 @@ static void gmc_v10_0_flush_gpu_tlb(struct amdgpu_device *adev, uint32_t vmid,
  	unsigned int i;
  	u32 tmp;
  
@@ -36,7 +36,7 @@ index c70657bc089b..adb90b07aff6 100644
  	sem = hub->vm_inv_eng0_sem + hub->eng_distance * eng;
  	req = hub->vm_inv_eng0_req + hub->eng_distance * eng;
  	ack = hub->vm_inv_eng0_ack + hub->eng_distance * eng;
-@@ -255,7 +265,8 @@ static void gmc_v10_0_flush_gpu_tlb(struct amdgpu_device *adev, uint32_t vmid,
+@@ -256,7 +266,8 @@ static void gmc_v10_0_flush_gpu_tlb(struct amdgpu_device *adev, uint32_t vmid,
  	/* This is necessary for SRIOV as well as for GFXOFF to function
  	 * properly under bare metal
  	 */
@@ -46,7 +46,7 @@ index c70657bc089b..adb90b07aff6 100644
  	    (amdgpu_sriov_runtime(adev) || !amdgpu_sriov_vf(adev))) {
  		amdgpu_gmc_fw_reg_write_reg_wait(adev, req, ack, inv_req,
  						 1 << vmid, GET_INST(GC, 0));
-@@ -318,6 +329,13 @@ static void gmc_v10_0_flush_gpu_tlb(struct amdgpu_device *adev, uint32_t vmid,
+@@ -319,6 +330,13 @@ static void gmc_v10_0_flush_gpu_tlb(struct amdgpu_device *adev, uint32_t vmid,
  			vmhub);
  }
  
@@ -60,7 +60,7 @@ index c70657bc089b..adb90b07aff6 100644
  /**
   * gmc_v10_0_flush_gpu_tlb_pasid - tlb flush via pasid
   *
-@@ -335,6 +353,9 @@ static void gmc_v10_0_flush_gpu_tlb_pasid(struct amdgpu_device *adev,
+@@ -336,6 +354,9 @@ static void gmc_v10_0_flush_gpu_tlb_pasid(struct amdgpu_device *adev,
  {
  	uint16_t queried;
  	int vmid, i;
@@ -70,7 +70,7 @@ index c70657bc089b..adb90b07aff6 100644
  
  	for (vmid = 1; vmid < AMDGPU_NUM_VMID; vmid++) {
  		bool valid;
-@@ -347,11 +368,21 @@ static void gmc_v10_0_flush_gpu_tlb_pasid(struct amdgpu_device *adev,
+@@ -348,11 +369,21 @@ static void gmc_v10_0_flush_gpu_tlb_pasid(struct amdgpu_device *adev,
  		if (all_hub) {
  			for_each_set_bit(i, adev->vmhubs_mask,
  					 AMDGPU_MAX_VMHUBS)
@@ -96,7 +96,7 @@ index c70657bc089b..adb90b07aff6 100644
  		}
  	}
  }
-@@ -960,7 +991,21 @@ static int gmc_v10_0_hw_init(struct amdgpu_ip_block *ip_block)
+@@ -965,7 +996,21 @@ static int gmc_v10_0_hw_init(struct amdgpu_ip_block *ip_block)
  	struct amdgpu_device *adev = ip_block->adev;
  	int r;
  

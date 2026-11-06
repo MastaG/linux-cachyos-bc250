@@ -523,6 +523,16 @@ class KernelPatchSetTests(unittest.TestCase):
     STABLE_ONLY = {}
     RC_ONLY = {}
 
+    # Patches in both sets that do something different on purpose, because the
+    # two series differ underneath (stable 7.3.1, RC 7.4-rc1), with the reason.
+    DIFFERENT_BY_SERIES = {
+        "gfx1013-compute-gfxoff-guard.patch":
+            "7.4 dropped GFX 12 from the condition the patch extends",
+        "pcon-vrr-hf-vsdb.patch":
+            "7.4 parses the AMD VSDB in software and has its own HF-VSDB fallback; "
+            "the RC patch only adds the PCON's SDP and VCP-rule part",
+    }
+
     @staticmethod
     def content_name(patch_name):
         """Strip the leading `NNNN-` ordering prefix, e.g. '0003-foo.patch' -> 'foo.patch'."""
@@ -565,6 +575,12 @@ class KernelPatchSetTests(unittest.TestCase):
         rc = self.rc_by_content()
         for content_name in sorted(set(stable) & set(rc)):
             with self.subTest(patch=content_name):
+                if content_name in self.DIFFERENT_BY_SERIES:
+                    # still listed only while it really differs
+                    self.assertNotEqual(self.substance(stable[content_name]),
+                                        self.substance(rc[content_name]),
+                                        "same in both sets now: drop it from DIFFERENT_BY_SERIES")
+                    continue
                 self.assertEqual(self.substance(stable[content_name]),
                                  self.substance(rc[content_name]))
 
@@ -816,30 +832,36 @@ class KernelPatchSetTests(unittest.TestCase):
                 self.assertNotIn("DP_BRANCH_DEVICE_ID_", body)
 
     def test_rc_pcon_vrr_fallback_keeps_the_dpcd_gates(self):
-        """The HF-VSDB fallback fills a range; it must not loosen the gates.
+        """The 7.4 PCON HF-VSDB patch only completes upstream's fallback.
 
-        It exists because the firmware EDID parser cannot run on DCN201. It
-        has to stay inside the allowlisted-PCON block (so the Adaptive-Sync
-        SDP, Ignore-MSA and allowlist checks still decide), fire only when the
-        AMD VSDB path produced nothing, and touch one file.
+        7.4 parses the AMD VSDB in software and falls back to the HF-VSDB range
+        by itself. The RC patch may only add, for an allowlisted PCON whose TV
+        has no AMD VSDB, the SDP v1.3 packing and the adaptive-sync type, and
+        exempt exactly that case from the MCCS VCP-code rule. The Adaptive-Sync
+        SDP, Ignore-MSA and allowlist gates must still decide, in one file, all
+        inside amdgpu_dm_update_freesync_caps (on 7.4 the 7.3 patch applied
+        with fuzz inside apply_dsc_policy_for_stream instead).
         """
-        touched, changed = self.substance(self.rc_by_content()["pcon-vrr-hf-vsdb.patch"])
+        patch = self.rc_by_content()["pcon-vrr-hf-vsdb.patch"]
+        touched, changed = self.substance(patch)
         self.assertEqual([t.split(" b/")[1] for t in touched],
                          ["drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c"])
         body = "\n".join(l[1:] for l in changed if l.startswith("+"))
-        self.assertIn("if (!freesync_capable && connector->display_info.hdmi.vrr_cap.supported) {", body)
+        self.assertIn("if (!has_vsdb && as_type == FREESYNC_TYPE_PCON_IN_WHITELIST && freesync_capable &&",
+                      body)
         self.assertIn("amdgpu_dm_connector->pack_sdp_v1_3 = true;", body)
         self.assertIn("amdgpu_dm_connector->as_type = as_type;", body)
+        self.assertIn("!sink->edid_caps.freesync_vcp_code && !pcon_hf_vrr)", body)
         self.assertNotIn("dm_get_adaptive_sync_support_type", body)
         self.assertNotIn("dm_freesync_pcon_whitelist", body)
-        self.assertFalse([l for l in changed if l.startswith("-")], "must only add")
-        # one hunk, inside amdgpu_dm_update_freesync_caps, and it reuses the
-        # as_type the gate function computed rather than inventing one
-        text = self.rc_by_content()["pcon-vrr-hf-vsdb.patch"].read_text()
-        hunks = [l for l in text.splitlines() if l.startswith("@@")]
-        self.assertEqual(len(hunks), 1)
-        self.assertIn("amdgpu_dm_update_freesync_caps", hunks[0])
         self.assertNotIn("as_type = FREESYNC_TYPE", body)
+        removed = [l for l in changed if l.startswith("-")]
+        self.assertEqual(removed, ["-\t    !sink->edid_caps.freesync_vcp_code)"],
+                         "only the VCP rule's condition may change")
+        hunks = [l for l in patch.read_text().splitlines() if l.startswith("@@")]
+        self.assertTrue(hunks)
+        for hunk in hunks:
+            self.assertIn("amdgpu_dm_update_freesync_caps", hunk)
 
     def test_rc_vrr_allowlist_patch_adds_exactly_one_entry(self):
         """The allowlist patch is one table entry and its define.
@@ -1823,10 +1845,9 @@ class LocalPatchGateTests(unittest.TestCase):
 
 
 class ParkedComponentTests(unittest.TestCase):
-    """linux-cachyos-rc is parked in CI until CachyOS re-pins its rc tree to a
-    Linux 7.4 rc1 (memory bc250_kernel_rc_parked.md), so the pipeline can be
-    green again: the tree it would build from is the 7.3-rc6 tag -- older than
-    stable -- and upstream's own pins there drift.
+    """linux-cachyos-rc can be parked in CI with one switch. It was parked from
+    2026-10-24 while CachyOS's rc tree was the 7.3-rc6 tag (older than stable,
+    drifting pins) and is unparked since the rebase onto 7.4-rc1 (2026-11-06).
 
     The park is ONE assignment in the decision step, and it has to survive both
     paths that can turn a component on: the fingerprint comparison and the
@@ -1846,7 +1867,7 @@ class ParkedComponentTests(unittest.TestCase):
         return re.findall(rf"(?m)^{re.escape(self.STEP_INDENT)}({pattern})$", self.WF)
 
     def test_the_flag_is_one_live_assignment_and_can_be_flipped(self):
-        self.assertEqual(self.live(r'parked_kernel_rc=true'), ["parked_kernel_rc=true"],
+        self.assertEqual(len(self.live(r'parked_kernel_rc=(?:true|false)')), 1,
                          "the park must be exactly one live line in the decision step")
         guard = self.live(
             r'if \[\[ "\$parked_kernel_rc" == true \]\]; then\n'
@@ -1873,7 +1894,7 @@ class ParkedComponentTests(unittest.TestCase):
         self.assertLess(force_at, guard_at, "the park must come after the force block")
         self.assertLess(force_true_at, guard_at, "...and after what force sets")
         # The input itself says so, for the human who clicks it.
-        self.assertIn("linux-cachyos-rc is parked",
+        self.assertIn("linux-cachyos-rc can be parked",
                       self.WF[self.WF.index("description: Rebuild all kernels"):])
 
     def _decide(self, flag_line, on_before):
@@ -1895,8 +1916,10 @@ class ParkedComponentTests(unittest.TestCase):
                               text=True).stdout.strip()
 
     def test_parked_stays_off_even_when_both_paths_say_build_it(self):
-        flag = self.live(r"parked_kernel_rc=true")[0]
-        self.assertEqual(self._decide(flag, "build_kernel_rc=true"), "false")
+        self.assertEqual(self._decide("parked_kernel_rc=true", "build_kernel_rc=true"), "false")
+
+    def test_the_rc_kernel_is_unparked_since_the_74_rebase(self):
+        self.assertEqual(self.live(r"parked_kernel_rc=(?:true|false)"), ["parked_kernel_rc=false"])
 
     def test_flipping_the_one_line_brings_it_back(self):
         flag = "parked_kernel_rc=false"

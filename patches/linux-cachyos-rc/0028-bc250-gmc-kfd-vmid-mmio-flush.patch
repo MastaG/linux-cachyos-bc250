@@ -28,10 +28,10 @@ continuous ALU load and checks each result on the CPU:
   messages.
 ---
 diff --git a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-index 2eb8185b3..97346e210 100644
+index f421a1012719..a99436b3ed92 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-@@ -357,8 +357,21 @@ static void gmc_v10_0_flush_gpu_tlb_internal(struct amdgpu_device *adev,
+@@ -358,8 +358,21 @@ static void gmc_v10_0_flush_gpu_tlb_internal(struct amdgpu_device *adev,
  static void gmc_v10_0_flush_gpu_tlb(struct amdgpu_device *adev, uint32_t vmid,
  					uint32_t vmhub, uint32_t flush_type)
  {

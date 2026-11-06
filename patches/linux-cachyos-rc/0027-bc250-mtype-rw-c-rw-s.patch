@@ -18,10 +18,10 @@ Based on KytyPS5-Native's bc250-amdgpu patch (faf53a5).
  1 file changed, 13 insertions(+)
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-index 5ae0e326115f..2eb8185b34f0 100644
+index 3c437404baee..f421a1012719 100644
 --- a/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
 +++ b/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c
-@@ -63,6 +63,16 @@ static int bc250_tlb_flush_type = -1;
+@@ -64,6 +64,16 @@ static int bc250_tlb_flush_type = -1;
  module_param(bc250_tlb_flush_type, int, 0644);
  MODULE_PARM_DESC(bc250_tlb_flush_type, "BC-250: TLB flush type for every GPU TLB flush (-1 = as requested, 0 = legacy)");
  
@@ -38,7 +38,7 @@ index 5ae0e326115f..2eb8185b34f0 100644
  static int gmc_v10_0_ecc_interrupt_state(struct amdgpu_device *adev,
  					 struct amdgpu_irq_src *src,
  					 unsigned int type,
-@@ -546,6 +556,9 @@ static void gmc_v10_0_get_vm_pte(struct amdgpu_device *adev,
+@@ -547,6 +557,9 @@ static void gmc_v10_0_get_vm_pte(struct amdgpu_device *adev,
  	case AMDGPU_VM_MTYPE_UC:
  		*flags = AMDGPU_PTE_MTYPE_NV10(*flags, MTYPE_UC);
  		break;

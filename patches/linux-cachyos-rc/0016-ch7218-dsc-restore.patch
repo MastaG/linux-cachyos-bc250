@@ -29,10 +29,10 @@ the PCON path.
 ---
 
 diff --git a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-index a0f011840e6e..19779a5ca56c 100644
+index 5319e5f0d567..8315740b9bd8 100644
 --- a/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
 +++ b/drivers/gpu/drm/amd/display/dc/link/protocols/link_dp_capability.c
-@@ -1233,6 +1233,42 @@ static void bc250_ch7218_force_converter_identity(struct dc_link *link)
+@@ -1234,6 +1234,42 @@ static void bc250_ch7218_force_converter_identity(struct dc_link *link)
  	DC_LOG_DC("BC-250: CH7218 quirk: forced HDMI 2.1 FRL PCON identity, 48 Gbps\n");
  }
  
@@ -75,7 +75,7 @@ index a0f011840e6e..19779a5ca56c 100644
  static void get_active_converter_info(
  	uint8_t data, struct dc_link *link)
  {
-@@ -2120,6 +2156,8 @@ static bool retrieve_link_cap(struct dc_link *link)
+@@ -2121,6 +2157,8 @@ static bool retrieve_link_cap(struct dc_link *link)
  				link->dpcd_caps.dsc_caps.dsc_basic_caps.raw,
  				sizeof(link->dpcd_caps.dsc_caps.dsc_basic_caps.raw));
  		if (status == DC_OK) {

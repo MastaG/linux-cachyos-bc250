@@ -25,10 +25,10 @@ Based on KytyPS5-Native's bc250-amdgpu patch (faf53a5).
  4 files changed, 79 insertions(+)
 
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
-index 344da6c0e96a..e3c44e5ed8fa 100644
+index d65ae53c81a5..c487649aade2 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
-@@ -1417,6 +1417,9 @@ static int kfd_ioctl_map_memory_to_gpu(struct file *filep,
+@@ -1426,6 +1426,9 @@ static int kfd_ioctl_map_memory_to_gpu(struct file *filep,
  		if (WARN_ON_ONCE(!peer_pdd))
  			continue;
  		kfd_flush_tlb(peer_pdd);
@@ -38,7 +38,7 @@ index 344da6c0e96a..e3c44e5ed8fa 100644
  	}
  	kfree(devices_arr);
  
-@@ -1504,6 +1507,11 @@ static int kfd_ioctl_unmap_memory_from_gpu(struct file *filep,
+@@ -1513,6 +1516,11 @@ static int kfd_ioctl_unmap_memory_from_gpu(struct file *filep,
  			continue;
  		if (flush_tlb)
  			kfd_flush_tlb(peer_pdd);
@@ -51,10 +51,10 @@ index 344da6c0e96a..e3c44e5ed8fa 100644
  		/* Remove dma mapping after tlb flush to avoid IO_PAGE_FAULT */
  		err = amdgpu_amdkfd_gpuvm_dmaunmap_mem(mem, peer_pdd->drm_priv);
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c
-index 4594824985e1..5a693b2905d5 100644
+index ce67e56efa8c..324dda5a56d3 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.c
-@@ -4079,3 +4079,62 @@ int dqm_debugfs_hang_hws(struct device_queue_manager *dqm)
+@@ -4257,3 +4257,62 @@ int dqm_debugfs_hang_hws(struct device_queue_manager *dqm)
  }
  
  #endif
@@ -118,10 +118,10 @@ index 4594824985e1..5a693b2905d5 100644
 +	return r;
 +}
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.h b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.h
-index c9f9f7a87111..5ba39e4693aa 100644
+index c21da12d3f38..d0e7c2966e69 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.h
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_device_queue_manager.h
-@@ -379,4 +379,11 @@ static inline void update_dqm_wait_times(struct device_queue_manager *dqm)
+@@ -383,4 +383,11 @@ static inline void update_dqm_wait_times(struct device_queue_manager *dqm)
  }
  
  
@@ -134,18 +134,18 @@ index c9f9f7a87111..5ba39e4693aa 100644
 +
  #endif /* KFD_DEVICE_QUEUE_MANAGER_H_ */
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_svm.c b/drivers/gpu/drm/amd/amdkfd/kfd_svm.c
-index d7f2ff5c8f02..20f385be6850 100644
+index ed5e3318877b..6a19f46a878d 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_svm.c
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_svm.c
-@@ -36,6 +36,7 @@
- #include "amdgpu_reset.h"
+@@ -37,6 +37,7 @@
+ #include "soc_v1_0.h"
  #include "kfd_priv.h"
  #include "kfd_svm.h"
 +#include "kfd_device_queue_manager.h"
  #include "kfd_migrate.h"
  #include "kfd_smi_events.h"
  
-@@ -1454,6 +1455,8 @@ svm_range_unmap_from_gpus(struct svm_range *prange, unsigned long start,
+@@ -1486,6 +1487,8 @@ svm_range_unmap_from_gpus(struct svm_range *prange, unsigned long start,
  				break;
  		}
  		kfd_flush_tlb(pdd);
@@ -154,7 +154,7 @@ index d7f2ff5c8f02..20f385be6850 100644
  	}
  
  	return r;
-@@ -1603,6 +1606,8 @@ svm_range_map_to_gpus(struct svm_range *prange, unsigned long offset,
+@@ -1635,6 +1638,8 @@ svm_range_map_to_gpus(struct svm_range *prange, unsigned long offset,
  		}
  
  		kfd_flush_tlb(pdd);

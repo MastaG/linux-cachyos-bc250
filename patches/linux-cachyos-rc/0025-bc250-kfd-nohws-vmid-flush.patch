@@ -19,10 +19,10 @@ Based on KytyPS5-Native's bc250-amdgpu patch (faf53a5).
  1 file changed, 9 insertions(+)
 
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_priv.h b/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
-index 25225fef0084..ab08a1e31c17 100644
+index eed7b2aeea86..60cca242f76b 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
-@@ -1604,6 +1604,15 @@ static inline void kfd_flush_tlb(struct kfd_process_device *pdd)
+@@ -1606,6 +1606,15 @@ static inline void kfd_flush_tlb(struct kfd_process_device *pdd)
  	struct amdgpu_device *adev = pdd->dev->adev;
  	struct amdgpu_vm *vm = drm_priv_to_vm(pdd->drm_priv);
  

@@ -16,15 +16,28 @@ patches/linux-cachyos-rc/
 ```
 
 `patches/linux-cachyos` is applied to both `linux-cachyos-bc250` and `linux-cachyos-bore-bc250`, since `linux-cachyos` and `linux-cachyos-bore` are built from the same upstream source series.
-`patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`. Since Linux 7.3 became stable both sets target the same series — the stable and BORE PKGBUILDs build `cachyos-7.3.1-1`, the RC one `cachyos-7.3-rc6-1`.
+`patches/linux-cachyos-rc` is applied only to `linux-cachyos-rc-bc250`. The stable and BORE PKGBUILDs build `cachyos-7.3.1-1`; the RC set is regenerated against `cachyos-7.4-rc1-1` (2026-11-06).
 
-**Rule, until we start rebasing onto 7.4-rc1:** `patches/linux-cachyos-rc` is an exact
-byte-for-byte copy of `patches/linux-cachyos` — every change to the stable set is copied
-over in the same edit (`cp -a`), and `diff -rq patches/linux-cachyos patches/linux-cachyos-rc`
-printing nothing is the check. The RC kernel is parked in CI (`parked_kernel_rc` in the
-build workflow), so nothing builds that copy right now. The rule ends with the parking: when
-7.4-rc1 releases, regenerate the RC set against its own tag instead of trusting the copy —
-the stable set will not apply to a new RC series unchanged.
+**Rebasing onto 7.4-rc1.** The RC set was an exact copy of the stable set while both
+targeted 7.3; it is now generated against its own tag. All twenty-eight patches were
+applied in order to a clean `cachyos-7.4-rc1-1` tree and regenerated from it, keeping
+their headers, so each lands with **no offset and no fuzz** there. Twenty-six do exactly
+what they do on 7.3 (the same files and the same changed lines); two were rewritten:
+
+- `0007-gfx1013-compute-gfxoff-guard.patch`: 7.4 dropped GFX 12 from the condition in
+  `amdgpu_amdkfd_set_compute_idle()` that the patch extends; the BC-250 is added to the
+  remaining GFX 11 clause.
+- `0019-pcon-vrr-hf-vsdb.patch`: 7.4 parses the AMD VSDB in the DRM core instead of
+  DMUB/DMCU firmware, falls back to the HF-VSDB VRR range for every sink by itself, and
+  turns FreeSync off for an allowlisted PCON without an MCCS VCP code. What remains is a
+  PCON whose TV has HDMI Forum VRR but no AMD VSDB (an LG G5): the patch gives it the SDP
+  v1.3 packing and adaptive-sync type and keeps the VCP rule from undoing that. On 7.4
+  the 7.3 patch still applied, with fuzz, **inside `apply_dsc_policy_for_stream()`** —
+  "applies" is not enough; check where each hunk lands.
+
+The RC kernel is built by CI again (`parked_kernel_rc=false` in the build workflow; set it
+to `true` to park it). From now on a change to a shared patch is made in both sets, each
+against its own tree.
 
 The directories stay separate because each kernel family is still prepared from its own upstream PKGBUILD and its own tag, and either tag can move on its own.
 
@@ -37,12 +50,14 @@ Two tests keep this from drifting apart silently: `KernelPatchSetTests`
 compares the two directories by patch *content name* (ignoring the `NNNN-`
 number) and asserts the shared ones are byte-identical in substance — the
 files touched and the lines changed — and that any patch existing in only one
-set is on an explicit, reasoned allow-list (empty since the 7.3 bump). A patch added to one set and
-forgotten in the other fails before CI ever builds it.
+set is on an explicit, reasoned allow-list (empty since the 7.3 bump). A patch that does
+something different on purpose in the two series (`0007` and `0019` since 7.4-rc1) is on a
+second allow-list with the reason. A patch added to one set and forgotten in the other
+fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twenty-eight BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3.1). The RC kernel carries the same twenty-eight patches (7.3-rc):
+The stable and BORE kernels carry these twenty-eight BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3.1). The RC kernel carries the same twenty-eight patches, regenerated for 7.4-rc1:
 
 ```text
 0001-bc250-8core-metrics.patch
