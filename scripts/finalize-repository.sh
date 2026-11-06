@@ -681,6 +681,18 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - FSR4 and OptiScaler are on by default. They remain launch options, so
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- **New: HelixSR [3.2.1](https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1) and HelixSR
+  Scaler 2.2.0** (a pre-release). HLX FSR 4 no longer ends a game under Proton 11.0 on a BC-250 and starts
+  with its safer shader set; HLX DLSS picks the faster of its two decoders at startup (newer Proton
+  versions). HelixSR Scaler 2.2.0 adds **HLX DLSS Preset K** (its DLSS Upscaler list) and **HLX FSR 4
+  Full** (its upscaler list), both sharper and slower; Preset K can freeze a game at startup with the
+  Steam overlay on. HLX DLSS's Ultra Performance now runs at the display size by default.
+- **New, for testing: FreeFG + HLX FSR 4 Full, FreeFG + HLX DLSS K, HLX DLSS K** (in the menu, marked
+  test; \`PROTON_USE_OPTISCALER=freefg-hlxfsr4full\`, \`freefg-hlxdlssk\`, \`hlxdlssk\`). Not yet
+  tested on a BC-250.
+- **Changed: OptiScaler nightly 20261105** for the stock variants (FSR4 RC12, HLX FSR 4 alone and the
+  others), which brings custom upscaler folders and FidelityFX SDK 2.4's runtime. FreeFG and HelixSR
+  Scaler keep the FidelityFX runtime they were made with.
 - **New: FreeFG + HLX DLSS** (\`PROTON_USE_OPTISCALER=freefg-hlxdlss\`, also in the menu): FreeFG's
   frame generation with HelixSR 3.2.0's HLX DLSS as the Direct3D 12 upscaler, set up as FreeFG's own
   installer does for HLX DLSS. Direct3D 11 and Vulkan games keep FSR4 RC12. Not yet tested on a BC-250.
@@ -763,7 +775,7 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   no ini, so the preset is unchanged for it and for every other variant, and the
   packages keep the 2026-10-15 nightly they already ship; the client build this
   asset comes from pins an older one (20260904), and its app is not needed here.
-- \`PROTON_USE_OPTISCALER=optiscaler\` selects the stock OptiScaler nightly (20261025) with the
+- \`PROTON_USE_OPTISCALER=optiscaler\` selects the stock OptiScaler nightly (20261105) with the
   FSR4 fork's bridge, and \`fsr412f\`, \`fsr411f\`, \`signed\`, \`fsr411b\`, \`fsr411rc9\`, \`fsr411rc10\`
   the other bridge DLLs. If a game looks wrong or crashes, \`PROTON_USE_OPTISCALER=optiscaler %command%\`
   goes back to plain OptiScaler. HelixSR's own log, \`helixsr.log\` in \`system32/umu/HelixSR\`

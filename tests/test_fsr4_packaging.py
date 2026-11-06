@@ -1020,8 +1020,8 @@ class SlrPackageTests(unittest.TestCase):
                 # HelixSR 3.2 (HLX DLSS, HLX FSR 4) for the Scaler 2.1 and
                 # freefg-hlxfsr4. HelixSR 2.0 is gone, with the HelixSR 2.0 builder option.
                 self.assertIn("--helixsr-ngx", text)
-                self.assertIn("HelixSR-3.2.0-network.zip", text)
-                self.assertIn("HelixSR-3.2.0-Scaler-2.1.0-core.zip", text)
+                self.assertIn("HelixSR-3.2.1-network.zip", text)
+                self.assertIn("HelixSR-3.2.1-Scaler-2.2.0-core.zip", text)
                 self.assertNotIn("HelixSR-2.0.0", text)
                 self.assertNotIn("--helixsr \"", text)
                 self.assertIn("--freefg-ini", text)

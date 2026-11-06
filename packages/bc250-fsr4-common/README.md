@@ -167,7 +167,7 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
-### The variants: `freefg-hlxfsr4` (default), `freefg-hlxdlss`, `helixsr`, `optiscaler`, `freefg`, `fsr412f`, `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
+### The variants: `freefg-hlxfsr4` (default), `freefg-hlxdlss`, `freefg-hlxfsr4full`, `freefg-hlxdlssk`, `hlxdlssk`, `helixsr`, `optiscaler`, `freefg`, `fsr412f`, `fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`
 
 OptiScaler loads two separate things: `amdxcffx64.dll`, the FSR4 provider our
 patched RADV drives, and `amd_fidelityfx_upscaler_dx12.dll`, the FidelityFX
@@ -202,15 +202,22 @@ picks one:
   selectable so a new default can be compared against them. Standing policy: a
   new release becomes the default, older ones stay reachable.
 - **`helixsr` (the Scaler)** — built with `--helixsr-scaler` and
-  `--helixsr-ngx` (HelixSR 3.2.0 after its setup, mirrored as
-  `HelixSR-3.2.0-network.zip`). [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
-  2.1.0 is OptiScaler v10 built on the same nightly (20261025) with HelixSR's
-  upscalers in its list: every other library is byte-identical, so its archive
-  (`HelixSR-3.2.0-Scaler-2.1.0-core.zip`, taken from the copy in the HelixSR 3.2.0
-  download, which its setup installs) holds only `OptiScaler.dll`,
-  `OptiScaler.ini`, the licences, its own OptiPatcher (shipped instead of the
-  pinned one) and AMD's FSR SDK 2.4.0 DLL (FSR 4.1.2, since HelixSR 3.2.0; the nightly's before), which it keeps as
-  `OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll`. HelixSR 3.x is two DLLs:
+  `--helixsr-ngx` (HelixSR 3.2.1 after its setup with `--preset-k`, mirrored as
+  `HelixSR-3.2.1-network.zip`). [HelixSR Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)
+  2.2.0 is OptiScaler v10 with HelixSR's upscalers in its list. Its archive
+  (`HelixSR-3.2.1-Scaler-2.2.0-core.zip`, taken from the copy in the HelixSR 3.2.1
+  download, which its setup installs) holds what differs from the packages'
+  nightly (20261105): `OptiScaler.dll`, `OptiScaler.ini`, the licences, its own
+  OptiPatcher (shipped instead of the pinned one), AMD's FSR SDK 2.4.0 DLL
+  (FSR 4.1.2) which it keeps as `OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll`,
+  HLX FSR 4 Full in `OptiScaler/custom/HLX FSR 4 Full/ffx/` (with its
+  `hlx_fsr4.ini`; refused unless it ends with `HLXFULL1`), and the FidelityFX
+  runtime it ships, the 20261025 nightly's (`amd_fidelityfx_framegeneration_dx12.dll`,
+  `amd_fidelityfx_loader_dx12.dll`, `amd_fidelityfx_vk.dll`). The FreeFG variants
+  take those three from it as well, since FreeFG 1.3.0 pins them; only the stock
+  variants run the 20261105 nightly's FidelityFX SDK 2.4 runtime. Preset K, when
+  the network archive has `HelixSR/k/` (all four files or the build fails), goes
+  to `HelixSR/k/`, where the Scaler finds it for its DLSS Upscaler list. HelixSR 3.x is two DLLs:
   HLX DLSS, `HelixSR/helixsr.dll` next to the proxy (`umu/`) with its
   `helixsr.ini` as released, the Scaler's DLSS upscaler; and HLX FSR 4, which
   takes the bridge's place as `OptiScaler/amd_fidelityfx_upscaler_dx12.dll`.
@@ -248,8 +255,19 @@ picks one:
   makes it pass HLX DLSS the game's input API. `helixsr.ini` beside the DLL is
   HelixSR's own with `[Upscaling] Int8 = off` (no Scaler writes it here). The
   RC12 bridge stays in the FidelityFX slot for Direct3D 11 and Vulkan games. FreeFG
-  1.3.0 pins HelixSR 3.1.0 for this; the packages use 3.2.0, whose HLX DLSS is
-  3.1.0's apart from a GTX 16 kernel.
+  1.3.0 pins HelixSR 3.1.0 for this; the packages use 3.2.1.
+- **`freefg-hlxfsr4full`, `freefg-hlxdlssk`, `hlxdlssk`** — HelixSR 3.2.1's test
+  upscalers, never the default. `freefg-hlxfsr4full` is `freefg-hlxfsr4` with HLX
+  FSR 4 Full from the Scaler's archive in HLX FSR 4's place and its `hlx_fsr4.ini`
+  beside it as `OptiScaler/hlx_fsr4.ini` (the DLL reads both that and AMD's
+  `.amd.dll` from its own folder). `freefg-hlxdlssk` is `freefg-hlxdlss` with
+  Preset K's four files (`helixsr.dll`, `helixsr.ini`, `helixsr_modelk_kernels.pak`,
+  `helixsr_modelk_weights.bin`) in `OptiScaler/custom/hlx-dlss/dlss/`: FreeFG's
+  OptiScaler loads that folder's only DLL whatever its name, and K finds its
+  kernels and weights beside itself (it ignores the input-API handshake the
+  folder name triggers). `hlxdlssk` is the same folder on the stock nightly,
+  whose custom upscaler folders (OptiScaler, 2026-10-28) load it the same way,
+  with the FreeFG variants' RC12 bridge for Direct3D 11 and Vulkan games.
 - **`freefg`** — opt-in, built with `--freefg` from FreeFG's release zip
   (mirrored unchanged as `freefg-1.3.0.zip`, its GPL source zip beside it).
   [FreeFG](https://github.com/daniel-h-0/freefg) speeds up Intel's XeSS frame

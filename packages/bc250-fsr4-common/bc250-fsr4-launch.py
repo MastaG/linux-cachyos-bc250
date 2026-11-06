@@ -621,7 +621,8 @@ def installed_variant(config, inherited):
 
 
 # The variants the menu offers, by the short names PROTON_USE_OPTISCALER takes.
-MENU_VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg", "helixsr", "fsr412f", "hlxfsr4")
+MENU_VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg-hlxfsr4full", "freefg-hlxdlssk", "freefg",
+                 "helixsr", "fsr412f", "hlxfsr4", "hlxdlssk")
 
 
 def menu_names(config):

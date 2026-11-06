@@ -46,7 +46,7 @@ builder = load_script("builder", ROOT / "scripts/build-fsr4-payload.py")
 # ships as "auto", which is what marks a prefix as having no opinion of its own
 # yet -- for the shared preset, which seeds a prefix and then leaves it alone.
 STUB_INI = (
-    # The pinned 20261025 nightly defines Fsr4GpuSupport (the renamed model
+    # The pinned 20261105 nightly defines Fsr4GpuSupport (the renamed model
     # switch) and no longer Fsr4ForceModel; the old name is kept in this fixture
     # as well so the paired expectations across this file stay meaningful.
     b"[FSR]\nFsr4ForceModel=auto\nFsr4GpuSupport=auto\nUpscalerIndex=auto\n"
@@ -1563,7 +1563,7 @@ class PresetTests(unittest.TestCase):
     INTEL_XEFG = b"intel-xefg-runtime" * 512
 
     FREEFG_OPTI = b"freefg-optiscaler-fork" * 512
-    # FreeFG's OptiScaler build (its fork) and the pinned 20261025 nightly now
+    # FreeFG's OptiScaler build (its fork) and the pinned 20261105 nightly now
     # define the same FSR keys; the fork's ini adds the Reprojection section.
     FORK_INI = STUB_INI + b"[Reprojection]\nFillMode=auto\n"
     FREEFG_PROXY = b"freefg-libxess-fg-proxy" * 512
@@ -1607,6 +1607,13 @@ class PresetTests(unittest.TestCase):
     NGX_DLL = b"hlx-dlss" * 1024 + b"HXSRNET1" + bytes(24)
     NGX_INI = b"; helixsr.ini\n[Upscaling]\nInt8 = auto\n"
     HLX_FSR4 = b"hlx-fsr4" * 1024 + b"HLXFSR4D" + bytes(16)
+    # HelixSR 3.2.1: HLX FSR 4 Full (prebuilt, HLXFULL1) and Preset K (HelixSR/k/).
+    HLX_FULL = b"hlx-full" * 1024 + b"HLXFULL1" + bytes(16)
+    K_FILES = {"helixsr.dll": b"preset-k" * (1024 * 1024 + 16),
+               "helixsr.ini": b"[Network]\nModel = K\n",
+               "helixsr_modelk_kernels.pak": b"k-kernels" * 64,
+               "helixsr_modelk_weights.bin": b"k-weights" * 64}
+    AUTHOR_LOADER = b"ffx-loader-2026-10-25" * 64
 
     def ngx_zip(self, work, hlx=None, dll=None):
         path = work / "HelixSR-3.0.0-network.zip"
@@ -1615,6 +1622,8 @@ class PresetTests(unittest.TestCase):
             archive_zip.writestr("HelixSR-3.0.0/HelixSR/helixsr.ini", self.NGX_INI)
             archive_zip.writestr("HelixSR-3.0.0/HLX-FSR4/amd_fidelityfx_upscaler_dx12.dll",
                                  hlx or self.HLX_FSR4)
+            for name, data in (self.K_FILES if getattr(self, "with_k", False) else {}).items():
+                archive_zip.writestr(f"HelixSR-3.0.0/HelixSR/k/{name}", data)
             archive_zip.writestr("HelixSR-3.0.0/LICENSE", b"freeware")
             archive_zip.writestr("HelixSR-3.0.0/THIRD_PARTY_NOTICES.md", b"nvidia and amd property")
         return path
@@ -1632,6 +1641,15 @@ class PresetTests(unittest.TestCase):
             archive_zip.writestr(
                 "HelixSR-Scaler-2.0.0/OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll",
                 self.SCALER_AMD_DLL)
+            if getattr(self, "with_full", False):
+                # HelixSR Scaler 2.2.0: HLX FSR 4 Full as a custom upscaler, and
+                # the FidelityFX runtime it was made with.
+                base = "HelixSR-Scaler-2.0.0/OptiScaler/custom/HLX FSR 4 Full/ffx/"
+                archive_zip.writestr(base + "amd_fidelityfx_upscaler_dx12.dll",
+                                     getattr(self, "full_dll", self.HLX_FULL))
+                archive_zip.writestr(base + "hlx_fsr4.ini", b"[HLX]\nDeepReuse = exact\n")
+                archive_zip.writestr("HelixSR-Scaler-2.0.0/OptiScaler/amd_fidelityfx_loader_dx12.dll",
+                                     self.AUTHOR_LOADER)
         return path
 
     def build_payload(self, default_name, scaler=False, scaler_ini=None,
@@ -1853,6 +1871,83 @@ class PresetTests(unittest.TestCase):
         for layer in (config["optiscaler_variant_seed"], config["optiscaler_variant_preset"]):
             for values in layer.values():
                 self.assertNotIn("Spoofing.Dxgi", values)
+
+    def build_321(self, **flags):
+        self.with_k, self.with_full = flags.pop("k", True), flags.pop("full", True)
+        try:
+            return self.build_payload("freefg-hlxfsr4", scaler=True, freefg={}, **flags)
+        finally:
+            self.with_k = self.with_full = False
+
+    def test_helixsr_321_full_and_preset_k_variants(self):
+        # Owner, 2026-11-06: HLX FSR 4 Full and HLX DLSS Preset K to test, with
+        # FreeFG and (K) on the stock nightly; the Scaler offers both itself.
+        config, bridges = self.build_321()
+        aliases = config["optiscaler_aliases"]
+        seeds = config["optiscaler_variant_seed"]
+        k_dir = "OptiScaler/custom/hlx-dlss/dlss/"
+        # FreeFG + Full: Full in HLX FSR 4's place, its ini and AMD's DLL beside it.
+        full = aliases["freefg-hlxfsr4full"]
+        tree = self.trees[full]
+        self.assertEqual(bridges[full], self.HLX_FULL)
+        self.assertIn(b"DeepReuse", tree["OptiScaler/hlx_fsr4.ini"])
+        self.assertEqual(tree["OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"], self.SCALER_AMD_DLL)
+        self.assertEqual(tree["winmm.dll"], self.trees[aliases["freefg"]]["winmm.dll"])
+        # FreeFG + K: K's four files where freefg-hlxdlss has HLX DLSS.
+        fk = aliases["freefg-hlxdlssk"]
+        for name, data in self.K_FILES.items():
+            self.assertEqual(self.trees[fk][k_dir + name], data, name)
+        self.assertEqual(seeds[fk]["Upscalers.Dx12Upscaler"], "hlx-dlss")
+        # K on the stock nightly, the FreeFG variants' bridge for DX11/Vulkan.
+        vk = aliases["hlxdlssk"]
+        tree = self.trees[vk]
+        self.assertNotIn(tree["winmm.dll"], (self.FREEFG_OPTI, self.SCALER_DLL))
+        self.assertNotIn("OptiScaler/bc250_xefg_original.dll", tree)
+        self.assertEqual(tree[k_dir + "helixsr.dll"], self.K_FILES["helixsr.dll"])
+        self.assertEqual(bridges[vk], self.FORK_BRIDGE)
+        self.assertEqual(seeds[vk], {"FrameGen.Enabled": "false", "FrameGen.FGInput": "upscaler",
+                                     "FrameGen.FGOutput": "fsrfg", "Upscalers.Dx12Upscaler": "hlx-dlss"})
+        self.assertIn("Preset K", tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
+        # The Scaler: K beside HLX DLSS, Full in its custom folder.
+        sc = self.trees[aliases["helixsr"]]
+        self.assertEqual(sc["HelixSR/k/helixsr_modelk_weights.bin"], self.K_FILES["helixsr_modelk_weights.bin"])
+        self.assertEqual(sc["OptiScaler/custom/HLX FSR 4 Full/ffx/amd_fidelityfx_upscaler_dx12.dll"], self.HLX_FULL)
+        # The Scaler's FidelityFX runtime in the Scaler and every FreeFG variant,
+        # the nightly's in the stock ones.
+        loader = "OptiScaler/amd_fidelityfx_loader_dx12.dll"
+        for name in ("helixsr", "freefg", "freefg-hlxfsr4", "freefg-hlxdlss",
+                     "freefg-hlxfsr4full", "freefg-hlxdlssk"):
+            self.assertEqual(self.trees[aliases[name]].get(loader), self.AUTHOR_LOADER, name)
+        for name in ("hlxfsr4", "hlxdlssk", "fsr411f"):
+            self.assertNotEqual(self.trees[aliases[name]].get(loader), self.AUTHOR_LOADER, name)
+        # Only these variants carry K or Full.
+        for name in ("freefg", "freefg-hlxfsr4", "freefg-hlxdlss", "hlxfsr4"):
+            tree = self.trees[aliases[name]]
+            self.assertFalse(any("helixsr_modelk" in n for n in tree), name)
+            self.assertNotEqual(tree["OptiScaler/amd_fidelityfx_upscaler_dx12.dll"], self.HLX_FULL, name)
+        # The menu offers all three.
+        menu = load_script("bc250_menu", COMMON / "bc250-fsr4-menu.py")
+        offered = [p[0] for p in menu.PRESETS]
+        for name in ("freefg-hlxfsr4full", "freefg-hlxdlssk", "hlxdlssk"):
+            self.assertIn(name, offered)
+            self.assertEqual(wrapper.menu_names(config)[aliases[name]], name)
+
+    def test_without_preset_k_or_full_their_variants_are_not_built(self):
+        config, _ = self.build_321(k=False, full=False)
+        for name in ("freefg-hlxfsr4full", "freefg-hlxdlssk", "hlxdlssk"):
+            self.assertNotIn(name, config["optiscaler_aliases"])
+
+    def test_an_incomplete_preset_k_fails_the_build(self):
+        self.K_FILES = {n: d for n, d in type(self).K_FILES.items() if n != "helixsr_modelk_weights.bin"}
+        with self.assertRaises(AssertionError):
+            self.build_321()
+        self.assertIn("incomplete HelixSR/k/", self.last_result.stderr)
+
+    def test_an_unbuilt_hlx_fsr4_full_fails_the_build(self):
+        self.full_dll = b"hlx-full without shaders" * 64
+        with self.assertRaises(AssertionError):
+            self.build_321()
+        self.assertIn("HLX FSR 4 Full in the Scaler archive is not built", self.last_result.stderr)
 
     def test_freefg_hlxdlss_is_hlx_dlss_in_freefgs_custom_provider_folder(self):
         # A user's request (2026-11-03): FreeFG with HLX DLSS, laid out as FreeFG's
