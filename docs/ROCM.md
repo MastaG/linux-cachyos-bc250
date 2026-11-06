@@ -8,7 +8,7 @@ On GFX1013 the normal gfx10 PASID TLB flush finds no VMID for a KFD process, so 
 amdgpu.sched_policy=2
 ```
 
-Without the hardware scheduler a process keeps one fixed VMID while it has queues. `0025-bc250-kfd-nohws-vmid-flush.patch` flushes that VMID directly on every KFD map and unmap (a legacy, type-0 flush on the GFX hub), the way amdgpu did before PASID flushes existed. When a process gets its VMID, and when it gives it back, the stock code flushes it as well, so no stale translation survives a reuse. Nothing else needs to be set; `bc250_flush_by_runlist` does nothing in this mode and can stay at `0`.
+Without the hardware scheduler a process keeps one fixed VMID while it has queues. `0025-bc250-kfd-nohws-vmid-flush.patch` flushes that VMID directly on every KFD map and unmap (a legacy, type-0 flush on the GFX hub), the way amdgpu did before PASID flushes existed. When a process gets its VMID, and when it gives it back, the stock code flushes it as well, so no stale translation survives a reuse. `0028-bc250-gmc-kfd-vmid-mmio-flush.patch` sends these flushes over MMIO like the PASID flushes: through the KIQ they stalled for seconds each when several compute processes ran at once (`failed to write reg 28b4 wait reg 28c6`). Nothing else needs to be set; `bc250_flush_by_runlist` does nothing in this mode and can stay at `0`.
 
 This is the configuration that holds up under sustained training ([issue #13](https://github.com/MastaG/linux-cachyos-bc250/issues/13), 36 CUs, stock ROCm 7.2.4 with a gfx1013 rocBLAS and a native PyTorch build):
 

@@ -42,7 +42,7 @@ forgotten in the other fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twenty-seven BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3.1). The RC kernel carries the same twenty-seven patches (7.3-rc):
+The stable and BORE kernels carry these twenty-eight BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3.1). The RC kernel carries the same twenty-eight patches (7.3-rc):
 
 ```text
 0001-bc250-8core-metrics.patch
@@ -72,6 +72,7 @@ The stable and BORE kernels carry these twenty-seven BC-250 patches in `patches/
 0025-bc250-kfd-nohws-vmid-flush.patch
 0026-bc250-gmc-flush-type-knob.patch
 0027-bc250-mtype-rw-c-rw-s.patch
+0028-bc250-gmc-kfd-vmid-mmio-flush.patch
 ```
 
 `patches/linux-cachyos-rc` is the same list, spelled out here as well because the
@@ -106,6 +107,7 @@ freezes the BC-250 and is parked in `disabled/bc250-vcn.patch` in both sets):
 0025-bc250-kfd-nohws-vmid-flush.patch
 0026-bc250-gmc-flush-type-knob.patch
 0027-bc250-mtype-rw-c-rw-s.patch
+0028-bc250-gmc-kfd-vmid-mmio-flush.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -162,7 +164,8 @@ effect. Linking the module's LTO objects on their own (`make CC=clang LD=ld.lld 
 drivers/gpu/drm/amd/amdgpu/amdgpu.o`) also passes: no error, no warning, and a 730 MB ELF
 relocatable out of the ThinLTO backend in 114 s. What a single-module build cannot do is the
 standalone `scripts/Makefile.modpost` step — it has no vmlinux symbol table, so it reports the
-whole tree's exports as unresolved; CI runs that inside `make all`. Regenerate a
+whole tree's exports as unresolved; CI runs that inside `make all`. `0028` (2026-11-06) was made on the same
+tree with all twenty-seven applied and lands with no offset and no fuzz. Regenerate a
 patch when it starts needing fuzz, not merely when it moves.
 
 #### Disabled patches
@@ -203,6 +206,7 @@ This patch set contains:
 - the GFX1013 compute GFXOFF guard;
 - an **opt-in** KFD/HWS runlist rebuild workaround for stale ROCm compute TLB translations (`amdgpu.bc250_flush_by_runlist`, a bitmask of the call sites: 1 = on unmap, 2 = on map, `3` = both; default 0, off). Under HWS the PASID sweep finds no VMID on this board, so the invalidation never happens; rebuilding an already-active runlist (queue preempt + VMID reassign) is the path measured to work. Sites: the KFD map and unmap ioctls and the SVM map/unmap paths. It takes `dqm_lock`, so `kfd_flush_tlb()` must never call it;
 - the same invalidation for the **no-HWS** path (`sched_policy=2`), where a process keeps one static VMID that neither the PASID sweep nor a runlist rebuild reaches: `kfd_flush_tlb()` flushes that VMID directly, as amdgpu did before PASID flushes existed (unconditional, no knob);
+- that VMID flush, and every other GFX hub flush of a KFD VMID, sent over MMIO (semaphore-guarded, type 0) like the GFX1013 PASID flushes instead of through the KIQ (`0028`, unconditional on the BC-250). Through the KIQ it stalled for seconds under concurrent compute (`failed to write reg 28b4 wait reg 28c6`, `Timeout waiting for VM flush hub: 0!`); graphics VMIDs and the GART flush keep their route, so ordinary Vulkan games are unaffected. Tested with three and four concurrent HIP processes on a BC-250 under `sched_policy=2`: no flush errors, no wrong results, about 50% more work done in the same time;
 - a **second gfx ring** on pipe 0, the PS5's AGR ring, opt-in with `amdgpu.bc250_gfx_queues=2` (default 1 = the stock single ring). `amdgpu_ctx` then maps ring index N to gfx ring N instead of balancing a context over both, because a PS5 title's queue is one hardware queue, and an EOP on pipe 0 checks the fences of every ring on it (queue 1's own EOP does not arrive);
 - EOP interrupts of render-node submissions delivered to the process as KFD events, which is what a PS5 title expects (`amdgpu.bc250_gfx_eop_events`, **default 0 = off**, unlike upstream's 2; `1` = on, `2` = on and an id-0 interrupt from inside an IB goes to the EOP log too). A context id with bit 27 set names the KFD event to signal; the others go to a per-process EOP log ring in the upper half of its signal page, which user space reads after registering a signal event with `AMDKFD_IOC_BC250_EOP_LOG` (ioctl number 0x80 — defined in `kfd_chardev.c` only, not in `include/uapi/linux/kfd.h`, so callers must carry the define). It ships off because with any non-zero value every end-of-pipe interrupt of every game on the board takes this path, and no BC-250 board has run it yet; Kyty's native GPU backend needs `amdgpu.bc250_gfx_eop_events=2` on the **kernel command line** (a `/etc/modprobe.d/` drop-in only applies if it was copied into the initramfs that loads `amdgpu`) — see the README's KytyPS5-Native section;
 - `amdgpu.bc250_tlb_flush_type` to force the flush type of **every** GPU TLB invalidation (default -1 = keep what the caller asked for, 0 = legacy). A heavyweight (type 2) invalidation of a KFD VMID waits for that VMID's outstanding requests and did not get its ACK while a KFD queue's GL2 flush was in flight, which stopped the KIQ and with it the GPU; our GFX1013 PASID path is forced to type 0 unconditionally, this knob covers the paths that stay heavyweight;
