@@ -1377,7 +1377,7 @@ What you need besides the package:
 on the board, not only to Kyty. `sched_policy=2` helps some games and hurts
 others (see
 [Optional AMDGPU scheduler tuning](#optional-amdgpu-scheduler-tuning)), and the
-[ROCm / KFD](docs/ROCM.md) TLB workaround does not operate with it. If other
+[ROCm / KFD](docs/ROCM.md) guide recommends it for compute. If other
 games get worse, take them out again while you are not playing PS5 games.
 `bc250_gfx_eop_events` is off by default in this repository's kernels because any
 non-zero value sends every end-of-pipe interrupt of every game on the board
@@ -1616,7 +1616,7 @@ sudo sed -i 's| amdgpu.sched_policy=2||' /etc/default/limine
 sudo limine-mkinitcpio
 ```
 
-The optional ROCm/KFD runlist-TLB workaround documented in [docs/ROCM.md](docs/ROCM.md) requires hardware scheduling and therefore does **not** operate with `sched_policy=2`.
+For ROCm/KFD, `sched_policy=2` is the recommended mode: the kernel then flushes each compute process's VMID directly, while the runlist-rebuild workaround for hardware scheduling locks the board under sustained load (see [docs/ROCM.md](docs/ROCM.md)).
 
 ---
 
