@@ -46,7 +46,7 @@ index 1f57984b58c..8682e6042ea 100644
 +   return nir_shader_intrinsics_pass(nir, fixup_smem_loads_null_prt, nir_metadata_control_flow, &s);
  }
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 2380b8e9044..48cddf6b148 100644
+index b5aa981c475..053fb57667d 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -374,6 +374,11 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -62,7 +62,7 @@ index 2380b8e9044..48cddf6b148 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 841cfd084fd..49c387f0b7d 100644
+index 9463931ddb7..468b3640119 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -184,6 +184,10260 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s

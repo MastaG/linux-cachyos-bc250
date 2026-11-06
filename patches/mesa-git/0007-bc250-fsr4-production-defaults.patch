@@ -42,7 +42,7 @@ src/amd/vulkan/radv_shader.c            | 11 +++++------
 ---
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 4bd0cf86833..4added5e405 100644
+index 96038d899f5..b3b2eda91eb 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -374,30 +374,30 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -101,7 +101,7 @@ index 4bd0cf86833..4added5e405 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 5522964676f..0fce74949ea 100644
+index fc615de22e9..551e84a8bbd 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8559,11 +8559,11 @@ bc250_fsr4_profile(const void *bytes, size_t size)

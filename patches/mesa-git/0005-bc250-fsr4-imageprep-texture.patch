@@ -32,7 +32,7 @@ src/amd/vulkan/radv_shader.c            | 4174 +++++++++++++++++++++
 ---
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 48cddf6b148..70112f516ae 100644
+index 053fb57667d..73e732c6c3f 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -378,6 +378,14 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -51,7 +51,7 @@ index 48cddf6b148..70112f516ae 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 49c387f0b7d..e996d7bb966 100644
+index 468b3640119..10471101983 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8499,7 +8499,7 @@ bc250_fsr4_dynamic_columns(nir_shader *nir, unsigned profile)
