@@ -28,7 +28,7 @@ source "${ROOT_DIR}/scripts/repo-package-helpers.sh"
 rm -rf -- "$BUILD_DIR"
 mkdir -p -- "$BUILD_DIR"
 cp -- "$PKG_DIR"/kytyps5-native-wrapper.sh "$PKG_DIR"/kytyps5-native.desktop \
-    "$PKG_DIR"/kyty-lodhw.service \
+    "$PKG_DIR"/kyty-lodhw.service "$PKG_DIR"/kytyps5-steam-sync \
     "$PKG_DIR"/kytyps5-native-git.install "$BUILD_DIR/"
 sed -e "s/@KYTY_COMMIT@/${KYTY_COMMIT}/" -e "s/@KYTY_TAG@/${KYTY_TAG}/" -e "s/@PKGREL@/${PKGREL}/" \
     "$PKG_DIR/PKGBUILD.in" > "$BUILD_DIR/PKGBUILD"
@@ -63,7 +63,8 @@ listing="$(bsdtar -tf "${packages[0]}")"
 for path in usr/lib/kytyps5-native/kyty_emulator usr/lib/kytyps5-native/kyty_launcher \
             usr/lib/kytyps5-native/kyty-lodhw usr/lib/kytyps5-native/kytyps5-run.sh \
             usr/lib/kytyps5-native/VERSION usr/lib/kytyps5-native/assets/fonts/NotoSans-Regular.ttf \
-            usr/bin/kytyps5-native usr/lib/systemd/system/kyty-lodhw.service; do
+            usr/bin/kytyps5-native usr/bin/kytyps5-steam-sync \
+            usr/lib/systemd/system/kyty-lodhw.service; do
     grep -qx -- "$path" <<<"$listing" || {
         printf 'ERROR: kytyps5-native-git is missing %s\n' "$path" >&2
         exit 1

@@ -1324,6 +1324,7 @@ Where everything is:
 | `/usr/lib/kytyps5-native/` | The program, read-only: `kyty_launcher`, `kyty_emulator`, `kytyps5-run.sh`, `kyty-lodhw`, `assets/`, `VERSION` |
 | `/usr/bin/kytyps5-native` | Starts the launcher (also in the application menu) |
 | `/usr/bin/kytyps5-run` | Starts a game from a Steam shortcut (step 3) |
+| `/usr/bin/kytyps5-steam-sync` | Adds the games in `~/Games/PS5` to Steam as shortcuts, with their own name and artwork (step 3) |
 | `/usr/bin/kyty_emulator` | The emulator on the command line (`kyty_emulator --help`, `kyty_emulator --game /path/to/game`) |
 | `/usr/lib/systemd/system/kyty-lodhw.service` | The GPU helper (step 2), runs `/usr/lib/kytyps5-native/kyty-lodhw` as root, socket `/run/kyty-lodhw.sock` |
 | `/usr/share/doc/kytyps5-native-git/` | Upstream's README and its kernel notes (`bc250-amdgpu.md`) |
@@ -1451,18 +1452,22 @@ To undo: `sudo systemctl disable --now kyty-lodhw.service` and
 ### 3. Playing
 
 - **Launcher:** `kytyps5-native`, then add the game's folder.
-- **Steam (Gaming Mode):** add `/usr/bin/kytyps5-run` as a non-Steam game and
-  give it the game folder as launch option: `"/path/to/game"`. Optional:
-  `--keep-steam` after the folder keeps Steam running during the game (by
-  default it is unloaded to free 2-3 GB of RAM for large games). It needs
-  `xorg-xprop`: `sudo pacman -S xorg-xprop`.
+- **Steam (Gaming Mode):** let `kytyps5-steam-sync` add your games (below), or
+  add `/usr/bin/kytyps5-run` as a non-Steam game by hand and give it the game
+  folder as launch option: `"/path/to/game"`. Optional: `--keep-steam` after
+  the folder keeps Steam running during the game (by default it is unloaded to
+  free 2-3 GB of RAM for large games). It needs `xorg-xprop`:
+  `sudo pacman -S xorg-xprop`.
 - **Turn Steam Input off for that shortcut** (its controller settings in Steam).
   With Steam Input on, Kyty sees only Steam's virtual pad: no motion controls,
   haptics, adaptive triggers or controller speaker.
-- **HDR** is automatic from a Steam shortcut: with Steam's HDR on (Settings >
-  Display), the runner starts Kyty in HDR10 and the game offers its HDR
-  options; with it off, SDR as before. On the KDE desktop, turn HDR on in the
-  launcher's settings for the game (KDE's own HDR on).
+- **HDR** is off by default from a Steam shortcut since upstream's build of
+  2026-11-04: ASTRO BOT looks washed out in HDR and upstream has not found why
+  yet (their issue #7). The game then renders in SDR, which gamescope shows
+  correctly inside Steam's HDR output. To try HDR anyway:
+  `mkdir -p ~/.config/KytyPS5-Native && touch ~/.config/KytyPS5-Native/hdr`
+  (with Steam's HDR on, Settings > Display); remove the file to go back. On the
+  KDE desktop, turn HDR on in the launcher's settings for the game.
 - **A USB DualSense** gets its own levels each time a game starts: speaker 50%,
   haptics 90%, the controller's mixer 100% (a new controller otherwise sits at
   40% and 80%, far quieter than on a PS5). Other levels for one shortcut:
@@ -1472,6 +1477,36 @@ To undo: `sudo systemctl disable --now kyty-lodhw.service` and
   haptics to reach the controller.
 - Upstream's Decky plugin is for SteamOS and installs its own copy of Kyty; it
   is not needed with this package.
+
+#### Adding your games to Steam: `kytyps5-steam-sync`
+
+Put each game in its own folder under `~/Games/PS5` (for example
+`~/Games/PS5/PPSA21564-app0`, the folder with `eboot.bin` and `sce_sys/`), then
+run from a terminal or over SSH:
+
+```bash
+kytyps5-steam-sync                  # adds every game in ~/Games/PS5 that has no shortcut yet
+kytyps5-steam-sync /mnt/games/ps5   # another folder
+kytyps5-steam-sync --list           # only show what it finds and what differs
+kytyps5-steam-sync --dry-run        # show what it would do, change nothing
+kytyps5-steam-sync --prune          # also remove shortcuts of games you deleted, without asking
+```
+
+Each shortcut gets the game's own name from `sce_sys/param.json` with ` (PS5)`
+behind it, and the game's own pictures as Steam artwork: `pic0` as the library
+banner and background, `icon0` as the icon and the cover (PS5 `.dds` pictures
+are converted to PNG). Running it again changes nothing for games that already
+have a shortcut, apart from updating their artwork if the game's pictures
+changed. When a game's folder is gone, it asks whether to remove that shortcut
+and its artwork; `--prune` removes them all without asking.
+
+Steam only reads its shortcut list when it starts, so when Steam is running the
+tool asks to stop it, writes the list and starts Steam again (`--yes` skips the
+question). It keeps a backup of the list next to it
+(`~/.local/share/Steam/userdata/<id>/config/shortcuts.vdf.bak-<date>`). Game
+folders linked in from another drive work too. Afterwards, **turn Steam Input
+off** for each new shortcut (see above). `kytyps5-steam-sync --help` lists the
+other options.
 
 ## Hardware video (VCN), parked
 

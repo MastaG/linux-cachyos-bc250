@@ -19,7 +19,10 @@
 # - The wrappers set a connected DualSense's speaker and haptics levels before
 #   a start (WirePlumber gives a new controller 40% and its mixer sits at 80%,
 #   far below a PS5). Upstream's runner starts Kyty in HDR when gamescope
-#   outputs HDR since its release faf53a5 (our PR #5).
+#   outputs HDR and ~/.config/KytyPS5-Native/hdr exists (off by default since
+#   47857b4: ASTRO BOT looks washed out in HDR, upstream issue #7).
+# - kytyps5-steam-sync, our own: adds the games of a folder (~/Games/PS5) to
+#   Steam as kytyps5-run shortcuts with the game's own name and artwork.
 # - Nothing on the system is changed on install, not even a new group: the
 #   kernel options, the helper service and the render group membership are
 #   the owner's choice, documented in the README ("KytyPS5-Native").
@@ -33,7 +36,8 @@ url="https://github.com/superkeka/KytyPS5-Native"
 license=('GPL-2.0-only')
 depends=('qt6-base' 'vulkan-icd-loader' 'libx11' 'libxext' 'libxcursor' 'libxi'
          'libxfixes' 'libxrandr' 'libxss' 'libxkbcommon' 'wayland' 'libpulse'
-         'alsa-lib' 'dbus' 'systemd-libs' 'hicolor-icon-theme')
+         'alsa-lib' 'dbus' 'systemd-libs' 'hicolor-icon-theme'
+         'python' 'python-pillow')
 makedepends=('git' 'cmake' 'ninja' 'clang' 'lld' 'glslang' 'python' 'pkgconf'
              'wayland-protocols' 'libxtst' 'mesa')
 optdepends=('xorg-xprop: Steam shortcuts through kytyps5-run'
@@ -46,8 +50,10 @@ options=('!lto' '!debug')
 source=("$_name::git+https://github.com/superkeka/KytyPS5-Native.git#commit=@KYTY_COMMIT@"
         'kytyps5-native-wrapper.sh'
         'kytyps5-native.desktop'
-        'kyty-lodhw.service')
+        'kyty-lodhw.service'
+        'kytyps5-steam-sync')
 sha256sums=('SKIP'
+            'SKIP'
             'SKIP'
             'SKIP'
             'SKIP')
@@ -106,6 +112,7 @@ package() {
 
     install -Dm755 kytyps5-native-wrapper.sh "$pkgdir/usr/bin/kytyps5-native"
     install -Dm755 kytyps5-native-wrapper.sh "$pkgdir/usr/bin/kytyps5-run"
+    install -Dm755 kytyps5-steam-sync "$pkgdir/usr/bin/kytyps5-steam-sync"
     ln -s "/usr/lib/$_name/kyty_emulator" "$pkgdir/usr/bin/kyty_emulator"
     install -Dm644 kytyps5-native.desktop "$pkgdir/usr/share/applications/kytyps5-native.desktop"
     install -Dm644 "$_name/docs/logo.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/kytyps5-native.svg"
