@@ -681,6 +681,15 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - FSR4 and OptiScaler are on by default. They remain launch options, so
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- **Back by popular request: FreeFG + HLX DLSS Preset K and FreeFG + HLX FSR 4 Full.** Both in the
+  menu again. HLX FSR 4 Full is now installed the way HelixSR's own setup does it, as an OptiScaler
+  custom upscaler next to HLX FSR 4 (the earlier package put it in HLX FSR 4's place, and one game
+  showed a black image there); HLX FSR 4 stays selectable in OptiScaler's overlay. Preset K is sharper
+  than Model E but can sparkle on foliage; turn the Steam overlay off for a game that freezes at
+  startup with it. AMD's FSR fallback beside HLX FSR 4 is FSR 4.1.2 again, as HelixSR ships it.
+- **New: a box for the game's own DLSS frame generation.** Ticking it sets frame generation to take
+  its input from the game's DLSS FG (\`FrameGen.FGInput=dlssg\`) and turns GPU spoofing and frame
+  generation on with it; then turn DLSS Frame Generation on in the game.
 - **Changed: three upscalers, all with FreeFG.** The menu now offers **FreeFG + HLX FSR 4** (the
   default), **FreeFG + HLX DLSS** (HLX DLSS Model E) and **FreeFG + FSR4 RC12**, and No upscaling. Gone:
   HelixSR Scaler, HLX FSR 4 Full and HLX DLSS Preset K (Preset K showed artifacts and ghosting, Full a

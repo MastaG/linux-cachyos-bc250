@@ -257,6 +257,8 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12" \\\n'
     '        --helixsr-ngx "${srcdir}/HelixSR-3.2.1-network.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1" \\\n'
+    '        --helixsr-full "${srcdir}/HelixSR-3.2.1-Scaler-2.2.0-core.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1" \\\n'
     '        --freefg "${srcdir}/freefg-1.3.0.zip" \\\n'
     '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.3.0" \\\n'
     '        --freefg-ini "${srcdir}/OptiScaler-bc250-ba0dedb.ini" \\\n'
@@ -313,6 +315,13 @@ payload_sources = [
     # FSR SDK (MIT).
     ("HelixSR-3.2.1-network.zip", f"{payload_base}/HelixSR-3.2.1-network.zip",
      "7309ca5630245994106bcc5a0b4ed49b208e90e7cf29130f61120b16454b4663", True),
+    # The Scaler 2.2.0 part of HelixSR 3.2.1 (lonewolf0622, GPL-3.0; the
+    # HLX FSR 4 Full custom upscaler in it is built from AMD's FSR SDK, MIT): only
+    # OptiScaler/custom/HLX FSR 4 Full/ffx/ (freefg-hlxfsr4full), AMD's FSR SDK
+    # 2.4.0 upscaler it keeps as amd_fidelityfx_upscaler_dx12.amd.dll (beside HLX
+    # FSR 4 in both HLX FSR 4 variants) and its FidelityFX licence are used. Mirrored.
+    ("HelixSR-3.2.1-Scaler-2.2.0-core.zip", f"{payload_base}/HelixSR-3.2.1-Scaler-2.2.0-core.zip",
+     "2852035f61ac648cda28094db72e9d6489938fbfeac89402bb719ddf18d84669", True),
     # FreeFG 1.3.0 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer; every variant ships it. Mirrored release
     # zip; its OptiScaler build is GPL-3.0, and the matching

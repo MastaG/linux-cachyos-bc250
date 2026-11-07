@@ -204,26 +204,48 @@ FREEFG_HLXFSR4_NAME = "freefg-hlxfsr4"
 # 2026-11-03, after HelixSR 2.0 and with it "freefg-helixsr" were retired).
 FREEFG_HLXDLSS_NAME = "freefg-hlxdlss"
 HLXDLSS_FOLDER = "OptiScaler/custom/hlx-dlss/dlss"
+# Back by popular request (owner, 2026-11-07), after the rework dropped them:
+# FreeFG with HLX DLSS Preset K, laid out as freefg-hlxdlss (FreeFG's OptiScaler
+# loads the custom folder's only DLL whatever its name, and K finds its kernels
+# and weights beside itself), from HelixSR/k/ in the HelixSR archive.
+FREEFG_HLXDLSSK_NAME = "freefg-hlxdlssk"
+HELIXSR_K_FILES = ("helixsr.dll", "helixsr.ini", "helixsr_modelk_kernels.pak",
+                   "helixsr_modelk_weights.bin")
+# FreeFG with HLX FSR 4 Full (the full FSR 4.1.2 network), laid out the way
+# HelixSR 3.2.1 installs it: freefg-hlxfsr4 (HLX FSR 4 in the FidelityFX slot,
+# AMD's .amd.dll beside it) plus Full as an OptiScaler custom upscaler in
+# OptiScaler/custom/HLX FSR 4 Full/ffx/ with its hlx_fsr4.ini, and
+# [Upscalers] Dx12Upscaler set to that folder's name. The Full DLL finds AMD's
+# FSR three folders up (OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll) and its
+# ini beside itself. The packages before the rework put Full in HLX FSR 4's place
+# instead, and the one game tried there showed a black image ("kernel dispatch
+# failed", 2026-11-06, HelixSR issue #187); this is the layout its author tested.
+# HLX FSR 4 stays selectable from OptiScaler's own menu in this variant.
+FREEFG_HLXFSR4FULL_NAME = "freefg-hlxfsr4full"
+HLX_FULL_FOLDER = "OptiScaler/custom/HLX FSR 4 Full/ffx"
+HLX_FULL_NAME = "HLX FSR 4 Full"
+HLX_FULL_TRAILER = b"HLXFULL1"
 # Variants an older package had, and the variant each name now selects, so a
 # launch option or a saved menu choice that names one keeps working. Since
 # 2026-11-07 (owner) the packages ship only the three FreeFG variants: the stock
 # OptiScaler nightly variants (its bridges, HLX FSR 4 and Preset K alone),
-# HelixSR Scaler and HelixSR 3.2.1's test upscalers (HLX FSR 4 Full, Preset K)
-# are gone. A name for the HLX FSR 4 or HLX DLSS family selects FreeFG with that
+# and HelixSR Scaler are gone (HLX FSR 4 Full and Preset K came back on FreeFG,
+# above). A name for the HLX FSR 4 or HLX DLSS family selects FreeFG with that
 # upscaler; a bridge name or the stock nightly selects FreeFG with the RC12
 # bridge. Frame generation stays off by default in each (FG_DEFAULT).
 RETIRED_VARIANTS = {
     "freefg-helixsr": "freefg-hlxdlss", "helixsr-ffx": "freefg-hlxdlss",
-    "helixsr": "freefg-hlxdlss", "freefg-hlxdlssk": "freefg-hlxdlss",
-    "hlxdlssk": "freefg-hlxdlss", "freefg-hlxfsr4full": "freefg-hlxfsr4",
+    "helixsr": "freefg-hlxdlss", "hlxdlssk": "freefg-hlxdlssk",
     "hlxfsr4": "freefg-hlxfsr4", "optiscaler": "freefg", "signed": "freefg",
     "fsr412f": "freefg", "fsr411f": "freefg", "fsr411b": "freefg",
     "fsr411rc9": "freefg", "fsr411rc10": "freefg",
 }
 # HLX FSR 4 hands what its own runtime does not cover to AMD's FidelityFX DLL
-# beside it (<name>.amd.dll); without one it logs "HLX FSR 4 only". The
-# nightly's own amd_fidelityfx_upscaler_dx12.dll is AMD's signed FidelityFX
-# upscaler, so that is the one kept there.
+# beside it (<name>.amd.dll); without one it logs "HLX FSR 4 only". HLX FSR 4 Full
+# finds the same file three folders up. It is the one HelixSR 3.2.1 ships there:
+# AMD's FSR SDK 2.4.0 upscaler (FSR 4.1.2.4555, signed), from the Scaler part of
+# the release, the version both HLX DLLs are built from. (The nightly's own is
+# FSR 4.1.1.2740; the first package of the 2026-11-07 rework shipped that.)
 AMD_FALLBACK = "OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"
 FREEFG_FOLDER = "OptiScaler/BC250-XeFG"
 FREEFG_LAYER = "VK_LAYER_BC250_xefg_wave"
@@ -448,6 +470,64 @@ def helixsr_ngx_from(source: Path, staging: Path) -> tuple[Path, Path, Path, Pat
             raise RuntimeError("HelixSR archive has no " + name)
         shutil.copy2(release / name, notices / name)
     return dll, ini, hlx, notices
+
+
+def helixsr_k_files(dll: Path) -> dict[str, Path]:
+    """Preset K beside HLX DLSS (HelixSR/k/, HelixSR 3.2.1's setup with --preset-k),
+    by file name. All four files or none; none is an error, the variant needs them."""
+    folder = dll.parent / "k"
+    found = {name: folder / name for name in HELIXSR_K_FILES if (folder / name).is_file()}
+    if len(found) != len(HELIXSR_K_FILES):
+        raise RuntimeError("HelixSR archive has no complete HelixSR/k/ (Preset K): "
+                           + ", ".join(sorted(set(HELIXSR_K_FILES) - set(found))) + " missing")
+    if found["helixsr.dll"].stat().st_size < HELIXSR_BUILT_DLL_MIN:
+        raise RuntimeError("Preset K's helixsr.dll is too small to be HelixSR's")
+    return found
+
+
+def helixsr_full_from(source: Path, staging: Path) -> tuple[Path, Path, Path, Path]:
+    """HLX FSR 4 Full from an archive that has the Scaler 2.2.0's
+    OptiScaler/custom/HLX FSR 4 Full/ffx/ (HelixSR 3.2.1's zip, or the Scaler
+    part of it): the DLL, its hlx_fsr4.ini, AMD's FidelityFX upscaler the Scaler
+    keeps as OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll, and the Scaler's
+    FidelityFX licence. Full ships built (its shaders behind an HLXFULL1
+    trailer); a DLL without them would not run."""
+    unpacked = staging / "helixsr-full"
+    unpacked.mkdir()
+    subprocess.run(
+        ["bsdtar", "-xf", str(source), "--no-same-owner",
+         "--no-same-permissions", "-C", str(unpacked)],
+        check=True,
+    )
+    if any(p.is_symlink() or not (p.is_dir() or p.is_file())
+           for p in unpacked.rglob("*")):
+        raise RuntimeError("HLX FSR 4 Full archive contains a link or special file")
+    tail = HLX_FULL_FOLDER.removeprefix("OptiScaler/")
+    dlls = [p for p in unpacked.rglob("amd_fidelityfx_upscaler_dx12.dll")
+            if p.parent.as_posix().endswith("/" + tail)]
+    if len(dlls) != 1:
+        raise RuntimeError(f"the archive must contain exactly one {HLX_FULL_FOLDER}/"
+                           "amd_fidelityfx_upscaler_dx12.dll")
+    dll = dlls[0]
+    with dll.open("rb") as handle:
+        handle.seek(max(0, dll.stat().st_size - 24))
+        if handle.read(8) != HLX_FULL_TRAILER:
+            raise RuntimeError("HLX FSR 4 Full in the archive is not built")
+    ini = dll.parent / "hlx_fsr4.ini"
+    if not ini.is_file():
+        raise RuntimeError("HLX FSR 4 Full in the archive has no hlx_fsr4.ini")
+    scaler = dll.parents[4]
+    amd = scaler / AMD_FALLBACK
+    if not amd.is_file() or amd.read_bytes()[:2] != b"MZ":
+        raise RuntimeError(f"the archive has no {AMD_FALLBACK} beside HLX FSR 4 Full")
+    notices = staging / "helixsr-full-notices"
+    notices.mkdir()
+    for path in sorted((scaler / "Licenses").glob("FidelityFX*")) if (scaler / "Licenses").is_dir() else []:
+        if path.is_file():
+            shutil.copy2(path, notices / path.name)
+    if not any(notices.iterdir()):
+        raise RuntimeError("HLX FSR 4 Full archive has no FidelityFX licence in Licenses/")
+    return dll, ini, amd, notices
 
 
 def helixsr_ini_int8_off(ini: Path, staging: Path) -> Path:
@@ -694,7 +774,8 @@ def provider_artifact(args, destination: Path) -> dict:
     }
 
 
-VARIANT_NAMES = (FREEFG_HLXFSR4_NAME, FREEFG_HLXDLSS_NAME, FREEFG_NAME)
+VARIANT_NAMES = (FREEFG_HLXFSR4_NAME, FREEFG_HLXDLSS_NAME, FREEFG_NAME,
+                 FREEFG_HLXDLSSK_NAME, FREEFG_HLXFSR4FULL_NAME)
 
 
 def main() -> int:
@@ -718,7 +799,13 @@ def main() -> int:
                     help="HelixSR 3.0 or later release zip (after its setup: "
                          "HelixSR/helixsr.dll and HLX-FSR4/) and the URL recorded "
                          "in the prefix; HLX FSR 4 for 'freefg-hlxfsr4' and HLX DLSS "
-                         "(Model E) for 'freefg-hlxdlss'")
+                         "(Model E) for 'freefg-hlxdlss', Preset K (HelixSR/k/) for "
+                         "'freefg-hlxdlssk'")
+    ap.add_argument("--helixsr-full", nargs=2, required=True, metavar=("ARCHIVE", "ORIGIN"),
+                    help="archive with the Scaler 2.2.0 OptiScaler/ of HelixSR 3.2.1 "
+                         "(custom/HLX FSR 4 Full/ffx/ and amd_fidelityfx_upscaler_dx12.amd.dll) "
+                         "and the URL recorded in the prefix: HLX FSR 4 Full for "
+                         "'freefg-hlxfsr4full', AMD's FSR beside both HLX FSR 4 variants")
     ap.add_argument("--freefg", nargs=2, required=True, metavar=("ARCHIVE", "ORIGIN"),
                     help="FreeFG release zip and the URL recorded in the prefix (Intel "
                          "XeFG frame generation with FreeFG's BC-250 shaders and VRR "
@@ -766,6 +853,12 @@ def main() -> int:
         bridge_origin = args.fsr4_bridge[1]
         hlx_dlss, helix_ini, hlx, helix_notices = helixsr_ngx_from(
             Path(args.helixsr_ngx[0]), staging)
+        k_files = helixsr_k_files(hlx_dlss)
+        full, full_ini, amd_dll, full_notices = helixsr_full_from(Path(args.helixsr_full[0]), staging)
+        full_all_notices = staging / "helixsr-full-all-notices"
+        full_all_notices.mkdir()
+        for path in [*helix_notices.iterdir(), *full_notices.iterdir()]:
+            shutil.copy2(path, full_all_notices / path.name)
         freefg, freefg_notices = freefg_from(Path(args.freefg[0]), args.optiscaler, staging)
         freefg_ini, mfg, mfg_dll, mfg_notices = args.freefg_ini, {}, None, None
         if args.mfg_unlocker:
@@ -774,27 +867,18 @@ def main() -> int:
             mfg = {"OptiScaler/plugins/MFGUnlocker.asi": mfg_dll}
             freefg_ini = with_xefg_model(args.freefg_ini, staging)
 
-        # AMD's own FidelityFX upscaler from the nightly, as HLX FSR 4's fallback.
-        amd_dir = staging / "amd-fallback"
-        amd_dir.mkdir()
-        subprocess.run(
-            ["bsdtar", "-xf", str(args.optiscaler), "--no-same-owner", "--no-same-permissions",
-             "-C", str(amd_dir), "OptiScaler/amd_fidelityfx_upscaler_dx12.dll"],
-            check=True,
-        )
-        amd_dll = amd_dir / "OptiScaler/amd_fidelityfx_upscaler_dx12.dll"
-        if not amd_dll.is_file() or amd_dll.read_bytes()[:2] != b"MZ":
-            raise RuntimeError("the OptiScaler nightly has no OptiScaler/amd_fidelityfx_upscaler_dx12.dll")
 
         # name, FidelityFX upscaler, files beside it, preset, notices, notice
         # prefix, what the provenance says about the upscaler.
         upscalers = [
-            (FREEFG_HLXFSR4_NAME, hlx, {AMD_FALLBACK: amd_dll}, {}, helix_notices, "HelixSR",
+            (FREEFG_HLXFSR4_NAME, hlx, {AMD_FALLBACK: amd_dll}, {}, full_all_notices, "HelixSR",
              f"HLX FSR 4 from HelixSR (origin: {args.helixsr_ngx[1]}, SHA256 "
              f"{digest(hlx)}), AMD's FSR 4 network on HelixSR's own pipeline, with "
              "shaders built from AMD's FSR SDK (MIT, see HelixSR's "
              f"THIRD_PARTY_NOTICES.md); {AMD_FALLBACK} is AMD's FidelityFX upscaler "
-             "from the OptiScaler nightly, its fallback for what HLX FSR 4 does not cover"),
+             f"(FSR SDK 2.4.0) from the Scaler part of HelixSR 3.2.1 (origin: "
+             f"{args.helixsr_full[1]}, SHA256 {digest(amd_dll)}), its fallback for what "
+             "HLX FSR 4 does not cover"),
             (FREEFG_HLXDLSS_NAME, bridge,
              {f"{HLXDLSS_FOLDER}/helixsr.dll": hlx_dlss,
               f"{HLXDLSS_FOLDER}/helixsr.ini": helixsr_ini_int8_off(helix_ini, staging)},
@@ -808,6 +892,30 @@ def main() -> int:
              "covered by HelixSR's licence. helixsr.ini beside it has Int8 = off"),
             (FREEFG_NAME, bridge, {}, {}, bridge_notices, "FSR4-RC12",
              f"the FSR4 RC12 bridge (origin: {bridge_origin}), the same build FreeFG ships"),
+            (FREEFG_HLXDLSSK_NAME, bridge,
+             {f"{HLXDLSS_FOLDER}/{n}": p for n, p in k_files.items()},
+             {"Upscalers.Dx12Upscaler": "hlx-dlss"}, helix_notices, "HelixSR",
+             f"the FSR4 RC12 bridge (origin: {bridge_origin}), for the Direct3D 11 and "
+             "Vulkan games; the DX12 upscaler is HLX DLSS Preset K, "
+             f"{HLXDLSS_FOLDER}/helixsr.dll from HelixSR (origin: {args.helixsr_ngx[1]}, "
+             f"SHA256 {digest(k_files['helixsr.dll'])}), NVIDIA's DLSS 4 Preset K network "
+             "as DirectX 12 compute shaders, built by HelixSR's own setup script from "
+             "NVIDIA's DLSS DLL; per its author that network remains the property of "
+             "NVIDIA and is not covered by HelixSR's licence. Its kernels and weights "
+             "and its own helixsr.ini are beside it"),
+            (FREEFG_HLXFSR4FULL_NAME, hlx,
+             {AMD_FALLBACK: amd_dll,
+              f"{HLX_FULL_FOLDER}/amd_fidelityfx_upscaler_dx12.dll": full,
+              f"{HLX_FULL_FOLDER}/hlx_fsr4.ini": full_ini},
+             {"Upscalers.Dx12Upscaler": HLX_FULL_NAME}, full_all_notices, "HelixSR",
+             f"HLX FSR 4 from HelixSR (origin: {args.helixsr_ngx[1]}, SHA256 {digest(hlx)}), "
+             f"with {AMD_FALLBACK}, AMD's FidelityFX upscaler (FSR SDK 2.4.0) from the "
+             f"Scaler part of HelixSR 3.2.1 (SHA256 {digest(amd_dll)}), beside it. The DX12 upscaler is HLX FSR 4 Full, {HLX_FULL_FOLDER}/"
+             f"amd_fidelityfx_upscaler_dx12.dll from the Scaler 2.2.0 in HelixSR 3.2.1 "
+             f"(origin: {args.helixsr_full[1]}, SHA256 {digest(full)}), the full FSR 4.1.2 "
+             "network on HelixSR's pipeline (AMD's FSR SDK, MIT), as an OptiScaler custom "
+             "upscaler the way HelixSR installs it; hlx_fsr4.ini beside it is its own "
+             "(DeepReuse = exact), and it falls back to AMD's DLL above"),
         ]
         for name, ffx_sdk, upscaler_files, upscaler_preset, upscaler_notices, \
                 notice_prefix, upscaler_text in upscalers:

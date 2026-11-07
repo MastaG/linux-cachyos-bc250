@@ -1018,13 +1018,17 @@ class SlrPackageTests(unittest.TestCase):
         for name, text in templates.items():
             with self.subTest(package=name):
                 # Since 2026-11-07 (owner): FreeFG + HLX FSR 4 (the default),
-                # FreeFG + HLX DLSS (Model E) and FreeFG + FSR4 RC12, nothing else.
+                # FreeFG + HLX DLSS (Model E), FreeFG + FSR4 RC12, and FreeFG with
+                # Preset K (from the HelixSR archive) and HLX FSR 4 Full (from the
+                # Scaler part of HelixSR 3.2.1), nothing else.
                 self.assertIn("--default freefg-hlxfsr4", text)
                 self.assertIn("--fsr4-bridge", text)
                 self.assertIn("bc250-fsr4-dll-4.0.0-rc12.zip", text)
                 self.assertIn("646778a0d06c42bf3cdcc99f9396680f5cc4a33658b90c0889fd15751bfb800d", text)
                 self.assertIn("--helixsr-ngx", text)
                 self.assertIn("HelixSR-3.2.1-network.zip", text)
+                self.assertIn("--helixsr-full", text)
+                self.assertIn("HelixSR-3.2.1-Scaler-2.2.0-core.zip", text)
                 self.assertIn("--freefg", text)
                 self.assertIn("freefg-1.3.0.zip", text)
                 self.assertIn("--freefg-ini", text)
@@ -1035,9 +1039,9 @@ class SlrPackageTests(unittest.TestCase):
                 self.assertIn("5bd19d03288e1ece1d0bb2030ac072b36758045028da192044dcaad73fd901dd", text)
                 self.assertIn("MFGUnlocker-LICENSE-v1.7.0.txt", text)
                 self.assertNotIn("v1.6.0", text)
-                # Gone: HelixSR Scaler (and its HLX FSR 4 Full), the stock
-                # nightly's variants with the AMD-signed and the older bridges.
-                for gone in ("HelixSR Scaler", "Scaler-2", "--ffx-sdk", "--helixsr-scaler", "--freefg-bridge",
+                # Gone: HelixSR Scaler as a variant, the stock nightly's
+                # variants with the AMD-signed and the older bridges.
+                for gone in ("HelixSR Scaler", "--ffx-sdk", "--helixsr-scaler", "--freefg-bridge",
                              "signedbin", "4.1.1b", "rc9", "rc10", "rc11", "HelixSR-2.0.0"):
                     self.assertNotIn(gone, text)
 

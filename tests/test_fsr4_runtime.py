@@ -1611,10 +1611,34 @@ class PresetTests(unittest.TestCase):
             archive_zip.writestr("HelixSR-3.2.1/HelixSR/helixsr.ini", self.NGX_INI)
             archive_zip.writestr("HelixSR-3.2.1/HelixSR/k/helixsr.dll", self.K_DLL)
             archive_zip.writestr("HelixSR-3.2.1/HelixSR/k/helixsr_modelk_weights.bin", b"k" * 64)
+            archive_zip.writestr("HelixSR-3.2.1/HelixSR/k/helixsr_modelk_kernels.pak", b"kp" * 64)
+            archive_zip.writestr("HelixSR-3.2.1/HelixSR/k/helixsr.ini", self.K_INI)
             archive_zip.writestr("HelixSR-3.2.1/HLX-FSR4/amd_fidelityfx_upscaler_dx12.dll",
                                  hlx or self.HLX_FSR4)
             archive_zip.writestr("HelixSR-3.2.1/LICENSE", b"freeware")
             archive_zip.writestr("HelixSR-3.2.1/THIRD_PARTY_NOTICES.md", b"nvidia and amd property")
+        return path
+
+    K_INI = b"[Upscaling]\nDeepReuse = exact\n"
+    HLX_FULL = b"MZhlx-fsr4-full" * 1024 + b"HLXFULL1" + bytes(16)
+    FULL_INI = b"; HLX FSR 4 settings\n[HLX]\nDeepReuse = exact\n"
+    FULL_DIR = "HelixSR-Scaler-2.2.0/OptiScaler/custom/HLX FSR 4 Full/ffx/"
+    SCALER_AMD = b"MZ" + b"fsr-sdk-2.4.0-amd" * 512
+
+    def full_zip(self, work, full=None, ini=True, amd=True):
+        # The Scaler part of HelixSR 3.2.1 as mirrored: Full in its custom
+        # upscaler folder, the Scaler's licence texts beside its OptiScaler/.
+        path = work / "HelixSR-3.2.1-Scaler-2.2.0-core.zip"
+        with zipfile.ZipFile(path, "w") as z:
+            z.writestr(self.FULL_DIR + "amd_fidelityfx_upscaler_dx12.dll", full or self.HLX_FULL)
+            if ini:
+                z.writestr(self.FULL_DIR + "hlx_fsr4.ini", self.FULL_INI)
+            z.writestr("HelixSR-Scaler-2.2.0/OptiScaler.dll", b"MZscaler")
+            if amd:
+                z.writestr("HelixSR-Scaler-2.2.0/OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll",
+                           self.SCALER_AMD)
+            z.writestr("HelixSR-Scaler-2.2.0/Licenses/FidelityFX_v2_LICENSE.md", b"MIT amd")
+            z.writestr("HelixSR-Scaler-2.2.0/Licenses/OptiScaler_LICENSE.txt", b"GPL-3.0")
         return path
 
     MFG_DLL = b"MZ" + b"mfg-unlocker" * 512
@@ -1629,7 +1653,7 @@ class PresetTests(unittest.TestCase):
         return archive, license
 
     def build_payload(self, default_name=None, freefg=None, hlx=None, ngx_dll=None, mfg=True,
-                      leave_out=()):
+                      leave_out=(), full=None):
         with tempfile.TemporaryDirectory(prefix="payload-default-") as temporary:
             work = Path(temporary)
             archive, fork, fakenvapi, stub, provider, licenses, preset = \
@@ -1644,6 +1668,8 @@ class PresetTests(unittest.TestCase):
                 "--provider": [str(provider)],
                 "--fsr4-bridge": [str(fork), "https://example/rc12"],
                 "--helixsr-ngx": [str(self.ngx_zip(work, hlx, ngx_dll)), "https://example/helixsr"],
+                "--helixsr-full": [str(self.full_zip(work, **(full or {}))),
+                                   "https://example/helixsr-full"],
                 "--freefg": [str(self.freefg_zip(work, **(freefg or {}))), "https://example/freefg"],
                 "--freefg-ini": [str(fork_ini)],
                 "--dlss": [str(stub)], "--licenses": [str(licenses)],
@@ -1678,20 +1704,23 @@ class PresetTests(unittest.TestCase):
             self.entries = {e["version"]: e for e in manifest["optiscaler"]}
             return config, bridges
 
-    VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg")
+    VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg", "freefg-hlxdlssk",
+                "freefg-hlxfsr4full")
 
-    def test_three_freefg_variants_and_hlx_fsr4_is_the_default(self):
+    def test_five_freefg_variants_and_hlx_fsr4_is_the_default(self):
         # Owner, 2026-11-07: FreeFG + HLX FSR 4 (default), FreeFG + HLX DLSS
-        # (Model E only), FreeFG + FSR4 RC12, and nothing else.
+        # (Model E), FreeFG + FSR4 RC12, and by popular request the same day
+        # FreeFG + HLX DLSS Preset K and FreeFG + HLX FSR 4 Full. Nothing else.
         config, bridges = self.build_payload()
         default = config["optiscaler_version"]
         aliases = config["optiscaler_aliases"]
         self.assertEqual(aliases["freefg-hlxfsr4"], default)
         self.assertEqual(set(self.trees), {aliases[name] for name in self.VARIANTS})
-        self.assertEqual(len(set(aliases[name] for name in self.VARIANTS)), 3)
+        self.assertEqual(len(set(aliases[name] for name in self.VARIANTS)), 5)
         self.assertEqual(bridges[default], self.HLX_FSR4)
-        self.assertEqual(bridges[aliases["freefg"]], self.FORK_BRIDGE)
-        self.assertEqual(bridges[aliases["freefg-hlxdlss"]], self.FORK_BRIDGE)
+        self.assertEqual(bridges[aliases["freefg-hlxfsr4full"]], self.HLX_FSR4)
+        for name in ("freefg", "freefg-hlxdlss", "freefg-hlxdlssk"):
+            self.assertEqual(bridges[aliases[name]], self.FORK_BRIDGE, name)
         # Every variant is FreeFG: its OptiScaler, its ini, its wrapper and layer.
         for name in self.VARIANTS:
             version = aliases[name]
@@ -1706,10 +1735,15 @@ class PresetTests(unittest.TestCase):
                 self.assertEqual(seed["FrameGen.Enabled"], "false")
                 self.assertEqual(seed["FrameGen.FGOutput"], "xefg")
                 self.assertNotIn("FrameGen.Enabled", config["optiscaler_variant_preset"][version])
-                # No HelixSR Scaler folder, no HLX FSR 4 Full, no Preset K anywhere.
+                # No HelixSR Scaler folder anywhere; Full and Preset K only in
+                # their own variants.
                 self.assertFalse(any(n.startswith("HelixSR") for n in tree))
-                self.assertFalse(any("Full" in n or "modelk" in n for n in tree), sorted(tree))
-                self.assertNotIn(self.K_DLL, tree.values())
+                self.assertNotIn("OptiScaler/hlx_fsr4.ini", tree)
+                if name != "freefg-hlxfsr4full":
+                    self.assertFalse(any("Full" in n for n in tree), sorted(tree))
+                if name != "freefg-hlxdlssk":
+                    self.assertFalse(any("modelk" in n for n in tree), sorted(tree))
+                    self.assertNotIn(self.K_DLL, tree.values())
         # Spoofing is the shared preset's (auto) and the menu's; no variant forces it.
         for layer in (config["optiscaler_variant_seed"], config["optiscaler_variant_preset"]):
             for values in layer.values():
@@ -1727,15 +1761,16 @@ class PresetTests(unittest.TestCase):
 
     def test_the_old_variant_names_select_their_successors(self):
         # A launch option or a saved choice that names a variant an older package
-        # had keeps working: the HLX FSR 4 family goes to FreeFG + HLX FSR 4, the
-        # HLX DLSS family (HelixSR Scaler, Preset K) to FreeFG + HLX DLSS, and the
-        # stock nightly with its bridges to FreeFG + FSR4 RC12.
+        # had keeps working: HLX FSR 4 alone goes to FreeFG + HLX FSR 4, Preset K
+        # alone to FreeFG + Preset K, the rest of the HLX DLSS family (HelixSR
+        # Scaler) to FreeFG + HLX DLSS, and the stock nightly with its bridges to
+        # FreeFG + FSR4 RC12.
         config, _ = self.build_payload()
         aliases = config["optiscaler_aliases"]
         expected = {
-            "freefg-hlxfsr4": ("freefg-hlxfsr4full", "hlxfsr4"),
-            "freefg-hlxdlss": ("freefg-helixsr", "helixsr-ffx", "helixsr", "freefg-hlxdlssk",
-                               "hlxdlssk"),
+            "freefg-hlxfsr4": ("hlxfsr4",),
+            "freefg-hlxdlssk": ("hlxdlssk",),
+            "freefg-hlxdlss": ("freefg-helixsr", "helixsr-ffx", "helixsr"),
             "freefg": ("optiscaler", "signed", "fsr412f", "fsr411f", "fsr411b", "fsr411rc9",
                        "fsr411rc10"),
         }
@@ -1746,20 +1781,69 @@ class PresetTests(unittest.TestCase):
         # The menu maps a saved choice the same way.
         self.assertTrue(set(menu.RETIRED.items()) <= {(o, n) for n, olds in expected.items() for o in olds})
 
+    def test_freefg_hlxfsr4full_installs_full_as_helixsrs_setup_does(self):
+        # HelixSR 3.2.1 ships Full as an OptiScaler custom upscaler beside HLX
+        # FSR 4: OptiScaler/custom/HLX FSR 4 Full/ffx/ with its hlx_fsr4.ini, AMD's
+        # FSR three folders up as .amd.dll, picked by the folder's name.
+        config, bridges = self.build_payload()
+        version = config["optiscaler_aliases"]["freefg-hlxfsr4full"]
+        tree = self.trees[version]
+        folder = "OptiScaler/custom/HLX FSR 4 Full/ffx/"
+        self.assertEqual(tree[folder + "amd_fidelityfx_upscaler_dx12.dll"], self.HLX_FULL)
+        self.assertEqual(tree[folder + "hlx_fsr4.ini"], self.FULL_INI)
+        self.assertEqual(bridges[version], self.HLX_FSR4)
+        self.assertEqual(tree["OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"], self.SCALER_AMD)
+        self.assertEqual(config["optiscaler_variant_seed"][version]["Upscalers.Dx12Upscaler"],
+                         "HLX FSR 4 Full")
+        notices = {n.rsplit("/", 1)[1] for n in tree if n.startswith(f"Licenses/{version}/")}
+        # HelixSR's own texts plus AMD's FidelityFX licence the Scaler carries
+        # for Full, not the Scaler's other licences.
+        self.assertTrue({"HelixSR-LICENSE", "HelixSR-FidelityFX_v2_LICENSE.md"} <= notices,
+                        sorted(notices))
+        self.assertNotIn("HelixSR-OptiScaler_LICENSE.txt", notices)
+        self.assertIn("HLX FSR 4 Full", tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
+
+    def test_an_unbuilt_or_incomplete_hlx_fsr4_full_fails_the_build(self):
+        with self.assertRaises(AssertionError):
+            self.build_payload(full={"full": b"MZ" + b"stub" * 64})
+        self.assertIn("HLX FSR 4 Full in the archive is not built", self.last_result.stderr)
+        with self.assertRaises(AssertionError):
+            self.build_payload(full={"ini": False})
+        self.assertIn("has no hlx_fsr4.ini", self.last_result.stderr)
+        with self.assertRaises(AssertionError):
+            self.build_payload(full={"amd": False})
+        self.assertIn("amd_fidelityfx_upscaler_dx12.amd.dll beside HLX FSR 4 Full",
+                      self.last_result.stderr)
+
+    def test_freefg_hlxdlssk_is_preset_k_in_freefgs_custom_provider_folder(self):
+        config, bridges = self.build_payload()
+        version = config["optiscaler_aliases"]["freefg-hlxdlssk"]
+        tree = self.trees[version]
+        folder = "OptiScaler/custom/hlx-dlss/dlss/"
+        self.assertEqual(tree[folder + "helixsr.dll"], self.K_DLL)
+        self.assertEqual(tree[folder + "helixsr.ini"], self.K_INI)
+        self.assertIn(folder + "helixsr_modelk_kernels.pak", tree)
+        self.assertIn(folder + "helixsr_modelk_weights.bin", tree)
+        self.assertEqual(bridges[version], self.FORK_BRIDGE)
+        self.assertEqual(config["optiscaler_variant_seed"][version]["Upscalers.Dx12Upscaler"],
+                         "hlx-dlss")
+
     def test_hlx_fsr4_has_amds_own_upscaler_beside_it(self):
         # HLX FSR 4 hands what its own runtime does not cover to <name>.amd.dll:
-        # the nightly's AMD FidelityFX upscaler. The RC12 variants have none.
+        # AMD's FSR SDK 2.4.0 upscaler as HelixSR 3.2.1 ships it (the Scaler
+        # part), not the nightly's 4.1.1 one. The RC12 variants have none.
         config, _ = self.build_payload()
         aliases = config["optiscaler_aliases"]
         fallback = "OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"
         tree = self.trees[aliases["freefg-hlxfsr4"]]
-        self.assertEqual(tree[fallback], self.NIGHTLY_AMD)
+        self.assertEqual(tree[fallback], self.SCALER_AMD)
+        self.assertNotIn(self.NIGHTLY_AMD, tree.values())
         self.assertIn(fallback, self.entries[aliases["freefg-hlxfsr4"]]["sha256_hash"])
-        for name in ("freefg", "freefg-hlxdlss"):
+        for name in ("freefg", "freefg-hlxdlss", "freefg-hlxdlssk"):
             self.assertNotIn(fallback, self.trees[aliases[name]], name)
         notices = {n.rsplit("/", 1)[1] for n in tree
                    if n.startswith(f"Licenses/{aliases['freefg-hlxfsr4']}/")}
-        self.assertTrue({"freefg.txt", "HelixSR-LICENSE"} <= notices)
+        self.assertTrue({"freefg.txt", "HelixSR-LICENSE", "HelixSR-FidelityFX_v2_LICENSE.md"} <= notices)
         self.assertIn("HLX FSR 4", tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode())
 
     def test_freefg_is_laid_out_as_its_wrapper_expects(self):
@@ -2138,14 +2222,15 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         # A choice saved by an older package names a variant that is gone now:
         # it selects what took that variant's place, saved as before.
         for old, new in (("freefg-helixsr", "freefg-hlxdlss"), ("helixsr", "freefg-hlxdlss"),
-                         ("hlxdlssk", "freefg-hlxdlss"), ("freefg-hlxfsr4full", "freefg-hlxfsr4"),
-                         ("hlxfsr4", "freefg-hlxfsr4"), ("fsr412f", "freefg")):
+                         ("hlxdlssk", "freefg-hlxdlssk"), ("hlxfsr4", "freefg-hlxfsr4"),
+                         ("fsr412f", "freefg")):
             with open(menu.store_path(root), "w") as stream:
                 stream.write('{"variant": "%s", "remember": 1}' % old)
             self.assertEqual(menu.decide(root, env)[:2], (False, new), old)
-        # Only the three FreeFG variants and No upscaling are offered.
+        # Only the five FreeFG variants and No upscaling are offered.
         self.assertEqual([name for name, _, _ in menu.PRESETS],
-                         ["freefg-hlxfsr4", "freefg-hlxdlss", "freefg", "off"])
+                         ["freefg-hlxfsr4", "freefg-hlxdlss", "freefg", "freefg-hlxdlssk",
+                          "freefg-hlxfsr4full", "off"])
 
     def test_the_installed_variant_comes_from_protonfixes_record(self):
         import tempfile

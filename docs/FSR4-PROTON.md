@@ -101,8 +101,8 @@ HelixSR is the deliberate exception: its `helixsr.ini` ships as released (with
 report, and a package that switched it off left players unable to send one.
 
 Every variant is FreeFG (since 2026-11-07: `freefg-hlxfsr4`, the default,
-`freefg-hlxdlss` and `freefg`; the stock nightly's variants, HelixSR Scaler, HLX FSR 4
-Full and Preset K are gone), and FreeFG also sets variables outside OptiScaler's own: FreeFG's Vulkan pacing layer runs in the game
+`freefg-hlxdlss`, `freefg`, `freefg-hlxdlssk` and `freefg-hlxfsr4full`; the stock
+nightly's variants and HelixSR Scaler are gone), and FreeFG also sets variables outside OptiScaler's own: FreeFG's Vulkan pacing layer runs in the game
 process, so the launcher prepends its folder in the prefix to `VK_LAYER_PATH`
 and its name to `VK_INSTANCE_LAYERS`, and sets `XEFG_WAVE_CONFIG` and vkd3d's
 `no_staggered_submit`, as FreeFG's own installer does. Switching variants

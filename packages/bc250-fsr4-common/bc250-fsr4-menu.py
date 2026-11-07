@@ -28,20 +28,22 @@ import os
 import sys
 
 # name, label, sub-label. The order is the order in the window. Since 2026-11-07
-# (owner) only FreeFG's three variants: the stock OptiScaler nightly variants,
-# HelixSR Scaler, HLX FSR 4 Full and HLX DLSS Preset K are gone.
+# (owner) only FreeFG variants: the stock OptiScaler nightly variants and HelixSR
+# Scaler are gone; HLX DLSS Preset K and HLX FSR 4 Full came back the same day
+# by popular request.
 PRESETS = [
     ("freefg-hlxfsr4", "FreeFG + HLX FSR 4", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX FSR 4 upscaler"),
     ("freefg-hlxdlss", "FreeFG + HLX DLSS", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX DLSS (Model E) upscaler"),
     ("freefg", "FreeFG + FSR4 RC12", "FreeFG 1.3.0 frame generation, FSR4 RC12 upscaler"),
+    ("freefg-hlxdlssk", "FreeFG + HLX DLSS Preset K", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX DLSS Preset K: sharper, slower, can sparkle on foliage"),
+    ("freefg-hlxfsr4full", "FreeFG + HLX FSR 4 Full", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX FSR 4 Full: the full FSR 4.1.2 network, sharper, slower"),
     (OFF := "off", "No upscaling", "The game as it ships: no OptiScaler, no FSR4"),
 ]
 # A choice saved by an older package that names a variant it no longer has:
 # what that name selects now (the same table as build-fsr4-payload.py's
 # RETIRED_VARIANTS, for the names a menu ever offered).
 RETIRED = {"freefg-helixsr": "freefg-hlxdlss", "helixsr-ffx": "freefg-hlxdlss",
-           "helixsr": "freefg-hlxdlss", "freefg-hlxdlssk": "freefg-hlxdlss",
-           "hlxdlssk": "freefg-hlxdlss", "freefg-hlxfsr4full": "freefg-hlxfsr4",
+           "helixsr": "freefg-hlxdlss", "hlxdlssk": "freefg-hlxdlssk",
            "hlxfsr4": "freefg-hlxfsr4", "fsr412f": "freefg"}
 FG_LABEL = "Enable frame generation"
 # OptiScaler's [FrameGen] FGInput=dlssg: the game's own DLSS Frame Generation
@@ -66,7 +68,8 @@ HINT = "Launch your game with PROTON_OPTISCALER_MENU=1 %command% to show this me
 # Which keys mean "frame generation on" for each build, verified from the build's
 # own OptiScaler.ini comments: [FrameGen] Enabled, with FGOutput=xefg as the
 # wiring each variant's preset brings.
-FREEFG_VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg")
+FREEFG_VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg", "freefg-hlxdlssk",
+                   "freefg-hlxfsr4full")
 FG_ON = {name: {"FrameGen.Enabled": "true"} for name in FREEFG_VARIANTS}
 FG_OFF = {name: {"FrameGen.Enabled": "false"} for name in FREEFG_VARIANTS}
 # Enabled alone does nothing in a build whose FGInput and FGOutput default (auto)
