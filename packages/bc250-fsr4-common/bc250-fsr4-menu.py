@@ -27,22 +27,22 @@ import json
 import os
 import sys
 
-# name, label, sub-label. The order is the order in the window.
+# name, label, sub-label. The order is the order in the window. Since 2026-11-07
+# (owner) only FreeFG's three variants: the stock OptiScaler nightly variants,
+# HelixSR Scaler, HLX FSR 4 Full and HLX DLSS Preset K are gone.
 PRESETS = [
     ("freefg-hlxfsr4", "FreeFG + HLX FSR 4", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX FSR 4 upscaler"),
-    ("freefg-hlxdlss", "FreeFG + HLX DLSS", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX DLSS upscaler"),
-    ("freefg-hlxfsr4full", "FreeFG + HLX FSR 4 Full (test)", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX FSR 4 Full: sharper, slower"),
-    ("freefg-hlxdlssk", "FreeFG + HLX DLSS K (test)", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX DLSS Preset K: sharper, slower"),
+    ("freefg-hlxdlss", "FreeFG + HLX DLSS", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX DLSS (Model E) upscaler"),
     ("freefg", "FreeFG + FSR4 RC12", "FreeFG 1.3.0 frame generation, FSR4 RC12 upscaler"),
-    ("helixsr", "HelixSR Scaler", "HelixSR Scaler 2.2.0, HelixSR 3.2.1: HLX DLSS; Preset K, HLX FSR 4 (Full) from its menu"),
-    ("fsr412f", "FSR4 RC12", "FSR4 RC12 upscaler only, no FreeFG"),
-    ("hlxfsr4", "HLX FSR 4", "HelixSR 3.2.1's HLX FSR 4 upscaler only, no FreeFG"),
-    ("hlxdlssk", "HLX DLSS K (test)", "HelixSR 3.2.1's HLX DLSS Preset K upscaler only, no FreeFG"),
     (OFF := "off", "No upscaling", "The game as it ships: no OptiScaler, no FSR4"),
 ]
-# A choice saved by an older package that names a variant it no longer has
-# (HelixSR 2.0 went in 2026-10): what that name selects now.
-RETIRED = {"freefg-helixsr": "freefg-hlxdlss", "helixsr-ffx": "helixsr"}
+# A choice saved by an older package that names a variant it no longer has:
+# what that name selects now (the same table as build-fsr4-payload.py's
+# RETIRED_VARIANTS, for the names a menu ever offered).
+RETIRED = {"freefg-helixsr": "freefg-hlxdlss", "helixsr-ffx": "freefg-hlxdlss",
+           "helixsr": "freefg-hlxdlss", "freefg-hlxdlssk": "freefg-hlxdlss",
+           "hlxdlssk": "freefg-hlxdlss", "freefg-hlxfsr4full": "freefg-hlxfsr4",
+           "hlxfsr4": "freefg-hlxfsr4", "fsr412f": "freefg"}
 FG_LABEL = "Enable frame generation"
 SPOOF_LABEL = "GPU spoofing (DXGI)"
 # OptiScaler's [Spoofing] Dxgi: "true or false - Default (auto) is true for
@@ -58,67 +58,25 @@ APPLY = [("matching", "Apply matching only"), ("everything", "Apply everything")
 HINT = "Launch your game with PROTON_OPTISCALER_MENU=1 %command% to show this menu again."
 
 # Which keys mean "frame generation on" for each build, verified from the build's
-# own OptiScaler.ini comments and the HelixSR Scaler README:
-#   freefg*:               [FrameGen] Enabled (+ FGOutput=xefg, that is the wiring)
-#   helixsr (the Scaler):  [FrameGen] Enabled + FG_WIRING -- HelixSR 3.x has no
-#                          frame generation of its own, OptiScaler's is all there is
-#   fsr412f, hlxfsr4, hlxdlssk: [FrameGen] Enabled + FG_WIRING, the stock nightly's keys
-FG_ON = {
-    "freefg-hlxfsr4": {"FrameGen.Enabled": "true"},
-    "freefg-hlxdlss": {"FrameGen.Enabled": "true"},
-    "freefg-hlxfsr4full": {"FrameGen.Enabled": "true"},
-    "freefg-hlxdlssk": {"FrameGen.Enabled": "true"},
-    "freefg": {"FrameGen.Enabled": "true"},
-    "helixsr": {"FrameGen.Enabled": "true"},
-    "fsr412f": {"FrameGen.Enabled": "true"},
-    "hlxfsr4": {"FrameGen.Enabled": "true"},
-    "hlxdlssk": {"FrameGen.Enabled": "true"},
-}
-FG_OFF = {
-    "freefg-hlxfsr4": {"FrameGen.Enabled": "false"},
-    "freefg-hlxdlss": {"FrameGen.Enabled": "false"},
-    "freefg-hlxfsr4full": {"FrameGen.Enabled": "false"},
-    "freefg-hlxdlssk": {"FrameGen.Enabled": "false"},
-    "freefg": {"FrameGen.Enabled": "false"},
-    "helixsr": {"FrameGen.Enabled": "false"},
-    "fsr412f": {"FrameGen.Enabled": "false"},
-    "hlxfsr4": {"FrameGen.Enabled": "false"},
-    "hlxdlssk": {"FrameGen.Enabled": "false"},
-}
-# Enabled alone does nothing in these builds: FGInput and FGOutput both default
-# (auto) to nofg. FreeFG gets its wiring from its variant preset; these get it
-# when the player turns frame generation on, and only where the ini still says
-# auto/nofg, so an output picked in the overlay stays. OptiFG (upscaler input)
-# works in any game whose upscaler OptiScaler sees; FSR FG is the output, its DLLs
-# are in the nightly, and it needs neither FreeFG's wrapper nor XeFG's runtime.
-FG_WIRING = {
-    "helixsr": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
-    "fsr412f": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
-    "hlxfsr4": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
-    "hlxdlssk": {"FrameGen.FGInput": "upscaler", "FrameGen.FGOutput": "fsrfg"},
-}
+# own OptiScaler.ini comments: [FrameGen] Enabled, with FGOutput=xefg as the
+# wiring each variant's preset brings.
+FREEFG_VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg")
+FG_ON = {name: {"FrameGen.Enabled": "true"} for name in FREEFG_VARIANTS}
+FG_OFF = {name: {"FrameGen.Enabled": "false"} for name in FREEFG_VARIANTS}
+# Enabled alone does nothing in a build whose FGInput and FGOutput default (auto)
+# to nofg. Every variant now gets its wiring from its preset, so none needs this;
+# the table stays for a variant without wiring of its own.
+FG_WIRING = {}
 UNWIRED = ("auto", "nofg")
 # What a variant does with frame generation on a fresh prefix (its seed): every
 # variant starts with it off and writes FrameGen.Enabled=false into the fresh ini
 # (owner's decision, 2026-10-30), so the box shows the prefix's own answer from
 # then on, the overlay's FG mode included.
-FRESH_ON = {"freefg-hlxfsr4": False, "freefg-hlxdlss": False, "freefg-hlxfsr4full": False,
-            "freefg-hlxdlssk": False, "freefg": False, "helixsr": False, "fsr412f": False,
-            "hlxfsr4": False, "hlxdlssk": False, OFF: False}
+FRESH_ON = {**{name: False for name in FREEFG_VARIANTS}, OFF: False}
 # Keys a build's own OptiScaler.ini does not define: protonfixes refuses the
 # launch, so the menu must not offer them (the fork ini has no [HelixSR] keys).
-DEFINABLE = {
-    "freefg-hlxfsr4": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
-    "freefg-hlxdlss": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
-    "freefg-hlxfsr4full": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
-    "freefg-hlxdlssk": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
-    "freefg": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
-    "helixsr": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
-    "fsr412f": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
-    "hlxfsr4": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
-    "hlxdlssk": {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"},
-}
-
+DEFINABLE = {name: {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"}
+             for name in FREEFG_VARIANTS}
 
 def store_path(prefix_path):
     """The per-prefix choice file. Under the prefix, not in the payload folder

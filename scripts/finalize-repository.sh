@@ -681,6 +681,17 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - FSR4 and OptiScaler are on by default. They remain launch options, so
   \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- **Changed: three upscalers, all with FreeFG.** The menu now offers **FreeFG + HLX FSR 4** (the
+  default), **FreeFG + HLX DLSS** (HLX DLSS Model E) and **FreeFG + FSR4 RC12**, and No upscaling. Gone:
+  HelixSR Scaler, HLX FSR 4 Full and HLX DLSS Preset K (Preset K showed artifacts and ghosting, Full a
+  black image on a BC-250), and the stock OptiScaler nightly's variants (\`fsr412f\`, \`fsr411f\`,
+  \`signed\`, \`fsr411b\`, \`fsr411rc9\`, \`fsr411rc10\`, \`optiscaler\`, HLX FSR 4 or Preset K alone). The
+  nightly returns, in place of FreeFG's own OptiScaler build, once it has merged FreeFG's changes. Old
+  names keep working as launch options and saved menu choices: the HLX FSR 4 ones select FreeFG + HLX
+  FSR 4, the HelixSR Scaler and Preset K ones FreeFG + HLX DLSS, the bridges FreeFG + FSR4 RC12. A game
+  on a variant that is gone starts fresh once (its old files and \`OptiScaler.ini\` are removed).
+  Frame generation still starts off. The OptiScaler files around FreeFG's build are now the nightly
+  FreeFG pins (20261025), and **MFG Unlocker 1.7.0** replaces 1.6.0 in every variant.
 - **New: HelixSR [3.2.1](https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1) and HelixSR
   Scaler 2.2.0** (a pre-release). HLX FSR 4 no longer ends a game under Proton 11.0 on a BC-250 and starts
   with its safer shader set; HLX DLSS picks the faster of its two decoders at startup (newer Proton
@@ -754,32 +765,6 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   [FreeFG 1.1.5](https://github.com/daniel-h-0/freefg/releases/tag/v1.1.5) (optional
   generated-frame scaling, off by default). HLX FSR 4's shaders come from AMD's FSR SDK (MIT); HLX DLSS's
   network is built from NVIDIA's DLSS DLL and per HelixSR's author remains NVIDIA's.
-- The default upscaler is FreeFG + HLX FSR 4 (see above). The BC-250 FSR4 fork's
-  [RC11](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11)
-  bridge (\`4.1.1r11\`, by daniel-h-0), the default before HelixSR, stays one launch
-  option away: \`PROTON_USE_OPTISCALER=fsr411f %command%\`. Two more
-  alternatives swap only that file, per game, each pinned by SHA256:
-  \`PROTON_USE_OPTISCALER=signed %command%\` for AMD's signed 4.0.2 bridge, and
-  \`PROTON_USE_OPTISCALER=fsr411b %command%\` for the third-party
-  [4.1.1b](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b)
-  rebuild aimed at RDNA2 ghosting. Neither 4.1.1r11 nor 4.1.1b is a provider
-  bump: each carries its own embedded model, and both are unsigned.
-- **New, opt-in: the same fork's RC12** ([v4.0.0-rc12](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12),
-  \`4.1.1r12\`, by daniel-h-0), selected with \`PROTON_USE_OPTISCALER=fsr412f
-  %command%\`. RC12 extends the RC8/RC9 shader work to the two context families
-  RC11 left alone, the ones a 1080p display and an 8K one pick: 34 new slots, 24
-  distinct programs, same output bits as RC11 per its author, 0.41-0.43 ms less
-  FSR4 GPU time at 1080p output, and the final pass keeps AMD's division in every
-  program where RC9-RC11 used a shift exact only for in-spec input. Its own
-  validation is client checks and install tests, no game testing. Its zip ships
-  no ini, so the preset is unchanged for it and for every other variant, and the
-  packages keep the 2026-10-15 nightly they already ship; the client build this
-  asset comes from pins an older one (20260904), and its app is not needed here.
-- \`PROTON_USE_OPTISCALER=optiscaler\` selects the stock OptiScaler nightly (20261105) with the
-  FSR4 fork's bridge, and \`fsr412f\`, \`fsr411f\`, \`signed\`, \`fsr411b\`, \`fsr411rc9\`, \`fsr411rc10\`
-  the other bridge DLLs. If a game looks wrong or crashes, \`PROTON_USE_OPTISCALER=optiscaler %command%\`
-  goes back to plain OptiScaler. HelixSR's own log, \`helixsr.log\` in \`system32/umu/HelixSR\`
-  of the prefix (HelixSR Scaler), is on: attach it when you report a HelixSR problem.
 - **New, opt-in: FreeFG** ([1.1.5](https://github.com/daniel-h-0/freefg/releases/tag/v1.1.5), by
   daniel-h-0) with \`PROTON_USE_OPTISCALER=freefg %command%\`. Intel's XeSS frame generation at 2×,
   with part of its GPU work run by FreeFG's own shaders (faster on the BC-250, same pixels where
@@ -817,8 +802,7 @@ sudo pacman -S protonge-latest-bc250
 - Needs the \`vulkan-radeon\` package from this repository.
 - Same launch options as the GE package: \`PROTON_FSR4_UPGRADE=0 %command%\` to
   turn FSR4 off for one game, \`BC250_FSR4_DEBUG=1 %command%\` for the watermark
-  and logs, and the same bridge choice —
-  \`PROTON_USE_OPTISCALER=signed\` / \`fsr411b\` — described above.
+  and logs, and the same upscaler choice described above.
 
 \`\`\`bash
 sudo pacman -S proton-cachyos-native-bc250

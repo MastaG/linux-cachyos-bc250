@@ -317,12 +317,21 @@ FREEFG_LOGS = ("OptiScaler/BC250-MFG.log", "OptiScaler/BC250-XeFG-fast.log")
 # HelixSR 2.0 folder: Scaler 2.0.0 still looks for it beside its proxy when
 # HelixSR/helixsr.dll is missing, and the HelixSR inside it is gone from the
 # package.
-RETIRED_FOLDERS = ("HelixSR-fsrfg",)
+# HelixSR is HelixSR Scaler 2.x's own folder (HLX DLSS and Preset K beside its
+# proxy), and "OptiScaler/custom/HLX FSR 4 Full" its HLX FSR 4 Full upscaler:
+# both went with the Scaler on 2026-11-07, and the Scaler is what looked for them.
+RETIRED_FOLDERS = ("HelixSR-fsrfg", "HelixSR", "OptiScaler/custom/HLX FSR 4 Full")
 # Files the same way: HelixSR 2.0 as OptiScaler's FidelityFX library (the
 # freefg-helixsr default and helixsr-ffx, both gone with it). The prefix's
 # OptiScaler.ini still points FfxDx12Path at that DLL and has UpscalerIndex=1,
 # so a prefix that has them is treated as a variant switch and starts fresh.
-RETIRED_FILES = ("OptiScaler/amd_fidelityfx_dx12.dll", "OptiScaler/helixsr.ini")
+# Since 2026-11-07 also HLX FSR 4 Full's ini (freefg-hlxfsr4full) and Preset K's
+# kernels and weights beside HLX DLSS (freefg-hlxdlssk, hlxdlssk): in the folder
+# freefg-hlxdlss still uses, so only the files go.
+RETIRED_FILES = ("OptiScaler/amd_fidelityfx_dx12.dll", "OptiScaler/helixsr.ini",
+                 "OptiScaler/hlx_fsr4.ini",
+                 "OptiScaler/custom/hlx-dlss/dlss/helixsr_modelk_kernels.pak",
+                 "OptiScaler/custom/hlx-dlss/dlss/helixsr_modelk_weights.bin")
 
 
 def clean_other_variants(config, env, inherited):
@@ -361,7 +370,7 @@ def clean_other_variants(config, env, inherited):
     if version not in config.get("freefg", {}):
         stale |= set(FREEFG_LOGS)
     stale_folders = (folders(stale) | set(RETIRED_FOLDERS)) - folders(keep)
-    # Only the files: their folder is OptiScaler/, which every variant shares.
+    # Only the files: their folders are ones the variants share.
     stale |= set(RETIRED_FILES) - keep
 
     root = payload.resolve()
@@ -621,8 +630,7 @@ def installed_variant(config, inherited):
 
 
 # The variants the menu offers, by the short names PROTON_USE_OPTISCALER takes.
-MENU_VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg-hlxfsr4full", "freefg-hlxdlssk", "freefg",
-                 "helixsr", "fsr412f", "hlxfsr4", "hlxdlssk")
+MENU_VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg")
 
 
 def menu_names(config):

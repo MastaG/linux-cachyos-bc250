@@ -252,34 +252,17 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --optipatcher "${srcdir}/OptiPatcher_v0.41.asi" \\\n'
     f'        --fakenvapi "${{srcdir}}/{fakenvapi_asset}" \\\n'
     '        --provider "${srcdir}/amdxcffx64_v4.1.1.xz" \\\n'
-    '        --ffx-sdk "${srcdir}/amd_fidelityfx_upscaler_dx12.dll" \\\n'
-    '        --ffx-sdk-default freefg-hlxfsr4 \\\n'
-    '        --ffx-sdk-alt fsr411b \\\n'
-    '            "${srcdir}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll" \\\n'
-    '            "https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b" \\\n'
-    '        --ffx-sdk-alt fsr412f \\\n'
-    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc12.zip" \\\n'
+    '        --default freefg-hlxfsr4 \\\n'
+    '        --fsr4-bridge "${srcdir}/bc250-fsr4-dll-4.0.0-rc12.zip" \\\n'
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12" \\\n'
-    '        --ffx-sdk-alt fsr411f \\\n'
-    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc11.zip" \\\n'
-    '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc11" \\\n'
-    '        --ffx-sdk-alt fsr411rc9 \\\n'
-    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc9.tar.xz" \\\n'
-    '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc9" \\\n'
-    '        --ffx-sdk-alt fsr411rc10 \\\n'
-    '            "${srcdir}/bc250-fsr4-dll-4.0.0-rc10.zip" \\\n'
-    '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc10" \\\n'
     '        --helixsr-ngx "${srcdir}/HelixSR-3.2.1-network.zip" \\\n'
-    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1" \\\n'
-    '        --helixsr-scaler "${srcdir}/HelixSR-3.2.1-Scaler-2.2.0-core.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1" \\\n'
     '        --freefg "${srcdir}/freefg-1.3.0.zip" \\\n'
     '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.3.0" \\\n'
     '        --freefg-ini "${srcdir}/OptiScaler-bc250-ba0dedb.ini" \\\n'
-    '        --freefg-bridge fsr412f \\\n'
-    '        --mfg-unlocker "${srcdir}/MFGUnlocker-v1.6.0.zip" \\\n'
-    '            "${srcdir}/MFGUnlocker-LICENSE-v1.6.0.txt" \\\n'
-    '            "https://github.com/dashdogy/MFG-Unlocker/releases/tag/v1.6.0" \\\n'
+    '        --mfg-unlocker "${srcdir}/MFGUnlocker-v1.7.0.zip" \\\n'
+    '            "${srcdir}/MFGUnlocker-LICENSE-v1.7.0.txt" \\\n'
+    '            "https://github.com/dashdogy/MFG-Unlocker/releases/tag/v1.7.0" \\\n'
     '        --dlss "${srcdir}/nvngx_dlss.dll" \\\n'
     '        --licenses "${srcdir}" \\\n'
     '        --preset "${srcdir}/optiscaler-preset.json" \\\n'
@@ -317,70 +300,37 @@ payload_sources = [
      "fb12735bfcc0d47f534f2206d57ec34129dc3d22b6405a1c2ef86745ab48b2eb", False),
     ("amdxcffx64_v4.1.1.xz", f"{payload_base}/amdxcffx64_v4.1.1.xz",
      "5de9b6d9f5475a0f2622e4cbce88cde46c68929d9bd0bbc353c70056997bb771", True),
-    ("amd_fidelityfx_upscaler_dx12.dll",
-     "https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/"
-     "f4c1da8e92f3fe563b5c28c44e6267ce6b6b8eb2/Kits/FidelityFX/signedbin/"
-     "amd_fidelityfx_upscaler_dx12.dll",
-     "241e6e5e4d848424eb8ec9a6b22c43fe34cf0cf52d30002ca435ba42e53a9ca0", False),
-    # Opt-in only, never the default: an unsigned third-party rebuild of the
-    # FidelityFX bridge, mirrored so a deleted upstream release cannot change
-    # what a rebuild produces. Selected with PROTON_USE_OPTISCALER=fsr411b.
-    ("amd_fidelityfx_upscaler_dx12_v4.1.1b.dll", f"{payload_base}/amd_fidelityfx_upscaler_dx12_v4.1.1b.dll",
-     "0dd77d9c78d1ef9bc330cf4697ab3ffe24bc1aa7850e4130263dc922107fbd75", False),
-    # Newest bridge from the same fork, opt-in with
-    # PROTON_USE_OPTISCALER=fsr412f (4.1.1r12): RC12 extends the RC8/RC9 shader
-    # work to the 1080p and 8K context families -- same output bits as RC11 per
-    # its notes, 0.41-0.43 ms less FSR4 GPU time at 1080p output, and the final
-    # pass keeps AMD's division in every program. Mirrored like the rest, so a
-    # deleted upstream release cannot change what a rebuild produces. Its zip
-    # carries no ini; the keys its README asks for are the ones
-    # optiscaler-preset.json already enforces.
+    # The BC-250 FSR4 fork's RC12 bridge (the build FreeFG pins): the upscaler of
+    # "FreeFG + FSR4 RC12", and the Direct3D 11 / Vulkan one of "FreeFG + HLX
+    # DLSS". Mirrored, so a deleted upstream release cannot change what a rebuild
+    # produces; taken as the release archive for the notices it carries.
     ("bc250-fsr4-dll-4.0.0-rc12.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc12.zip",
      "646778a0d06c42bf3cdcc99f9396680f5cc4a33658b90c0889fd15751bfb800d", True),
-    # The default bridge: the BC-250 FSR4 fork's RC11, mirrored from its
-    # release so a deleted upstream release cannot change what a rebuild
-    # produces. Taken as the published archive rather than a bare DLL: it
-    # carries the notices that release asks be kept. RC11 ships only a zip.
-    # RC11's own release notes: "retains RC10's 348 shader programs and
-    # performance"; the DLL identifies itself as 4.1.1r11 rather than r10.
-    ("bc250-fsr4-dll-4.0.0-rc11.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc11.zip",
-     "95ef0c6ea887e0506a3a92f7e4648e7ab7e1100e99f5eff2f70dd33b8dff2a72", True),
-    # Older bridges from the same fork, opt-in only, kept so their
-    # performance can be measured against the default rather than deleted
-    # when superseded. PROTON_USE_OPTISCALER=fsr411rc9 / fsr411rc10.
-    ("bc250-fsr4-dll-4.0.0-rc9.tar.xz", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc9.tar.xz",
-     "e7b53b1f1aa7aa4b767c3f73e72a33a9a3c5563eefd1edf48bf165fcb0feac89", True),
-    ("bc250-fsr4-dll-4.0.0-rc10.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc10.zip",
-     "eb6a363855dcba4d8519d99b1fda68079b75848736bbe9495a5507a91f29dc98", True),
-    # HelixSR 3.2.1 (lonewolf0622): HLX DLSS (HelixSR/helixsr.dll,
-    # NVIDIA's DLSS Model E network, for HelixSR Scaler; Preset K in HelixSR/k/) and HLX FSR 4 (AMD's FSR 4
-    # network on HelixSR's pipeline). Mirrored after its own setup built the network;
-    # per its author that remains NVIDIA's. HLX FSR 4 is built from AMD's FSR SDK (MIT).
+    # HelixSR 3.2.1 (lonewolf0622): HLX FSR 4 (AMD's FSR 4 network on HelixSR's
+    # pipeline, the default variant's upscaler) and HLX DLSS (HelixSR/helixsr.dll,
+    # NVIDIA's DLSS Model E network). Mirrored after its own setup built the
+    # network; per its author that remains NVIDIA's. HLX FSR 4 is built from AMD's
+    # FSR SDK (MIT).
     ("HelixSR-3.2.1-network.zip", f"{payload_base}/HelixSR-3.2.1-network.zip",
      "7309ca5630245994106bcc5a0b4ed49b208e90e7cf29130f61120b16454b4663", True),
-    # HelixSR Scaler 2.2.0 (OptiScaler with HelixSR built in, GPL-3.0), from the
-    # HelixSR 3.2.1 download: only what differs from the nightly.
-    ("HelixSR-3.2.1-Scaler-2.2.0-core.zip", f"{payload_base}/HelixSR-3.2.1-Scaler-2.2.0-core.zip",
-     "2852035f61ac648cda28094db72e9d6489938fbfeac89402bb719ddf18d84669", True),
     # FreeFG 1.3.0 (daniel-h-0): Intel XeSS frame generation with its own BC-250
-    # shaders and a VRR pacing layer, opt-in with PROTON_USE_OPTISCALER=freefg.
-    # Mirrored release zip; its OptiScaler build is GPL-3.0, and the matching
+    # shaders and a VRR pacing layer; every variant ships it. Mirrored release
+    # zip; its OptiScaler build is GPL-3.0, and the matching
     # freefg-1.3.0-source.zip is mirrored beside it.
     ("freefg-1.3.0.zip", f"{payload_base}/freefg-1.3.0.zip",
      "25b00f55f672b1431b4ca85e4258c3daffc498a6031fc57e61b16c86628162e9", True),
     # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-ba0dedb),
-    # pinned by commit: the freefg variants ship this build and this ini.
+    # pinned by commit: the variants ship this build and this ini.
     ("OptiScaler-bc250-ba0dedb.ini",
      "https://raw.githubusercontent.com/daniel-h-0/OptiScaler/ba0dedb4681875a1a0b88a35385d5aeb91db4063/OptiScaler.ini",
      "060d8fcfb1374f69dfbe4df6b22fed30d6349b97e9b5f6272cad9f494c440cb8", False),
-    # MFG Unlocker 1.6.0 (dashdogy, MIT): loaded by the FreeFG variants as an
-    # OptiScaler plugin, so OptiScaler's XeFG menu offers 3x and 4x. 1.6.0 is the
-    # version FreeFG's 3x/4x checks on the BC-250 used. Mirrored release zip; its
-    # license, which the zip does not carry, pinned by the tag's commit.
-    ("MFGUnlocker-v1.6.0.zip", f"{payload_base}/MFGUnlocker-v1.6.0.zip",
-     "09b2fb936676fac1ec3db2f427ca338347c064702aa60b7cb8ba00b573657ddf", True),
-    ("MFGUnlocker-LICENSE-v1.6.0.txt",
-     "https://raw.githubusercontent.com/dashdogy/MFG-Unlocker/ded3614aa2084adb1e04765ecf8f64d33557ed61/LICENSE",
+    # MFG Unlocker 1.7.0 (dashdogy, MIT): loaded as an OptiScaler plugin, so
+    # OptiScaler's XeFG menu offers 3x and 4x. Mirrored release zip; its license,
+    # which the zip does not carry, pinned by the tag's commit.
+    ("MFGUnlocker-v1.7.0.zip", f"{payload_base}/MFGUnlocker-v1.7.0.zip",
+     "5bd19d03288e1ece1d0bb2030ac072b36758045028da192044dcaad73fd901dd", True),
+    ("MFGUnlocker-LICENSE-v1.7.0.txt",
+     "https://raw.githubusercontent.com/dashdogy/MFG-Unlocker/b97deee1ea58d9b3d8b318041c89d6f9d27eb959/LICENSE",
      "433da96087fd9b91afd44c6350ca92da53167c9636a0a71e428f71036d8c372f", False),
     # Tracked live, not pinned: resolve-fakenvapi.sh takes the newest release, so
     # a new upstream version changes this package's fingerprint and rebuilds it.

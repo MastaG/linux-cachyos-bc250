@@ -45,8 +45,7 @@ seeded like the shared preset, on its first launch only, so turning it off in
 the overlay and saving survives a restart.
 
 Enforced on every launch is what a prefix must not be left to decide: a variant's
-own wiring — the HelixSR Scaler's `DLSS.HelixSR` and `HelixSR.Int8`, FreeFG's
-XeFG keys — the debug keys under `BC250_FSR4_DEBUG=1`, and
+own wiring — FreeFG's XeFG keys — the debug keys under `BC250_FSR4_DEBUG=1`, and
 `BC250_OPTISCALER_EXTRA`, merged last so it beats both. Every preset key is still
 checked against the ini it ships with at build time: protonfixes refuses a launch
 on a key the build does not define, so a preset that names one fails the build
@@ -96,13 +95,14 @@ shipped ini sets `enable_logs=0` and `enable_trace_logs=0`, is only written when
 fakenvapi did not bring settings of its own, and stays editable in the prefix
 because `.ini` files are excluded from the payload's per-file checksums.
 
-HelixSR is the deliberate exception: its `helixsr.ini` ships as released, so it
-writes `helixsr.log` beside its DLL (`system32/umu/HelixSR` with the
-Scaler) on every launch. That log is what its author asks for with a problem
+HelixSR is the deliberate exception: its `helixsr.ini` ships as released (with
+`Int8 = off`), so HLX DLSS writes `helixsr.log` beside its DLL
+(`system32/umu/OptiScaler/custom/hlx-dlss/dlss`) on every launch. That log is what its author asks for with a problem
 report, and a package that switched it off left players unable to send one.
 
-The FreeFG variants (`freefg-hlxfsr4`, the default, `freefg-hlxdlss`, the
-test variants `freefg-hlxfsr4full` and `freefg-hlxdlssk`, and `freefg`) are the ones that also set variables outside OptiScaler's own: FreeFG's Vulkan pacing layer runs in the game
+Every variant is FreeFG (since 2026-11-07: `freefg-hlxfsr4`, the default,
+`freefg-hlxdlss` and `freefg`; the stock nightly's variants, HelixSR Scaler, HLX FSR 4
+Full and Preset K are gone), and FreeFG also sets variables outside OptiScaler's own: FreeFG's Vulkan pacing layer runs in the game
 process, so the launcher prepends its folder in the prefix to `VK_LAYER_PATH`
 and its name to `VK_INSTANCE_LAYERS`, and sets `XEFG_WAVE_CONFIG` and vkd3d's
 `no_staggered_submit`, as FreeFG's own installer does. Switching variants
@@ -115,7 +115,8 @@ removes the previous variant's leftovers from the prefix first (details in
 
 `proton-cachyos-native-bc250` follows CachyOS's `proton-cachyos-native` PKGBUILD, pinned to the same `CachyOS-PKGBUILDS` commit as the Mesa packages. Rather than carrying a diff of that PKGBUILD, the prepare step rewrites it and asserts on every anchor it touches, so an upstream change fails the build naming what moved instead of a patch applying at an offset and quietly meaning something else.
 
-The OptiScaler build is pinned rather than tracked. Nightlies publish most days, and following them would rebuild a ~1.1 GB package daily for a payload nobody asked to move. Moving it forward requires updating `FALLBACK_TAG`, `FALLBACK_ASSET` and `FALLBACK_SHA256` together in `scripts/select-optiscaler.py`, which changes the component fingerprint. `BC250_FSR4_TRACK_OPTISCALER=1` checks the newest nightly instead. Payload assembly validates the preset against the actual extracted INI on every route, including the mirrored fallback.
+The OptiScaler build is pinned rather than tracked, to the nightly FreeFG pins
+(2026-10-25): every variant ships FreeFG's OptiScaler build in that tree. Nightlies publish most days, and following them would rebuild a ~1.1 GB package daily for a payload nobody asked to move. Moving it forward requires updating `FALLBACK_TAG`, `FALLBACK_ASSET` and `FALLBACK_SHA256` together in `scripts/select-optiscaler.py`, which changes the component fingerprint. `BC250_FSR4_TRACK_OPTISCALER=1` checks the newest nightly instead. Payload assembly validates the preset against the actual extracted INI on every route, including the mirrored fallback.
 
 Run the packaging and launch regression checks with
 `python3 -B -m unittest discover -s tests -v`. They exercise both real upstream
