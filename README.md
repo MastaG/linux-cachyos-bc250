@@ -739,7 +739,8 @@ BC250_GAME_PRESET=everything %command%    # apply all of this game's known setti
 
 Every game launch first shows a small menu: the upscaler (FreeFG + HLX FSR 4,
 the default; FreeFG + HLX DLSS; FreeFG + FSR4 RC12; No upscaling), **GPU
-spoofing**, **Enable frame generation**, and **Save selection for next time**.
+spoofing**, **Enable frame generation**, **Use the game's DLSS frame
+generation**, and **Save selection for next time**.
 It works with a controller (Steam Controller, PS5 pad; D-pad or stick to move, A
 to select, Start to start the game), with mouse and keyboard, in Gaming Mode and
 on the desktop, and it waits until you choose.
@@ -757,6 +758,14 @@ on the desktop, and it waits until you choose.
 - Choosing another upscaler starts that one fresh: its files and a new
   `OptiScaler.ini` replace the old ones, so settings saved in the overlay for the
   previous upscaler are gone.
+- **Use the game's DLSS frame generation** takes the game's own DLSS Frame
+  Generation as the input for FreeFG's frame generation
+  (`FrameGen.FGInput=dlssg`) instead of OptiFG: its motion vectors and its image
+  without the HUD, so the UI is not interpolated. Ticking it also sets GPU
+  spoofing to **On** (a game only offers DLSS FG on an "NVIDIA" card) and
+  enables frame generation; then turn DLSS Frame Generation on in the game's own
+  menu. It is the player's pick, so a known game's preset does not change it back.
+  Unticked, the input returns to OptiFG.
 - **GPU spoofing (DXGI)**: Auto lets OptiScaler decide (on when the game ships
   `nvngx_dlss.dll`, which is what brings its DLSS option); On and Off force it
   for this game. Like the frame generation box, it shows the prefix's current
@@ -1033,7 +1042,8 @@ fullscreen (XeFG does not interpolate in exclusive fullscreen), Reflex forced on
 for XeLL, and OptiFG as the input (`FrameGen.FGInput=upscaler`, which works in
 any game whose upscaler OptiScaler sees). FreeFG's own installer picks the input
 per game from its recipes; here a game that has DLSS or FSR frame generation can
-ask for it instead:
+ask for it instead, with the menu's **Use the game's DLSS frame generation**
+box, or per launch:
 
 ```text
 BC250_OPTISCALER_EXTRA="FrameGen.FGInput=dlssg" %command%

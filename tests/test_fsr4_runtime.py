@@ -2070,6 +2070,47 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         sections = menu.read_ini_sections(self.prefix(["[FrameGen]", "enabled = false"])[1])
         self.assertEqual(menu.fg_state("freefg-hlxfsr4", sections), False)
 
+    def test_the_dlss_frame_generation_box(self):
+        # Owner, 2026-11-07: a box that takes the game's own DLSS frame generation
+        # as FreeFG's input (FGInput=dlssg). Like the other boxes it shows the
+        # prefix's ini and hands back only a change, marked as the player's own.
+        menu = self.load()
+        fg = dict(menu.FRESH_ON)
+        for lines, shown in (([], False), (["[FrameGen]", "fginput = dlssg"], True),
+                             (["[FrameGen]", "fginput = upscaler"], False)):
+            sections = menu.read_ini_sections(self.prefix(lines)[1]) if lines else {}
+            self.assertEqual(menu.dlssg_state(sections), shown, lines)
+        pick = {"preset": "freefg-hlxdlss", "enable_framegen": 1, "spoof": "true", "dlssg": 1}
+        on = menu.answer(pick, "freefg-hlxdlss", "freefg-hlxdlss", fg,
+                         {"freefg-hlxdlss": "auto"}, {}, {"freefg-hlxdlss": False})
+        changed = dict(part.split("=", 1) for part in on["changed"].split(";"))
+        self.assertEqual(changed["FrameGen.FGInput"], "dlssg")
+        self.assertEqual(changed["Spoofing.Dxgi"], "true")
+        self.assertEqual(changed["FrameGen.Enabled"], "true")
+        self.assertEqual(on["explicit"], "FrameGen.FGInput")
+        # Already on in the prefix: Start changes nothing.
+        same = menu.answer(pick, "freefg-hlxdlss", "freefg-hlxdlss", {"freefg-hlxdlss": True},
+                           {"freefg-hlxdlss": "true"}, {}, {"freefg-hlxdlss": True})
+        self.assertEqual((same["changed"], same["explicit"]), ("", ""))
+        # Unticked: back to OptiFG, the variants' own input.
+        off = menu.answer(dict(pick, dlssg=0), "freefg-hlxdlss", "freefg-hlxdlss",
+                          {"freefg-hlxdlss": True}, {"freefg-hlxdlss": "true"}, {},
+                          {"freefg-hlxdlss": True})
+        self.assertEqual(off["changed"], "FrameGen.FGInput=upscaler")
+        # No upscaling has no ini to write to.
+        none = menu.answer(dict(pick, preset="off"), "off", "freefg-hlxdlss", fg, {}, {}, {})
+        self.assertEqual(none["changed"], "")
+
+    def test_the_players_dlss_pick_beats_a_game_presets_input(self):
+        # A game preset with its own FGInput drops the menu's wiring default, but
+        # not the input the player picked with the DLSS box.
+        change = wrapper.PlayerChange({"FrameGen.FGInput": "dlssg"})
+        change.explicit = {"framegen.fginput"}
+        self.assertIn("framegen.fginput", getattr(change, "explicit", set()))
+        self.assertEqual(getattr({}, "explicit", set()), set())
+        source = (Path(wrapper.__file__)).read_text()
+        self.assertIn('"framegen.fginput" not in getattr(change, "explicit", set())', source)
+
     def test_the_box_says_enable(self):
         menu = self.load()
         self.assertEqual(menu.FG_LABEL, "Enable frame generation")
@@ -2156,7 +2197,7 @@ class FirstLaunchMenuStateTests(unittest.TestCase):
         # Off: nothing switched, nothing written into the ini.
         self.assertEqual(menu.answer({"preset": "off", "enable_framegen": 0}, "freefg-hlxfsr4",
                                      "freefg-hlxfsr4", states),
-                         {"preset": "off", "enable_framegen": 0, "remember": 0, "switched": 0, "changed": "",
+                         {"preset": "off", "enable_framegen": 0, "remember": 0, "switched": 0, "changed": "", "explicit": "",
                           "apply_preset": ""})
         # Back to the variant the files belong to: not a switch, the overlay's FG off stays.
         back = menu.answer({"preset": "freefg-hlxfsr4", "enable_framegen": 0}, "off", "freefg-hlxfsr4", states)

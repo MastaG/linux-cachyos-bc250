@@ -44,6 +44,12 @@ RETIRED = {"freefg-helixsr": "freefg-hlxdlss", "helixsr-ffx": "freefg-hlxdlss",
            "hlxdlssk": "freefg-hlxdlss", "freefg-hlxfsr4full": "freefg-hlxfsr4",
            "hlxfsr4": "freefg-hlxfsr4", "fsr412f": "freefg"}
 FG_LABEL = "Enable frame generation"
+# OptiScaler's [FrameGen] FGInput=dlssg: the game's own DLSS Frame Generation
+# feeds FreeFG's XeFG (its motion vectors and HUD-less image) instead of OptiFG.
+# A game only offers DLSS FG when it sees an NVIDIA card, so ticking it also sets
+# GPU spoofing to On and frame generation on (owner, 2026-11-07).
+DLSSG_LABEL = "Use the game's DLSS frame generation (turn it on in the game; sets spoofing On)"
+DLSSG_ON, DLSSG_OFF = "dlssg", "upscaler"
 SPOOF_LABEL = "GPU spoofing (DXGI)"
 # OptiScaler's [Spoofing] Dxgi: "true or false - Default (auto) is true for
 # AMD/Intel", and with no nvngx_dlss.dll in the game auto turns it off. Some
@@ -121,6 +127,11 @@ def ini_value(ini_sections, key):
     section, _, option = key.partition(".")
     value = (ini_sections.get(section.lower(), {}) or {}).get(option.lower())
     return str(value).strip().lower() if value is not None else "auto"
+
+
+def dlssg_state(ini_sections):
+    """Does the prefix's ini take the game's DLSS frame generation as input?"""
+    return ini_value(ini_sections, "FrameGen.FGInput") == DLSSG_ON
 
 
 def spoof_state(ini_sections):
@@ -257,7 +268,8 @@ def tag_steam_game(surface, env=os.environ):
     x11.XCloseDisplay(display)  # flushes
 
 
-def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known=""):
+def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known="", dlssg_states=None):
+    dlssg_states = dlssg_states or {}
     try:
         sdl = ctypes.CDLL("libSDL3.so.0")
     except OSError:
@@ -326,23 +338,41 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known=""):
         spoof_row.append(s)
     box.append(spoof_row)
     fg = Gtk.CheckButton(label=FG_LABEL)
+    dlssg = Gtk.CheckButton(label=DLSSG_LABEL)
+    loading = [False]  # True while picked() shows a prefix's own values
+
+    def dlssg_toggled(button):
+        # The game's DLSS FG is only offered on an "NVIDIA" card, and it is
+        # OptiScaler's frame generation that runs: both follow a tick by the
+        # player, not the box showing what the prefix already has.
+        if button.get_active() and not loading[0]:
+            fg.set_active(True)
+            for value, s in spoofs:
+                s.set_active(value == "true")
+
+    dlssg.connect("toggled", dlssg_toggled)
 
     def picked(button, name):
         # Ticked when frame generation is on. The prefix's own variant shows its
         # real state (its ini, the overlay's FG mode and Save Settings included);
         # another one starts fresh, with it off. No upscaling has nothing to switch.
         if button.get_active():
-            fg.set_active(fg_states.get(name, False))
-            fg.set_sensitive(name in FG_ON)
             for value, s in spoofs:
                 s.set_active(value == spoof_states.get(name, "auto"))
                 s.set_sensitive(name in FG_ON)
+            loading[0] = True
+            dlssg.set_active(dlssg_states.get(name, False))
+            loading[0] = False
+            dlssg.set_sensitive(name in FG_ON)
+            fg.set_active(fg_states.get(name, False))
+            fg.set_sensitive(name in FG_ON)
 
     for name, r in radios:
         r.connect("toggled", picked, name)
         if name == preselected:
             picked(r, name)
     box.append(fg)
+    box.append(dlssg)
     force, applies = None, []
     if known:
         force = Gtk.CheckButton(label=FORCE_LABEL % known)
@@ -380,6 +410,7 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known=""):
             if r.get_active():
                 result["preset"] = name
         result["enable_framegen"] = int(fg.get_active())
+        result["dlssg"] = int(dlssg.get_active())
         result["spoof"] = next((value for value, s in spoofs if s.get_active()), "auto")
         result["remember"] = int(keep.get_active())
         result["apply_preset"] = (next((v for v, a in applies if a.get_active()), "matching")
@@ -395,7 +426,7 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known=""):
         extra = [force] if force is not None else []
         if force is not None and force.get_active():
             extra += [a for _, a in applies]
-        order = [r for _, r in radios] + [s for _, s in spoofs] + [fg, *extra, keep, start]
+        order = [r for _, r in radios] + [s for _, s in spoofs] + [fg, dlssg, *extra, keep, start]
         cur = win.get_focus()
         while cur is not None and cur not in order:
             cur = cur.get_parent()
@@ -507,7 +538,8 @@ def decide(prefix, env):
     return not int(store.get("remember", 0)), current, fg_on, int(store.get("remember", 0))
 
 
-def answer(result, current, base, fg_states, spoof_states=None, ini_sections=None):
+def answer(result, current, base, fg_states, spoof_states=None, ini_sections=None,
+           dlssg_states=None):
     """What the launcher gets back for the player's pick.
 
     base is the variant the prefix's files and ini belong to: the current one, or
@@ -524,15 +556,24 @@ def answer(result, current, base, fg_states, spoof_states=None, ini_sections=Non
     changed = {} if new == OFF else change(new, fg_states.get(new, False), is_on,
                                            DEFINABLE.get(new, set()),
                                            ini_sections if new == base else {})
+    explicit = []  # keys the player set by hand, which beat a game preset's
     spoof = result.get("spoof", "auto")
     if new != OFF and spoof != (spoof_states or {}).get(new, "auto"):
         changed["Spoofing.Dxgi"] = spoof
+    # The input, like the other boxes, only when the player changed it; unticked
+    # it goes back to OptiFG, the variants' own input.
+    use_dlssg = bool(int(result.get("dlssg", 0)))
+    if (new != OFF and use_dlssg != bool((dlssg_states or {}).get(new, False))
+            and "framegen.fginput" in DEFINABLE.get(new, set())):
+        changed["FrameGen.FGInput"] = DLSSG_ON if use_dlssg else DLSSG_OFF
+        explicit.append("FrameGen.FGInput")
     return {
         "preset": new,
         "enable_framegen": int(result["enable_framegen"]),
         "remember": int(result.get("remember", 0)),
         "switched": int(switched),
         "changed": ";".join(k + "=" + v for k, v in changed.items()),
+        "explicit": ";".join(explicit),
         # No upscaling has no OptiScaler.ini to apply settings to.
         "apply_preset": "" if new == OFF else result.get("apply_preset", ""),
     }
@@ -554,6 +595,7 @@ def main():
     fg_states = dict(FRESH_ON)
     # A variant that starts fresh gets the shared preset's auto.
     spoof_states = {}
+    dlssg_states = {}
     installed = os.environ.get("BC250_MENU_INSTALLED", "")
     ini = os.path.join(prefix, "pfx", "drive_c", "windows", "system32", "umu", "OptiScaler.ini")
     sections = read_ini_sections(ini) if prefix else {}
@@ -566,8 +608,9 @@ def main():
         fg_states[base] = fg_on
         if base == installed:
             spoof_states[base] = spoof_state(sections)
+            dlssg_states[base] = dlssg_state(sections)
     result = gui(PRESETS, current, fg_states, spoof_states, saved,
-                 os.environ.get("BC250_MENU_GAME_PRESET", "").strip())
+                 os.environ.get("BC250_MENU_GAME_PRESET", "").strip(), dlssg_states)
     if result is None:
         # No window: keep the current choice and let the game start.
         return 3
@@ -575,7 +618,8 @@ def main():
     if path:
         with open(path, "w") as stream:
             json.dump({"variant": result["preset"], "remember": int(result.get("remember", 0))}, stream)
-    for key, value in answer(result, current, base, fg_states, spoof_states, sections).items():
+    for key, value in answer(result, current, base, fg_states, spoof_states, sections,
+                             dlssg_states).items():
         print("%s=%s" % (key, value))
     if path:
         print("store=%s" % path)

@@ -662,6 +662,11 @@ MENU_ENV = ("STEAM_COMPAT_DATA_PATH", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"
             "BC250_MENU_DEFAULT", "BC250_MENU_GAME_PRESET")
 
 
+class PlayerChange(dict):
+    """The menu's keys, plus which of them the player set by hand (explicit)."""
+    explicit = frozenset()
+
+
 def menu_choice(config, inherited):
     """Ask the first-launch menu which variant to run and what to change.
 
@@ -716,6 +721,11 @@ def menu_choice(config, inherited):
     if not choice.get("preset"):
         return current, {}, False, None
     change = dict(part.split("=", 1) for part in choice.get("changed", "").split(";") if "=" in part)
+    # Keys the player set by hand (the DLSS frame generation box), as opposed to
+    # the menu's own wiring defaults: a game preset does not take these back.
+    explicit = {k.lower() for k in choice.get("explicit", "").split(";") if k}
+    change = PlayerChange(change)
+    change.explicit = explicit
     force = choice.get("apply_preset") if choice.get("apply_preset") in PRESET_MODES else None
     return choice["preset"], change, choice.get("switched") == "1", force
 
@@ -1105,8 +1115,10 @@ def main():
         if proxy and not os.environ.get("PROTON_OPTISCALER_NAME", "").strip():
             os.environ["PROTON_OPTISCALER_NAME"] = proxy
         if layer or proxy:
-            if any(k.lower() == "framegen.fginput" for k in layer):
-                # The menu's FG wiring is a default, not the player's pick.
+            if (any(k.lower() == "framegen.fginput" for k in layer)
+                    and "framegen.fginput" not in getattr(change, "explicit", set())):
+                # The menu's FG wiring is a default, not the player's pick; the
+                # DLSS frame generation box is the player's pick, and stays.
                 change = {k: v for k, v in change.items() if k.lower() != "framegen.fginput"}
             env = environment(config, os.environ, game=game, menu=change, known=layer)
         arguments = with_launch_options(arguments, launch)
