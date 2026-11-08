@@ -365,6 +365,38 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual((umu / "winmm.dll").read_bytes(), self.files["winmm.dll"])
                 self.assertTrue((umu / "OptiScaler.ini").is_file())
 
+    def test_an_updated_variant_is_seeded_on_its_first_launch(self):
+        # A package update changes one file of the variant the prefix runs.
+        # protonfixes re-extracts it, shipped ini included; the seed must reach
+        # that very launch, not the one after it (HLX FSR 4 Full on 2026-11-08).
+        for base in BASES:
+            with self.subTest(base=base):
+                self.setUp()
+                version = self.add_variant("fulllike", dict(self.files, **{
+                    "OptiScaler/custom/Full/ffx/amd_fidelityfx_upscaler_dx12.dll": b"full-v1" * 256}))
+                self.config["optiscaler_variant_seed"] = {version: {"Upscalers.Dx12Upscaler": "Full"}}
+                self.launch(base, "fulllike")
+                self.assertEqual(self.read_ini()["Upscalers"]["Dx12Upscaler"], "Full")
+
+                # Relaunching the same payload keeps the prefix's ini.
+                inherited = {"SteamAppId": "999999998", "WINEPREFIX": str(self.prefix),
+                             "PROTON_USE_OPTISCALER": "fulllike"}
+                with mock.patch.object(wrapper, "TOOL", self.work):
+                    self.assertFalse(wrapper.payload_outdated(self.config, inherited))
+
+                manifest = json.loads((self.work / "manifest.json").read_text())
+                manifest["optiscaler"] = [e for e in manifest["optiscaler"] if e["version"] != version]
+                (self.work / "manifest.json").write_text(json.dumps(manifest))
+                self.add_variant("fulllike", dict(self.files, **{
+                    "OptiScaler/custom/Full/ffx/amd_fidelityfx_upscaler_dx12.dll": b"full-v2" * 256}))
+                with mock.patch.object(wrapper, "TOOL", self.work):
+                    self.assertTrue(wrapper.payload_outdated(self.config, inherited))
+                self.launch(base, "fulllike")
+                self.assertEqual(
+                    (self.umu() / "OptiScaler/custom/Full/ffx/amd_fidelityfx_upscaler_dx12.dll").read_bytes(),
+                    b"full-v2" * 256)
+                self.assertEqual(self.read_ini()["Upscalers"]["Dx12Upscaler"], "Full")
+
     def test_the_selected_variants_own_files_are_left_alone(self):
         # Relaunching the same variant removes nothing, not even its logs.
         for base in BASES:
@@ -1653,7 +1685,7 @@ class PresetTests(unittest.TestCase):
         return archive, license
 
     def build_payload(self, default_name=None, freefg=None, hlx=None, ngx_dll=None, mfg=True,
-                      leave_out=(), full=None):
+                      leave_out=(), full=None, full_dll=None):
         with tempfile.TemporaryDirectory(prefix="payload-default-") as temporary:
             work = Path(temporary)
             archive, fork, fakenvapi, stub, provider, licenses, preset = \
@@ -1677,6 +1709,12 @@ class PresetTests(unittest.TestCase):
                 "--proton-rel": ["proton"], "--output": [str(output)],
                 "--config": [str(output / "cfg.json")],
             }
+            if full_dll is not None:
+                fix = work / "HLX-FSR-4-Full-fix-test.zip"
+                with zipfile.ZipFile(fix, "w") as z:
+                    for name, data in full_dll.items():
+                        z.writestr(name, data)
+                options["--helixsr-full-dll"] = [str(fix), "https://example/helixsr-full-fix"]
             if mfg:
                 options["--mfg-unlocker"] = [*map(str, self.mfg_inputs(work)), "https://example/mfg"]
             if default_name:
@@ -1814,6 +1852,35 @@ class PresetTests(unittest.TestCase):
             self.build_payload(full={"amd": False})
         self.assertIn("amd_fidelityfx_upscaler_dx12.amd.dll beside HLX FSR 4 Full",
                       self.last_result.stderr)
+
+    FIXED_FULL = b"MZhlx-fsr4-full-fixed" * 1024 + b"HLXFULL1" + bytes(16)
+
+    def test_a_fixed_full_dll_replaces_the_releases_until_a_release_has_it(self):
+        # HelixSR #187: lonewolf0622 posted a fixed Full DLL before a release.
+        # Only the DLL changes; its ini, AMD's fallback and the rest stay the release's.
+        config, bridges = self.build_payload(full_dll={
+            "amd_fidelityfx_upscaler_dx12.dll": self.FIXED_FULL, "hlx_fsr4.ini": self.FULL_INI})
+        version = config["optiscaler_aliases"]["freefg-hlxfsr4full"]
+        tree = self.trees[version]
+        folder = "OptiScaler/custom/HLX FSR 4 Full/ffx/"
+        self.assertEqual(tree[folder + "amd_fidelityfx_upscaler_dx12.dll"], self.FIXED_FULL)
+        self.assertEqual(tree[folder + "hlx_fsr4.ini"], self.FULL_INI)
+        self.assertEqual(tree["OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll"], self.SCALER_AMD)
+        self.assertEqual(bridges[version], self.HLX_FSR4)
+        notes = tree["Licenses/THIRD-PARTY-UPSCALER.txt"].decode()
+        self.assertIn("https://example/helixsr-full-fix", notes)
+        self.assertIn(hashlib.sha256(self.FIXED_FULL).hexdigest(), notes)
+        for name in self.VARIANTS:
+            if name != "freefg-hlxfsr4full":
+                self.assertNotIn(self.FIXED_FULL, self.trees[config["optiscaler_aliases"][name]].values())
+        # A fix that also changes the ini, or is not built, is not taken blindly.
+        with self.assertRaises(AssertionError):
+            self.build_payload(full_dll={"amd_fidelityfx_upscaler_dx12.dll": self.FIXED_FULL,
+                                         "hlx_fsr4.ini": b"[HLX]\nDeepReuse = off\n"})
+        self.assertIn("hlx_fsr4.ini differs from the release's", self.last_result.stderr)
+        with self.assertRaises(AssertionError):
+            self.build_payload(full_dll={"amd_fidelityfx_upscaler_dx12.dll": b"MZ" + b"stub" * 64})
+        self.assertIn("Full in the DLL archive is not built", self.last_result.stderr)
 
     def test_freefg_hlxdlssk_is_preset_k_in_freefgs_custom_provider_folder(self):
         config, bridges = self.build_payload()

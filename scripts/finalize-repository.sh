@@ -687,6 +687,12 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   showed a black image there); HLX FSR 4 stays selectable in OptiScaler's overlay. Preset K is sharper
   than Model E but can sparkle on foliage; turn the Steam overlay off for a game that freezes at
   startup with it. AMD's FSR fallback beside HLX FSR 4 is FSR 4.1.2 again, as HelixSR ships it.
+- **Fixed: FreeFG + HLX FSR 4 Full no longer shows a black image** in games with a 10-bit output, such
+  as Ghost of Tsushima. The package ships the fixed Full DLL from HelixSR's author until a HelixSR
+  release has it.
+- **Fixed: the first launch after an update keeps the chosen upscaler.** When an update changed the
+  files of the variant a game uses, that first launch quietly ran on OptiScaler's default (FreeFG +
+  HLX FSR 4 Full started as plain HLX FSR 4) and only the next launch was right.
 - **New: a box for the game's own DLSS frame generation.** Ticking it sets frame generation to take
   its input from the game's DLSS FG (\`FrameGen.FGInput=dlssg\`) and turns GPU spoofing and frame
   generation on with it; then turn DLSS Frame Generation on in the game.

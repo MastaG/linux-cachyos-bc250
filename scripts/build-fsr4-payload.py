@@ -530,6 +530,34 @@ def helixsr_full_from(source: Path, staging: Path) -> tuple[Path, Path, Path, Pa
     return dll, ini, amd, notices
 
 
+def helixsr_full_dll_from(source: Path, staging: Path, release_ini: Path) -> Path:
+    """A fixed HLX FSR 4 Full DLL from a zip lonewolf0622 posted before a release
+    carries it (amd_fidelityfx_upscaler_dx12.dll, and hlx_fsr4.ini if any, at the
+    top). It replaces only the DLL: an ini in the zip must be the release's, or the
+    fix is more than the DLL and has to be looked at. Built like the release's."""
+    unpacked = staging / "helixsr-full-dll"
+    unpacked.mkdir()
+    subprocess.run(
+        ["bsdtar", "-xf", str(source), "--no-same-owner",
+         "--no-same-permissions", "-C", str(unpacked)],
+        check=True,
+    )
+    if any(p.is_symlink() or not (p.is_dir() or p.is_file())
+           for p in unpacked.rglob("*")):
+        raise RuntimeError("HLX FSR 4 Full DLL archive contains a link or special file")
+    dll = unpacked / "amd_fidelityfx_upscaler_dx12.dll"
+    if not dll.is_file() or dll.read_bytes()[:2] != b"MZ":
+        raise RuntimeError("the archive has no amd_fidelityfx_upscaler_dx12.dll at the top")
+    with dll.open("rb") as handle:
+        handle.seek(max(0, dll.stat().st_size - 24))
+        if handle.read(8) != HLX_FULL_TRAILER:
+            raise RuntimeError("HLX FSR 4 Full in the DLL archive is not built")
+    ini = unpacked / "hlx_fsr4.ini"
+    if ini.is_file() and ini.read_bytes() != release_ini.read_bytes():
+        raise RuntimeError("the DLL archive's hlx_fsr4.ini differs from the release's")
+    return dll
+
+
 def helixsr_ini_int8_off(ini: Path, staging: Path) -> Path:
     """A copy of HelixSR's helixsr.ini with [Upscaling] Int8 = off.
 
@@ -806,6 +834,10 @@ def main() -> int:
                          "(custom/HLX FSR 4 Full/ffx/ and amd_fidelityfx_upscaler_dx12.amd.dll) "
                          "and the URL recorded in the prefix: HLX FSR 4 Full for "
                          "'freefg-hlxfsr4full', AMD's FSR beside both HLX FSR 4 variants")
+    ap.add_argument("--helixsr-full-dll", nargs=2, metavar=("ARCHIVE", "ORIGIN"),
+                    help="zip with a fixed HLX FSR 4 Full amd_fidelityfx_upscaler_dx12.dll "
+                         "that is not in a release yet, and the URL recorded in the prefix; "
+                         "replaces the DLL from --helixsr-full, keeps its hlx_fsr4.ini")
     ap.add_argument("--freefg", nargs=2, required=True, metavar=("ARCHIVE", "ORIGIN"),
                     help="FreeFG release zip and the URL recorded in the prefix (Intel "
                          "XeFG frame generation with FreeFG's BC-250 shaders and VRR "
@@ -855,6 +887,12 @@ def main() -> int:
             Path(args.helixsr_ngx[0]), staging)
         k_files = helixsr_k_files(hlx_dlss)
         full, full_ini, amd_dll, full_notices = helixsr_full_from(Path(args.helixsr_full[0]), staging)
+        full_origin = args.helixsr_full[1]
+        full_from = "the Scaler 2.2.0 in HelixSR 3.2.1"
+        if args.helixsr_full_dll:
+            full = helixsr_full_dll_from(Path(args.helixsr_full_dll[0]), staging, full_ini)
+            full_origin = args.helixsr_full_dll[1]
+            full_from = "HelixSR's fixed build for that DLL, not in a release yet"
         full_all_notices = staging / "helixsr-full-all-notices"
         full_all_notices.mkdir()
         for path in [*helix_notices.iterdir(), *full_notices.iterdir()]:
@@ -911,8 +949,8 @@ def main() -> int:
              f"HLX FSR 4 from HelixSR (origin: {args.helixsr_ngx[1]}, SHA256 {digest(hlx)}), "
              f"with {AMD_FALLBACK}, AMD's FidelityFX upscaler (FSR SDK 2.4.0) from the "
              f"Scaler part of HelixSR 3.2.1 (SHA256 {digest(amd_dll)}), beside it. The DX12 upscaler is HLX FSR 4 Full, {HLX_FULL_FOLDER}/"
-             f"amd_fidelityfx_upscaler_dx12.dll from the Scaler 2.2.0 in HelixSR 3.2.1 "
-             f"(origin: {args.helixsr_full[1]}, SHA256 {digest(full)}), the full FSR 4.1.2 "
+             f"amd_fidelityfx_upscaler_dx12.dll from {full_from} "
+             f"(origin: {full_origin}, SHA256 {digest(full)}), the full FSR 4.1.2 "
              "network on HelixSR's pipeline (AMD's FSR SDK, MIT), as an OptiScaler custom "
              "upscaler the way HelixSR installs it; hlx_fsr4.ini beside it is its own "
              "(DeepReuse = exact), and it falls back to AMD's DLL above"),

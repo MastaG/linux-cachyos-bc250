@@ -259,6 +259,8 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1" \\\n'
     '        --helixsr-full "${srcdir}/HelixSR-3.2.1-Scaler-2.2.0-core.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1" \\\n'
+    '        --helixsr-full-dll "${srcdir}/HLX-FSR-4-Full-fix187-test.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/issues/187#issuecomment-6714625469" \\\n'
     '        --freefg "${srcdir}/freefg-1.3.0.zip" \\\n'
     '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.3.0" \\\n'
     '        --freefg-ini "${srcdir}/OptiScaler-bc250-ba0dedb.ini" \\\n'
@@ -322,6 +324,12 @@ payload_sources = [
     # FSR 4 in both HLX FSR 4 variants) and its FidelityFX licence are used. Mirrored.
     ("HelixSR-3.2.1-Scaler-2.2.0-core.zip", f"{payload_base}/HelixSR-3.2.1-Scaler-2.2.0-core.zip",
      "2852035f61ac648cda28094db72e9d6489938fbfeac89402bb719ddf18d84669", True),
+    # HLX FSR 4 Full fix for HelixSR issue #187 (lonewolf0622): runs AMD's post
+    # pass for outputs its fast kernel does not write (R10G10B10A2, a black image
+    # before). Posted as a test build, not in a release yet; only its DLL replaces
+    # the 3.2.1 Full DLL. Mirrored. Drop it when a HelixSR release carries the fix.
+    ("HLX-FSR-4-Full-fix187-test.zip", f"{payload_base}/HLX-FSR-4-Full-fix187-test.zip",
+     "71b3d69ff5ddb6a1a3590871b919ff236ada4276741ad7e0ed7785366bbd0e37", True),
     # FreeFG 1.3.0 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer; every variant ships it. Mirrored release
     # zip; its OptiScaler build is GPL-3.0, and the matching

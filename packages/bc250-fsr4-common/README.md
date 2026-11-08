@@ -223,9 +223,14 @@ all reach it; every other variant has its own version string.
   key, the player picks the custom upscaler in the Scaler's menu. Taken with
   `--helixsr-full` from `HelixSR-3.2.1-Scaler-2.2.0-core.zip` (byte-identical
   to the copy in `HelixSR-3.2.1.zip`); the builder refuses a Full DLL without its
-  `HLXFULL1` trailer. The package before the rework put Full in HLX FSR 4's
-  place, where one game showed a black image (log: `kernel dispatch failed`,
-  HelixSR issue #187).
+  `HLXFULL1` trailer. 3.2.1's Full DLL showed a black image on R10G10B10A2
+  outputs (Ghost of Tsushima; log: `kernel dispatch failed` every frame,
+  HelixSR issue #187): its fast post pass writes only RGBA16F and R11G11B10F.
+  The fixed DLL its author posted runs AMD's post pass for the other formats;
+  `--helixsr-full-dll` takes it from `HLX-FSR-4-Full-fix187-test.zip`
+  (mirrored) in place of the release's, and refuses a zip whose
+  `hlx_fsr4.ini` differs from the release's. Drop that option when a HelixSR
+  release carries the fix.
 - **The FreeFG tree, and `freefg`** — built with `--freefg` from FreeFG's
   release zip (mirrored unchanged as `freefg-1.3.0.zip`, its GPL source zip
   beside it).

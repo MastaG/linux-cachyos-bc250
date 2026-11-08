@@ -992,10 +992,13 @@ PROTON_USE_OPTISCALER=freefg-hlxfsr4full %command% # FreeFG + HLX FSR 4 Full
   `OptiScaler/custom/HLX FSR 4 Full/ffx/` with its own `hlx_fsr4.ini`, and the
   DX12 upscaler set to "HLX FSR 4 Full". You can switch back to HLX FSR 4 in
   OptiScaler's overlay. `DeepReuse = 1:2` or `1:4` in that `hlx_fsr4.ini` is
-  faster with some ghosting in motion; `exact`, the default, has none. An
-  earlier package put Full in HLX FSR 4's place, and one game showed a black
-  image ([HelixSR #187](https://github.com/lonewolf0622/HelixSR/issues/187)).
-  If you still see that, its `HLX_FSR.log` helps.
+  faster with some ghosting in motion; `exact`, the default, has none. Games
+  that draw to a 10-bit (R10G10B10A2) output, Ghost of Tsushima among them,
+  showed a black image with 3.2.1's Full
+  ([HelixSR #187](https://github.com/lonewolf0622/HelixSR/issues/187)). The
+  package ships the fixed Full DLL HelixSR's author posted there until a
+  HelixSR release has it. If you still see a black image, Full's
+  `hlx_fsr4.log` beside it helps.
 
 Since 2026-11-07 that is all: the stock OptiScaler nightly's variants (its
 FidelityFX bridges `fsr411f`, `fsr412f`, `signed`, `fsr411b`, `fsr411rc9`,

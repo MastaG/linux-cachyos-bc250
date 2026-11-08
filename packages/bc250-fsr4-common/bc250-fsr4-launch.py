@@ -756,14 +756,68 @@ def variant_switched(config, inherited):
     return False
 
 
+def compat_data(inherited):
+    """The folder protonfixes keeps upscaler_files in, if it can be located.
+
+    Steam exports it; umu and Heroic export only WINEPREFIX, which is its pfx.
+    """
+    data = inherited.get("STEAM_COMPAT_DATA_PATH", "").strip()
+    if data:
+        return Path(data)
+    prefix = inherited.get("WINEPREFIX", "").strip()
+    return Path(prefix).parent if prefix else None
+
+
+def payload_outdated(config, inherited):
+    """True when protonfixes will re-extract the selected variant this launch.
+
+    It does so whenever its record of the prefix's payload (upscaler_files)
+    disagrees with the manifest: another version, or a file whose checksum the
+    package changed. Re-extracting moves every ini in the archive aside and
+    copies the shipped one, all "auto". seed_once reads the ini before that
+    happens, so a seed the old ini already held was dropped as the player's
+    answer, and the first launch after the update ran on "auto" -- HLX FSR 4
+    Full fell back to HLX FSR 4 until the next start. Only the record is read,
+    not the files: a file damaged in the prefix is protonfixes' own business.
+    """
+    requested = inherited.get("PROTON_USE_OPTISCALER", "").strip() or config["optiscaler_version"]
+    version = optiscaler_version(config, requested)
+    data = compat_data(inherited)
+    ini = prefix_ini(inherited)
+    if version == "0" or not data or not ini or not ini.is_file():
+        return False
+    entries = json.loads((TOOL / config["manifest"]).read_text()).get("optiscaler", [])
+    entry = next((e for e in entries if e.get("version") == version), None)
+    if entry is None:
+        return False
+    try:
+        tracked = json.loads((data / "upscaler_files").read_text())["opti_files"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return True
+    if not isinstance(tracked, dict):
+        return True
+    for name, md5 in entry.get("md5_hash", {}).items():
+        item = tracked.get("drive_c/windows/system32/umu/" + name)
+        if not isinstance(item, dict) or item.get("version") != version:
+            return True
+        if md5 and str(item.get("md5_hash", "")).lower() != md5.lower():
+            return True
+    return False
+
+
 def start_fresh_on_switch(config, inherited, switched=False):
     """Remove the prefix's OptiScaler.ini when this launch switches variant.
 
     protonfixes re-copies a missing ini, so the new variant seeds from scratch.
     Runs before environment() reads the ini, or the leaving variant's answers
     (FreeFG's FrameGen.Enabled=true) would count as the player's.
+
+    The same when protonfixes is about to re-extract the variant itself (see
+    payload_outdated): it would swap in the shipped ini anyway, after the seeds
+    had already been filtered against the old one.
     """
-    if not (switched or variant_switched(config, inherited)):
+    if not (switched or variant_switched(config, inherited)
+            or payload_outdated(config, inherited)):
         return False
     ini = prefix_ini(inherited)
     if ini and ini.is_file():
