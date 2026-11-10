@@ -533,8 +533,16 @@ def gui(window_rows, preselected, fg_states, spoof_states, saved_on, known="", d
         while cur is not None and cur not in order:
             cur = cur.get_parent()
         i = order.index(cur) if cur in order else 0
-        i = max(0, min(len(order) - 1, i + (1 if d == Gtk.DirectionType.DOWN else -1)))
-        order[i].grab_focus()
+        # Step over what cannot take focus right now: the HLX DLSS choices while
+        # another row is picked, the frame-generation rows under No upscaling.
+        # grab_focus() on a greyed-out widget does nothing, so stepping onto one
+        # left the focus where it was and the pad could not get past it.
+        step = 1 if d == Gtk.DirectionType.DOWN else -1
+        j = i + step
+        while 0 <= j < len(order) and not (order[j].is_sensitive() and order[j].is_visible()):
+            j += step
+        if 0 <= j < len(order):
+            order[j].grab_focus()
         win.set_focus_visible(True)
 
     def poll_pad():
