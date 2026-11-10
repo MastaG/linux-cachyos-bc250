@@ -13,12 +13,13 @@ This package ships those artifacts inside itself and points protonfixes at a loc
 
 ### Launch options
 
-FSR4 and OptiScaler are on by default, but they are still yours to set per game:
+FSR4 and OptiScaler are on for a game once it is set up for them (a new game starts on No upscaling: the launch menu, or `~/.config/bc250-fsr4/settings` with `default = <variant>`, turns them on; see README.md, "Settings for every game"). Per game:
 
 ```text
 PROTON_FSR4_UPGRADE=0 %command%      # disable the packaged FSR4 upgrade and default proxy
 BC250_FSR4_DEBUG=1 %command%         # FSR4 watermark + OptiScaler log + PROTON_LOG
 PROTON_OPTISCALER_NAME=dxgi.dll      # proxy OptiScaler as dxgi, for games that use winmm
+PROTON_OPTISCALER_MENU=0 %command%   # no menu; start with the game's current choice
 ```
 
 The opt-out also defaults OptiScaler to off, so it cannot load a provider retained
@@ -37,10 +38,13 @@ changed default reaches a fresh install and never a prefix that has decided.
 Anything unreadable keeps the whole preset, because the safe way to be wrong is a
 launch that behaves as documented.
 
-A variant switch removes the prefix's ini before the launch reads it, and
-protonfixes copies a fresh one, so the new variant seeds from scratch rather than
-inheriting the last one's answers (FreeFG's frame generation left on for the
-default was the Ghost of Tsushima case). A variant's frame generation keys are
+Moving to another payload (an older package's variants, or a payload update)
+removes the prefix's ini before the launch reads it, and protonfixes copies a
+fresh one, so it seeds from scratch rather than inheriting the last one's
+answers (FreeFG's frame generation left on for the default was the Ghost of
+Tsushima case). Picking another upscaler is not such a move: since 2026-11-08
+the payload carries all five, and the pick is the ini's `[Upscalers]
+Dx12Upscaler`, which the overlay saves and the menu reads back. A variant's frame generation keys are
 seeded like the shared preset, on its first launch only, so turning it off in
 the overlay and saving survives a restart.
 
@@ -100,13 +104,14 @@ HelixSR is the deliberate exception: its `helixsr.ini` ships as released (with
 (`system32/umu/OptiScaler/custom/hlx-dlss/dlss`) on every launch. That log is what its author asks for with a problem
 report, and a package that switched it off left players unable to send one.
 
-Every variant is FreeFG (since 2026-11-07: `freefg-hlxfsr4`, the default,
-`freefg-hlxdlss`, `freefg`, `freefg-hlxdlssk` and `freefg-hlxfsr4full`; the stock
-nightly's variants and HelixSR Scaler are gone), and FreeFG also sets variables outside OptiScaler's own: FreeFG's Vulkan pacing layer runs in the game
+The payload is FreeFG with five upscalers (since 2026-11-08 one payload,
+`freefg-all`; the one-upscaler variants `freefg-hlxfsr4`, `freefg-hlxdlss`,
+`freefg`, `freefg-hlxdlssk` and `freefg-hlxfsr4full` are names for its
+upscalers now), and FreeFG also sets variables outside OptiScaler's own: FreeFG's Vulkan pacing layer runs in the game
 process, so the launcher prepends its folder in the prefix to `VK_LAYER_PATH`
 and its name to `VK_INSTANCE_LAYERS`, and sets `XEFG_WAVE_CONFIG` and vkd3d's
-`no_staggered_submit`, as FreeFG's own installer does. Switching variants
-removes the previous variant's leftovers from the prefix first (details in
+`no_staggered_submit`, as FreeFG's own installer does. Moving to the payload
+removes an older one's leftovers from the prefix first (details in
 [packages/bc250-fsr4-common/README.md](../packages/bc250-fsr4-common/README.md)).
 
 ### Which Proton, and which OptiScaler

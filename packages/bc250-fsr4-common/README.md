@@ -167,71 +167,87 @@ inherited game setting from re-enabling the proxy in either tool.
 `BC250_FSR4_DEBUG=1` adds the FSR4 watermark, OptiScaler file logging and
 `PROTON_LOG=1` — useful for confirming FSR4 is actually the active upscaler.
 
-### The variants: `freefg-hlxfsr4` (default), `freefg-hlxdlss`, `freefg`, `freefg-hlxdlssk`, `freefg-hlxfsr4full`
+### One payload with five upscalers (`freefg-all`)
 
-Since 2026-11-07 (owner) every variant is FreeFG with one of five upscalers;
-the stock OptiScaler nightly's variants (its bridges `optiscaler`, `fsr412f`,
-`fsr411f`, `signed`, `fsr411b`, `fsr411rc9`, `fsr411rc10`, and HLX FSR 4 or Preset
-K alone) and HelixSR Scaler are gone. HLX DLSS Preset K and HLX FSR 4 Full,
-dropped the same morning, came back that day by popular request. The OptiScaler nightly is still an input: it is the
-tree FreeFG's OptiScaler build goes into, pinned to the nightly FreeFG pins
-(2026-10-25), so its libraries are the ones FreeFG was made and tested with, and
-Intel's XeFG runtime comes from it. Once the nightly has merged FreeFG's changes,
-it replaces FreeFG's build.
+Since 2026-11-08 (owner) the package ships one OptiScaler payload: FreeFG with
+all five upscalers side by side, picked with `[Upscalers] Dx12Upscaler` from
+OptiScaler's own overlay (*Save Settings* writes it) or from the launch menu,
+which reads that key back so it shows the overlay's pick. Until then each
+upscaler was a variant (a whole archive) of its own, `PROTON_USE_OPTISCALER`
+picked one, and switching started the prefix's `OptiScaler.ini` over.
 
-The payload is built once per variant, identical except for the upscaler and the
-files beside it, and `PROTON_USE_OPTISCALER` picks one. The builder takes every
-input as a required option (`--fsr4-bridge`, `--helixsr-ngx`, `--helixsr-full`,
-`--freefg`, `--freefg-ini`; `--mfg-unlocker` optional) and `--default` names the variant
-that gets the plain OptiScaler version, so an unset variable, `1` and `default`
-all reach it; every other variant has its own version string.
+FreeFG's OptiScaler lists every folder under `OptiScaler/custom/` by name
+(`misc/CustomProviders.h`: `custom/<name>/ffx` is a DX12 FFX upscaler,
+`custom/<name>/dlss` an NGX runtime, the DLL in it under any name), so each
+upscaler that shares a file name with another gets a folder:
 
-- **`freefg-hlxfsr4`** (the default since 2026-10-29) — the FreeFG tree (below)
-  with HLX FSR 4 (HelixSR 3.2.1's `HLX-FSR4/amd_fidelityfx_upscaler_dx12.dll`, from
-  `HelixSR-3.2.1-network.zip`, mirrored after HelixSR's own setup) as the
-  FidelityFX upscaler. AMD's own FidelityFX upscaler as HelixSR 3.2.1 ships it
-  (FSR SDK 2.4.0, FSR 4.1.2.4555, the Scaler's
-  `OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll` from
-  `HelixSR-3.2.1-Scaler-2.2.0-core.zip`) sits beside it under that name, HLX FSR
-  4's fallback for what its own runtime does not cover. (The nightly's own is FSR
-  4.1.1; the first package of the rework shipped that one.) The shared `UpscalerIndex = 0` selects HLX FSR 4
-  (checked on a BC-250 in Shadow of the Tomb Raider: 720p → 1080p in 1.17 ms).
-  The builder refuses HLX FSR 4 unless its shaders end with the `HLXFSR4D` trailer.
-- **`freefg-hlxdlss`** — the FreeFG tree with HLX DLSS (Model E, HelixSR's
-  `HelixSR/helixsr.dll`), laid out as FreeFG's installer does for `--upscaler hlx-dlss` (its
-  `hlx.py`): `helixsr.dll` in `OptiScaler/custom/hlx-dlss/dlss/` and
-  `[Upscalers] Dx12Upscaler=hlx-dlss`, a seed like every upscaler key. FreeFG's
-  OptiScaler takes a folder under `custom/` with a `dlss/` DLL as a DLSS
-  provider, and the name `hlx-dlss` is what makes it pass HLX DLSS the game's
-  input API. `helixsr.ini` beside the DLL is HelixSR's own with `[Upscaling] Int8
-  = off`. The RC12 bridge stays in the FidelityFX slot for Direct3D 11 and Vulkan
-  games. The builder refuses a DLL without the setup's `HXSRNET1` network
-  trailer. FreeFG 1.3.0 pins HelixSR 3.1.0 for this; the packages use 3.2.1.
-- **`freefg-hlxdlssk`** — `freefg-hlxdlss` with HLX DLSS Preset K instead of
-  Model E: the four files of the network archive's `HelixSR/k/` (`helixsr.dll`,
-  its own `helixsr.ini`, `helixsr_modelk_kernels.pak`,
-  `helixsr_modelk_weights.bin`) in `OptiScaler/custom/hlx-dlss/dlss/`. FreeFG's
-  OptiScaler loads the custom folder's DLL whatever it is, and K finds its
-  kernels and weights beside itself. The builder wants all four files.
-- **`freefg-hlxfsr4full`** — `freefg-hlxfsr4` plus HLX FSR 4 Full, laid out as
-  HelixSR 3.2.1 installs it (Scaler 2.2.0's `HelixSR-Scaler-package.txt`): the
-  Full DLL and its `hlx_fsr4.ini` in `OptiScaler/custom/HLX FSR 4 Full/ffx/`, an
-  OptiScaler custom upscaler, and `[Upscalers] Dx12Upscaler=HLX FSR 4 Full` as
-  the seed. The DLL looks for AMD's FSR as `fsr4_full.dll` or
-  `amd_fidelityfx_upscaler_dx12.amd.dll` beside itself, then three folders up,
-  which is the `.amd.dll` beside HLX FSR 4; HelixSR's own installers set no ini
-  key, the player picks the custom upscaler in the Scaler's menu. Taken with
-  `--helixsr-full` from `HelixSR-3.2.1-Scaler-2.2.0-core.zip` (byte-identical
-  to the copy in `HelixSR-3.2.1.zip`); the builder refuses a Full DLL without its
-  `HLXFULL1` trailer. 3.2.1's Full DLL showed a black image on R10G10B10A2
-  outputs (Ghost of Tsushima; log: `kernel dispatch failed` every frame,
-  HelixSR issue #187): its fast post pass writes only RGBA16F and R11G11B10F.
-  The fixed DLL its author posted runs AMD's post pass for the other formats;
-  `--helixsr-full-dll` takes it from `HLX-FSR-4-Full-fix187-test.zip`
-  (mirrored) in place of the release's, and refuses a zip whose
-  `hlx_fsr4.ini` differs from the release's. Drop that option when a HelixSR
-  release carries the fix.
-- **The FreeFG tree, and `freefg`** — built with `--freefg` from FreeFG's
+| `Dx12Upscaler` | Files | From |
+|---|---|---|
+| `ffx` (index 0) | `OptiScaler/amd_fidelityfx_upscaler_dx12.dll` = HLX FSR 4, AMD's FSR beside it as `.amd.dll` | `--helixsr-ngx` (`HLX-FSR4/`), `--helixsr-full` (the `.amd.dll`) |
+| `hlx-dlss` | `OptiScaler/custom/hlx-dlss/dlss/` = Model E's `helixsr.dll` and its `helixsr.ini` (`Int8 = off`) | `--helixsr-ngx` (`HelixSR/`) |
+| `HLX DLSS Preset K` | `OptiScaler/custom/HLX DLSS Preset K/dlss/` = K's four files | `--helixsr-ngx` (`HelixSR/k/`) |
+| `FSR 4 RC12` | `OptiScaler/custom/FSR 4 RC12/ffx/amd_fidelityfx_upscaler_dx12.dll` | `--fsr4-bridge` |
+| `HLX FSR 4 Full` | `OptiScaler/custom/HLX FSR 4 Full/ffx/` = Full and its `hlx_fsr4.ini` | `--helixsr-full`, or `--helixsr-full-dll` |
+
+- **`hlx-dlss` is a fixed name.** FreeFG's OptiScaler passes HLX DLSS the game's
+  input API (`HelixSR.Upscale.Input.API`, `DLSSFeature_Dx12.cpp`) only for a
+  custom folder of exactly that name, as FreeFG's own installer lays it out for
+  `--upscaler hlx-dlss`. Model E's DLL reads it; Preset K's carries no such
+  string, so a folder of its own costs K nothing. The overlay therefore lists
+  Model E as `hlx-dlss`; the menu shows the two as one HLX DLSS row with a DLSS
+  Model E / DLSS Preset K choice (owner). They cannot share one overlay entry:
+  swapping files in a folder at launch breaks protonfixes' checksums.
+- **HLX FSR 4 keeps the FidelityFX slot** because it looks for AMD's DLL beside
+  itself (`<name>.amd.dll`; without one it logs "HLX FSR 4 only"), and Full finds
+  the same file three folders up. Direct3D 11 games take OptiScaler's `ffx_12`
+  route through that slot, so they get HLX FSR 4 whatever DX12 upscaler is
+  picked (the HLX DLSS variants used to give them RC12). The `.amd.dll` is AMD's
+  FSR SDK 2.4.0 upscaler (FSR 4.1.2.4555, signed) from the Scaler part of
+  HelixSR 3.3.0 (the same file as 3.2.1's), the version both HLX DLLs are built from. The builder refuses
+  HLX FSR 4 unless its shaders end with the `HLXFSR4D` trailer, an HLX DLSS DLL
+  without the setup's `HXSRNET1` network trailer, an incomplete `HelixSR/k/`,
+  and a Full DLL without its `HLXFULL1` trailer.
+- **Full and #187.** 3.2.1's Full DLL showed a black image on R10G10B10A2
+  outputs (Ghost of Tsushima; log: `kernel dispatch failed` every frame, HelixSR
+  issue #187): its fast post pass writes only RGBA16F and R11G11B10F. HelixSR
+  3.3.0 carries the fix (AMD's post pass for the other formats), so the recipes
+  no longer pass `--helixsr-full-dll`; the builder keeps the option for the next
+  fix posted ahead of a release (a lone DLL that replaces only the release's,
+  refused when its `hlx_fsr4.ini` differs).
+- **The upscaler is the prefix's.** The shared preset seeds `Dx12Upscaler=ffx`
+  and `FSR.UpscalerIndex=0` into a fresh ini, like every key it has; from then
+  on the ini decides. The menu hands back `Dx12Upscaler` (and index 0 for `ffx`)
+  only when the player picks another upscaler than the ini has, so a pick does
+  not reset anything else. An upscaler the menu does not list (XeSS, or another
+  FidelityFX provider at index 1 or up) gets a "Keep the overlay's choice" row.
+- **Old names.** The config's `optiscaler_upscalers` maps each one-upscaler
+  variant name to its `Dx12Upscaler` (`freefg-hlxfsr4` `ffx`, `freefg-hlxdlss`
+  `hlx-dlss`, `freefg-hlxdlssk` `HLX DLSS Preset K`, `freefg` `FSR 4 RC12`,
+  `freefg-hlxfsr4full` `HLX FSR 4 Full`, and the retired names of
+  `RETIRED_VARIANTS` as the one they became). Every name is an alias of the
+  payload's version. As a launch option one also sets its upscaler on every
+  launch, as the variant did. A prefix last launched with one (protonfixes'
+  `upscaler_files` records `<version>-<variant>`; the launcher's
+  `previous_upscaler`, longest name first) starts fresh on the move, since its
+  files change, and is seeded with that upscaler under the menu's pick; the menu
+  gets it as `BC250_MENU_PREVIOUS` to pre-select it. Preset K's kernels and
+  weights, which `freefg-hlxdlssk` kept in `hlx-dlss/`, are `RETIRED_FILES`.
+- **No default to choose.** `--default` is gone; the payload takes the bare
+  OptiScaler version, so an unset `PROTON_USE_OPTISCALER`, `1`, `default` and
+  `freefg-all` all reach it.
+- **A new prefix starts on No upscaling** (owner, 2026-11-10). "New" is the
+  launcher's `new_prefix`: no `bc250-fsr4-menu.json` and no payload record in
+  `upscaler_files`, so a prefix of an older package keeps its upscaler. The
+  player's `~/.config/bc250-fsr4/settings` (`read_settings`, `key = value`)
+  can change that: `default = off | freefg-all | <one-upscaler name>` and
+  `menu = 0 | 1`. The launcher hands them to the menu as `BC250_MENU_DEFAULT`
+  (`off` or the payload's menu name), `BC250_MENU_AUTO` and, for a new prefix,
+  the default's upscaler as `BC250_MENU_PREVIOUS`; it seeds that upscaler
+  itself, and falls back to No upscaling when the menu cannot be asked.
+  `PROTON_OPTISCALER_MENU=0` skips the menu for one launch and keeps the
+  prefix's choice; `=1` shows it (also over `menu = 0`) and clears a save.
+
+- **The FreeFG tree** — built with `--freefg` from FreeFG's
   release zip (mirrored unchanged as `freefg-1.3.0.zip`, its GPL source zip
   beside it).
   [FreeFG](https://github.com/daniel-h-0/freefg) speeds up Intel's XeSS frame
@@ -269,7 +285,7 @@ all reach it; every other variant has its own version string.
   the game's `.exe`; in OptiScaler's library folder nothing finds it, OptiScaler
   gets NULL for every forwarded export, and Spider-Man 2 crashed calling
   `xefgSwapChainSetLoggingCallback` while creating its swapchain.
-  With `--mfg-unlocker`, every variant also carries
+  With `--mfg-unlocker`, the payload also carries
   [MFG Unlocker](https://github.com/dashdogy/MFG-Unlocker) (MIT, by dashdogy;
   1.7.0, the newest; FreeFG's 3×/4× checks on the BC-250 used 1.6.0) as the OptiScaler
   plugin `OptiScaler/plugins/MFGUnlocker.asi`, loaded through the shared
@@ -281,18 +297,19 @@ all reach it; every other variant has its own version string.
   13 programs. It goes into the ini rather than the preset because protonfixes
   refuses a preset key the ini does not have. MFG Unlocker's license, which its
   zip does not carry, is pinned by the tag's commit.
-- **Frame generation** starts off in every variant: `FrameGen.Enabled = false`
-  is seeded on a variant's first launch (FG_DEFAULT under FREEFG_PRESET's XeFG
+- **Frame generation** starts off: `FrameGen.Enabled = false`
+  is seeded on the payload's first launch (FG_DEFAULT under FREEFG_PRESET's XeFG
   wiring), so the menu's "Enable frame generation" box shows the prefix's own
   value and only the switch itself is ever written.
-- **Retired names** — `RETIRED_VARIANTS` in the builder keeps every name an older
-  package had as an alias, and the menu maps a saved choice the same way: the HLX
-  FSR 4 family (`hlxfsr4`, `freefg-hlxfsr4full`) selects `freefg-hlxfsr4`; the HLX
-  DLSS family (`helixsr`, `helixsr-ffx`, `freefg-helixsr`, `freefg-hlxdlssk`,
-  `hlxdlssk`) `freefg-hlxdlss`; the stock nightly and its bridges (`optiscaler`,
-  `signed`, `fsr412f`, `fsr411f`, `fsr411b`, `fsr411rc9`, `fsr411rc10`) `freefg`.
+- **Retired names** — `RETIRED_VARIANTS` in the builder keeps every name an
+  older package had before the one-upscaler variants, as the one it became: the
+  HelixSR ones (`helixsr`, `helixsr-ffx`, `freefg-helixsr`) `freefg-hlxdlss`,
+  `hlxdlssk` `freefg-hlxdlssk`, `hlxfsr4` `freefg-hlxfsr4`, the stock nightly and
+  its bridges (`optiscaler`, `signed`, `fsr412f`, `fsr411f`, `fsr411b`,
+  `fsr411rc9`, `fsr411rc10`) `freefg`; each then stands for that one's upscaler
+  (see Old names above). The menu maps any saved old name to the payload.
 
-Switching variants cleans up after the previous one. protonfixes replaces the
+Moving to another payload cleans up after the previous one. protonfixes replaces the
 payload when the version changes, but it only removes the files it checksums:
 `.ini` files and anything written at run time stay. So on every game launch the
 launcher (`clean_other_variants`) removes each file the manifest lists for some
@@ -320,11 +337,12 @@ mechanism necessary at all:
   start otherwise, and OptiScaler loads its libraries from
   `Libraries.OptiDllPath` rather than from the game. Trying an alternate binary
   requires a build.
-- A variant is a whole second archive rather than a patch, because protonfixes
-  installs an OptiScaler entry all-or-nothing against one set of hashes. It
-  costs about 78 MB per variant in each package.
+- A variant would be a whole second archive rather than a patch, because
+  protonfixes installs an OptiScaler entry all-or-nothing against one set of
+  hashes (about 78 MB per variant in each package). That is why the upscalers
+  share one payload in folders of their own instead.
 
-Every variant ships `Licenses/THIRD-PARTY-UPSCALER.txt` into the prefix
+The payload ships `Licenses/THIRD-PARTY-UPSCALER.txt` into the prefix
 naming the origin URL and SHA256, so an unsigned DLL is never sitting there
 unexplained.
 

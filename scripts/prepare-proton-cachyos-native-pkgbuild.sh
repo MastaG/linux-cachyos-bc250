@@ -252,15 +252,12 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --optipatcher "${srcdir}/OptiPatcher_v0.41.asi" \\\n'
     f'        --fakenvapi "${{srcdir}}/{fakenvapi_asset}" \\\n'
     '        --provider "${srcdir}/amdxcffx64_v4.1.1.xz" \\\n'
-    '        --default freefg-hlxfsr4 \\\n'
     '        --fsr4-bridge "${srcdir}/bc250-fsr4-dll-4.0.0-rc12.zip" \\\n'
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12" \\\n'
-    '        --helixsr-ngx "${srcdir}/HelixSR-3.2.1-network.zip" \\\n'
-    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1" \\\n'
-    '        --helixsr-full "${srcdir}/HelixSR-3.2.1-Scaler-2.2.0-core.zip" \\\n'
-    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.2.1" \\\n'
-    '        --helixsr-full-dll "${srcdir}/HLX-FSR-4-Full-fix187-test.zip" \\\n'
-    '            "https://github.com/lonewolf0622/HelixSR/issues/187#issuecomment-6714625469" \\\n'
+    '        --helixsr-ngx "${srcdir}/HelixSR-3.3.0-network.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.3.0" \\\n'
+    '        --helixsr-full "${srcdir}/HelixSR-3.3.0-Scaler-2.3.0-core.zip" \\\n'
+    '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.3.0" \\\n'
     '        --freefg "${srcdir}/freefg-1.3.0.zip" \\\n'
     '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.3.0" \\\n'
     '        --freefg-ini "${srcdir}/OptiScaler-bc250-ba0dedb.ini" \\\n'
@@ -310,26 +307,20 @@ payload_sources = [
     # produces; taken as the release archive for the notices it carries.
     ("bc250-fsr4-dll-4.0.0-rc12.zip", f"{payload_base}/bc250-fsr4-dll-4.0.0-rc12.zip",
      "646778a0d06c42bf3cdcc99f9396680f5cc4a33658b90c0889fd15751bfb800d", True),
-    # HelixSR 3.2.1 (lonewolf0622): HLX FSR 4 (AMD's FSR 4 network on HelixSR's
+    # HelixSR 3.3.0 (lonewolf0622): HLX FSR 4 (AMD's FSR 4 network on HelixSR's
     # pipeline, the default variant's upscaler) and HLX DLSS (HelixSR/helixsr.dll,
     # NVIDIA's DLSS Model E network). Mirrored after its own setup built the
     # network; per its author that remains NVIDIA's. HLX FSR 4 is built from AMD's
     # FSR SDK (MIT).
-    ("HelixSR-3.2.1-network.zip", f"{payload_base}/HelixSR-3.2.1-network.zip",
-     "7309ca5630245994106bcc5a0b4ed49b208e90e7cf29130f61120b16454b4663", True),
-    # The Scaler 2.2.0 part of HelixSR 3.2.1 (lonewolf0622, GPL-3.0; the
+    ("HelixSR-3.3.0-network.zip", f"{payload_base}/HelixSR-3.3.0-network.zip",
+     "d69ae753fc8668f49a7d320615ac83135f7fc629217f63cbac2bb6427803e8f5", True),
+    # The Scaler 2.3.0 part of HelixSR 3.3.0 (lonewolf0622, GPL-3.0; the
     # HLX FSR 4 Full custom upscaler in it is built from AMD's FSR SDK, MIT): only
     # OptiScaler/custom/HLX FSR 4 Full/ffx/ (freefg-hlxfsr4full), AMD's FSR SDK
     # 2.4.0 upscaler it keeps as amd_fidelityfx_upscaler_dx12.amd.dll (beside HLX
     # FSR 4 in both HLX FSR 4 variants) and its FidelityFX licence are used. Mirrored.
-    ("HelixSR-3.2.1-Scaler-2.2.0-core.zip", f"{payload_base}/HelixSR-3.2.1-Scaler-2.2.0-core.zip",
-     "2852035f61ac648cda28094db72e9d6489938fbfeac89402bb719ddf18d84669", True),
-    # HLX FSR 4 Full fix for HelixSR issue #187 (lonewolf0622): runs AMD's post
-    # pass for outputs its fast kernel does not write (R10G10B10A2, a black image
-    # before). Posted as a test build, not in a release yet; only its DLL replaces
-    # the 3.2.1 Full DLL. Mirrored. Drop it when a HelixSR release carries the fix.
-    ("HLX-FSR-4-Full-fix187-test.zip", f"{payload_base}/HLX-FSR-4-Full-fix187-test.zip",
-     "71b3d69ff5ddb6a1a3590871b919ff236ada4276741ad7e0ed7785366bbd0e37", True),
+    ("HelixSR-3.3.0-Scaler-2.3.0-core.zip", f"{payload_base}/HelixSR-3.3.0-Scaler-2.3.0-core.zip",
+     "755036bd2909cce293d97a9c3ae9f9c13ecc88290be373e07d51e0e3c4fda29e", True),
     # FreeFG 1.3.0 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer; every variant ships it. Mirrored release
     # zip; its OptiScaler build is GPL-3.0, and the matching

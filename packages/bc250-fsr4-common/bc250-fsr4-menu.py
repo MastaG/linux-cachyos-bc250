@@ -13,13 +13,19 @@ Prints the choice as key=value lines on stdout. Exit 0 = a choice was made; any
 other exit = no choice, and the caller keeps the current one and starts the game.
 Exit 3 = the menu cannot appear (no display, or gi/GTK4/SDL3 missing).
 
-The state rules (owner's decisions, 2026-10-26): single choice among the presets,
-the variant the prefix is on pre-selected; the frame-generation row shows the
+The state rules (owner's decisions, 2026-10-26, upscalers 2026-11-08): single
+choice among the upscalers, the one the prefix's OptiScaler.ini has pre-selected
+(OptiScaler's overlay writes it on Save Settings, so a pick there shows here);
+picking one changes only that key; the frame-generation row shows the
 prefix's real current state and is written only when the player changes it;
 switching variant means starting fresh (the launcher removes the prefix's
 OptiScaler.ini, protonfixes re-copies it); "Save selection" skips the menu from
-then on; PROTON_OPTISCALER_MENU=1 shows it again and clears the save. No
-timeout: the menu waits for a choice. Never block a launch.
+then on; PROTON_OPTISCALER_MENU=1 shows it again and clears the save, and
+PROTON_OPTISCALER_MENU=0 skips it for that launch and keeps the prefix's
+choice. A new prefix starts on No upscaling (owner, 2026-11-10), unless the
+player's settings file says otherwise (the launcher reads it and passes
+BC250_MENU_DEFAULT, BC250_MENU_PREVIOUS and BC250_MENU_AUTO). No timeout: the
+menu waits for a choice. Never block a launch.
 """
 import configparser
 import ctypes
@@ -27,24 +33,36 @@ import json
 import os
 import sys
 
-# name, label, sub-label. The order is the order in the window. Since 2026-11-07
-# (owner) only FreeFG variants: the stock OptiScaler nightly variants and HelixSR
-# Scaler are gone; HLX DLSS Preset K and HLX FSR 4 Full came back the same day
-# by popular request.
-PRESETS = [
-    ("freefg-hlxfsr4", "FreeFG + HLX FSR 4", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX FSR 4 upscaler"),
-    ("freefg-hlxdlss", "FreeFG + HLX DLSS", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX DLSS (Model E) upscaler"),
-    ("freefg", "FreeFG + FSR4 RC12", "FreeFG 1.3.0 frame generation, FSR4 RC12 upscaler"),
-    ("freefg-hlxdlssk", "FreeFG + HLX DLSS Preset K", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX DLSS Preset K: sharper, slower, can sparkle on foliage"),
-    ("freefg-hlxfsr4full", "FreeFG + HLX FSR 4 Full", "FreeFG 1.3.0 frame generation, HelixSR 3.2.1's HLX FSR 4 Full: the full FSR 4.1.2 network, sharper, slower"),
-    (OFF := "off", "No upscaling", "The game as it ships: no OptiScaler, no FSR4"),
+# Since 2026-11-08 (owner) one payload carries every upscaler, and the menu
+# picks the upscaler: [Upscalers] Dx12Upscaler of the prefix's OptiScaler.ini,
+# the key OptiScaler's own overlay writes on Save Settings, so a pick made there
+# shows here on the next launch. value (as the ini has it), label, sub-label, in
+# window order. The two HLX DLSS networks share a row with a choice of model
+# (owner); the overlay lists them apart, as hlx-dlss and HLX DLSS Preset K.
+VARIANT = "freefg-all"
+HLX_DLSS_E, HLX_DLSS_K = "hlx-dlss", "HLX DLSS Preset K"
+UPSCALERS = [
+    ("ffx", "FreeFG + HLX FSR 4", "HelixSR 3.3.0's HLX FSR 4: AMD's FSR 4 network on HelixSR's pipeline"),
+    (HLX_DLSS_E, "FreeFG + HLX DLSS Model E", "HelixSR 3.3.0's HLX DLSS with NVIDIA's DLSS Model E network"),
+    (HLX_DLSS_K, "FreeFG + HLX DLSS Preset K", "HelixSR 3.3.0's HLX DLSS with NVIDIA's DLSS 4 Preset K network: sharper, slower, can sparkle on foliage"),
+    ("HLX FSR 4 Full", "FreeFG + HLX FSR 4 Full", "HelixSR 3.3.0's HLX FSR 4 Full: the full FSR 4.1.2 network, sharper, slower"),
+    ("FSR 4 RC12", "FreeFG + FSR 4 RC12", "The BC-250 FSR 4 fork's RC12 build, the one FreeFG ships"),
 ]
-# A choice saved by an older package that names a variant it no longer has:
-# what that name selects now (the same table as build-fsr4-payload.py's
-# RETIRED_VARIANTS, for the names a menu ever offered).
-RETIRED = {"freefg-helixsr": "freefg-hlxdlss", "helixsr-ffx": "freefg-hlxdlss",
-           "helixsr": "freefg-hlxdlss", "hlxdlssk": "freefg-hlxdlssk",
-           "hlxfsr4": "freefg-hlxfsr4", "fsr412f": "freefg"}
+LABELS = {value: label for value, label, _ in UPSCALERS}
+HLX_DLSS_ROW = ("FreeFG + HLX DLSS", "HelixSR 3.3.0's HLX DLSS: NVIDIA's DLSS networks as DirectX 12 compute shaders",
+                [(HLX_DLSS_E, "DLSS Model E"), (HLX_DLSS_K, "DLSS Preset K: sharper, slower, can sparkle on foliage")])
+OFF = "off"
+OFF_ROW = (OFF, "No upscaling", "The game as it ships: no OptiScaler, no FSR 4")
+OFF_DEFAULT_SUB = "The game as it ships: no OptiScaler, no FSR 4 (where a new game starts)"
+# Shown only when the ini has an upscaler the menu does not list (XeSS, or
+# another FidelityFX provider picked in the overlay): starting keeps it.
+KEEP = "keep"
+KEEP_LABEL = "Keep the overlay's choice (%s)"
+# Every older menu choice was a variant with one upscaler; each now means the
+# one payload (the launcher seeds its upscaler, see previous_upscaler there).
+RETIRED = {name: VARIANT for name in (
+    "freefg-hlxfsr4", "freefg-hlxdlss", "freefg", "freefg-hlxdlssk", "freefg-hlxfsr4full",
+    "freefg-helixsr", "helixsr-ffx", "helixsr", "hlxdlssk", "hlxfsr4", "fsr412f")}
 FG_LABEL = "Enable frame generation"
 # OptiScaler's [FrameGen] FGInput=dlssg: the game's own DLSS Frame Generation
 # feeds FreeFG's XeFG (its motion vectors and HUD-less image) instead of OptiFG.
@@ -65,27 +83,63 @@ FORCE_LABEL = "Force apply known settings for %s"
 APPLY = [("matching", "Apply matching only"), ("everything", "Apply everything")]
 HINT = "Launch your game with PROTON_OPTISCALER_MENU=1 %command% to show this menu again."
 
-# Which keys mean "frame generation on" for each build, verified from the build's
-# own OptiScaler.ini comments: [FrameGen] Enabled, with FGOutput=xefg as the
-# wiring each variant's preset brings.
-FREEFG_VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg", "freefg-hlxdlssk",
-                   "freefg-hlxfsr4full")
-FG_ON = {name: {"FrameGen.Enabled": "true"} for name in FREEFG_VARIANTS}
-FG_OFF = {name: {"FrameGen.Enabled": "false"} for name in FREEFG_VARIANTS}
+# Which keys mean "frame generation on", verified from the build's own
+# OptiScaler.ini comments: [FrameGen] Enabled, with FGOutput=xefg as the wiring
+# the variant's preset brings.
+FG_ON = {VARIANT: {"FrameGen.Enabled": "true"}}
+FG_OFF = {VARIANT: {"FrameGen.Enabled": "false"}}
 # Enabled alone does nothing in a build whose FGInput and FGOutput default (auto)
-# to nofg. Every variant now gets its wiring from its preset, so none needs this;
+# to nofg. The variant gets its wiring from its preset, so it needs none of this;
 # the table stays for a variant without wiring of its own.
 FG_WIRING = {}
 UNWIRED = ("auto", "nofg")
-# What a variant does with frame generation on a fresh prefix (its seed): every
-# variant starts with it off and writes FrameGen.Enabled=false into the fresh ini
+# What the variant does with frame generation on a fresh prefix (its seed): it
+# starts with it off and writes FrameGen.Enabled=false into the fresh ini
 # (owner's decision, 2026-10-30), so the box shows the prefix's own answer from
 # then on, the overlay's FG mode included.
-FRESH_ON = {**{name: False for name in FREEFG_VARIANTS}, OFF: False}
+FRESH_ON = {VARIANT: False, OFF: False}
 # Keys a build's own OptiScaler.ini does not define: protonfixes refuses the
 # launch, so the menu must not offer them (the fork ini has no [HelixSR] keys).
-DEFINABLE = {name: {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi"}
-             for name in FREEFG_VARIANTS}
+DEFINABLE = {VARIANT: {"framegen.enabled", "framegen.fginput", "framegen.fgoutput", "spoofing.dxgi",
+                       "upscalers.dx12upscaler", "fsr.upscalerindex"}}
+
+
+def upscaler_keys(upscaler):
+    """The ini keys that pick an upscaler (the launcher's function of that name)."""
+    keys = {"Upscalers.Dx12Upscaler": upscaler}
+    if upscaler.lower() == "ffx":
+        keys["FSR.UpscalerIndex"] = "0"
+    return keys
+
+
+def ini_raw(ini_sections, key):
+    """A "Section.Option" value from the prefix's ini as written; missing is auto."""
+    section, _, option = key.partition(".")
+    value = (ini_sections.get(section.lower(), {}) or {}).get(option.lower())
+    return str(value).strip() if value is not None else "auto"
+
+
+def upscaler_state(ini_sections, fresh, previous=""):
+    """The upscaler the launch runs with if nothing is picked, as a value of
+    UPSCALERS, or (KEEP, what the ini has) for one the menu does not list.
+
+    A fresh ini (fresh: the launch starts the prefix over) is seeded with the
+    previous variant's upscaler, else with the shared preset's ffx; an ini still
+    at auto gets that seed too. ffx is HLX FSR 4 only with UpscalerIndex 0, its
+    first provider; another index is AMD's own FSR beside it."""
+    if fresh:
+        return previous if previous in LABELS else "ffx"
+    raw = ini_raw(ini_sections, "Upscalers.Dx12Upscaler")
+    if raw.lower() == "auto" or not raw:
+        return previous if previous in LABELS else "ffx"
+    if raw.lower() == "ffx":
+        index = ini_raw(ini_sections, "FSR.UpscalerIndex").lower()
+        return "ffx" if index in ("auto", "0") else (KEEP, "ffx, provider " + index)
+    for value in LABELS:
+        if value.lower() == raw.lower():
+            return value
+    return (KEEP, raw)
+
 
 def store_path(prefix_path):
     """The per-prefix choice file. Under the prefix, not in the payload folder
@@ -173,13 +227,22 @@ def change(variant, was_on, is_on, can_write, ini_sections=None):
     return {k: v for k, v in wanted.items() if k.lower() in can_write}
 
 
+def menu_option(env):
+    """PROTON_OPTISCALER_MENU: "1" shows the menu (and clears a save), "0" skips
+    it for this launch, anything else leaves it to the save and the settings."""
+    value = env.get("PROTON_OPTISCALER_MENU", "").strip()
+    return value if value in ("0", "1") else ""
+
+
 def should_show(env, store, menu_enabled_default=True):
-    """The menu is on by default: it shows unless it was saved away, and a launch
-    option both shows it again and clears the save."""
+    """The menu is on by default: it shows unless it was saved away or the
+    player's settings turn it off (menu_enabled_default, BC250_MENU_AUTO=0). A
+    launch option shows it again and clears the save (=1), or skips it (=0)."""
     if env.get("PROTON_USE_OPTISCALER", "").strip() not in ("", "0"):
         return False
-    if env.get("PROTON_OPTISCALER_MENU", "") == "1":
-        return True
+    option = menu_option(env)
+    if option:
+        return option == "1"
     return bool(store.get("remember", 0)) is False and menu_enabled_default
 
 
@@ -271,7 +334,10 @@ def tag_steam_game(surface, env=os.environ):
     x11.XCloseDisplay(display)  # flushes
 
 
-def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known="", dlssg_states=None):
+def gui(window_rows, preselected, fg_states, spoof_states, saved_on, known="", dlssg_states=None):
+    """The window. window_rows as rows() makes them; preselected and the state
+    dicts are by row name, a choice's name for a row with choices. Returns the
+    picked name as result["preset"], or None when there is no window."""
     dlssg_states = dlssg_states or {}
     try:
         sdl = ctypes.CDLL("libSDL3.so.0")
@@ -311,7 +377,10 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known="", 
     t.add_css_class("title")
     box.append(t)
     radios, group = [], None
-    for name, label, sub in preset_names:
+    # Per row with choices (HLX DLSS): its own radio group, sensitive while the
+    # row is picked, and which choice is on says which name the row stands for.
+    choices = {}
+    for name, label, sub, options in window_rows:
         r = Gtk.CheckButton()
         lab = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         l1 = Gtk.Label(label=label, xalign=0)
@@ -324,9 +393,29 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known="", 
             r.set_group(group)
         else:
             group = r
-        r.set_active(name == preselected)
+        names = [c for c, _ in options] if options else [name]
+        r.set_active(preselected in names)
         radios.append((name, r))
         box.append(r)
+        if options:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+            row.set_margin_start(32)
+            buttons, first = [], None
+            for value, text in options:
+                c = Gtk.CheckButton(label=text)
+                if first:
+                    c.set_group(first)
+                else:
+                    first = c
+                c.set_active(value == preselected or (preselected not in names and value == names[0]))
+                buttons.append((value, c))
+                row.append(c)
+            box.append(row)
+            choices[name] = buttons
+
+    def chosen(name):
+        """The name a picked row stands for: its active choice, or itself."""
+        return next((v for v, c in choices.get(name, []) if c.get_active()), name)
     box.append(Gtk.Separator())
     spoof_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
     spoof_row.append(Gtk.Label(label=SPOOF_LABEL + ":", xalign=0))
@@ -356,23 +445,29 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known="", 
     dlssg.connect("toggled", dlssg_toggled)
 
     def picked(button, name):
-        # Ticked when frame generation is on. The prefix's own variant shows its
-        # real state (its ini, the overlay's FG mode and Save Settings included);
-        # another one starts fresh, with it off. No upscaling has nothing to switch.
+        # Ticked when frame generation is on. The payload shows its real state
+        # (its ini, the overlay's FG mode and Save Settings included), the same
+        # for every upscaler; No upscaling has nothing to switch.
+        for row_name, buttons in choices.items():
+            for _, c in buttons:
+                c.set_sensitive(dict(radios)[row_name].get_active())
         if button.get_active():
+            name = chosen(name)
+            on = name != OFF
             for value, s in spoofs:
                 s.set_active(value == spoof_states.get(name, "auto"))
-                s.set_sensitive(name in FG_ON)
+                s.set_sensitive(on)
             loading[0] = True
             dlssg.set_active(dlssg_states.get(name, False))
             loading[0] = False
-            dlssg.set_sensitive(name in FG_ON)
+            dlssg.set_sensitive(on)
             fg.set_active(fg_states.get(name, False))
-            fg.set_sensitive(name in FG_ON)
+            fg.set_sensitive(on)
 
     for name, r in radios:
         r.connect("toggled", picked, name)
-        if name == preselected:
+    for name, r in radios:
+        if r.get_active():
             picked(r, name)
     box.append(fg)
     box.append(dlssg)
@@ -411,7 +506,7 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known="", 
     def finish(*_):
         for name, r in radios:
             if r.get_active():
-                result["preset"] = name
+                result["preset"] = chosen(name)
         result["enable_framegen"] = int(fg.get_active())
         result["dlssg"] = int(dlssg.get_active())
         result["spoof"] = next((value for value, s in spoofs if s.get_active()), "auto")
@@ -424,12 +519,16 @@ def gui(preset_names, preselected, fg_states, spoof_states, saved_on, known="", 
     win.connect("close-request", lambda *_: (loop.quit(), False)[1])
 
     # Own focus order for the pad: GTK's directional focus keeps a radio group's
-    # focus inside the group, so the pad could not leave the four presets.
+    # focus inside the group, so the pad could not leave the upscaler rows.
     def move(d):
         extra = [force] if force is not None else []
         if force is not None and force.get_active():
             extra += [a for _, a in applies]
-        order = [r for _, r in radios] + [s for _, s in spoofs] + [fg, dlssg, *extra, keep, start]
+        order = []
+        for name, r in radios:
+            order.append(r)
+            order += [c for _, c in choices.get(name, [])]
+        order += [s for _, s in spoofs] + [fg, dlssg, *extra, keep, start]
         cur = win.get_focus()
         while cur is not None and cur not in order:
             cur = cur.get_parent()
@@ -508,11 +607,13 @@ def state(prefix, env=os.environ):
     """The prefix's current variant and its real frame-generation state."""
     path = store_path(prefix)
     store = read_store(path)
-    known = {name for name, _, _ in PRESETS}
+    known = {VARIANT, OFF}
     saved = RETIRED.get(store.get("variant"), store.get("variant"))
     saved = saved if saved in known else None
     installed = env.get("BC250_MENU_INSTALLED", "")
-    default = env.get("BC250_MENU_DEFAULT", "") or "freefg-hlxfsr4"
+    # What a new prefix starts on: No upscaling, or the settings file's default.
+    default = env.get("BC250_MENU_DEFAULT", "").strip() or OFF
+    default = default if default in known else OFF
     # A saved choice is the player's word; otherwise what the prefix holds now
     # (the launcher reads it off the payload on disk), then the last pick, then
     # the package default for a fresh prefix. No upscaling leaves the last
@@ -533,24 +634,30 @@ def decide(prefix, env):
     """Should the menu appear for this launch? (owner's rules, no code in the
     launcher about menu state)."""
     store, current, fg_on, _ = state(prefix, env)
-    if env.get("PROTON_USE_OPTISCALER", "").strip() not in ("", "0"):
-        return False, current, fg_on, int(store.get("remember", 0))
-    if env.get("PROTON_OPTISCALER_MENU", "") == "1":
-        # Shows again, and clears the save on the way out.
-        return True, current, fg_on, int(store.get("remember", 0))
-    return not int(store.get("remember", 0)), current, fg_on, int(store.get("remember", 0))
+    saved = int(store.get("remember", 0))
+    # =1 shows again and clears the save on the way out; =0 starts the game on
+    # current, the prefix's choice, without asking.
+    auto = env.get("BC250_MENU_AUTO", "").strip() != "0"
+    return should_show(env, store, auto), current, fg_on, saved
 
 
 def answer(result, current, base, fg_states, spoof_states=None, ini_sections=None,
-           dlssg_states=None):
+           dlssg_states=None, upscaler="ffx"):
     """What the launcher gets back for the player's pick.
+
+    result["preset"] is the picked row: an upscaler of UPSCALERS, KEEP or OFF.
+    The launcher gets the variant (the payload, or OFF) as "preset" and the
+    upscaler as Upscalers.Dx12Upscaler among the changed keys, only when it
+    differs from upscaler, what the launch would run with anyway.
 
     base is the variant the prefix's files and ini belong to: the current one, or
     under No upscaling the one installed before it, so that going back to it is
     not a switch and keeps the player's settings. ini_sections is the prefix's
-    ini, which belongs to base.
+    ini, which belongs to base. fg_states, spoof_states and dlssg_states are by
+    variant.
     """
-    new = result["preset"]
+    row = result["preset"]
+    new = OFF if row == OFF else VARIANT
     is_on = bool(int(result["enable_framegen"]))
     switched = new != OFF and new != base
     # A switch starts fresh (the launcher removes the prefix's ini and
@@ -559,12 +666,14 @@ def answer(result, current, base, fg_states, spoof_states=None, ini_sections=Non
     changed = {} if new == OFF else change(new, fg_states.get(new, False), is_on,
                                            DEFINABLE.get(new, set()),
                                            ini_sections if new == base else {})
+    if new != OFF and row in LABELS and row != upscaler:
+        changed.update(upscaler_keys(row))
     explicit = []  # keys the player set by hand, which beat a game preset's
     spoof = result.get("spoof", "auto")
     if new != OFF and spoof != (spoof_states or {}).get(new, "auto"):
         changed["Spoofing.Dxgi"] = spoof
     # The input, like the other boxes, only when the player changed it; unticked
-    # it goes back to OptiFG, the variants' own input.
+    # it goes back to OptiFG, the variant's own input.
     use_dlssg = bool(int(result.get("dlssg", 0)))
     if (new != OFF and use_dlssg != bool((dlssg_states or {}).get(new, False))
             and "framegen.fginput" in DEFINABLE.get(new, set())):
@@ -580,6 +689,20 @@ def answer(result, current, base, fg_states, spoof_states=None, ini_sections=Non
         # No upscaling has no OptiScaler.ini to apply settings to.
         "apply_preset": "" if new == OFF else result.get("apply_preset", ""),
     }
+
+
+def rows(upscaler, off_default=True):
+    """The window's rows: (name, label, sub-label, choices). A row with choices
+    (HLX DLSS) is picked by its choices' names; the others by their own.
+    off_default: a new prefix starts on No upscaling, and its row says so."""
+    by_value = {value: (value, label, sub, None) for value, label, sub in UPSCALERS}
+    off = (OFF, OFF_ROW[1], OFF_DEFAULT_SUB if off_default else OFF_ROW[2], None)
+    out = [off, by_value["ffx"], (HLX_DLSS_E,) + HLX_DLSS_ROW, by_value["HLX FSR 4 Full"],
+           by_value["FSR 4 RC12"]]
+    if isinstance(upscaler, tuple):
+        out.append((KEEP, KEEP_LABEL % upscaler[1],
+                    "Picked in OptiScaler's overlay; the other rows replace it", None))
+    return out
 
 
 def main():
@@ -612,17 +735,34 @@ def main():
         if base == installed:
             spoof_states[base] = spoof_state(sections)
             dlssg_states[base] = dlssg_state(sections)
-    result = gui(PRESETS, current, fg_states, spoof_states, saved,
-                 os.environ.get("BC250_MENU_GAME_PRESET", "").strip(), dlssg_states)
+    # The upscaler the payload runs with: what its ini has, or the seed of a
+    # fresh one (an older package's prefix starts over).
+    upscaler = upscaler_state(sections, installed != VARIANT,
+                              os.environ.get("BC250_MENU_PREVIOUS", "").strip())
+    if current == OFF:
+        preselected = OFF
+    else:
+        preselected = KEEP if isinstance(upscaler, tuple) else upscaler
+    window_rows = rows(upscaler, (os.environ.get("BC250_MENU_DEFAULT", "").strip() or OFF) == OFF)
+    # The window shows the boxes by row; every row but No upscaling is the payload.
+    names = [n for r in window_rows for n in ([c for c, _ in r[3]] if r[3] else [r[0]])]
+
+    def per_row(states):
+        return {n: states[v] for n in names
+                for v in [OFF if n == OFF else VARIANT] if v in states}
+
+    result = gui(window_rows, preselected, per_row(fg_states), per_row(spoof_states), saved,
+                 os.environ.get("BC250_MENU_GAME_PRESET", "").strip(), per_row(dlssg_states))
     if result is None:
         # No window: keep the current choice and let the game start.
         return 3
+    new = OFF if result["preset"] == OFF else VARIANT
     path = store_path(prefix)
     if path:
         with open(path, "w") as stream:
-            json.dump({"variant": result["preset"], "remember": int(result.get("remember", 0))}, stream)
+            json.dump({"variant": new, "remember": int(result.get("remember", 0))}, stream)
     for key, value in answer(result, current, base, fg_states, spoof_states, sections,
-                             dlssg_states).items():
+                             dlssg_states, upscaler).items():
         print("%s=%s" % (key, value))
     if path:
         print("store=%s" % path)

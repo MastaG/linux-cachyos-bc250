@@ -678,9 +678,29 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   pick it per game under Properties -> Compatibility, or as the global default.
 - Needs the \`vulkan-radeon\` package from this repository: the FSR4 support the
   provider calls into lives in our patched RADV, not in stock Mesa.
-- FSR4 and OptiScaler are on by default. They remain launch options, so
-  \`PROTON_FSR4_UPGRADE=0 %command%\` turns FSR4 off for one game, and
+- A game you have not set up yet starts with **No upscaling**; the menu at its launch turns FSR4 and
+  OptiScaler on. \`PROTON_FSR4_UPGRADE=0 %command%\` turns them off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- **New: No upscaling is where a new game starts, and the menu can stay away.**
+  \`PROTON_OPTISCALER_MENU=0 %command%\` now skips the menu for that game and starts it with its
+  current choice (it used to do nothing). For every game, \`~/.config/bc250-fsr4/settings\` takes
+  \`menu = 0\` (no menu unless a game asks with \`PROTON_OPTISCALER_MENU=1\`) and
+  \`default = <name>\` (what a new game starts with: \`off\`, or an upscaler such as
+  \`freefg-hlxfsr4\`). Games you already play keep their choice. The menu lists No upscaling first,
+  then FreeFG + HLX FSR 4, FreeFG + HLX DLSS (DLSS Model E or DLSS Preset K), FreeFG + HLX FSR 4 Full
+  and FreeFG + FSR 4 RC12.
+- **New: HelixSR [3.3.0](https://github.com/lonewolf0622/HelixSR/releases/tag/v3.3.0)** with HelixSR
+  Scaler 2.3.0. HLX FSR 4 Full's network kernels are about 2.5% faster on a BC-250 and a game with a
+  10-bit (R10G10B10A2) output no longer gets a black image; Preset K writes crash diagnostics to its
+  log.
+- **New: every upscaler in one package, picked in the OptiScaler overlay.** HLX FSR 4, HLX DLSS
+  (DLSS Model E and DLSS Preset K), FSR 4 RC12 and HLX FSR 4 Full are all in every game now: pick one
+  in the overlay (Insert, the Upscalers list, *Save Settings*) and the menu shows that one at the
+  next launch. Picking another upscaler in the menu changes only that, so your other OptiScaler
+  settings stay. The menu has one HLX DLSS row with a DLSS Model E / DLSS Preset K choice; the
+  overlay lists Model E as \`hlx-dlss\` and Preset K as \`HLX DLSS Preset K\`. A game moves over on its
+  next launch with the upscaler it had; its \`OptiScaler.ini\` starts fresh that one time. Launch
+  options such as \`PROTON_USE_OPTISCALER=freefg-hlxdlss\` still pick their upscaler every launch.
 - **Back by popular request: FreeFG + HLX DLSS Preset K and FreeFG + HLX FSR 4 Full.** Both in the
   menu again. HLX FSR 4 Full is now installed the way HelixSR's own setup does it, as an OptiScaler
   custom upscaler next to HLX FSR 4 (the earlier package put it in HLX FSR 4's place, and one game
@@ -688,8 +708,7 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   than Model E but can sparkle on foliage; turn the Steam overlay off for a game that freezes at
   startup with it. AMD's FSR fallback beside HLX FSR 4 is FSR 4.1.2 again, as HelixSR ships it.
 - **Fixed: FreeFG + HLX FSR 4 Full no longer shows a black image** in games with a 10-bit output, such
-  as Ghost of Tsushima. The package ships the fixed Full DLL from HelixSR's author until a HelixSR
-  release has it.
+  as Ghost of Tsushima (HelixSR 3.3.0 has the fix).
 - **Fixed: the first launch after an update keeps the chosen upscaler.** When an update changed the
   files of the variant a game uses, that first launch quietly ran on OptiScaler's default (FreeFG +
   HLX FSR 4 Full started as plain HLX FSR 4) and only the next launch was right.

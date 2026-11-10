@@ -175,17 +175,65 @@ def anticheat_ignored(inherited):
     """
     if inherited.get("BC250_FSR4_IGNORE_ANTICHEAT", "").strip() == "1":
         return "BC250_FSR4_IGNORE_ANTICHEAT=1"
-    config = inherited.get("XDG_CONFIG_HOME", "").strip()
-    if not config and inherited.get("HOME", "").strip():
-        config = str(Path(inherited["HOME"]) / ".config")
-    if config:
-        switch = Path(config) / "bc250-fsr4" / "ignore-anticheat"
+    folder = config_dir(inherited)
+    if folder:
+        switch = folder / "ignore-anticheat"
         try:
             if switch.exists():
                 return str(switch)
         except OSError:
             pass
     return None
+
+
+def config_dir(inherited):
+    """~/.config/bc250-fsr4 (XDG_CONFIG_HOME honoured), or None without a home."""
+    config = inherited.get("XDG_CONFIG_HOME", "").strip()
+    if not config and inherited.get("HOME", "").strip():
+        config = str(Path(inherited["HOME"]) / ".config")
+    return Path(config) / "bc250-fsr4" if config else None
+
+
+# The player's settings for every game (owner, 2026-11-10), because Steam has no
+# global launch option: ~/.config/bc250-fsr4/settings, "key = value" lines.
+#   menu = 1 | 0      0: the menu never shows by itself (PROTON_OPTISCALER_MENU=1
+#                     still shows it for one game)
+#   default = off | freefg-all | freefg-hlxfsr4 | freefg-hlxdlss | freefg-hlxdlssk
+#             | freefg-hlxfsr4full | freefg
+#                     what a new prefix starts on: No upscaling (the default), the
+#                     payload with the overlay's pick, or the payload with that upscaler
+SETTINGS_FILE = "settings"
+SETTINGS_DEFAULTS = {"menu": "1", "default": "off"}
+
+
+def read_settings(config, inherited):
+    """The settings file, checked; a bad line is reported and left at its default.
+    Never fails a launch."""
+    settings = dict(SETTINGS_DEFAULTS)
+    folder = config_dir(inherited)
+    try:
+        text = (folder / SETTINGS_FILE).read_text() if folder else ""
+    except (OSError, UnicodeDecodeError):
+        return settings
+    defaults = {"off", *config.get("optiscaler_upscalers", {}), *MENU_VARIANTS}
+    allowed = {"menu": {"0", "1"}, "default": defaults}
+    for number, line in enumerate(text.splitlines(), 1):
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        key, sep, value = (part.strip() for part in line.partition("="))
+        key = key.lower()
+        if not sep or key not in allowed or value not in allowed[key]:
+            sys.stderr.write("bc250-fsr4: " + str(folder / SETTINGS_FILE) + " line "
+                             + str(number) + " ignored: " + line + "\n")
+            continue
+        settings[key] = value
+    return settings
+
+
+def default_upscaler(config, settings):
+    """The upscaler the settings' default picks, or None (off, or the overlay's)."""
+    return config.get("optiscaler_upscalers", {}).get(settings["default"])
 
 
 def defaulted(env, name, value):
@@ -328,9 +376,13 @@ RETIRED_FOLDERS = ("HelixSR-fsrfg", "HelixSR")
 # so a prefix that has them is treated as a variant switch and starts fresh.
 # Since 2026-11-07 also hlx_fsr4.ini beside the FidelityFX slot, where the first
 # freefg-hlxfsr4full had HLX FSR 4 Full (it is a custom upscaler now). Preset K's
-# kernels and weights beside HLX DLSS are freefg-hlxdlssk's own files again.
+# kernels and weights beside HLX DLSS were freefg-hlxdlssk's own files; since
+# 2026-11-08 Preset K has a custom folder of its own in the one payload, and the
+# two files in hlx-dlss/ (where Model E's DLL replaces K's) belong to nothing.
 RETIRED_FILES = ("OptiScaler/amd_fidelityfx_dx12.dll", "OptiScaler/helixsr.ini",
-                 "OptiScaler/hlx_fsr4.ini")
+                 "OptiScaler/hlx_fsr4.ini",
+                 "OptiScaler/custom/hlx-dlss/dlss/helixsr_modelk_kernels.pak",
+                 "OptiScaler/custom/hlx-dlss/dlss/helixsr_modelk_weights.bin")
 
 
 def clean_other_variants(config, env, inherited):
@@ -537,6 +589,7 @@ def environment(config, inherited, *, game, menu=None, known=None):
     # Otherwise OptiScaler can still discover a provider retained in a prefix.
     defaulted(env, "PROTON_USE_OPTISCALER",
               "0" if env["PROTON_FSR4_UPGRADE"] == "0" else config["optiscaler_version"])
+    named_upscaler = config.get("optiscaler_upscalers", {}).get(env["PROTON_USE_OPTISCALER"].strip())
     env["PROTON_USE_OPTISCALER"] = optiscaler_version(config, env["PROTON_USE_OPTISCALER"])
 
     # Not shipped, and explicitly off rather than merely absent: leaving it to
@@ -563,6 +616,11 @@ def environment(config, inherited, *, game, menu=None, known=None):
     preset.update(config.get("optiscaler_variant_preset", {}).get(env["PROTON_USE_OPTISCALER"], {}))
     preset.update(seed_once(config.get("optiscaler_variant_seed", {}).get(env["PROTON_USE_OPTISCALER"], {}),
                             inherited))
+    if named_upscaler and env["PROTON_USE_OPTISCALER"] != "0":
+        # A launch option naming one of the old one-upscaler variants
+        # (PROTON_USE_OPTISCALER=freefg-hlxdlss) picks that upscaler of the one
+        # payload, every launch, as the variant did.
+        preset.update(upscaler_keys(named_upscaler))
     if known:
         # The game's known working settings (apply_game_preset): on a fresh ini
         # or when the player forces them, over the seeds, under the menu.
@@ -628,9 +686,48 @@ def installed_variant(config, inherited):
     return version if version in variant_files(config) else None
 
 
-# The variants the menu offers, by the short names PROTON_USE_OPTISCALER takes.
-MENU_VARIANTS = ("freefg-hlxfsr4", "freefg-hlxdlss", "freefg", "freefg-hlxdlssk",
-                 "freefg-hlxfsr4full")
+# The variants the menu offers, by the short names PROTON_USE_OPTISCALER takes:
+# since 2026-11-08 one payload with every upscaler, picked in the ini.
+MENU_VARIANTS = ("freefg-all",)
+
+
+def upscaler_keys(upscaler):
+    """The ini keys that pick an upscaler of the payload: a custom folder's name,
+    or ffx for the FidelityFX slot, whose first provider is HLX FSR 4."""
+    keys = {"Upscalers.Dx12Upscaler": upscaler}
+    if upscaler.lower() == "ffx":
+        keys["FSR.UpscalerIndex"] = "0"
+    return keys
+
+
+def previous_upscaler(config, inherited):
+    """The upscaler of the old one-upscaler variant this prefix was last launched
+    with, or None.
+
+    Until 2026-11-08 each upscaler was a payload of its own, its version the
+    package's OptiScaler version plus "-<variant>". Moving to the one payload
+    starts the prefix fresh (the variant's files change), and without this its
+    ini would be seeded with HLX FSR 4 whatever the player had picked. Read from
+    protonfixes' record before the launch replaces it.
+    """
+    data = compat_data(inherited)
+    upscalers = config.get("optiscaler_upscalers", {})
+    if not data or not upscalers:
+        return None
+    try:
+        tracked = json.loads((data / "upscaler_files").read_text())["opti_files"]
+        versions = [str(item.get("version", "")) for item in tracked.values()]
+    except (OSError, ValueError, KeyError, AttributeError, TypeError):
+        return None
+    if not versions:
+        return None
+    version = max(set(versions), key=versions.count)
+    if version in variant_files(config):
+        return None
+    for name in sorted(upscalers, key=len, reverse=True):
+        if version.endswith("-" + name):
+            return upscalers[name]
+    return None
 
 
 def menu_names(config):
@@ -659,7 +756,8 @@ def launch_client(inherited):
 MENU_ENV = ("STEAM_COMPAT_DATA_PATH", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
             "XDG_RUNTIME_DIR", "SteamAppId", "SteamGameId", "STEAM_GAME",
             "PROTON_OPTISCALER_MENU", "PROTON_USE_OPTISCALER", "BC250_MENU_INSTALLED",
-            "BC250_MENU_DEFAULT", "BC250_MENU_GAME_PRESET")
+            "BC250_MENU_DEFAULT", "BC250_MENU_GAME_PRESET", "BC250_MENU_PREVIOUS",
+            "BC250_MENU_AUTO")
 
 
 class PlayerChange(dict):
@@ -667,7 +765,24 @@ class PlayerChange(dict):
     explicit = frozenset()
 
 
-def menu_choice(config, inherited):
+def new_prefix(inherited):
+    """True for a prefix this package has never set up: no menu choice and no
+    payload record (protonfixes' upscaler_files). It starts on the settings'
+    default, No upscaling unless the player changed it (owner, 2026-11-10). A
+    prefix of an older package has a record and keeps its upscaler."""
+    data = compat_data(inherited)
+    if not data:
+        return False
+    try:
+        if (data / "bc250-fsr4-menu.json").exists():
+            return False
+        tracked = json.loads((data / "upscaler_files").read_text()).get("opti_files")
+    except (OSError, ValueError, AttributeError):
+        return True
+    return not tracked
+
+
+def menu_choice(config, inherited, settings=None, fresh=False):
     """Ask the first-launch menu which variant to run and what to change.
 
     Returns (variant, change, switched, force). force is "matching" or
@@ -686,10 +801,19 @@ def menu_choice(config, inherited):
         return None, {}, False, None
     if anticheat_reason(inherited) and not anticheat_ignored(inherited):
         return None, {}, False, None
+    settings = settings or dict(SETTINGS_DEFAULTS)
     names = menu_names(config)
     env = dict(inherited)
     env["BC250_MENU_INSTALLED"] = names.get(installed_variant(config, inherited), "")
-    env["BC250_MENU_DEFAULT"] = names.get(config["optiscaler_version"], "")
+    # What a new prefix starts on: No upscaling, or the payload (settings).
+    env["BC250_MENU_DEFAULT"] = ("off" if settings["default"] == "off"
+                                 else names.get(config["optiscaler_version"], ""))
+    env["BC250_MENU_AUTO"] = settings["menu"]
+    # The upscaler a prefix leaving an old one-upscaler variant is seeded with,
+    # so the menu shows that one picked rather than the payload's default; for a
+    # new prefix the settings' default upscaler.
+    env["BC250_MENU_PREVIOUS"] = (previous_upscaler(config, inherited)
+                                  or (default_upscaler(config, settings) if fresh else None) or "")
     # The SLR and GE packages run this inside Steam Linux Runtime 4
     # ("require_tool_appid" 4183110), which has no python-gobject and no GTK4.
     # Steam's own launcher service runs the menu beside the Steam client instead,
@@ -1142,7 +1266,16 @@ def main():
     os.environ.pop("BC250_MENU_GAME_PRESET", None)
     if found is not None:
         os.environ["BC250_MENU_GAME_PRESET"] = describe_game(found)
-    variant, change, menu_switched, force = menu_choice(config, os.environ) if game else (None, {}, False, None)
+    settings = read_settings(config, os.environ) if game else dict(SETTINGS_DEFAULTS)
+    fresh = game and new_prefix(os.environ)
+    variant, change, menu_switched, force = (menu_choice(config, os.environ, settings, fresh)
+                                             if game else (None, {}, False, None))
+    chosen = any(os.environ.get(name, "").strip()
+                 for name in ("PROTON_USE_OPTISCALER", "PROTON_FSR4_UPGRADE"))
+    if variant is None and fresh and not chosen and settings["default"] == "off":
+        # No menu answer (it could not be asked) for a new prefix: its default,
+        # as the menu would have started it.
+        variant = "off"
     if variant == "off":
         # The menu's "No upscaling" is the documented opt-out: no FSR4 provider,
         # and so no OptiScaler either (see environment()).
@@ -1151,7 +1284,20 @@ def main():
     elif variant:
         os.environ["PROTON_USE_OPTISCALER"] = variant
     if game:
-        start_fresh_on_switch(config, os.environ, menu_switched)
+        previous = previous_upscaler(config, os.environ)
+        if not start_fresh_on_switch(config, os.environ, menu_switched):
+            previous = None
+        if fresh and not chosen and variant != "off":
+            # A new prefix on the settings' default upscaler, unless the menu
+            # picked another.
+            previous = default_upscaler(config, settings)
+        if previous and not any(k.lower() == "upscalers.dx12upscaler" for k in change):
+            # The prefix leaves an old one-upscaler variant (or is new): that
+            # upscaler is the player's answer, seeded into the fresh ini under
+            # the menu's pick.
+            explicit = getattr(change, "explicit", frozenset())
+            change = PlayerChange({**upscaler_keys(previous), **change})
+            change.explicit = explicit
     env = environment(config, os.environ, game=game, menu=change)
     arguments = sys.argv[1:]
     if found is not None:

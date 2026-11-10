@@ -703,8 +703,11 @@ Delete that file to turn the guard back on. The launcher says in Steam's log
 when it skipped the guard and why. Besides bans, anti-cheat may simply refuse
 to start a game with OptiScaler loaded, so it will not work in every title.
 
-**That is the whole setup.** FSR4 and OptiScaler are on by default — no launch
-options, no DLLs to copy into game folders, no environment variables.
+**That is the whole setup.** No launch options, no DLLs to copy into game
+folders, no environment variables. A game you have not set up yet starts with
+**No upscaling**: the [upscaler menu](#the-upscaler-menu) at its launch lets you
+pick one, and the [settings file](#settings-for-every-game) can change that
+default or keep the menu away for every game.
 
 **fakenvapi** is bundled and always active — there is no variable to enable it.
 It stands in for `nvapi64.dll` so OptiScaler can reach AntiLag 2, Vulkan
@@ -726,9 +729,10 @@ Per game, if you want them:
 ```text
 BC250_FSR4_DEBUG=1 %command%              # FSR4 watermark + OptiScaler log + PROTON_LOG
 PROTON_FSR4_UPGRADE=0 %command%           # turn the packaged FSR4 upgrade off
-PROTON_USE_OPTISCALER=freefg-hlxdlss %command%  # pick one of the upscalers by name
-                                          # (see below); skips the menu
+PROTON_USE_OPTISCALER=freefg-hlxdlss %command%  # force one of the upscalers by name
+                                          # every launch (see below); skips the menu
 PROTON_OPTISCALER_MENU=1 %command%        # show the upscaler menu again after "Save selection"
+PROTON_OPTISCALER_MENU=0 %command%        # skip the menu, start with this game's current choice
 BC250_OPTISCALER_EXTRA="A.B=c;D.E=f"      # override individual OptiScaler settings
 PROTON_OPTISCALER_NAME=dxgi.dll %command% # load OptiScaler as dxgi instead of winmm
 BC250_GAME_PRESET=0 %command%             # no known per-game settings (see Game presets)
@@ -737,28 +741,31 @@ BC250_GAME_PRESET=everything %command%    # apply all of this game's known setti
 
 ### The upscaler menu
 
-Every game launch first shows a small menu: the upscaler (FreeFG + HLX FSR 4,
-the default; FreeFG + HLX DLSS; FreeFG + FSR4 RC12; FreeFG + HLX DLSS Preset K;
-FreeFG + HLX FSR 4 Full; No upscaling), **GPU
-spoofing**, **Enable frame generation**, **Use the game's DLSS frame
-generation**, and **Save selection for next time**.
+Every game launch first shows a small menu: the upscaler (**No upscaling**, where
+a new game starts; **FreeFG + HLX FSR 4**; **FreeFG + HLX DLSS** with a choice of
+**DLSS Model E** or **DLSS Preset K**; **FreeFG + HLX FSR 4 Full**; **FreeFG +
+FSR 4 RC12**), **GPU spoofing**, **Enable frame generation**, **Use the game's
+DLSS frame generation**, and **Save selection for next time**.
 It works with a controller (Steam Controller, PS5 pad; D-pad or stick to move, A
 to select, Start to start the game), with mouse and keyboard, in Gaming Mode and
 on the desktop, and it waits until you choose.
 
-- The variant the game is on now is pre-selected, and the frame generation box
-  shows what the game really does now — including what you saved in the
-  OptiScaler overlay. Pressing Start without touching it changes nothing.
-- Every upscaler starts with frame generation **off**: a new game, or one
-  switched to another upscaler, gets `FrameGen.Enabled=false` written into its
-  `OptiScaler.ini`. Tick **Enable frame generation** to turn it on, or turn it on
+- The upscaler the game is on now is pre-selected, read from the game's
+  `OptiScaler.ini`: pick another one in the OptiScaler overlay (Insert, the
+  Upscalers list, *Save Settings*) and the menu shows that one at the next
+  launch. The frame generation box likewise shows what the game really does
+  now. Pressing Start without touching anything changes nothing. An upscaler
+  the menu does not list (XeSS, say, picked in the overlay) gets a row of its
+  own, **Keep the overlay's choice**.
+- Frame generation starts **off**: a new game gets `FrameGen.Enabled=false`
+  written into its `OptiScaler.ini`. Tick **Enable frame generation** to turn it on, or turn it on
   in the OptiScaler overlay (Insert, Frame Gen mode, *Save Settings*); either way
   the box is ticked at the next launch, because it reads the game's own ini.
   The generator is already wired, so nothing else needs picking: FreeFG's XeFG,
   unless you picked something else in the overlay.
-- Choosing another upscaler starts that one fresh: its files and a new
-  `OptiScaler.ini` replace the old ones, so settings saved in the overlay for the
-  previous upscaler are gone.
+- Choosing another upscaler changes only that (`[Upscalers] Dx12Upscaler`):
+  every upscaler is in the game's files already, so your other OptiScaler
+  settings stay.
 - **Use the game's DLSS frame generation** takes the game's own DLSS Frame
   Generation as the input for FreeFG's frame generation
   (`FrameGen.FGInput=dlssg`) instead of OptiFG: its motion vectors and its image
@@ -772,19 +779,50 @@ on the desktop, and it waits until you choose.
   for this game. Like the frame generation box, it shows the prefix's current
   value and is written only when you change it.
 - **No upscaling** runs the game as it ships, the same as
-  `PROTON_FSR4_UPGRADE=0`: no FSR4 and no OptiScaler. It leaves the previous
-  upscaler's files and settings alone, so going back to that one later is not a
-  switch.
+  `PROTON_FSR4_UPGRADE=0`: no FSR4 and no OptiScaler. It leaves the game's
+  OptiScaler files and settings alone for when you come back.
 - **Save selection** skips the menu from then on. `PROTON_OPTISCALER_MENU=1
-  %command%` shows it again; a launch option that names a variant
+  %command%` shows it again. `PROTON_OPTISCALER_MENU=0 %command%` skips it
+  without saving anything: the game starts with its current choice (the last one
+  picked in the menu or the overlay). A launch option that names an upscaler
   (`PROTON_USE_OPTISCALER=...`) skips it too. Anti-cheat games never see it,
   unless the anti-cheat guard is switched off (`BC250_FSR4_IGNORE_ANTICHEAT=1`
   or `~/.config/bc250-fsr4/ignore-anticheat`).
 - No display, or `python-gobject`, `gtk4` or `sdl3` missing: no menu, and the
-  game starts with its current choice.
+  game starts with its current choice (a new game: No upscaling, or the
+  settings file's default).
 - **Force apply known settings** appears only for a game the preset database
   knows (next section). Ticked, it applies them again over what the prefix has
   now: **Apply matching only** (the default) or **Apply everything**.
+
+### Settings for every game
+
+Steam has no launch option for all games, so the menu reads
+`~/.config/bc250-fsr4/settings` (`key = value` lines, `#` starts a comment):
+
+```ini
+# Never show the menu by itself (PROTON_OPTISCALER_MENU=1 still shows it for one game).
+menu = 0
+# What a game you have not set up yet starts with:
+#   off                  No upscaling (the default)
+#   freefg-hlxfsr4       FreeFG + HLX FSR 4
+#   freefg-hlxdlss       FreeFG + HLX DLSS, DLSS Model E
+#   freefg-hlxdlssk      FreeFG + HLX DLSS, DLSS Preset K
+#   freefg-hlxfsr4full   FreeFG + HLX FSR 4 Full
+#   freefg               FreeFG + FSR 4 RC12
+default = freefg-hlxfsr4
+```
+
+```bash
+mkdir -p ~/.config/bc250-fsr4 && printf 'menu = 0\n' > ~/.config/bc250-fsr4/settings
+```
+
+`default` only decides how a new game starts (no menu choice and no OptiScaler
+files in its prefix yet); a game you have played keeps its own choice. With
+`menu = 0` and the default `off`, these packages behave like their upstream
+Proton until you turn OptiScaler on for a game (`PROTON_OPTISCALER_MENU=1` once,
+or `PROTON_USE_OPTISCALER=...`). A line the launcher does not understand is
+skipped and named in Steam's log.
 
 ### Game presets
 
@@ -910,7 +948,7 @@ only those: change one in the overlay, save, and it sticks from then on. A
 package update that ships a new OptiScaler build resets the file and seeds it
 again, and a launch option still beats both. A variant's own library paths and
 the debug keys are what stays enforced on every launch — those are the things
-*Save Settings* cannot win, because a variant switch reuses the prefix's ini.
+*Save Settings* cannot win.
 
 Two follow-ups, both seen on a BC-250 in The Last of Us Part II:
 
@@ -941,80 +979,85 @@ change sticks:
 
 ### The upscalers
 
-Every variant is [FreeFG](#freefg-xess-frame-generation-for-the-bc-250-the-default)
+One payload carries five upscalers, all on [FreeFG](#freefg-xess-frame-generation-for-the-bc-250-the-default)
 (its OptiScaler build with Intel's XeSS frame generation, sped up for the BC-250,
-off until you turn it on) with one of five upscalers. Pick one in the menu, or
-per game with `PROTON_USE_OPTISCALER`:
+off until you turn it on). Pick one in the menu, or in the OptiScaler overlay
+(Insert, the Upscalers list for DirectX 12, then *Save Settings*); the overlay
+lists them as below, and the menu shows the overlay's pick at the next launch.
 
-```text
-                                                # (unset) FreeFG + HLX FSR 4 — the default
-PROTON_USE_OPTISCALER=freefg-hlxdlss %command%  # FreeFG + HLX DLSS (Model E)
-PROTON_USE_OPTISCALER=freefg %command%          # FreeFG + FSR4 RC12
-PROTON_USE_OPTISCALER=freefg-hlxdlssk %command% # FreeFG + HLX DLSS Preset K
-PROTON_USE_OPTISCALER=freefg-hlxfsr4full %command% # FreeFG + HLX FSR 4 Full
-```
+| Menu | In the OptiScaler overlay | Launch option (forces it every launch) |
+|---|---|---|
+| FreeFG + HLX FSR 4 | `FSR 3.X/4`, with HLX FSR 4 in its *FFX Upscaler* list | `PROTON_USE_OPTISCALER=freefg-hlxfsr4` |
+| FreeFG + HLX DLSS, DLSS Model E | `hlx-dlss` | `PROTON_USE_OPTISCALER=freefg-hlxdlss` |
+| FreeFG + HLX DLSS, DLSS Preset K | `HLX DLSS Preset K` | `PROTON_USE_OPTISCALER=freefg-hlxdlssk` |
+| FreeFG + HLX FSR 4 Full | `HLX FSR 4 Full` | `PROTON_USE_OPTISCALER=freefg-hlxfsr4full` |
+| FreeFG + FSR 4 RC12 | `FSR 4 RC12` | `PROTON_USE_OPTISCALER=freefg` |
 
-- **HLX FSR 4** (`freefg-hlxfsr4`, the default): AMD's FSR 4 network on the
-  faster pipeline of [HelixSR](https://github.com/lonewolf0622/HelixSR) 3.2.1 by
+`PROTON_USE_OPTISCALER=freefg-all` turns OptiScaler on without forcing an
+upscaler (the overlay's pick stays), and `PROTON_USE_OPTISCALER=0` turns it off.
+
+Model E keeps the name `hlx-dlss` in the overlay because FreeFG's OptiScaler
+recognises HLX DLSS by that folder name to hand it the game's input type.
+
+- **HLX FSR 4** (the payload's first pick): AMD's FSR 4 network on the
+  faster pipeline of [HelixSR](https://github.com/lonewolf0622/HelixSR) 3.3.0 by
   lonewolf0622 (the DirectMesh author), an FSR 3.1 drop-in as OptiScaler's
   FidelityFX upscaler. On a BC-250 in Shadow of the Tomb Raider it took 1.17 ms
   from 720p to 1080p, against 3.6 ms for the fork's RC11. Its shaders are built
-  from AMD's FSR SDK 2.4.0 (FSR 4.1.2, MIT); 3.2.1 fixes HLX FSR 4 ending the
+  from AMD's FSR SDK 2.4.0 (FSR 4.1.2, MIT); since 3.2.1 it no longer ends the
   game under Proton 11.0 on a BC-250. AMD's own FidelityFX upscaler from the
   same release (FSR SDK 2.4.0, FSR 4.1.2) sits beside it as
   `amd_fidelityfx_upscaler_dx12.amd.dll`, its fallback for what its own runtime
-  does not cover. It also carries the
-  Direct3D 11 and Vulkan games (OptiScaler's `ffx_12` route).
-- **HLX DLSS** (`freefg-hlxdlss`): HelixSR's NVIDIA DLSS neural network (Model E)
+  does not cover. It also carries the Direct3D 11 games (OptiScaler's `ffx_12`
+  route), whichever DirectX 12 upscaler is picked.
+- **HLX DLSS, DLSS Model E**: HelixSR's NVIDIA DLSS neural network (Model E)
   as ordinary DirectX 12 compute shaders, so no NVIDIA GPU or driver is needed,
   set up the way FreeFG's own installer does for `--upscaler hlx-dlss`. Pick DLSS,
   FSR or XeSS in the game; OptiScaler hands the frames to HLX DLSS in Direct3D 12
-  games, while Direct3D 11 and Vulkan games get FSR4 RC12. HelixSR's int8 path is
+  games. HelixSR's int8 path is
   off (`Int8 = off` in its `helixsr.ini`): the BC-250 has no fast int8. On a
   BC-250, a good starting point is 1440p output, medium to high settings and
   HLX DLSS at Quality (960p render), which often runs well enough without frame
   generation.
-- **FSR4 RC12** (`freefg`): the BC-250 FSR4 fork's
+- **HLX DLSS, DLSS Preset K**: HelixSR 3.3.0's DLSS 4 Preset K network in a
+  folder of its own (`OptiScaler/custom/HLX DLSS Preset K/dlss/`, its kernels and
+  weights beside it). Sharper than Model E and a little slower (2.54 ms at 1080p
+  Quality on a BC-250), but it can sparkle on foliage and showed artifacts and
+  ghosting in our tests; some players like it. With the Steam overlay on, a game
+  can freeze at startup: turn the overlay off for that game if it does.
+- **FSR 4 RC12**: the BC-250 FSR4 fork's
   [v4.0.0-rc12](https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12)
   bridge (`4.1.1r12`, by daniel-h-0), the build FreeFG pins itself: made for and
   measured on this hardware, the RC8/RC9 shader work extended to the 1080p and
-  8K context families. `BC250_FSR4_DEBUG=1` puts its watermark on screen.
-- **HLX DLSS Preset K** (`freefg-hlxdlssk`): HelixSR 3.2.1's DLSS 4 Preset K
-  network, laid out like HLX DLSS (its kernels and weights beside it). Sharper
-  than Model E and a little slower (2.54 ms at 1080p Quality on a BC-250), but it
-  can sparkle on foliage and showed artifacts and ghosting in our tests; some
-  players like it. With the Steam overlay on, a game can freeze at startup:
-  turn the overlay off for that game if it does.
-- **HLX FSR 4 Full** (`freefg-hlxfsr4full`): HelixSR 3.2.1's full FSR 4.1.2
+  8K context families. `BC250_FSR4_DEBUG=1` puts its watermark on screen. It is
+  an OptiScaler custom upscaler here (`OptiScaler/custom/FSR 4 RC12/ffx/`),
+  since HLX FSR 4 has the FidelityFX slot.
+- **HLX FSR 4 Full**: HelixSR 3.3.0's full FSR 4.1.2
   network, sharper and slower than HLX FSR 4 (about 2.15 ms at 1080p Quality on
-  a BC-250). Installed the way HelixSR's own setup does it: HLX FSR 4 as in
-  `freefg-hlxfsr4`, plus Full as an OptiScaler custom upscaler in
-  `OptiScaler/custom/HLX FSR 4 Full/ffx/` with its own `hlx_fsr4.ini`, and the
-  DX12 upscaler set to "HLX FSR 4 Full". You can switch back to HLX FSR 4 in
-  OptiScaler's overlay. `DeepReuse = 1:2` or `1:4` in that `hlx_fsr4.ini` is
+  a BC-250). Installed the way HelixSR's own setup does it: an OptiScaler
+  custom upscaler in `OptiScaler/custom/HLX FSR 4 Full/ffx/` with its own
+  `hlx_fsr4.ini`. `DeepReuse = 1:2` or `1:4` in that `hlx_fsr4.ini` is
   faster with some ghosting in motion; `exact`, the default, has none. Games
   that draw to a 10-bit (R10G10B10A2) output, Ghost of Tsushima among them,
   showed a black image with 3.2.1's Full
-  ([HelixSR #187](https://github.com/lonewolf0622/HelixSR/issues/187)). The
-  package ships the fixed Full DLL HelixSR's author posted there until a
-  HelixSR release has it. If you still see a black image, Full's
-  `hlx_fsr4.log` beside it helps.
+  ([HelixSR #187](https://github.com/lonewolf0622/HelixSR/issues/187)); 3.3.0
+  fixes that, and its Full network kernels are about 2.5% faster on a BC-250.
+  If you still see a black image, Full's `hlx_fsr4.log` beside it helps.
 
-Since 2026-11-07 that is all: the stock OptiScaler nightly's variants (its
-FidelityFX bridges `fsr411f`, `fsr412f`, `signed`, `fsr411b`, `fsr411rc9`,
-`fsr411rc10`, and HLX FSR 4 or Preset K alone) and HelixSR Scaler are gone.
-The old names still work as launch options and saved menu choices: `hlxfsr4`
-selects FreeFG + HLX FSR 4, `hlxdlssk` FreeFG + HLX DLSS Preset K, the HelixSR
-ones (`helixsr`, `helixsr-ffx`, `freefg-helixsr`) FreeFG + HLX DLSS, and the
-bridges and `optiscaler` FreeFG + FSR4 RC12. Once
+Until 2026-11-08 each upscaler was a variant of its own, and switching meant
+starting the game's OptiScaler settings over. A game that ran one of those
+moves to the one payload on its next launch with the same upscaler picked; its
+`OptiScaler.ini` starts fresh that one time. The older names still work as
+launch options too: `hlxfsr4` is HLX FSR 4, `hlxdlssk` DLSS Preset K, the
+HelixSR ones (`helixsr`, `helixsr-ffx`, `freefg-helixsr`) DLSS Model E, and the
+stock nightly's bridges and `optiscaler` FSR 4 RC12. Once
 OptiScaler's nightly has merged FreeFG's changes, FreeFG's own OptiScaler build
 gives way to the nightly.
 
-Switching between them is safe: on a game launch the wrapper removes every
-file and folder another variant left in the prefix (its `.ini` files and logs
-included, which Proton's own replacement keeps, and what HelixSR Scaler left
-behind), and the prefix's `OptiScaler.ini` too, so the new
-variant seeds from scratch and a game never runs with pieces of two variants.
+On a game launch the wrapper also removes every file and folder an older
+package left in the prefix that the payload no longer has (`.ini` files and
+logs included, which Proton's own replacement keeps), so a game never runs with
+pieces of two payloads.
 
 None of them ever uses a DLL from the game's own folder: the upscaler always
 comes from the pinned payload, and the game's FSR/DLSS DLLs are only the API it
@@ -1027,7 +1070,7 @@ licence (its source is not published). The DLSS network it runs is, per its
 author, NVIDIA's property and not covered by any licence here; its release
 does not contain it: its setup script builds it from NVIDIA's public DLSS
 310.7.0 DLL. HLX FSR 4's shaders ship built in the release. We ran the setup
-script once and mirrored the result (`HelixSR-3.2.1-network.zip`), so the Proton
+script once and mirrored the result (`HelixSR-3.3.0-network.zip`), so the Proton
 packages need no setup step and nothing is downloaded at game launch. HelixSR and
 the RC12 bridge are unsigned; each is pinned by SHA256 and its origin is written
 into the prefix (`Licenses/THIRD-PARTY-UPSCALER.txt`, notices under
@@ -1038,20 +1081,20 @@ and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md)
 
 ### FreeFG: XeSS frame generation for the BC-250 (the default)
 
-Every variant is [FreeFG](https://github.com/daniel-h-0/freefg) 1.3.0 by
+Every upscaler runs on [FreeFG](https://github.com/daniel-h-0/freefg) 1.3.0 by
 daniel-h-0. Frame generation is Intel's XeSS FG (XeFG): Intel's unmodified
 runtime generates the frames, and FreeFG's wrapper runs part of its GPU work with
 FreeFG's own shaders, which are faster on the BC-250 (its author measured +21% in
 Cyberpunk 2077 at 2×) and gave the same pixels where compared. FreeFG's Vulkan
-layer paces the frames for VRR displays (under gamescope only). The variants
-differ only in the upscaler (see [the upscalers](#the-upscalers)).
+layer paces the frames for VRR displays (under gamescope only). See
+[the upscalers](#the-upscalers) for what it upscales with.
 OptiScaler's files around FreeFG's build are those of the nightly FreeFG pins
 (2026-10-25).
 
 A game that ran a variant that is gone now (HelixSR Scaler, a bridge on the stock
-nightly) starts fresh on its next launch with the
-variant that took its place: its old files and its `OptiScaler.ini` are removed,
-so settings saved in the OptiScaler overlay for it are reset once.
+nightly, or one of the one-upscaler variants) starts fresh on its next launch:
+its old files and its `OptiScaler.ini` are removed, so settings saved in the
+OptiScaler overlay for it are reset once, and the upscaler it had stays picked.
 
 FreeFG has optional generated-frame scaling since 1.1.4 (cheaper in 1.1.5; 50–100% or a resolution
 limit, with a choice of filters); the default, and what this package leaves it

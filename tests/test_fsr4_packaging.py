@@ -1017,18 +1017,23 @@ class SlrPackageTests(unittest.TestCase):
         }
         for name, text in templates.items():
             with self.subTest(package=name):
-                # Since 2026-11-07 (owner): FreeFG + HLX FSR 4 (the default),
-                # FreeFG + HLX DLSS (Model E), FreeFG + FSR4 RC12, and FreeFG with
-                # Preset K (from the HelixSR archive) and HLX FSR 4 Full (from the
-                # Scaler part of HelixSR 3.2.1), nothing else.
-                self.assertIn("--default freefg-hlxfsr4", text)
+                # Since 2026-11-08 (owner): one FreeFG payload with HLX FSR 4,
+                # HLX DLSS Model E and Preset K (from the HelixSR archive), FSR4
+                # RC12 and HLX FSR 4 Full (from the Scaler part of HelixSR
+                # 3.3.0), so there is no default variant to name.
+                self.assertNotIn("--default", text)
                 self.assertIn("--fsr4-bridge", text)
                 self.assertIn("bc250-fsr4-dll-4.0.0-rc12.zip", text)
                 self.assertIn("646778a0d06c42bf3cdcc99f9396680f5cc4a33658b90c0889fd15751bfb800d", text)
                 self.assertIn("--helixsr-ngx", text)
-                self.assertIn("HelixSR-3.2.1-network.zip", text)
+                self.assertIn("HelixSR-3.3.0-network.zip", text)
                 self.assertIn("--helixsr-full", text)
-                self.assertIn("HelixSR-3.2.1-Scaler-2.2.0-core.zip", text)
+                self.assertIn("HelixSR-3.3.0-Scaler-2.3.0-core.zip", text)
+                self.assertIn("d69ae753fc8668f49a7d320615ac83135f7fc629217f63cbac2bb6427803e8f5", text)
+                self.assertIn("755036bd2909cce293d97a9c3ae9f9c13ecc88290be373e07d51e0e3c4fda29e", text)
+                # 3.3.0 carries the #187 fix (R10G10B10A2): no test DLL any more.
+                self.assertNotIn("--helixsr-full-dll", text)
+                self.assertNotIn("fix187", text)
                 self.assertIn("--freefg", text)
                 self.assertIn("freefg-1.3.0.zip", text)
                 self.assertIn("--freefg-ini", text)

@@ -460,9 +460,9 @@ class ReservedProxyTests(unittest.TestCase):
 
 class MenuTests(unittest.TestCase):
     def test_the_force_choice_reaches_the_launcher(self):
-        pick = {"preset": "freefg-hlxfsr4", "enable_framegen": 1, "apply_preset": "everything"}
-        self.assertEqual(menu.answer(pick, "freefg-hlxfsr4", "freefg-hlxfsr4", {})["apply_preset"], "everything")
-        self.assertEqual(menu.answer(dict(pick, preset="off"), "freefg-hlxfsr4", "freefg-hlxfsr4", {})
+        pick = {"preset": "ffx", "enable_framegen": 1, "apply_preset": "everything"}
+        self.assertEqual(menu.answer(pick, menu.VARIANT, menu.VARIANT, {})["apply_preset"], "everything")
+        self.assertEqual(menu.answer(dict(pick, preset="off"), menu.VARIANT, menu.VARIANT, {})
                          ["apply_preset"], "")
         self.assertEqual(menu.answer({"preset": "fsr412f", "enable_framegen": 0}, "fsr412f", "fsr412f", {})
                          ["apply_preset"], "")
