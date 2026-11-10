@@ -65,7 +65,7 @@ src/compiler/nir/nir_shader_compiler_options.h                  |  5 ++++-
 ---
 
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-index b7fdf1865bb..52a8e533dc2 100644
+index 85da233ed4f..9ad48ddb6dc 100644
 --- a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
 @@ -1808,6 +1808,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
@@ -260,10 +260,10 @@ index 01b4e7148ca..9463931ddb7 100644
        NIR_PASS(_, nir, nir_opt_scalar_array_vars_to_vec, nir_var_function_temp | nir_var_mem_shared);
  
 diff --git a/src/compiler/nir/nir_opt_algebraic.py b/src/compiler/nir/nir_opt_algebraic.py
-index cbea9b8fa2b..2fdc0930f19 100644
+index 9cf34fb65e6..87ace91ed91 100644
 --- a/src/compiler/nir/nir_opt_algebraic.py
 +++ b/src/compiler/nir/nir_opt_algebraic.py
-@@ -444,10 +444,47 @@ for sz in (16, 32, 64):
+@@ -449,10 +449,47 @@ for sz in (16, 32, 64):
  
  # Shorthand for the expansion of just the dot product part of the [iu]dp4a
  # instructions.
@@ -315,7 +315,7 @@ index cbea9b8fa2b..2fdc0930f19 100644
  udot_4x8_a_b = ('iadd', ('iadd', ('umul24_relaxed', ('extract_u8', a, 0), ('extract_u8', b, 0)),
                                   ('umul24_relaxed', ('extract_u8', a, 1), ('extract_u8', b, 1))),
                          ('iadd', ('umul24_relaxed', ('extract_u8', a, 2), ('extract_u8', b, 2)),
-@@ -462,7 +499,17 @@ udot_2x16_a_b = ('iadd', ('umul24_relaxed', ('extract_u16', a, 0), ('extract_u16
+@@ -467,7 +504,17 @@ udot_2x16_a_b = ('iadd', ('umul24_relaxed', ('extract_u16', a, 0), ('extract_u16
                           ('umul24_relaxed', ('extract_u16', a, 1), ('extract_u16', b, 1)))
  
  optimizations.extend([
@@ -335,10 +335,10 @@ index cbea9b8fa2b..2fdc0930f19 100644
     (('sudot_4x8_iadd', a, b, c), ('iadd', sudot_4x8_a_b, c), '!options->has_sudot_4x8'),
     (('sdot_2x16_iadd', a, b, c), ('iadd', sdot_2x16_a_b, c), '!options->has_dot_2x16'),
 diff --git a/src/compiler/nir/nir_shader_compiler_options.h b/src/compiler/nir/nir_shader_compiler_options.h
-index 0b5a961ad8f..ad32401a011 100644
+index 5bc04386de7..118fd681b27 100644
 --- a/src/compiler/nir/nir_shader_compiler_options.h
 +++ b/src/compiler/nir/nir_shader_compiler_options.h
-@@ -667,6 +667,10 @@ typedef struct nir_shader_compiler_options {
+@@ -668,6 +668,10 @@ typedef struct nir_shader_compiler_options {
     /** Backend supports sdot_4x8_iadd. */
     bool has_sdot_4x8;
  

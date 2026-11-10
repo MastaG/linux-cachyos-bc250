@@ -58,10 +58,10 @@ which RADV sets only for ACO on GFX1013; every other driver keeps
 upstream's sdot_4x8_iadd lowering unchanged.
 ---
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-index c58a491e2f0..caef3534adf 100644
+index a8d2c554e9d..d7299aa745c 100644
 --- a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-@@ -1776,6 +1776,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1779,6 +1779,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
@@ -69,7 +69,7 @@ index c58a491e2f0..caef3534adf 100644
     case nir_op_imul24_relaxed: {
        if (dst.regClass() == s1) {
           emit_sop2_instruction(ctx, instr, aco_opcode::s_mul_i32, dst, false, 0x3);
-@@ -1786,6 +1787,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1789,6 +1790,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
@@ -343,5 +343,5 @@ index 8f0e9a7c0e1..8fe5962bf8d 100644
     bool has_udot_4x8;
  
 -- 
-2.55.0
+2.56.0
 
