@@ -77,6 +77,19 @@ SigLevel = Optional TrustAll
 Server = https://github.com/MastaG/linux-cachyos-bc250/releases/download/repo
 ```
 
+#### Optional: the emulator repository
+
+Emulators for the BC-250 have their own package repository:
+[bc250-emulators](https://github.com/MastaG/bc250-emulators). To add it, run this once
+(running it again does nothing):
+
+```bash
+grep -q '^\[bc250-emulators\]' /etc/pacman.conf || printf '\n[bc250-emulators]\nSigLevel = Optional TrustAll\nServer = https://github.com/MastaG/bc250-emulators/releases/download/repo\n' | sudo tee -a /etc/pacman.conf >/dev/null
+sudo pacman -Sy
+```
+
+Which emulators it has and how to set them up is in that repository's README.
+
 ### 2. Enable the BC-250 fan/sensor driver at boot
 
 ```bash
