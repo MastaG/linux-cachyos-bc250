@@ -37,6 +37,8 @@ RETIRED_PACKAGES=(
     # Moved to its own repository (2026-11-11). Split pkgbase: removing it by
     # pkgbase also removes its second package; its sidecars use the usual names.
     lichii-bc250
+    # Moved to the same repository (2026-11-11), with its archived builds.
+    kytyps5-native-git
 )
 
 # Needs remove_pkgbase_from_repo from repo-package-helpers.sh; callers source
