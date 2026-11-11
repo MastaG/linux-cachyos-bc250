@@ -82,6 +82,10 @@ SAVE_LABEL = "Save selection for next time (make sure to test it first)"
 FORCE_LABEL = "Force apply known settings for %s"
 APPLY = [("matching", "Apply matching only"), ("everything", "Apply everything")]
 HINT = "Launch your game with PROTON_OPTISCALER_MENU=1 %command% to show this menu again."
+# OptiScaler replaces an upscaler the game already has; it cannot add one to a
+# game without (users enabled it everywhere, expecting it to work in any game).
+SUPPORT_NOTE = ("Only for games that have FSR 2 or newer, XeSS or DLSS in their own graphics settings: "
+                "choose that upscaler in the game, and it is replaced by the one picked here.")
 
 # Which keys mean "frame generation on", verified from the build's own
 # OptiScaler.ini comments: [FrameGen] Enabled, with FGOutput=xefg as the wiring
@@ -376,6 +380,9 @@ def gui(window_rows, preselected, fg_states, spoof_states, saved_on, known="", d
     t = Gtk.Label(label="Choose the upscaler for this game", xalign=0)
     t.add_css_class("title")
     box.append(t)
+    note = Gtk.Label(label=SUPPORT_NOTE, xalign=0, wrap=True)
+    note.add_css_class("hint")
+    box.append(note)
     radios, group = [], None
     # Per row with choices (HLX DLSS): its own radio group, sensitive while the
     # row is picked, and which choice is on says which name the row stands for.
