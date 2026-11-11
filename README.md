@@ -1023,7 +1023,11 @@ recognises HLX DLSS by that folder name to hand it the game's input type.
   same release (FSR SDK 2.4.0, FSR 4.1.2) sits beside it as
   `amd_fidelityfx_upscaler_dx12.amd.dll`, its fallback for what its own runtime
   does not cover. It also carries the Direct3D 11 games (OptiScaler's `ffx_12`
-  route), whichever DirectX 12 upscaler is picked.
+  route), whichever DirectX 12 upscaler is picked. Vulkan games get HelixSR's
+  Vulkan build of HLX FSR 4 natively (`OptiScaler/custom/HLX FSR 4/ffx_vk`),
+  also whichever upscaler is picked; before, they went through OptiScaler's
+  DirectX 12 bridge. If a Vulkan game misbehaves, the bridge is still there:
+  `BC250_OPTISCALER_EXTRA="Upscalers.VulkanUpscaler=ffx_12" %command%`.
 - **HLX DLSS, DLSS Model E**: HelixSR's NVIDIA DLSS neural network (Model E)
   as ordinary DirectX 12 compute shaders, so no NVIDIA GPU or driver is needed,
   set up the way FreeFG's own installer does for `--upscaler hlx-dlss`. Pick DLSS,
@@ -1084,7 +1088,7 @@ licence (its source is not published). The DLSS network it runs is, per its
 author, NVIDIA's property and not covered by any licence here; its release
 does not contain it: its setup script builds it from NVIDIA's public DLSS
 310.7.0 DLL. HLX FSR 4's shaders ship built in the release. We ran the setup
-script once and mirrored the result (`HelixSR-3.3.0-network.zip`), so the Proton
+script once and mirrored the result (`HelixSR-3.3.0-20261111-network.zip`), so the Proton
 packages need no setup step and nothing is downloaded at game launch. HelixSR and
 the RC12 bridge are unsigned; each is pinned by SHA256 and its origin is written
 into the prefix (`Licenses/THIRD-PARTY-UPSCALER.txt`, notices under

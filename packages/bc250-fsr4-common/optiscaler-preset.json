@@ -23,6 +23,6 @@
     "Spoofing.VulkanExtensionSpoofing": "false",
     "Upscalers.Dx11Upscaler": "ffx_12",
     "Upscalers.Dx12Upscaler": "ffx",
-    "Upscalers.VulkanUpscaler": "ffx_12"
+    "Upscalers.VulkanUpscaler": "HLX FSR 4"
   }
 }

@@ -201,7 +201,11 @@ upscaler that shares a file name with another gets a folder:
   itself (`<name>.amd.dll`; without one it logs "HLX FSR 4 only"), and Full finds
   the same file three folders up. Direct3D 11 games take OptiScaler's `ffx_12`
   route through that slot, so they get HLX FSR 4 whatever DX12 upscaler is
-  picked (the HLX DLSS variants used to give them RC12). The `.amd.dll` is AMD's
+  picked (the HLX DLSS variants used to give them RC12). Vulkan games take
+  HelixSR's Vulkan HLX FSR 4 (`custom/HLX FSR 4/ffx_vk`, `VulkanUpscaler = HLX FSR 4`
+  in the shared preset; it was `ffx_12`, the DirectX 12 bridge): FreeFG's
+  OptiScaler takes a custom folder in Vulkan games only as `ffx_vk`, so HLX DLSS
+  cannot run there natively yet, whatever its setup built. The `.amd.dll` is AMD's
   FSR SDK 2.4.0 upscaler (FSR 4.1.2.4555, signed) from the Scaler part of
   HelixSR 3.3.0 (the same file as 3.2.1's), the version both HLX DLLs are built from. The builder refuses
   HLX FSR 4 unless its shaders end with the `HLXFSR4D` trailer, an HLX DLSS DLL

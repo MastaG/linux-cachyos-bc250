@@ -220,6 +220,15 @@ RC12_NAME = "FSR 4 RC12"
 RC12_FOLDER = f"OptiScaler/custom/{RC12_NAME}/ffx"
 HLX_FULL_FOLDER = "OptiScaler/custom/HLX FSR 4 Full/ffx"
 HLX_FULL_NAME = "HLX FSR 4 Full"
+# HLX FSR 4 for Vulkan games, HelixSR 3.3.0's layout (the Scaler's
+# custom/HLX FSR 4/ffx_vk/): FreeFG's OptiScaler takes a custom folder in Vulkan
+# games only as ffx_vk (misc/CustomProviders.h, ResolveVulkanUpscaler), picked
+# with [Upscalers] VulkanUpscaler = the folder's name. It ships built: its
+# shaders behind the same 24-byte trailer as HLX FSR 4's, HLXFSR4V, and it loads
+# no AMD DLL of its own (FFXFeature_Vk returns before the FFX SDK path).
+HLX_VK_NAME = "HLX FSR 4"
+HLX_VK_FOLDER = f"OptiScaler/custom/{HLX_VK_NAME}/ffx_vk"
+HLX_VK_TRAILER = b"HLXFSR4V"
 # HLXFULL1 up to HelixSR 3.2.1; 3.3.0 ships its kernels in a smaller format
 # (HLXFULL2), behind the same 24-byte trailer.
 HLX_FULL_TRAILERS = (b"HLXFULL1", b"HLXFULL2")
@@ -528,6 +537,24 @@ def helixsr_full_from(source: Path, staging: Path) -> tuple[Path, Path, Path, Pa
     if not any(notices.iterdir()):
         raise RuntimeError("HLX FSR 4 Full archive has no FidelityFX licence in Licenses/")
     return dll, ini, amd, notices
+
+
+def helixsr_vk_from(staging: Path) -> Path:
+    """HLX FSR 4 for Vulkan games from the archive helixsr_full_from unpacked:
+    the one OptiScaler/custom/HLX FSR 4/ffx_vk/amd_fidelityfx_upscaler_vk.dll,
+    built (HLXFSR4V trailer); a DLL without its shaders would not run."""
+    tail = HLX_VK_FOLDER.removeprefix("OptiScaler/")
+    dlls = [p for p in (staging / "helixsr-full").rglob("amd_fidelityfx_upscaler_vk.dll")
+            if p.parent.as_posix().endswith("/" + tail)]
+    if len(dlls) != 1:
+        raise RuntimeError(f"the archive must contain exactly one {HLX_VK_FOLDER}/"
+                           "amd_fidelityfx_upscaler_vk.dll")
+    dll = dlls[0]
+    with dll.open("rb") as handle:
+        handle.seek(max(0, dll.stat().st_size - 24))
+        if handle.read(8) != HLX_VK_TRAILER:
+            raise RuntimeError("HLX FSR 4 for Vulkan in the archive is not built")
+    return dll
 
 
 def helixsr_full_dll_from(source: Path, staging: Path, release_ini: Path) -> Path:
@@ -881,6 +908,7 @@ def main() -> int:
         k_files = helixsr_k_files(hlx_dlss)
         full, full_ini, amd_dll, full_notices = helixsr_full_from(Path(args.helixsr_full[0]), staging)
         full_origin = args.helixsr_full[1]
+        hlx_vk = helixsr_vk_from(staging)
         full_from = "the Scaler 2.3.0 in HelixSR 3.3.0"
         if args.helixsr_full_dll:
             full = helixsr_full_dll_from(Path(args.helixsr_full_dll[0]), staging, full_ini)
@@ -910,6 +938,7 @@ def main() -> int:
             f"{RC12_FOLDER}/amd_fidelityfx_upscaler_dx12.dll": bridge,
             f"{HLX_FULL_FOLDER}/amd_fidelityfx_upscaler_dx12.dll": full,
             f"{HLX_FULL_FOLDER}/hlx_fsr4.ini": full_ini,
+            f"{HLX_VK_FOLDER}/amd_fidelityfx_upscaler_vk.dll": hlx_vk,
         }
         upscaler_notices = [(full_all_notices, "HelixSR"), (bridge_notices, "FSR4-RC12")]
         upscaler_text = (
@@ -938,7 +967,10 @@ def main() -> int:
             f"- {HLX_FULL_FOLDER}/amd_fidelityfx_upscaler_dx12.dll is HLX FSR 4 Full from "
             f"{full_from} (origin: {full_origin}, SHA256 {digest(full)}), the full FSR "
             "4.1.2 network on HelixSR's pipeline (AMD's FSR SDK, MIT); hlx_fsr4.ini beside "
-            "it is its own (DeepReuse = exact)"
+            "it is its own (DeepReuse = exact)\n"
+            f"- {HLX_VK_FOLDER}/amd_fidelityfx_upscaler_vk.dll is HLX FSR 4 for Vulkan games "
+            f"from the Scaler 2.3.0 in HelixSR 3.3.0 (origin: {args.helixsr_full[1]}, SHA256 "
+            f"{digest(hlx_vk)}), picked with [Upscalers] VulkanUpscaler"
         )
         version = args.optiscaler_version
         aliases[FREEFG_ALL_NAME] = version

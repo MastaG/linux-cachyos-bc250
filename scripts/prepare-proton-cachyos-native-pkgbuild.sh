@@ -254,9 +254,9 @@ sub('      "${srcdir}/compatibilitytool.vdf.template" > compatibilitytool.vdf\n}
     '        --provider "${srcdir}/amdxcffx64_v4.1.1.xz" \\\n'
     '        --fsr4-bridge "${srcdir}/bc250-fsr4-dll-4.0.0-rc12.zip" \\\n'
     '            "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12" \\\n'
-    '        --helixsr-ngx "${srcdir}/HelixSR-3.3.0-network.zip" \\\n'
+    '        --helixsr-ngx "${srcdir}/HelixSR-3.3.0-20261111-network.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.3.0" \\\n'
-    '        --helixsr-full "${srcdir}/HelixSR-3.3.0-Scaler-2.3.0-core.zip" \\\n'
+    '        --helixsr-full "${srcdir}/HelixSR-3.3.0-20261111-Scaler-2.3.0-core.zip" \\\n'
     '            "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.3.0" \\\n'
     '        --freefg "${srcdir}/freefg-1.3.0.zip" \\\n'
     '            "https://github.com/daniel-h-0/freefg/releases/tag/v1.3.0" \\\n'
@@ -312,15 +312,15 @@ payload_sources = [
     # NVIDIA's DLSS Model E network). Mirrored after its own setup built the
     # network; per its author that remains NVIDIA's. HLX FSR 4 is built from AMD's
     # FSR SDK (MIT).
-    ("HelixSR-3.3.0-network.zip", f"{payload_base}/HelixSR-3.3.0-network.zip",
-     "d69ae753fc8668f49a7d320615ac83135f7fc629217f63cbac2bb6427803e8f5", True),
+    ("HelixSR-3.3.0-20261111-network.zip", f"{payload_base}/HelixSR-3.3.0-20261111-network.zip",
+     "4bc31e78f90b50910c897e83d2257f8ae6d8f39367ccc5391657b9999422c3fd", True),
     # The Scaler 2.3.0 part of HelixSR 3.3.0 (lonewolf0622, GPL-3.0; the
     # HLX FSR 4 Full custom upscaler in it is built from AMD's FSR SDK, MIT): only
     # OptiScaler/custom/HLX FSR 4 Full/ffx/ (freefg-hlxfsr4full), AMD's FSR SDK
     # 2.4.0 upscaler it keeps as amd_fidelityfx_upscaler_dx12.amd.dll (beside HLX
     # FSR 4 in both HLX FSR 4 variants) and its FidelityFX licence are used. Mirrored.
-    ("HelixSR-3.3.0-Scaler-2.3.0-core.zip", f"{payload_base}/HelixSR-3.3.0-Scaler-2.3.0-core.zip",
-     "755036bd2909cce293d97a9c3ae9f9c13ecc88290be373e07d51e0e3c4fda29e", True),
+    ("HelixSR-3.3.0-20261111-Scaler-2.3.0-core.zip", f"{payload_base}/HelixSR-3.3.0-20261111-Scaler-2.3.0-core.zip",
+     "d2287133ca72abc728331f7f0db7c00175a3565492ab5dfb7a92dca2e4858f5e", True),
     # FreeFG 1.3.0 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer; every variant ships it. Mirrored release
     # zip; its OptiScaler build is GPL-3.0, and the matching

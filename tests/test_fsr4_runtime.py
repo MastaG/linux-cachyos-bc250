@@ -1656,8 +1656,10 @@ class PresetTests(unittest.TestCase):
     FULL_INI = b"; HLX FSR 4 settings\n[HLX]\nDeepReuse = exact\n"
     FULL_DIR = "HelixSR-Scaler-2.2.0/OptiScaler/custom/HLX FSR 4 Full/ffx/"
     SCALER_AMD = b"MZ" + b"fsr-sdk-2.4.0-amd" * 512
+    HLX_VK = b"MZhlx-fsr4-vk" * 1024 + b"HLXFSR4V" + bytes(16)
+    VK_DIR = "HelixSR-Scaler-2.2.0/OptiScaler/custom/HLX FSR 4/ffx_vk/"
 
-    def full_zip(self, work, full=None, ini=True, amd=True):
+    def full_zip(self, work, full=None, ini=True, amd=True, vk=None):
         # The Scaler part of HelixSR 3.2.1 as mirrored: Full in its custom
         # upscaler folder, the Scaler's licence texts beside its OptiScaler/.
         path = work / "HelixSR-3.2.1-Scaler-2.2.0-core.zip"
@@ -1665,6 +1667,8 @@ class PresetTests(unittest.TestCase):
             z.writestr(self.FULL_DIR + "amd_fidelityfx_upscaler_dx12.dll", full or self.HLX_FULL)
             if ini:
                 z.writestr(self.FULL_DIR + "hlx_fsr4.ini", self.FULL_INI)
+            if vk is not False:
+                z.writestr(self.VK_DIR + "amd_fidelityfx_upscaler_vk.dll", vk or self.HLX_VK)
             z.writestr("HelixSR-Scaler-2.2.0/OptiScaler.dll", b"MZscaler")
             if amd:
                 z.writestr("HelixSR-Scaler-2.2.0/OptiScaler/amd_fidelityfx_upscaler_dx12.amd.dll",
@@ -1748,6 +1752,7 @@ class PresetTests(unittest.TestCase):
     K_FOLDER = "OptiScaler/custom/HLX DLSS Preset K/dlss/"
     RC12_FOLDER = "OptiScaler/custom/FSR 4 RC12/ffx/"
     FULL_FOLDER = "OptiScaler/custom/HLX FSR 4 Full/ffx/"
+    VK_FOLDER = "OptiScaler/custom/HLX FSR 4/ffx_vk/"
 
     def test_one_payload_has_every_upscaler(self):
         # Owner, 2026-11-08: one release with HLX FSR 4, HLX DLSS Model E, FSR 4
@@ -1772,10 +1777,13 @@ class PresetTests(unittest.TestCase):
         self.assertEqual(tree[self.RC12_FOLDER + "amd_fidelityfx_upscaler_dx12.dll"], self.FORK_BRIDGE)
         self.assertEqual(tree[self.FULL_FOLDER + "amd_fidelityfx_upscaler_dx12.dll"], self.HLX_FULL)
         self.assertEqual(tree[self.FULL_FOLDER + "hlx_fsr4.ini"], self.FULL_INI)
+        # HLX FSR 4 for Vulkan games: FreeFG's OptiScaler takes custom/<name>/ffx_vk.
+        self.assertEqual(tree[self.VK_FOLDER + "amd_fidelityfx_upscaler_vk.dll"], self.HLX_VK)
         # Every file pinned.
         for name in (self.E_FOLDER + "helixsr.dll", self.K_FOLDER + "helixsr.dll",
                      self.RC12_FOLDER + "amd_fidelityfx_upscaler_dx12.dll",
-                     self.FULL_FOLDER + "amd_fidelityfx_upscaler_dx12.dll"):
+                     self.FULL_FOLDER + "amd_fidelityfx_upscaler_dx12.dll",
+                     self.VK_FOLDER + "amd_fidelityfx_upscaler_vk.dll"):
             self.assertIn(name, self.entries[version]["sha256_hash"])
         # FreeFG: its OptiScaler, its wrapper and layer.
         self.assertEqual(tree["winmm.dll"], self.FREEFG_OPTI)
@@ -1833,6 +1841,19 @@ class PresetTests(unittest.TestCase):
         # The menu maps a saved choice to the payload.
         self.assertEqual(set(menu.RETIRED.values()), {menu.VARIANT})
         self.assertTrue(set(menu.RETIRED) <= set(upscalers))
+
+    def test_an_unbuilt_or_missing_vulkan_hlx_fsr4_fails_the_build(self):
+        with self.assertRaises(AssertionError):
+            self.build_payload(full={"vk": b"MZ" + b"stub" * 64})
+        self.assertIn("HLX FSR 4 for Vulkan in the archive is not built", self.last_result.stderr)
+        with self.assertRaises(AssertionError):
+            self.build_payload(full={"vk": False})
+        self.assertIn("ffx_vk/amd_fidelityfx_upscaler_vk.dll", self.last_result.stderr)
+
+    def test_the_preset_runs_vulkan_games_on_hlx_fsr4_natively(self):
+        shipped = json.loads((ROOT / "packages/bc250-fsr4-common/optiscaler-preset.json").read_text())
+        shipped = shipped.get("preset", shipped)
+        self.assertEqual(shipped["Upscalers.VulkanUpscaler"], "HLX FSR 4")
 
     def test_an_unbuilt_or_incomplete_hlx_fsr4_full_fails_the_build(self):
         with self.assertRaises(AssertionError):
