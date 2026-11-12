@@ -199,12 +199,13 @@ def bridge_from(source: Path, staging: Path, name: str) -> tuple[Path, Path | No
 # custom/<name>/dlss an NGX runtime, the DLL in it under any name), so the
 # upscalers that share a file name get a folder each:
 #   ffx                 HLX FSR 4 in the FidelityFX slot, AMD's .amd.dll beside it
-#   hlx-dlss            HLX DLSS Model E. The name is FreeFG's OptiScaler's
-#                       identity check for passing HLX DLSS the game's input API
-#                       (DLSSFeature_Dx12.cpp, _hlxInput), so it stays exactly this
-#   HLX DLSS Preset K   Preset K's four files. Its helixsr.dll reads no input-API
-#                       parameter (only Model E's carries the string), so a folder
-#                       of its own loses nothing
+#   hlx-dlss            HLX DLSS Model E
+#   hlx-dlss-k          HLX DLSS Preset K's four files. Both names are FreeFG's
+#                       (1.4.0 on): its OptiScaler passes HLX DLSS the game's input
+#                       API for any custom folder whose name starts with hlx-dlss
+#                       (DLSSFeature_Dx12.cpp, _hlxInput); up to 1.3.0 that was
+#                       Model E's folder only, and Preset K had a folder of its own
+#                       named "HLX DLSS Preset K"
 #   FSR 4 RC12          the BC-250 FSR4 fork's RC12 bridge, FreeFG's own pin
 #   HLX FSR 4 Full      HelixSR 3.3.0's layout; Full finds AMD's FSR three folders up
 # HLX FSR 4 keeps the FidelityFX slot because it looks for AMD's DLL beside
@@ -212,7 +213,7 @@ def bridge_from(source: Path, staging: Path, name: str) -> tuple[Path, Path | No
 FREEFG_ALL_NAME = "freefg-all"
 HLXDLSS_NAME = "hlx-dlss"
 HLXDLSS_FOLDER = f"OptiScaler/custom/{HLXDLSS_NAME}/dlss"
-HLXDLSSK_NAME = "HLX DLSS Preset K"
+HLXDLSSK_NAME = "hlx-dlss-k"
 HLXDLSSK_FOLDER = f"OptiScaler/custom/{HLXDLSSK_NAME}/dlss"
 HELIXSR_K_FILES = ("helixsr.dll", "helixsr.ini", "helixsr_modelk_kernels.pak",
                    "helixsr_modelk_weights.bin")
@@ -1002,7 +1003,7 @@ def main() -> int:
                 shutil.copy2(path, merged / path.name)
         provenance = (
             f"{args.proxy} in this directory is FreeFG's build of OptiScaler (GPL-3.0; "
-            "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-ba0dedb "
+            "source: https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-4d0c0b9-r1 "
             f"and {Path(args.freefg[0]).name.removesuffix('.zip')}-source.zip "
             "beside FreeFG's release), NOT the stock "
             "OptiScaler nightly.\n\n"

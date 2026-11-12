@@ -369,7 +369,9 @@ FREEFG_LOGS = ("OptiScaler/BC250-MFG.log", "OptiScaler/BC250-XeFG-fast.log")
 # proxy): it went with the Scaler on 2026-11-07, and the Scaler is what looked
 # for it. (HLX FSR 4 Full's custom folder is freefg-hlxfsr4full's own again,
 # removed like any other variant's files.)
-RETIRED_FOLDERS = ("HelixSR-fsrfg", "HelixSR")
+# OptiScaler/custom/HLX DLSS Preset K is Preset K's folder up to FreeFG 1.3.0;
+# since 2026-11-12 it is hlx-dlss-k, FreeFG's own name (RENAMED_UPSCALERS).
+RETIRED_FOLDERS = ("HelixSR-fsrfg", "HelixSR", "OptiScaler/custom/HLX DLSS Preset K")
 # Files the same way: HelixSR 2.0 as OptiScaler's FidelityFX library (the
 # freefg-helixsr default and helixsr-ffx, both gone with it). The prefix's
 # OptiScaler.ini still points FfxDx12Path at that DLL and has UpscalerIndex=1,
@@ -383,6 +385,35 @@ RETIRED_FILES = ("OptiScaler/amd_fidelityfx_dx12.dll", "OptiScaler/helixsr.ini",
                  "OptiScaler/hlx_fsr4.ini",
                  "OptiScaler/custom/hlx-dlss/dlss/helixsr_modelk_kernels.pak",
                  "OptiScaler/custom/hlx-dlss/dlss/helixsr_modelk_weights.bin")
+
+
+# Custom upscaler folders that were renamed, by their old name (lowercase, as
+# OptiScaler compares them) -> the new one. A prefix keeps its OptiScaler.ini
+# across a payload update, and a picked upscaler is not "auto", so seed_once
+# leaves it alone: without this, a game set to Preset K would ask for a folder
+# that is gone.
+RENAMED_UPSCALERS = {"hlx dlss preset k": "hlx-dlss-k"}
+
+
+def current_upscaler_name(value):
+    """An upscaler name as the payload has it now (RENAMED_UPSCALERS)."""
+    return RENAMED_UPSCALERS.get(str(value).strip().lower(), value)
+
+
+def renamed_upscaler(inherited):
+    """The new name of the upscaler this prefix's ini picks, when that upscaler
+    was renamed; else None."""
+    ini = prefix_ini(inherited)
+    if not ini or not ini.is_file():
+        return None
+    parser = configparser.ConfigParser()
+    try:
+        with ini.open() as stream:
+            parser.read_file(stream)
+    except (OSError, UnicodeDecodeError, configparser.Error):
+        return None
+    value = parser.get("Upscalers", "dx12upscaler", fallback="").strip().lower()
+    return RENAMED_UPSCALERS.get(value)
 
 
 def clean_other_variants(config, env, inherited):
@@ -616,6 +647,10 @@ def environment(config, inherited, *, game, menu=None, known=None):
     preset.update(config.get("optiscaler_variant_preset", {}).get(env["PROTON_USE_OPTISCALER"], {}))
     preset.update(seed_once(config.get("optiscaler_variant_seed", {}).get(env["PROTON_USE_OPTISCALER"], {}),
                             inherited))
+    renamed = renamed_upscaler(inherited)
+    if renamed and env["PROTON_USE_OPTISCALER"] != "0":
+        # The prefix picked an upscaler under its old folder name: the same one.
+        preset.update(upscaler_keys(renamed))
     if named_upscaler and env["PROTON_USE_OPTISCALER"] != "0":
         # A launch option naming one of the old one-upscaler variants
         # (PROTON_USE_OPTISCALER=freefg-hlxdlss) picks that upscaler of the one
@@ -629,6 +664,8 @@ def environment(config, inherited, *, game, menu=None, known=None):
         # The player chose in the menu. A decision for this game, like a launch
         # option, so it goes on top of the seed filter.
         preset.update(menu)
+    if "Upscalers.Dx12Upscaler" in preset:
+        preset["Upscalers.Dx12Upscaler"] = current_upscaler_name(preset["Upscalers.Dx12Upscaler"])
     # null drops a shared key the variant's OptiScaler does not have: protonfixes
     # refuses a launch on a key missing from the ini, and FreeFG's OptiScaler
     # writes its ini without the old FSR.Fsr4ForceModel.

@@ -39,9 +39,9 @@ from pathlib import Path
 # OptiScaler build in this tree, so the libraries around it are the ones FreeFG
 # was made and tested with (2026-11-07; was nightly-20261105 for the stock
 # nightly's custom upscaler folders, gone with those variants).
-FALLBACK_TAG = "nightly-20261025"
-FALLBACK_ASSET = "OptiScaler_v10.0.0-pre1_20261025.7z"
-FALLBACK_SHA256 = "6bb2e9cd6ac0204c76c974df1c202afb1fc7a765844a9ccf608103557aa595fe"
+FALLBACK_TAG = "nightly-20261111"
+FALLBACK_ASSET = "OptiScaler_v10.0.0-pre1_20261111.7z"
+FALLBACK_SHA256 = "c7cff235da733e2b778962cb1532dd18380c621d113375f513b5d65832f4611e"
 
 NIGHTLY_REPO = "optiscaler/OptiScaler-nightly"
 NIGHTLY_URL = f"https://github.com/{NIGHTLY_REPO}/releases/download"

@@ -645,6 +645,11 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
 - A game you have not set up yet starts with **No upscaling**; the menu at its launch turns FSR4 and
   OptiScaler on. \`PROTON_FSR4_UPGRADE=0 %command%\` turns them off for one game, and
   \`BC250_FSR4_DEBUG=1 %command%\` adds the OptiScaler watermark plus logging.
+- **New: FreeFG [1.4.0](https://github.com/daniel-h-0/freefg/releases/tag/v1.4.0)** (its OptiScaler
+  build \`bc250-4d0c0b9-r1\`, on the OptiScaler nightly of 2026-11-11) and HelixSR 3.3.0 rebuilt from
+  its 2026-11-12 archive. HLX DLSS Preset K now gets the game's input type as Model E does; in the
+  OptiScaler overlay it is called \`hlx-dlss-k\` now (FreeFG's name), and a game set to Preset K keeps
+  it. Not yet tested on a BC-250.
 - **New: No upscaling is where a new game starts, and the menu can stay away.**
   \`PROTON_OPTISCALER_MENU=0 %command%\` now skips the menu for that game and starts it with its
   current choice (it used to do nothing). For every game, \`~/.config/bc250-fsr4/settings\` takes

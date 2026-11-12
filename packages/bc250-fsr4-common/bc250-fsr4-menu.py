@@ -38,9 +38,12 @@ import sys
 # the key OptiScaler's own overlay writes on Save Settings, so a pick made there
 # shows here on the next launch. value (as the ini has it), label, sub-label, in
 # window order. The two HLX DLSS networks share a row with a choice of model
-# (owner); the overlay lists them apart, as hlx-dlss and HLX DLSS Preset K.
+# (owner); the overlay lists them apart, as hlx-dlss and hlx-dlss-k (FreeFG's
+# folder names; Preset K's was "HLX DLSS Preset K" up to 2026-11-12, which an
+# ini saved before then still says: RENAMED, as in the launcher).
 VARIANT = "freefg-all"
-HLX_DLSS_E, HLX_DLSS_K = "hlx-dlss", "HLX DLSS Preset K"
+HLX_DLSS_E, HLX_DLSS_K = "hlx-dlss", "hlx-dlss-k"
+RENAMED = {"hlx dlss preset k": HLX_DLSS_K}
 UPSCALERS = [
     ("ffx", "FreeFG + HLX FSR 4", "HelixSR 3.3.0's HLX FSR 4: AMD's FSR 4 network on HelixSR's pipeline"),
     (HLX_DLSS_E, "FreeFG + HLX DLSS Model E", "HelixSR 3.3.0's HLX DLSS with NVIDIA's DLSS Model E network"),
@@ -134,6 +137,7 @@ def upscaler_state(ini_sections, fresh, previous=""):
     if fresh:
         return previous if previous in LABELS else "ffx"
     raw = ini_raw(ini_sections, "Upscalers.Dx12Upscaler")
+    raw = RENAMED.get(raw.lower(), raw)
     if raw.lower() == "auto" or not raw:
         return previous if previous in LABELS else "ffx"
     if raw.lower() == "ffx":

@@ -1003,15 +1003,17 @@ lists them as below, and the menu shows the overlay's pick at the next launch.
 |---|---|---|
 | FreeFG + HLX FSR 4 | `FSR 3.X/4`, with HLX FSR 4 in its *FFX Upscaler* list | `PROTON_USE_OPTISCALER=freefg-hlxfsr4` |
 | FreeFG + HLX DLSS, DLSS Model E | `hlx-dlss` | `PROTON_USE_OPTISCALER=freefg-hlxdlss` |
-| FreeFG + HLX DLSS, DLSS Preset K | `HLX DLSS Preset K` | `PROTON_USE_OPTISCALER=freefg-hlxdlssk` |
+| FreeFG + HLX DLSS, DLSS Preset K | `hlx-dlss-k` | `PROTON_USE_OPTISCALER=freefg-hlxdlssk` |
 | FreeFG + HLX FSR 4 Full | `HLX FSR 4 Full` | `PROTON_USE_OPTISCALER=freefg-hlxfsr4full` |
 | FreeFG + FSR 4 RC12 | `FSR 4 RC12` | `PROTON_USE_OPTISCALER=freefg` |
 
 `PROTON_USE_OPTISCALER=freefg-all` turns OptiScaler on without forcing an
 upscaler (the overlay's pick stays), and `PROTON_USE_OPTISCALER=0` turns it off.
 
-Model E keeps the name `hlx-dlss` in the overlay because FreeFG's OptiScaler
-recognises HLX DLSS by that folder name to hand it the game's input type.
+The two HLX DLSS entries are called `hlx-dlss` and `hlx-dlss-k` because FreeFG's
+OptiScaler recognises HLX DLSS by a folder name starting with `hlx-dlss` to hand
+it the game's input type (FreeFG's own names). Until 2026-11-12 Preset K was
+`HLX DLSS Preset K`; a game set to it moves to `hlx-dlss-k` by itself.
 
 - **HLX FSR 4** (the payload's first pick): AMD's FSR 4 network on the
   faster pipeline of [HelixSR](https://github.com/lonewolf0622/HelixSR) 3.3.0 by
@@ -1038,8 +1040,9 @@ recognises HLX DLSS by that folder name to hand it the game's input type.
   HLX DLSS at Quality (960p render), which often runs well enough without frame
   generation.
 - **HLX DLSS, DLSS Preset K**: HelixSR 3.3.0's DLSS 4 Preset K network in a
-  folder of its own (`OptiScaler/custom/HLX DLSS Preset K/dlss/`, its kernels and
-  weights beside it). Sharper than Model E and a little slower (2.54 ms at 1080p
+  folder of its own (`OptiScaler/custom/hlx-dlss-k/dlss/`, its kernels and
+  weights beside it). Since FreeFG 1.4.0 it gets the game's input type too, as
+  Model E does. Sharper than Model E and a little slower (2.54 ms at 1080p
   Quality on a BC-250), but it can sparkle on foliage and showed artifacts and
   ghosting in our tests; some players like it. With the Steam overlay on, a game
   can freeze at startup: turn the overlay off for that game if it does.
@@ -1088,7 +1091,7 @@ licence (its source is not published). The DLSS network it runs is, per its
 author, NVIDIA's property and not covered by any licence here; its release
 does not contain it: its setup script builds it from NVIDIA's public DLSS
 310.7.0 DLL. HLX FSR 4's shaders ship built in the release. We ran the setup
-script once and mirrored the result (`HelixSR-3.3.0-20261111-network.zip`), so the Proton
+script once and mirrored the result (`HelixSR-3.3.0-20261112-network.zip`), so the Proton
 packages need no setup step and nothing is downloaded at game launch. HelixSR and
 the RC12 bridge are unsigned; each is pinned by SHA256 and its origin is written
 into the prefix (`Licenses/THIRD-PARTY-UPSCALER.txt`, notices under
@@ -1099,7 +1102,7 @@ and [packages/bc250-fsr4-common/README.md](packages/bc250-fsr4-common/README.md)
 
 ### FreeFG: XeSS frame generation for the BC-250 (the default)
 
-Every upscaler runs on [FreeFG](https://github.com/daniel-h-0/freefg) 1.3.0 by
+Every upscaler runs on [FreeFG](https://github.com/daniel-h-0/freefg) 1.4.0 by
 daniel-h-0. Frame generation is Intel's XeSS FG (XeFG): Intel's unmodified
 runtime generates the frames, and FreeFG's wrapper runs part of its GPU work with
 FreeFG's own shaders, which are faster on the BC-250 (its author measured +21% in
@@ -1162,8 +1165,8 @@ Spider-Man 2 and Shadow of the Tomb Raider. Its logs, `BC250-MFG.log` and
 FreeFG problems [to FreeFG](https://github.com/daniel-h-0/freefg/issues). The
 package ships FreeFG's release files unchanged, pinned by SHA256: its
 OptiScaler build (GPL-3.0; source at
-[daniel-h-0/OptiScaler](https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-ba0dedb),
-and `freefg-1.3.0-source.zip` is mirrored beside the package inputs), its
+[daniel-h-0/OptiScaler](https://github.com/daniel-h-0/OptiScaler/releases/tag/bc250-4d0c0b9-r1),
+and `freefg-1.4.0-source.zip` is mirrored beside the package inputs), its
 wrapper, shaders and layer (MIT). Intel's XeFG and XeLL runtimes are the ones in
 the pinned OptiScaler nightly, byte-identical to what FreeFG pins.
 

@@ -53,21 +53,21 @@ source=(
     # (HelixSR/helixsr.dll, NVIDIA's DLSS Model E network). Mirrored after its own
     # setup built the network from NVIDIA's DLSS DLL; per its author that remains
     # NVIDIA's. HLX FSR 4 ships built from AMD's FSR SDK (MIT).
-    "HelixSR-3.3.0-20261111-network.zip::@PAYLOAD_BASE@/HelixSR-3.3.0-20261111-network.zip"
+    "HelixSR-3.3.0-20261112-network.zip::@PAYLOAD_BASE@/HelixSR-3.3.0-20261112-network.zip"
     # The Scaler 2.3.0 part of HelixSR 3.3.0 (lonewolf0622, GPL-3.0; the
     # HLX FSR 4 Full custom upscaler in it is built from AMD's FSR SDK, MIT): only
     # OptiScaler/custom/HLX FSR 4 Full/ffx/ (freefg-hlxfsr4full), AMD's FSR SDK
     # 2.4.0 upscaler it keeps as amd_fidelityfx_upscaler_dx12.amd.dll (beside HLX
     # FSR 4 in both HLX FSR 4 variants) and its FidelityFX licence are used. Mirrored.
-    "HelixSR-3.3.0-20261111-Scaler-2.3.0-core.zip::@PAYLOAD_BASE@/HelixSR-3.3.0-20261111-Scaler-2.3.0-core.zip"
-    # FreeFG 1.3.0 (daniel-h-0): Intel XeSS frame generation with its own BC-250
+    "HelixSR-3.3.0-20261112-Scaler-2.3.0-core.zip::@PAYLOAD_BASE@/HelixSR-3.3.0-20261112-Scaler-2.3.0-core.zip"
+    # FreeFG 1.4.0 (daniel-h-0): Intel XeSS frame generation with its own BC-250
     # shaders and a VRR pacing layer; every variant ships it. Mirrored release
     # zip; its OptiScaler build is GPL-3.0, and the matching
-    # freefg-1.3.0-source.zip is mirrored beside it.
-    "freefg-1.3.0.zip::@PAYLOAD_BASE@/freefg-1.3.0.zip"
-    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-ba0dedb),
+    # freefg-1.4.0-source.zip is mirrored beside it.
+    "freefg-1.4.0.zip::@PAYLOAD_BASE@/freefg-1.4.0.zip"
+    # The OptiScaler.ini of FreeFG's OptiScaler build (fork tag bc250-4d0c0b9-r1),
     # pinned by commit: the variants ship this build and this ini.
-    "OptiScaler-bc250-ba0dedb.ini::https://raw.githubusercontent.com/daniel-h-0/OptiScaler/ba0dedb4681875a1a0b88a35385d5aeb91db4063/OptiScaler.ini"
+    "OptiScaler-bc250-4d0c0b9.ini::https://raw.githubusercontent.com/daniel-h-0/OptiScaler/4d0c0b9798e07332a0a8a86a7dfa5b0388732957/OptiScaler.ini"
     # MFG Unlocker 1.7.0 (dashdogy, MIT): loaded as an OptiScaler plugin, so
     # OptiScaler's XeFG menu offers 3x and 4x. Mirrored release zip; its license,
     # which the zip does not carry, pinned by the tag's commit.
@@ -98,9 +98,9 @@ noextract=(
     "@FAKENVAPI_ASSET@"
     # build-fsr4-payload.py unpacks these itself.
     "bc250-fsr4-dll-4.0.0-rc12.zip"
-    "HelixSR-3.3.0-20261111-network.zip"
-    "HelixSR-3.3.0-20261111-Scaler-2.3.0-core.zip"
-    "freefg-1.3.0.zip"
+    "HelixSR-3.3.0-20261112-network.zip"
+    "HelixSR-3.3.0-20261112-Scaler-2.3.0-core.zip"
+    "freefg-1.4.0.zip"
     "MFGUnlocker-v1.7.0.zip"
 )
 
@@ -121,10 +121,10 @@ sha256sums=(
     'fb12735bfcc0d47f534f2206d57ec34129dc3d22b6405a1c2ef86745ab48b2eb'
     '5de9b6d9f5475a0f2622e4cbce88cde46c68929d9bd0bbc353c70056997bb771'
     '646778a0d06c42bf3cdcc99f9396680f5cc4a33658b90c0889fd15751bfb800d'
-    '4bc31e78f90b50910c897e83d2257f8ae6d8f39367ccc5391657b9999422c3fd'
-    'd2287133ca72abc728331f7f0db7c00175a3565492ab5dfb7a92dca2e4858f5e'
-    '25b00f55f672b1431b4ca85e4258c3daffc498a6031fc57e61b16c86628162e9'
-    '060d8fcfb1374f69dfbe4df6b22fed30d6349b97e9b5f6272cad9f494c440cb8'
+    '4484a0990880e2f6607a0d06adee18af7ff30477b73d6d52824bb96543b5e7ab'
+    '99fd7eaf07e1b23a6b38dba24453e28f0d957a1ee800a1f26c3d3b070f88338c'
+    '6fa3a44d27acb331d21169549d9b0bbd5bf283a0f37ef169172d4cb65614ef35'
+    '7c47167e814469dd887354191786f908c5b8d78de92d384b3e7e3814ac97ccc8'
     '5bd19d03288e1ece1d0bb2030ac072b36758045028da192044dcaad73fd901dd'
     '433da96087fd9b91afd44c6350ca92da53167c9636a0a71e428f71036d8c372f'
     '@FAKENVAPI_SHA256@'
@@ -201,13 +201,13 @@ build() {
         --provider-version "$_provider_version" \
         --fsr4-bridge "$srcdir/bc250-fsr4-dll-4.0.0-rc12.zip" \
             "https://github.com/daniel-h-0/bc250-fsr4-fork/releases/tag/v4.0.0-rc12" \
-        --helixsr-ngx "$srcdir/HelixSR-3.3.0-20261111-network.zip" \
+        --helixsr-ngx "$srcdir/HelixSR-3.3.0-20261112-network.zip" \
             "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.3.0" \
-        --helixsr-full "$srcdir/HelixSR-3.3.0-20261111-Scaler-2.3.0-core.zip" \
+        --helixsr-full "$srcdir/HelixSR-3.3.0-20261112-Scaler-2.3.0-core.zip" \
             "https://github.com/lonewolf0622/HelixSR/releases/tag/v3.3.0" \
-        --freefg "$srcdir/freefg-1.3.0.zip" \
-            "https://github.com/daniel-h-0/freefg/releases/tag/v1.3.0" \
-        --freefg-ini "$srcdir/OptiScaler-bc250-ba0dedb.ini" \
+        --freefg "$srcdir/freefg-1.4.0.zip" \
+            "https://github.com/daniel-h-0/freefg/releases/tag/v1.4.0" \
+        --freefg-ini "$srcdir/OptiScaler-bc250-4d0c0b9.ini" \
         --mfg-unlocker "$srcdir/MFGUnlocker-v1.7.0.zip" \
             "$srcdir/MFGUnlocker-LICENSE-v1.7.0.txt" \
             "https://github.com/dashdogy/MFG-Unlocker/releases/tag/v1.7.0" \

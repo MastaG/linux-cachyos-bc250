@@ -185,16 +185,18 @@ upscaler that shares a file name with another gets a folder:
 |---|---|---|
 | `ffx` (index 0) | `OptiScaler/amd_fidelityfx_upscaler_dx12.dll` = HLX FSR 4, AMD's FSR beside it as `.amd.dll` | `--helixsr-ngx` (`HLX-FSR4/`), `--helixsr-full` (the `.amd.dll`) |
 | `hlx-dlss` | `OptiScaler/custom/hlx-dlss/dlss/` = Model E's `helixsr.dll` and its `helixsr.ini` (`Int8 = off`) | `--helixsr-ngx` (`HelixSR/`) |
-| `HLX DLSS Preset K` | `OptiScaler/custom/HLX DLSS Preset K/dlss/` = K's four files | `--helixsr-ngx` (`HelixSR/k/`) |
+| `hlx-dlss-k` | `OptiScaler/custom/hlx-dlss-k/dlss/` = K's four files | `--helixsr-ngx` (`HelixSR/k/`) |
 | `FSR 4 RC12` | `OptiScaler/custom/FSR 4 RC12/ffx/amd_fidelityfx_upscaler_dx12.dll` | `--fsr4-bridge` |
 | `HLX FSR 4 Full` | `OptiScaler/custom/HLX FSR 4 Full/ffx/` = Full and its `hlx_fsr4.ini` | `--helixsr-full`, or `--helixsr-full-dll` |
 
-- **`hlx-dlss` is a fixed name.** FreeFG's OptiScaler passes HLX DLSS the game's
-  input API (`HelixSR.Upscale.Input.API`, `DLSSFeature_Dx12.cpp`) only for a
-  custom folder of exactly that name, as FreeFG's own installer lays it out for
-  `--upscaler hlx-dlss`. Model E's DLL reads it; Preset K's carries no such
-  string, so a folder of its own costs K nothing. The overlay therefore lists
-  Model E as `hlx-dlss`; the menu shows the two as one HLX DLSS row with a DLSS
+- **`hlx-dlss` and `hlx-dlss-k` are fixed names**, FreeFG's own (1.4.0 on).
+  FreeFG's OptiScaler passes HLX DLSS the game's input API
+  (`HelixSR.Upscale.Input.API`, `DLSSFeature_Dx12.cpp`) for any custom folder
+  whose name starts with `hlx-dlss`, as FreeFG's own installer lays them out for
+  `--upscaler hlx-dlss` and `hlx-dlss-k`. Up to FreeFG 1.3.0 that was Model E's
+  folder only, and Preset K's was `HLX DLSS Preset K`; the launcher's
+  `RENAMED_UPSCALERS` moves a game's saved pick to the new name and
+  `RETIRED_FOLDERS` removes the old folder. The menu shows the two as one HLX DLSS row with a DLSS
   Model E / DLSS Preset K choice (owner). They cannot share one overlay entry:
   swapping files in a folder at launch breaks protonfixes' checksums.
 - **HLX FSR 4 keeps the FidelityFX slot** because it looks for AMD's DLL beside
@@ -226,7 +228,7 @@ upscaler that shares a file name with another gets a folder:
   FidelityFX provider at index 1 or up) gets a "Keep the overlay's choice" row.
 - **Old names.** The config's `optiscaler_upscalers` maps each one-upscaler
   variant name to its `Dx12Upscaler` (`freefg-hlxfsr4` `ffx`, `freefg-hlxdlss`
-  `hlx-dlss`, `freefg-hlxdlssk` `HLX DLSS Preset K`, `freefg` `FSR 4 RC12`,
+  `hlx-dlss`, `freefg-hlxdlssk` `hlx-dlss-k`, `freefg` `FSR 4 RC12`,
   `freefg-hlxfsr4full` `HLX FSR 4 Full`, and the retired names of
   `RETIRED_VARIANTS` as the one they became). Every name is an alias of the
   payload's version. As a launch option one also sets its upscaler on every
@@ -252,7 +254,7 @@ upscaler that shares a file name with another gets a folder:
   prefix's choice; `=1` shows it (also over `menu = 0`) and clears a save.
 
 - **The FreeFG tree** — built with `--freefg` from FreeFG's
-  release zip (mirrored unchanged as `freefg-1.3.0.zip`, its GPL source zip
+  release zip (mirrored unchanged as `freefg-1.4.0.zip`, its GPL source zip
   beside it).
   [FreeFG](https://github.com/daniel-h-0/freefg) speeds up Intel's XeSS frame
   generation on the BC-250. The tree is the nightly's with FreeFG's OptiScaler
