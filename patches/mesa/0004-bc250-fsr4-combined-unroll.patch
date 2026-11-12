@@ -29,10 +29,10 @@ Measured by the kit at 8.015 ms -> 5.843 ms per FSR4.1.1 INT8 upscale
 Origin: bc250-fsr4-20260906 research kit, source/accepted-2.84.patch
 ---
 diff --git a/src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c b/src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c
-index 2d091a7d7cb..13790ab4adc 100644
+index 1f57984b58c..8682e6042ea 100644
 --- a/src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c
 +++ b/src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c
-@@ -118,5 +118,5 @@ ac_nir_fixup_smem_loads_null_prt(nir_shader *nir, uint8_t address_prt_wa_control
+@@ -117,5 +117,5 @@ ac_nir_fixup_smem_loads_null_prt(nir_shader *nir, uint8_t address_prt_wa_control
        .control_bit = address_prt_wa_control_bit,
     };
  
@@ -40,10 +40,10 @@ index 2d091a7d7cb..13790ab4adc 100644
 +   return nir_shader_intrinsics_pass(nir, fixup_smem_loads_null_prt, nir_metadata_control_flow, &s);
  }
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index e4725219b8d..f86e62ddfc1 100644
+index 5ce65245e6d..5c36b9738ba 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -383,6 +383,11 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -371,6 +371,11 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
        return -1;
  #endif
  
@@ -56,7 +56,7 @@ index e4725219b8d..f86e62ddfc1 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 4812798e7fe..e772f0816d8 100644
+index 35a0c940e93..d2307110309 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -182,6 +182,10260 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
@@ -10320,7 +10320,7 @@ index 4812798e7fe..e772f0816d8 100644
  struct bc250_dot_density {
     unsigned sdot;
     unsigned iadd;
-@@ -482,7 +10736,7 @@ radv_spirv_nir_debug(void *private_data, enum nir_spirv_debug_level level, size_
+@@ -484,7 +10738,7 @@ radv_spirv_nir_debug(void *private_data, enum nir_spirv_debug_level level, size_
  
  static void
  radv_shader_choose_subgroup_size(const struct radv_compiler_info *compiler_info, nir_shader *nir,
@@ -10329,7 +10329,7 @@ index 4812798e7fe..e772f0816d8 100644
  {
     VkPipelineShaderStageRequiredSubgroupSizeCreateInfo rss_info = {
        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
-@@ -516,6 +10770,11 @@ radv_shader_choose_subgroup_size(const struct radv_compiler_info *compiler_info,
+@@ -518,6 +10772,11 @@ radv_shader_choose_subgroup_size(const struct radv_compiler_info *compiler_info,
        else
           default_wave_size = compiler_info->key.cs_wave_size;
  
@@ -10341,7 +10341,7 @@ index 4812798e7fe..e772f0816d8 100644
        /* Games don't always request full subgroups when they should, which can cause bugs if cswave32
         * is enabled. Furthermore, if cooperative matrices or subgroup info are used, we can't transparently change
         * the subgroup size.
-@@ -607,7 +10866,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -609,7 +10868,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        nir_validate_shader(nir, "in internal shader");
  
        assert(exec_list_length(&nir->functions) == 1);
@@ -10350,7 +10350,7 @@ index 4812798e7fe..e772f0816d8 100644
     } else {
        uint32_t *spirv = (uint32_t *)stage->spirv.data;
        assert(stage->spirv.size % 4 == 0);
-@@ -709,7 +10968,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -718,7 +10977,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
         */
        NIR_PASS(_, nir, nir_lower_variable_initializers, ~0);
  
@@ -10359,8 +10359,8 @@ index 4812798e7fe..e772f0816d8 100644
 +         compiler_info->debug.family == CHIP_GFX1013 && (bc250_fsr4_profile(stage->spirv.data, stage->spirv.size) & 2));
  
        progress = false;
-       NIR_PASS(progress, nir, nir_lower_cooperative_matrix_flexible_dimensions, 16, 16, 16);
-@@ -922,7 +11182,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+       struct nir_lower_coopmat_args coopmat_args = {
+@@ -937,7 +11197,22 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
           deferred_options.has_sdot_4x8 = true;
           nir->options = &deferred_options;
           radv_optimize_nir(nir, false);

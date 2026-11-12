@@ -26,10 +26,10 @@ more launches on another board. Kept opt-in for that reason.
 Origin: bc250-fsr4-20260906 research kit, source/composed-over-2.84.patch
 ---
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index f86e62ddfc1..f357403d802 100644
+index 5c36b9738ba..6d7814ae273 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -387,6 +387,14 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -375,6 +375,14 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
     const char *bc250_fsr4_cache = debug_get_bool_option("BC250_FSR4_DISABLE", false) ?
        "bc250-fsr4-integrated-v2-disabled" : "bc250-fsr4-integrated-v2";
     _mesa_blake3_update(&ctx, bc250_fsr4_cache, strlen(bc250_fsr4_cache));
@@ -45,7 +45,7 @@ index f86e62ddfc1..f357403d802 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index e772f0816d8..66a02c23faf 100644
+index d2307110309..5199e310cc5 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8497,7 +8497,7 @@ bc250_fsr4_dynamic_columns(nir_shader *nir, unsigned profile)
@@ -72,7 +72,7 @@ index e772f0816d8..66a02c23faf 100644
     return 0;
  }
  
-@@ -10847,6 +10853,4162 @@ ycbcr_conversion_lookup(const void *data, uint32_t set, uint32_t binding, uint32
+@@ -10849,6 +10855,4162 @@ ycbcr_conversion_lookup(const void *data, uint32_t set, uint32_t binding, uint32
     }
  }
  
@@ -4235,7 +4235,7 @@ index e772f0816d8..66a02c23faf 100644
  nir_shader *
  radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct radv_shader_stage *stage,
                           const struct radv_spirv_to_nir_options *options, bool is_internal)
-@@ -10868,7 +15030,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -10870,7 +15032,8 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        assert(exec_list_length(&nir->functions) == 1);
        radv_shader_choose_subgroup_size(compiler_info, nir, &stage->key, 0, false);
     } else {
@@ -4245,7 +4245,7 @@ index e772f0816d8..66a02c23faf 100644
        assert(stage->spirv.size % 4 == 0);
  
        const bool dump_spirv = compiler_info->debug.dump_spirv &&
-@@ -10917,7 +15080,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -10919,7 +15082,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
           .buffer_descriptor_size = compiler_info->buffer_descriptor_size,
           .buffer_descriptor_alignment = compiler_info->buffer_descriptor_alignment,
        };
@@ -4254,7 +4254,7 @@ index e772f0816d8..66a02c23faf 100644
                           &compiler_info->nir_options[stage->stage]);
        nir->info.internal |= is_internal;
        assert(nir->info.stage == stage->stage);
-@@ -10968,7 +15131,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -10977,7 +15140,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
         */
        NIR_PASS(_, nir, nir_lower_variable_initializers, ~0);
  

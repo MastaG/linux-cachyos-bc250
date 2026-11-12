@@ -58,10 +58,10 @@ which RADV sets only for ACO on GFX1013; every other driver keeps
 upstream's sdot_4x8_iadd lowering unchanged.
 ---
 diff --git a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-index a8d2c554e9d..d7299aa745c 100644
+index 523e1d871dc..1320b2fc401 100644
 --- a/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
 +++ b/src/amd/compiler/instruction_selection/aco_select_nir_alu.cpp
-@@ -1779,6 +1779,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1804,6 +1804,7 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
@@ -69,7 +69,7 @@ index a8d2c554e9d..d7299aa745c 100644
     case nir_op_imul24_relaxed: {
        if (dst.regClass() == s1) {
           emit_sop2_instruction(ctx, instr, aco_opcode::s_mul_i32, dst, false, 0x3);
-@@ -1789,6 +1790,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
+@@ -1814,6 +1815,22 @@ visit_alu_instr(isel_context* ctx, nir_alu_instr* instr)
        }
        break;
     }
@@ -93,7 +93,7 @@ index a8d2c554e9d..d7299aa745c 100644
        if (dst.regClass() == s1) {
           Operand op1(get_alu_src(ctx, instr->src[0]));
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index f7999886e39..4812798e7fe 100644
+index 7291b13b6d8..35a0c940e93 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -60,6 +60,8 @@ get_nir_options_for_stage(struct radv_compiler_info *compiler_info, mesa_shader_
@@ -227,7 +227,7 @@ index f7999886e39..4812798e7fe 100644
  void
  radv_optimize_nir(struct nir_shader *shader, bool optimize_conservatively)
  {
-@@ -793,7 +910,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -808,7 +925,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        NIR_PASS(_, nir, nir_opt_find_array_copies);
        NIR_PASS(_, nir, nir_lower_vars_to_ssa);
  
@@ -250,10 +250,10 @@ index f7999886e39..4812798e7fe 100644
 +         radv_optimize_nir(nir, false);
 +      }
  
-       NIR_PASS(_, nir, nir_opt_memcpy);
-       NIR_PASS(_, nir, nir_opt_deref);
+       NIR_PASS(_, nir, nir_opt_scalar_array_vars_to_vec, nir_var_function_temp | nir_var_mem_shared);
+ 
 diff --git a/src/compiler/nir/nir_opt_algebraic.py b/src/compiler/nir/nir_opt_algebraic.py
-index b82a73a6525..a3b4e325a06 100644
+index a466f6e0850..18059a3f07c 100644
 --- a/src/compiler/nir/nir_opt_algebraic.py
 +++ b/src/compiler/nir/nir_opt_algebraic.py
 @@ -444,10 +444,47 @@ for sz in (16, 32, 64):
@@ -328,10 +328,10 @@ index b82a73a6525..a3b4e325a06 100644
     (('sudot_4x8_iadd', a, b, c), ('iadd', sudot_4x8_a_b, c), '!options->has_sudot_4x8'),
     (('sdot_2x16_iadd', a, b, c), ('iadd', sdot_2x16_a_b, c), '!options->has_dot_2x16'),
 diff --git a/src/compiler/nir/nir_shader_compiler_options.h b/src/compiler/nir/nir_shader_compiler_options.h
-index 8f0e9a7c0e1..8fe5962bf8d 100644
+index a1ba885fed3..b818e4de0bc 100644
 --- a/src/compiler/nir/nir_shader_compiler_options.h
 +++ b/src/compiler/nir/nir_shader_compiler_options.h
-@@ -662,6 +662,10 @@ typedef struct nir_shader_compiler_options {
+@@ -669,6 +669,10 @@ typedef struct nir_shader_compiler_options {
     /** Backend supports sdot_4x8_iadd. */
     bool has_sdot_4x8;
  

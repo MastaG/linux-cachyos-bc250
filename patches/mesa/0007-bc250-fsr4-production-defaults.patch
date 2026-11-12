@@ -37,10 +37,10 @@ shaderBinaryUUID on every AMD GPU. The bytes hashed on GFX1013 are
 unchanged, so existing BC-250 shader caches stay valid.
 ---
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index cedc98c5ccd..af0b7e66b1c 100644
+index a21b21e845a..fe3d1cc61a5 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
-@@ -383,30 +383,30 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
+@@ -371,30 +371,30 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
        return -1;
  #endif
  
@@ -96,7 +96,7 @@ index cedc98c5ccd..af0b7e66b1c 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 0bc863dc1b0..672c537f824 100644
+index 77c5a198bb0..d8edfb2c787 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8557,11 +8557,11 @@ bc250_fsr4_profile(const void *bytes, size_t size)
@@ -113,7 +113,7 @@ index 0bc863dc1b0..672c537f824 100644
              flags |= 524304; /* Existing pointwise schedule, eight outputs. */
           return flags;
        }
-@@ -15029,7 +15029,7 @@ bc250_imageprep_spirv(const struct radv_compiler_info *compiler_info,
+@@ -15031,7 +15031,7 @@ bc250_imageprep_spirv(const struct radv_compiler_info *compiler_info,
         strcmp(stage->entrypoint, "main") ||
         (stage->spec_info && stage->spec_info->mapEntryCount) ||
         debug_get_bool_option("BC250_FSR4_DISABLE", false) ||
@@ -122,7 +122,7 @@ index 0bc863dc1b0..672c537f824 100644
         *size != sizeof(bc250_imageprep_original) ||
         memcmp(original, bc250_imageprep_original, sizeof(bc250_imageprep_original)))
        return original;
-@@ -15055,8 +15055,8 @@ bc250_resolution_guard_spirv(const struct radv_compiler_info *compiler_info,
+@@ -15057,8 +15057,8 @@ bc250_resolution_guard_spirv(const struct radv_compiler_info *compiler_info,
         strcmp(stage->entrypoint, "main") ||
         (stage->spec_info && stage->spec_info->mapEntryCount) ||
         spirv != (const uint32_t *)stage->spirv.data ||
