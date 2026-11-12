@@ -36,13 +36,12 @@ GFX1013. As carried upstream they changed pipelineCacheUUID and
 shaderBinaryUUID on every AMD GPU. The bytes hashed on GFX1013 are
 unchanged, so existing BC-250 shader caches stay valid.
 ---
-src/amd/vulkan/radv_physical_device.c   | 48 +++++++++++++++++++++
-src/amd/vulkan/radv_shader.c            | 11 +++++------
-2 files changed, 29 insertions(+), 30 deletions(-)
----
+ src/amd/vulkan/radv_physical_device.c | 48 +++++++++++++--------------
+ src/amd/vulkan/radv_shader.c          | 10 +++---
+ 2 files changed, 29 insertions(+), 29 deletions(-)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index 2791a0bd515..00546ebcba4 100644
+index a462d6e0228..d4623d6eff5 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -376,30 +376,30 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -101,7 +100,7 @@ index 2791a0bd515..00546ebcba4 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index fc615de22e9..551e84a8bbd 100644
+index 4965df02d6a..c7037caa149 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
 @@ -8559,11 +8559,11 @@ bc250_fsr4_profile(const void *bytes, size_t size)
