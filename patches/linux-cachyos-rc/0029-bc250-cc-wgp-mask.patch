@@ -1,0 +1,147 @@
+From 0800d9810d9715e08bcc95a2b8eb4f03b1e755bf Mon Sep 17 00:00:00 2001
+From: ForceConstant <26015318+ForceConstant@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 17:46:37 +0100
+Subject: [PATCH] drm/amdgpu/gfx10: BC-250 per-shader-array WGP mask
+
+amdgpu.bc250_cc_write_mode=3 enables all 40 CUs. On boards where some of
+the harvested WGPs are defective that is not usable, and unlocking only
+the good ones from userspace (UMR, after the driver bound) leaves KFD
+with the fused count: it enumerates CUs once, here, in
+gfx_v10_0_get_cu_info().
+
+amdgpu.bc250_cc_wgp_mask takes up to four comma-separated 5-bit WGP
+enable masks, in the order SE0.SH0, SE0.SH1, SE1.SH0, SE1.SH1 (bit set =
+WGP enabled; entries not given are all-on), and writes per shader array,
+before the enumeration loop:
+
+- CC_GC_SHADER_ARRAY_CONFIG: the disabled WGPs in INACTIVE_WGPS (bits
+  31:16), where gfx_v10_0_get_wgp_active_bitmap_per_sh() reads them;
+- SPI_PG_ENABLE_STATIC_WGP_MASK and RLC_PG_ALWAYS_ON_WGP_MASK: the mask.
+
+It takes precedence over bc250_cc_write_mode. An unparsable value, a
+fifth entry or a mask above 0x1f leaves the registers as fused and logs
+a warning. Like 0011 it only acts on PCI device 0x13FE.
+
+Based on the patch proposed by ForceConstant in issue #14, with the CC
+write moved from bits 4:0 to the INACTIVE_WGPS field: in bits 4:0 it
+cleared the fused field and KFD would have enumerated all 40 CUs.
+
+Link: https://github.com/MastaG/linux-cachyos-bc250/issues/14
+---
+ drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c | 79 +++++++++++++++++++++++++-
+ 1 file changed, 78 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
+index 98584e3b3..dc378dd1c 100644
+--- a/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
+@@ -26,12 +26,47 @@
+ #include <linux/firmware.h>
+ #include <linux/module.h>
+ #include <linux/pci.h>
++#include <linux/kstrtox.h>
++#include <linux/slab.h>
++#include <linux/string.h>
+ 
+ /* BC-250 40 CU unlock: clears harvest mask + enables SPI dispatch to all WGPs */
+ static int bc250_cc_write_mode;
+ module_param(bc250_cc_write_mode, int, 0444);
+ MODULE_PARM_DESC(bc250_cc_write_mode,
+ 	"BC-250: 0=off 1=probe-SE0SH0 2=clear-SE0SH0 3=clear-all-SAs 4=probe-all-SAs");
++static char *bc250_cc_wgp_mask;
++module_param(bc250_cc_wgp_mask, charp, 0444);
++MODULE_PARM_DESC(bc250_cc_wgp_mask,
++	"BC-250: per-shader-array WGP enable masks SE0.SH0,SE0.SH1,SE1.SH0,SE1.SH1, e.g. 0x1d,0x1f,0x0f,0x1f");
++
++/*
++ * Parse up to four comma-separated 5-bit WGP enable masks (bit set = WGP
++ * enabled). Entries not given stay all-on. Returns false when the string
++ * cannot be parsed, so a typo does not unlock anything.
++ */
++static bool bc250_parse_wgp_masks(const char *s, unsigned int masks[4])
++{
++	char *buf, *p, *tok;
++	bool ok = true;
++	int n = 0;
++
++	buf = kstrdup(s, GFP_KERNEL);
++	if (!buf)
++		return false;
++	p = buf;
++	while ((tok = strsep(&p, ","))) {
++		unsigned int v;
++
++		if (n == 4 || kstrtouint(strim(tok), 0, &v) || v > 0x1f) {
++			ok = false;
++			break;
++		}
++		masks[n++] = v;
++	}
++	kfree(buf);
++	return ok;
++}
+ #define BC250_PCI_DEVICE_ID 0x13FE
+ #include "amdgpu.h"
+ #include "amdgpu_gfx.h"
+@@ -10154,8 +10189,49 @@ static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
+ 
+ 	mutex_lock(&adev->grbm_idx_mutex);
+ 
++	/*
++	 * BC-250: per-shader-array WGP mask, for boards where some of the
++	 * harvested WGPs are defective. Same three registers as below, but each
++	 * shader array keeps the WGPs its mask leaves out disabled, in CC too,
++	 * so KFD and RADV enumerate exactly the enabled ones. CC holds the
++	 * inactive WGPs in bits 31:16, which is where
++	 * gfx_v10_0_get_wgp_active_bitmap_per_sh() reads them.
++	 */
++	if (bc250_cc_wgp_mask && bc250_cc_wgp_mask[0] &&
++	    adev->pdev->device == BC250_PCI_DEVICE_ID) {
++		unsigned int masks[4] = {0x1f, 0x1f, 0x1f, 0x1f};
++		int bc_se, bc_sh;
++
++		if (!bc250_parse_wgp_masks(bc250_cc_wgp_mask, masks)) {
++			dev_warn(adev->dev, "bc250-wgp-mask: cannot parse \"%s\", left as fused\n",
++				 bc250_cc_wgp_mask);
++			goto bc250_done;
++		}
++		for (bc_se = 0; bc_se < adev->gfx.config.max_shader_engines; bc_se++) {
++			for (bc_sh = 0; bc_sh < adev->gfx.config.max_sh_per_se; bc_sh++) {
++				int idx = bc_se * adev->gfx.config.max_sh_per_se + bc_sh;
++				unsigned int m = idx < 4 ? masks[idx] : 0x1f;
++				u32 cc = ((~m) & 0x1f) <<
++					 CC_GC_SHADER_ARRAY_CONFIG__INACTIVE_WGPS__SHIFT;
++				u32 bc_cc_orig, bc_cc_after, bc_spi_orig, bc_spi_after;
++
++				gfx_v10_0_select_se_sh(adev, bc_se, bc_sh, 0xffffffff, 0);
++				bc_cc_orig = RREG32_SOC15(GC, 0, mmCC_GC_SHADER_ARRAY_CONFIG);
++				WREG32_SOC15(GC, 0, mmCC_GC_SHADER_ARRAY_CONFIG, cc);
++				bc_cc_after = RREG32_SOC15(GC, 0, mmCC_GC_SHADER_ARRAY_CONFIG);
++				bc_spi_orig = RREG32_SOC15(GC, 0, mmSPI_PG_ENABLE_STATIC_WGP_MASK);
++				WREG32_SOC15(GC, 0, mmSPI_PG_ENABLE_STATIC_WGP_MASK, m);
++				bc_spi_after = RREG32_SOC15(GC, 0, mmSPI_PG_ENABLE_STATIC_WGP_MASK);
++				WREG32_SOC15(GC, 0, mmRLC_PG_ALWAYS_ON_WGP_MASK, m);
++				dev_info(adev->dev,
++					"bc250-wgp-mask: se=%d sh=%d mask=0x%02x CC=0x%08x->0x%08x SPI=0x%08x->0x%08x\n",
++					bc_se, bc_sh, m, bc_cc_orig, bc_cc_after,
++					bc_spi_orig, bc_spi_after);
++			}
++		}
++		gfx_v10_0_select_se_sh(adev, 0xffffffff, 0xffffffff, 0xffffffff, 0);
+ 	/* BC-250: unlock harvested CUs -- CC (enumeration) + SPI (dispatch) + RLC (power) */
+-	if (bc250_cc_write_mode > 0 && adev->pdev->device == BC250_PCI_DEVICE_ID) {
++	} else if (bc250_cc_write_mode > 0 && adev->pdev->device == BC250_PCI_DEVICE_ID) {
+ 		int bc_se, bc_sh;
+ 		for (bc_se = 0; bc_se < adev->gfx.config.max_shader_engines; bc_se++) {
+ 			for (bc_sh = 0; bc_sh < adev->gfx.config.max_sh_per_se; bc_sh++) {
+@@ -10186,6 +10262,7 @@ static int gfx_v10_0_get_cu_info(struct amdgpu_device *adev,
+ 		}
+ 		gfx_v10_0_select_se_sh(adev, 0xffffffff, 0xffffffff, 0xffffffff, 0);
+ 	}
++bc250_done:
+ 
+ 	for (i = 0; i < adev->gfx.config.max_shader_engines; i++) {
+ 		for (j = 0; j < adev->gfx.config.max_sh_per_se; j++) {
+-- 
+2.56.0
+

@@ -57,7 +57,7 @@ fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twenty-eight BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3.1). The RC kernel carries the same twenty-eight patches, regenerated for 7.4-rc1:
+The stable and BORE kernels carry these twenty-nine BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3.1). The RC kernel carries the same twenty-nine patches, regenerated for 7.4-rc1:
 
 ```text
 0001-bc250-8core-metrics.patch
@@ -88,6 +88,7 @@ The stable and BORE kernels carry these twenty-eight BC-250 patches in `patches/
 0026-bc250-gmc-flush-type-knob.patch
 0027-bc250-mtype-rw-c-rw-s.patch
 0028-bc250-gmc-kfd-vmid-mmio-flush.patch
+0029-bc250-cc-wgp-mask.patch
 ```
 
 `patches/linux-cachyos-rc` is the same list, spelled out here as well because the
@@ -123,6 +124,7 @@ freezes the BC-250 and is parked in `disabled/bc250-vcn.patch` in both sets):
 0026-bc250-gmc-flush-type-knob.patch
 0027-bc250-mtype-rw-c-rw-s.patch
 0028-bc250-gmc-kfd-vmid-mmio-flush.patch
+0029-bc250-cc-wgp-mask.patch
 ```
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
@@ -995,6 +997,18 @@ If you enable this, cap the clocks. With [cyan-skillfish-governor](https://githu
 Harvest patterns vary. Boards whose disabled CUs are contiguous appear to be policy-harvested, but a scattered pattern may indicate genuinely defective silicon. The upstream project ships tooling to map your own board and to mask individual WGPs through `amdgpu.disable_cu=SE.SH.WGP` if some of the unlocked units turn out to be unstable. Masking works at WGP granularity, so disabling one CU disables its partner.
 
 This patch is carried unmodified apart from one rebase: upstream Linux added an `adev` argument to `amdgpu_gfx_parse_disable_cu()` after the patch was written, so its context needed updating. The register writes themselves are untouched.
+
+### Unlocking only some WGPs: `amdgpu.bc250_cc_wgp_mask`
+
+Mode 3 is all or nothing. On a board where some of the harvested WGPs are defective, `bc250-cc-wgp-mask.patch` (`0029` in both sets, [issue #14](https://github.com/MastaG/linux-cachyos-bc250/issues/14)) sets the same three registers per shader array from a mask: one 5-bit WGP enable mask (bit set = enabled, 2 CUs per WGP) for each shader array, in the order SE0.SH0, SE0.SH1, SE1.SH0, SE1.SH1. For example, a board whose WGP 1 in SE0.SH0 and WGP 4 in SE1.SH0 are bad runs at 36 CUs with:
+
+```text
+amdgpu.bc250_cc_wgp_mask=0x1d,0x1f,0x0f,0x1f
+```
+
+The disabled WGPs stay disabled in `CC_GC_SHADER_ARRAY_CONFIG` too, so the driver, RADV and KFD/ROCm all count exactly the enabled CUs. Entries left out are all-on, and the mask takes precedence over `bc250_cc_write_mode`. A value that does not parse, a fifth entry or a mask above `0x1f` leaves the board as fused and logs a warning. Check with `dmesg | grep bc250-wgp-mask` (one line per shader array, with the register values before and after) and `rocminfo | grep 'Compute Unit'`. The thermal notes above apply in the same way.
+
+This is the kernel-side way to do what a userspace unlock through UMR does after boot. Such a tool unlocks dispatch for games, but runs after the driver has counted the CUs, so KFD (ROCm) keeps the fused 24. **Not yet validated on hardware.**
 
 ## BC-250 APU telemetry
 

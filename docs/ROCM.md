@@ -10,11 +10,13 @@ amdgpu.sched_policy=2
 
 Without the hardware scheduler a process keeps one fixed VMID while it has queues. `0025-bc250-kfd-nohws-vmid-flush.patch` flushes that VMID directly on every KFD map and unmap (a legacy, type-0 flush on the GFX hub), the way amdgpu did before PASID flushes existed. When a process gets its VMID, and when it gives it back, the stock code flushes it as well, so no stale translation survives a reuse. `0028-bc250-gmc-kfd-vmid-mmio-flush.patch` sends these flushes over MMIO like the PASID flushes: through the KIQ they stalled for seconds each when several compute processes ran at once (`failed to write reg 28b4 wait reg 28c6`). Nothing else needs to be set; `bc250_flush_by_runlist` does nothing in this mode and can stay at `0`.
 
-This is the configuration that holds up under sustained training ([issue #13](https://github.com/MastaG/linux-cachyos-bc250/issues/13), 36 CUs, stock ROCm 7.2.4 with a gfx1013 rocBLAS and a native PyTorch build):
+This is the configuration that holds up under sustained training ([issue #13](https://github.com/MastaG/linux-cachyos-bc250/issues/13), stock ROCm 7.2.4 with a gfx1013 rocBLAS and a native PyTorch build):
 
 - a CPU-referenced validation suite passes: fp32/fp16/bf16 GEMM against float64 over 11 shapes, layer_norm and rms_norm forward and backward, 50 optimizer steps agreeing with the CPU, 100 allocation/dispatch cycles;
 - 500 steps of LoRA fp16 training (256x2 tokens) ran with no preemption failure, GPU reset or page fault, and the loss went down;
 - the same run under `sched_policy=0` (below) locked the board within seconds.
+
+That run had 36 CUs unlocked for dispatch by a userspace tool after boot, but KFD counts CUs once, when the driver loads, so ROCm saw the fused 24. For KFD to see unlocked CUs they have to be unlocked by the kernel: `amdgpu.bc250_cc_write_mode=3` (all 40) or `amdgpu.bc250_cc_wgp_mask` (per shader array), see [Optional 40 CU unlock](PATCHES.md#optional-40-cu-unlock).
 
 Limits of this mode: queues are mapped statically, so there is no oversubscription (only as many KFD processes and queues as there are free compute VMIDs and queue slots), and a kernel that never finishes can still hang the GPU. Moving a process's memory (eviction) still preempts its queues; that has not caused a failure so far.
 
