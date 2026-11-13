@@ -1008,7 +1008,9 @@ amdgpu.bc250_cc_wgp_mask=0x1d,0x1f,0x0f,0x1f
 
 The disabled WGPs stay disabled in `CC_GC_SHADER_ARRAY_CONFIG` too, so the driver, RADV and KFD/ROCm all count exactly the enabled CUs. Entries left out are all-on, and the mask takes precedence over `bc250_cc_write_mode`. A value that does not parse, a fifth entry or a mask above `0x1f` leaves the board as fused and logs a warning. Check with `dmesg | grep bc250-wgp-mask` (one line per shader array, with the register values before and after) and `rocminfo | grep 'Compute Unit'`. The thermal notes above apply in the same way.
 
-This is the kernel-side way to do what a userspace unlock through UMR does after boot. Such a tool unlocks dispatch for games, but runs after the driver has counted the CUs, so KFD (ROCm) keeps the fused 24. **Not yet validated on hardware.**
+This is the kernel-side way to do what a userspace unlock through UMR does after boot. Such a tool unlocks dispatch for games, but runs after the driver has counted the CUs, so KFD (ROCm) keeps the fused 24.
+
+Validated by the reporter of issue #14 on 7.3.4, on a board with a defective WGP pair: with `amdgpu.sched_policy=2 amdgpu.bc250_cc_wgp_mask=0x1d,0x1f,0x0f,0x1f` and no userspace unlock, CC reads back `0xffe20000` / `0xffe00000` / `0xfff00000` / `0xffe00000`, the driver reports `active_cu_number 36` and `rocminfo` reports 36 CUs. A short LoRA fp16 training run then completed without `failed to write reg`, VM flush, queue preemption or GPU reset errors.
 
 ## BC-250 APU telemetry
 
