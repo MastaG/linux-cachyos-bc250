@@ -1364,7 +1364,7 @@ Installing it does not remove the ability to manage those packages individually,
 
 Each of these is genuinely optional; the defaults are fine.
 
-- **[40 CU unlock](docs/PATCHES.md#optional-40-cu-unlock)** — enables the 4
+- **[40 CU unlock](docs/PATCHES.md#optional-40-cu-unlock)** — enables the 16
   disabled compute units with `amdgpu.bc250_cc_write_mode=3`, or only the
   healthy ones with `amdgpu.bc250_cc_wgp_mask`. **Read the thermal
   notes first**: it raises power draw, and not every board is stable at 40 CUs.
