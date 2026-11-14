@@ -470,7 +470,7 @@ fi
 
 cat > RELEASE_NOTES.md <<EOF_NOTES
 
-# BC-250 CachyOS kernels + Mesa repository
+# BC-250 CachyOS kernels + Mesa + AI repository
 
 ## Kernels
 
