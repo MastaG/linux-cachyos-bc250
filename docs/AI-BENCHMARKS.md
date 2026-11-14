@@ -5,10 +5,32 @@ CachyOS with a kernel from this repository, all 40 CUs unlocked
 (`amdgpu.bc250_cc_write_mode=3`), `amdgpu.sched_policy=2`, the default 512 MB
 VRAM carve-out, game session stopped.
 
+## The GPU clock matters most
+
+`amdgpu` alone runs the BC-250's GPU at a low clock. The
+[cyan-skillfish-governor](https://github.com/filippor/cyan-skillfish-governor)
+raises it with load, but it measures load the way games produce it: ROCm compute
+(PyTorch, ComfyUI) does not register, and the GPU then stays at the governor's
+minimum. `systemctl isolate multi-user.target` also stops the governor.
+
+| Workload | Clock | Result |
+|---|---|---:|
+| Qwen3.8-27B IQ3_XXS, llama.cpp Vulkan (package), generation | 1200 MHz (governor stopped) | 15.6 t/s |
+| same | governor running (holds 2100 MHz) | **23.9 t/s** |
+| same, prompt (512 tokens) | 1200 MHz | 117.5 t/s |
+| same, prompt (512 tokens) | governor running | **191.0 t/s** |
+| SDXL-Lightning 8 steps, 1024×1024, ComfyUI | 1200 MHz | 28.7 s per image |
+| same | governor running (stays at 1000 MHz: compute is invisible to it) | slower still |
+| same | fixed 2100 MHz through the governor's D-Bus `SetFixedFrequency` | **20.3 s per image** |
+
+Most tables below were measured at 1200 MHz, before this was found. They
+compare setups at the same clock, so which setup wins still holds; the absolute
+numbers are lower than with the governor.
+
 ## LLM: Qwen3.8-27B
 
 Qwen3.8-27B, Unsloth `UD-IQ3_XXS` (10.9 GB, 3.06 bits per weight), all layers on
-the GPU, `llama-bench`:
+the GPU, `llama-bench`, GPU at 1200 MHz:
 
 | Backend | Build | Prompt, 512 tokens | Prompt, 64 tokens | Generation |
 |---|---|---:|---:|---:|
@@ -55,9 +77,25 @@ slots splits the context between them.
 Qwen3.8 uses a hybrid architecture (`qwen35` in llama.cpp) in which only some
 layers keep a classic KV cache, which is why long contexts fit at all.
 
+### At full clock, and the gfx1013 llama.cpp fork
+
+GPU fixed at 2100 MHz, `llama-bench -fa 1 -p 512 -n 128`:
+
+| Build | Qwen3.8-27B IQ3_XXS prompt / generation | Qwen3.5-9B Q4_K_M prompt / generation |
+|---|---:|---:|
+| CachyOS `llama-cpp` package (cd959bae99) | 192.4 / 24.0 t/s | 582.6 / 59.3 t/s |
+| llama.cpp master (32bdc3a89, 2026-11-14) | 198.6 / 23.9 t/s | 610.5 / 59.2 t/s |
+| [TechMakesArt/llama.cpp-bc250](https://github.com/TechMakesArt/llama.cpp-bc250) (82fac30, June 2026) | cannot load the model | 472.5 / 55.2 t/s |
+
+The fork's Vulkan changes for gfx1013 (K-quant tuning and a fused SwiGLU kernel)
+gained ~49% against llama.cpp as it was in June; current llama.cpp is now faster
+than the fork, the fork is too old for Qwen3.8, and it needs `-DLLAMA_OPENSSL=OFF`
+to build with current OpenSSL. Use the packaged llama.cpp.
+
 ## Images: SDXL in ComfyUI
 
-SDXL base 1.0, 1024×1024, one image, after the first:
+SDXL base 1.0, 1024×1024, one image, after the first, GPU at 1200 MHz (at a
+fixed 2100 MHz the Lightning setup takes 20.3 s):
 
 | Setup | Time per image | Per step |
 |---|---:|---:|
@@ -69,7 +107,7 @@ With cfg 1 there is no separate negative-prompt pass, so each Lightning step
 costs half a normal one, and there are 3x fewer of them. The rest of the 29 s
 is mostly decoding the image (VAE).
 
-What we tried, per SDXL step at 1024×1024 (25-step setup):
+What we tried, per SDXL step at 1024×1024 (25-step setup, 1200 MHz):
 
 | Change | Per step | |
 |---|---:|---|
@@ -86,6 +124,11 @@ A profile of one step shows why: 61% of the time is matrix multiplies, which
 rocBLAS runs on its generic gfx1013 kernels (there are no tuned ones for this
 GPU yet), and 18% convolutions. TunableOp picks the fastest of the available
 kernels per size; the rest needs tuned kernels for gfx1013.
+
+TunableOp writes its results (`tunableop0.csv`: the GPU index is appended to the
+name) only when the process exits normally. Stopped with Ctrl-C, ComfyUI saves
+them and the next start needs no tuning (27 s for its first image, model loading
+included); killed with SIGTERM it saves nothing and tunes again.
 
 The same prompt with SDXL-Lightning, 8 steps (29 s), and plain SDXL, 25 steps (134 s):
 

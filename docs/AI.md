@@ -3,8 +3,8 @@
 Two setups, both the fastest we measured on the board
 ([numbers and what else we tried](AI-BENCHMARKS.md)):
 
-- **Chat (LLM):** Qwen3.8-27B with llama.cpp: about 15 tokens/s, 32k context.
-- **Images:** ComfyUI with SDXL-Lightning: a 1024×1024 image in about 30 s.
+- **Chat (LLM):** Qwen3.8-27B with llama.cpp: about 24 tokens/s, 32k context.
+- **Images:** ComfyUI with SDXL-Lightning: a 1024×1024 image in about 20 s.
 
 Each needs most of the board's memory, so run one at a time.
 
@@ -14,9 +14,15 @@ The GPU shares the board's 16 GB with the system. Stop the game session while
 you use these models:
 
 ```bash
-sudo systemctl isolate multi-user.target     # stop Steam and the display
-sudo systemctl isolate graphical.target      # back to game mode (or reboot)
+sudo systemctl stop display-manager      # stop Steam and the display
+sudo systemctl start display-manager     # back to game mode (or reboot)
 ```
+
+Keep the GPU clock governor running (`cyan-skillfish-governor-smu`, see the
+[README](../README.md#cyan-skillfish-governor-recommendations)): without it the
+GPU stays at a low clock and everything below is about 35% slower. Don't use
+`systemctl isolate multi-user.target` instead of the commands above: it stops
+the governor too.
 
 If you work over SSH, also run this once, or your services stop when you log out:
 
@@ -62,6 +68,8 @@ your own scripts.
   `"chat_template_kwargs": {"enable_thinking": false}`.
 - Like any local model it can state wrong facts with confidence. Check what matters.
 - Use the Vulkan backend as above: it is faster here than ROCm and needs no extra setup.
+- Want it faster rather than smarter? `Qwen3.5-9B-Q4_K_M.gguf` (5.7 GB, from
+  `unsloth/Qwen3.5-9B-GGUF`) runs at about 60 tokens/s with the same service file.
 
 ## Images: ComfyUI with SDXL-Lightning
 
@@ -82,9 +90,16 @@ curl -L -o models/loras/sdxl_lightning_8step_lora.safetensors \
   https://huggingface.co/ByteDance/SDXL-Lightning/resolve/main/sdxl_lightning_8step_lora.safetensors         # 0.4 GB
 ```
 
-Start it:
+The clock governor can't see this kind of GPU work and would leave the GPU at
+its lowest clock, so set a fixed clock while you generate images, then start
+ComfyUI:
 
 ```bash
+sudo busctl --system set-property com.cyanskillfish.Governor /com/cyanskillfish/Governor \
+  com.cyanskillfish.Governor.PerformanceMode Enabled b true
+sudo busctl --system call com.cyanskillfish.Governor /com/cyanskillfish/Governor \
+  com.cyanskillfish.Governor.PerformanceMode SetFixedFrequency u 2100    # or your config's max
+
 cd ~/ComfyUI
 PYTORCH_TUNABLEOP_ENABLED=1 PYTORCH_TUNABLEOP_FILENAME=$HOME/ComfyUI/tunableop.csv \
   venv/bin/python main.py --listen 0.0.0.0
@@ -98,9 +113,19 @@ Open `http://<board-ip>:8188`. In the default workflow:
 3. *KSampler*: steps **8**, cfg **1.0**, sampler **euler**, scheduler **sgm_uniform**.
 4. *Empty Latent Image*: **1024 × 1024**.
 
-**The first image takes about 10 minutes**: TunableOp measures the GPU's
-fastest settings once and saves them in `tunableop.csv`. After that every image
-takes about 30 s, also after a restart.
+**The first image takes about 8 minutes**: TunableOp measures the GPU's
+fastest settings for every size the model uses. They are saved (as
+`tunableop0.csv`) when you stop ComfyUI with Ctrl-C, so do that rather than
+killing it; after that every image takes about 20 s, also after a restart.
+After a `bc250-pytorch` update the first image is slow once more.
+
+When you are done, stop ComfyUI with **Ctrl-C** and give the clock back to the
+governor:
+
+```bash
+sudo busctl --system set-property com.cyanskillfish.Governor /com/cyanskillfish/Governor \
+  com.cyanskillfish.Governor.PerformanceMode Enabled b false
+```
 
 Don't `pip install torch` into the venv, and remove any line in a custom node's
 requirements that pins a torch version: that would replace the BC-250 build
@@ -109,4 +134,4 @@ with a CUDA one.
 ![SDXL-Lightning, 8 steps](images/ai/sdxl-lightning-8step.jpg)
 
 *"a cozy cabin in a snowy pine forest at dusk, warm light in the windows,
-photorealistic, detailed": SDXL-Lightning, 8 steps, 29 s.*
+photorealistic, detailed": SDXL-Lightning, 8 steps.*
