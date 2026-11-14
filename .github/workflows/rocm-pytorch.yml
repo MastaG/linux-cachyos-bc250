@@ -29,7 +29,7 @@ jobs:
       - Linux
       - X64
       - bc250
-    # A cold build is ~8 hours at 8 CPUs; leave room.
+    # A cold build is most of a night at 6 CPUs; leave room.
     timeout-minutes: 1440
 
     steps:
@@ -39,9 +39,9 @@ jobs:
       - name: Build
         env:
           CONTAINER_CLI: docker
-          # Same caps as the package builds; more CPUs than 8 do not fit 20g.
+          # Same memory cap as the package builds; at 8 CPUs MIOpen ran into it.
           BC250_BUILD_MEMORY: ${{ vars.BC250_BUILD_MEMORY || '20g' }}
-          BC250_BUILD_CPUS: ${{ vars.BC250_ROCM_BUILD_CPUS || '8' }}
+          BC250_BUILD_CPUS: ${{ vars.BC250_ROCM_BUILD_CPUS || '6' }}
         shell: bash
         run: |
           set -euo pipefail

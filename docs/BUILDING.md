@@ -117,7 +117,7 @@ After the changed components are added, `scripts/finalize-repository.sh` validat
 
 `bc250-pytorch` packages wheels it does not build itself. They come from the separate workflow *ROCm and PyTorch wheels* (`.github/workflows/rocm-pytorch.yml`), which only runs when started by hand: ROCm and PyTorch are compiled from pinned sources (`rocm/pins.env`, `rocm/patches/`) by `rocm/build-rocm.sh`, in TheRock's own build image, and the result does not depend on the system Python or ROCm. So a CachyOS Python or ROCm update never needs a rebuild; a new PyTorch or ROCm release, or a fix, does. The nightly workflow does not watch `rocm/`.
 
-1. Change the pins or patches, then run the workflow (a cold build takes most of a night at 8 CPUs and 20 GB; its work directory, about 150 GB, is kept next to the runner's checkout so later builds are incremental).
+1. Change the pins or patches, then run the workflow (a cold build takes most of a night at 6 CPUs and 20 GB; its work directory, about 150 GB, is kept next to the runner's checkout so later builds are incremental).
 2. It uploads the wheels to the `rocm-pytorch` release, each asset prefixed with the build id, so builds never overwrite each other.
 3. `rocm/update-pkgbuild.sh <build id>` writes that build's wheels and checksums into `packages/bc250-pytorch/PKGBUILD`. Commit it: the nightly workflow then packages it like any other component.
 

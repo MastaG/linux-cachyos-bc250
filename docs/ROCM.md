@@ -28,23 +28,19 @@ Limits of this mode: queues are mapped statically, so there is no oversubscripti
 
 `sudo pacman -S bc250-pytorch` installs PyTorch 2.13, torchvision and torchaudio with ROCm built for the BC-250 GPU (gfx1013), all in its own Python 3.12 under `/opt/bc250-pytorch`. It does not use the system Python or any system ROCm package, so CachyOS updates neither break it nor change it. It needs `sched_policy=2` (above) and your user in the `render` group; `bc250-pytorch-check` checks both and runs a small matrix multiply and convolution on the GPU.
 
-Apps use it through a venv made on top of it, so torch comes from `/opt` and only the app's own packages go into the venv. For example ComfyUI:
+Apps use it through a venv made on top of it, so torch comes from `/opt` and only the app's own packages go into the venv:
 
 ```bash
-git clone https://github.com/comfyanonymous/ComfyUI ~/ComfyUI
-cd ~/ComfyUI
-/opt/bc250-pytorch/bin/python3 -m venv --system-site-packages venv
-venv/bin/pip install -r requirements.txt   # torch/torchvision: "already satisfied"
-venv/bin/python main.py
+/opt/bc250-pytorch/bin/python3 -m venv --system-site-packages ~/myapp/venv
 ```
 
-With uv: `uv venv --python /opt/bc250-pytorch/bin/python3 --system-site-packages`. For a single script: `bc250-python script.py`.
+For a single script: `bc250-python script.py`. A complete ComfyUI setup, and a fast LLM setup, are in [AI.md](AI.md).
 
 - Don't install `torch` into the venv, and remove any line in an app's requirements that pins a torch version: pip would put the CUDA build from PyPI over it.
 - System `python-*` packages can't be used from this Python (they are built for the system Python); install what you need in the venv.
 - What this GPU can't do: flash attention, hipBLASLt, composable_kernel and Triton (`torch.compile` on the GPU). Matrix multiplies use rocBLAS with generic gfx1013 kernels.
 - The settings this board needs (`HSA_ENABLE_SDMA=0`, `GPU_PINNED_MIN_XFER_SIZE=16384`, `TORCH_BLAS_PREFER_HIPBLASLT=0`) are applied when this Python starts; setting one yourself overrides it.
-- For LLMs, llama.cpp / Ollama / KoboldCpp with Vulkan are usually the easier route and need no ROCm at all.
+- For LLMs, llama.cpp with Vulkan is faster on this board than with ROCm and needs no ROCm at all: see [AI.md](AI.md).
 
 How it is built: [BUILDING.md](BUILDING.md#rocm-and-pytorch-wheels). rocBLAS gets gfx1013 support from the still-open [ROCm/rocm-libraries#8838](https://github.com/ROCm/rocm-libraries/pull/8838).
 

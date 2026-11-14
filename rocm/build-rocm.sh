@@ -15,8 +15,8 @@
 # State lives in $BC250_ROCM_WORK (default ~/.cache/bc250-rocm): ~31 GB of
 # sources, the build tree and ccache, ~150 GB in all. Keep it between runs: a
 # rebuild after a small change takes minutes, a cold one most of a night.
-# Limits: BC250_BUILD_MEMORY (20g, also caps swap) and BC250_BUILD_CPUS (8).
-# With more CPUs the 20g cap is too small for Flang and MIOpen's tests.
+# Limits: BC250_BUILD_MEMORY (20g, also caps swap) and BC250_BUILD_CPUS (6).
+# 8 CPUs ran into the 20g cap (MIOpen); 6 leaves room. Flang needs 1 job.
 set -Eeuo pipefail
 
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,7 +26,7 @@ WORK="${BC250_ROCM_WORK:-$HOME/.cache/bc250-rocm}"
 SRC="$WORK/TheRock"
 OUT="$WORK/out"
 MEMORY="${BC250_BUILD_MEMORY:-20g}"
-CPUS="${BC250_BUILD_CPUS:-8}"
+CPUS="${BC250_BUILD_CPUS:-6}"
 CLI="${CONTAINER_CLI:-podman}"
 PY="/opt/python/$PYTHON_TAG/bin/python"
 TORCH_DIR=/therock/src/external-builds/pytorch
@@ -95,6 +95,7 @@ cmake -GNinja -S /therock/src -B /therock/output/build \
   -DTHEROCK_ENABLE_PRIM=ON -DTHEROCK_ENABLE_SPARSE=ON -DTHEROCK_ENABLE_SOLVER=ON \
   -DTHEROCK_ENABLE_MIOPEN=ON \
   -DTHEROCK_ENABLE_LIBHIPCXX=ON \
+  -DTHEROCK_BUILD_TESTING=OFF \
   -DTHEROCK_BUNDLE_SYSDEPS=ON -DFLANG_PARALLEL_COMPILE_JOBS=1 \
   -DTHEROCK_DIST_PYTHON_EXECUTABLES=$PY \
   -DTHEROCK_SHARED_PYTHON_EXECUTABLES=/opt/python-shared/$PYTHON_TAG/bin/python3 \
@@ -102,6 +103,8 @@ cmake -GNinja -S /therock/src -B /therock/output/build \
 time cmake --build /therock/output/build --target therock-artifacts therock-dist
 '
 }
+# TESTING OFF: the wheels ship no tests, and MIOpen's and rocPRIM's test files
+# are what runs out of memory in 20g (several sub-projects build at once).
 # LIBHIPCXX: torch 2.13 takes the CCCL 3 code path with hipCUB 3.x and needs
 # libhipcxx for ::cuda::maximum. FLANG jobs 1: two Flang compiles exceed 20g.
 
