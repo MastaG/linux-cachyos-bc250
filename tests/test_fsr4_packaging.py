@@ -1654,7 +1654,9 @@ class RetiredPackageTests(unittest.TestCase):
                 self.assertNotIn("AIC8800D80_DKMS", (ROOT / path).read_text())
         readme = (ROOT / "README.md").read_text()
         self.assertNotIn("| `aic8800d80-dkms` |", readme)
-        self.assertIn("makepkg -si", readme)
+        # The switch-over to the AUR package is in the release notes; the README
+        # no longer has a section for it.
+        self.assertIn("aic8800d80-dkms && makepkg -si", (ROOT / "scripts/finalize-repository.sh").read_text())
         # never tell people to remove the driver before its replacement exists
         self.assertNotIn("pacman -Rns aic8800d80-dkms", readme)
         self.assertNotIn("pacman -Rns aic8800d80-dkms", (ROOT / "scripts/finalize-repository.sh").read_text())

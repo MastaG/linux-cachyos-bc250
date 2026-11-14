@@ -885,32 +885,6 @@ sudo pacman -U https://github.com/MastaG/linux-cachyos-bc250/releases/download/r
 
 Install every file of the same version together: a kernel with its `-headers` package, Mesa with the split packages you have installed (`vulkan-radeon`, `lib32-mesa`, ...). The next `pacman -Syu` brings you back to the current build; to stay on the older one until you are ready, add the package names to `IgnorePkg` in `/etc/pacman.conf`.
 
-## aic8800d80-dkms — removed, use the AUR package
-
-This repository briefly (2026-09-21 to 2026-09-24) carried its own build of the
-AUR `aic8800d80-dkms` package, from a fork with a Linux 7.3 fix, because the
-upstream driver did not build on the RC kernel and on a WiFi-only board that
-meant no network at all. Upstream merged that fix
-([shenmintao/aic8800d80#91](https://github.com/shenmintao/aic8800d80/pull/91))
-on 2026-09-24, and the AUR package builds from upstream `main`, so the AUR one
-is now correct on every kernel this repository ships and ours has been
-retired from the repository database.
-
-If you installed ours, `pacman -Syu` will **not** replace it: it is no longer in
-this repository's database, so pacman treats it as a foreign package, and AUR
-helpers will not downgrade it to the AUR's lower release number. Swap it by
-hand once — build the AUR package and install it in a single transaction, so
-there is never a moment without a driver (removing the package first would
-delete the DKMS modules from every kernel before the replacement exists):
-
-```bash
-git clone https://aur.archlinux.org/aic8800d80-dkms.git
-cd aic8800d80-dkms && makepkg -si     # pacman -U replaces ours in one step
-```
-
-DKMS rebuilds the modules for every installed kernel that has its headers
-package (`linux-cachyos-bc250-headers`, `linux-cachyos-rc-bc250-headers`, `linux-cachyos-bore-bc250-headers`).
-
 ---
 
 ## linux-cachyos-bc250-meta
