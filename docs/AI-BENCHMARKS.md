@@ -92,6 +92,36 @@ gained ~49% against llama.cpp as it was in June; current llama.cpp is now faster
 than the fork, the fork is too old for Qwen3.8, and it needs `-DLLAMA_OPENSSL=OFF`
 to build with current OpenSSL. Use the packaged llama.cpp.
 
+### MTP (multi-token prediction)
+
+Qwen3.8 has built-in multi-token prediction heads. llama.cpp uses them for
+speculative decoding: they guess the next tokens, and the full model checks
+those guesses in one pass. The output is the same as without MTP. The heads
+come as a separate file, `MTP/mtp-Qwen3.8-27B-Q4_0.gguf` (1.4 GB) in
+`unsloth/Qwen3.8-27B-GGUF`, loaded with `--spec-type draft-mtp --model-draft …`.
+
+CachyOS `llama-cpp` 0.9.0 + `ggml-vulkan`, governor running, server mode,
+`llama-server` with the service-file settings (32k context, q8_0 KV), 400 tokens
+per reply, thinking off. Each cell is generation speed at temperature 0 / 0.7,
+and the percentage is the share of drafted tokens the model accepted (both
+temperatures averaged):
+
+| Drafted tokens (`--spec-draft-n-max`) | Code (Python function + tests) | Explanation | Short story | Average |
+|---|---:|---:|---:|---:|
+| no MTP | 23.3 / 23.3 t/s | 23.3 / 23.3 t/s | 23.3 / 23.3 t/s | 23.3 t/s |
+| 1 | 29.3 / 28.8 (92%) | 26.9 / 26.9 (77%) | 26.3 / 24.7 (68%) | 27.2 t/s |
+| **2** | **31.6 / 30.4 (84%)** | 26.5 / 27.5 (66%) | 25.4 / 23.8 (57%) | **27.5 t/s** |
+| 3 (default) | 28.0 / 28.6 (78%) | 21.7 / 19.8 (48%) | 19.7 / 18.8 (42%) | 22.8 t/s |
+
+- 2 is best. With 3, too many guesses get rejected on prose, and it ends up
+  slower than without MTP.
+- With a 20,600-token prompt: prompt 166 → 156 t/s (−6%), generation
+  21.1 → 24.8 t/s (+18%).
+- Memory: about 1.3 GB more. The 32k context still fits, but with almost no
+  free RAM left (about 60 MiB available, about 200 MiB more swap used). Keep the board in
+  server mode while it runs.
+- A q8_0 KV cache for the draft (`-ctkd q8_0 -ctvd q8_0`) made no difference.
+
 ## Images: SDXL in ComfyUI
 
 SDXL base 1.0, 1024×1024, one image, after the first, GPU at 1200 MHz (at a

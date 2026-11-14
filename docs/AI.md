@@ -3,7 +3,7 @@
 Two setups, both the fastest we measured on the board
 ([numbers and what else we tried](AI-BENCHMARKS.md)):
 
-- **Chat (LLM):** Qwen3.8-27B with llama.cpp: about 24 tokens/s, 32k context.
+- **Chat (LLM):** Qwen3.8-27B with llama.cpp: about 27 tokens/s (31 on code), 32k context.
 - **Images:** ComfyUI with SDXL-Lightning: a 1024×1024 image in about 20 s.
 
 Each needs most of the board's memory, so run one at a time.
@@ -36,6 +36,7 @@ sudo loginctl enable-linger $USER
 sudo pacman -S llama-cpp ggml-vulkan
 mkdir -p ~/models && cd ~/models
 curl -LO https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-IQ3_XXS.gguf   # 10.9 GB
+curl -LO https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/MTP/mtp-Qwen3.8-27B-Q4_0.gguf  # 1.4 GB
 ```
 
 Create `~/.config/systemd/user/llama-server.service`:
@@ -47,7 +48,9 @@ Description=llama.cpp server (Qwen3.8-27B)
 [Service]
 ExecStart=/usr/bin/llama-server --model %h/models/Qwen3.8-27B-UD-IQ3_XXS.gguf \
     --n-gpu-layers 99 --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
-    --ctx-size 32768 --parallel 1 --jinja --host 0.0.0.0 --port 8080
+    --ctx-size 32768 --parallel 1 --jinja --host 0.0.0.0 --port 8080 \
+    --spec-type draft-mtp --model-draft %h/models/mtp-Qwen3.8-27B-Q4_0.gguf \
+    --n-gpu-layers-draft 99 --spec-draft-n-max 2
 Restart=on-failure
 
 [Install]
@@ -67,6 +70,10 @@ your own scripts.
   or the answer may come back empty, or turn thinking off per request with
   `"chat_template_kwargs": {"enable_thinking": false}`.
 - Like any local model it can state wrong facts with confidence. Check what matters.
+- The `--spec-type draft-mtp` lines use the model's multi-token prediction
+  heads to guess 2 tokens ahead. It doesn't change the answers, and it makes
+  replies about 18% faster (more on code, less on prose). It uses 1.3 GB more memory: if
+  you need that memory, remove those two lines and the trailing `\` before them.
 - Use the Vulkan backend as above: it is faster here than ROCm and needs no extra setup.
 - Want it faster rather than smarter? `Qwen3.5-9B-Q4_K_M.gguf` (5.7 GB, from
   `unsloth/Qwen3.5-9B-GGUF`) runs at about 60 tokens/s with the same service file.
