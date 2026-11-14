@@ -22,6 +22,32 @@ Limits of this mode: queues are mapped statically, so there is no oversubscripti
 
 `sched_policy=2` applies to the whole board, games included; see [Optional AMDGPU scheduler tuning](../README.md#optional-amdgpu-scheduler-tuning) for what it does there.
 
+## PyTorch (`bc250-pytorch`)
+
+> **New, tested on one board so far** (2026-11-14, 40 CU unlock, `sched_policy=2`): fp32/fp16/bf16 matrix multiplies against float64 on the CPU over several shapes, layer/RMS norm and softmax forward and backward, convolution forward and backward, 200 allocate/free cycles, and 50 training steps matching the CPU all passed; ComfyUI starts on the GPU. Matrix multiplies reach about 4.4 TFLOPS (fp32 and fp16 alike). No image generation or long training run yet.
+
+`sudo pacman -S bc250-pytorch` installs PyTorch 2.13, torchvision and torchaudio with ROCm built for the BC-250 GPU (gfx1013), all in its own Python 3.12 under `/opt/bc250-pytorch`. It does not use the system Python or any system ROCm package, so CachyOS updates neither break it nor change it. It needs `sched_policy=2` (above) and your user in the `render` group; `bc250-pytorch-check` checks both and runs a small matrix multiply and convolution on the GPU.
+
+Apps use it through a venv made on top of it, so torch comes from `/opt` and only the app's own packages go into the venv. For example ComfyUI:
+
+```bash
+git clone https://github.com/comfyanonymous/ComfyUI ~/ComfyUI
+cd ~/ComfyUI
+/opt/bc250-pytorch/bin/python3 -m venv --system-site-packages venv
+venv/bin/pip install -r requirements.txt   # torch/torchvision: "already satisfied"
+venv/bin/python main.py
+```
+
+With uv: `uv venv --python /opt/bc250-pytorch/bin/python3 --system-site-packages`. For a single script: `bc250-python script.py`.
+
+- Don't install `torch` into the venv, and remove any line in an app's requirements that pins a torch version: pip would put the CUDA build from PyPI over it.
+- System `python-*` packages can't be used from this Python (they are built for the system Python); install what you need in the venv.
+- What this GPU can't do: flash attention, hipBLASLt, composable_kernel and Triton (`torch.compile` on the GPU). Matrix multiplies use rocBLAS with generic gfx1013 kernels.
+- The settings this board needs (`HSA_ENABLE_SDMA=0`, `GPU_PINNED_MIN_XFER_SIZE=16384`, `TORCH_BLAS_PREFER_HIPBLASLT=0`) are applied when this Python starts; setting one yourself overrides it.
+- For LLMs, llama.cpp / Ollama / KoboldCpp with Vulkan are usually the easier route and need no ROCm at all.
+
+How it is built: [BUILDING.md](BUILDING.md#rocm-and-pytorch-wheels). rocBLAS gets gfx1013 support from the still-open [ROCm/rocm-libraries#8838](https://github.com/ROCm/rocm-libraries/pull/8838).
+
 ## Experimental: runlist rebuild under hardware scheduling (`sched_policy=0`)
 
 `0008-bc250-kfd-flush-tlb-by-runlist.patch` is based on the BC-250 ROCm investigation by GabriWar.  

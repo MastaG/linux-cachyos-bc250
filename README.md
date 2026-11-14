@@ -29,6 +29,7 @@ Packages: <https://github.com/MastaG/linux-cachyos-bc250/releases/tag/repo>
 | `bc250-paccache-cleanup` | Optional: empties the pacman package cache after every update, to save disk space |
 | `bc250-ch7218-fw` | Optional: UGREEN's updater and five firmware images for the UGREEN DP-to-HDMI 2.1 adapter, behind a manual flash command |
 | `bc250-vcn-fw` | Parked: the firmware file for the BC-250 VCN video-block experiment. No shipped kernel uses it (see [Hardware video (VCN)](#hardware-video-vcn-parked)) |
+| `bc250-pytorch` | Optional: PyTorch with ROCm built for the BC-250 GPU, in its own Python under `/opt` (see [docs/ROCM.md](docs/ROCM.md#pytorch-bc250-pytorch)). New: tested on one board so far |
 | `linux-cachyos-bc250-meta` | Installs the recommended set in one go |
 
 Emulator packages for the BC-250 are maintained in a separate repository, with its own pacman repository: [bc250-emulators](https://github.com/MastaG/bc250-emulators).

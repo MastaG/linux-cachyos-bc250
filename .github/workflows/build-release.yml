@@ -192,6 +192,7 @@ jobs:
           bc250_fixes="$(./scripts/source-fingerprint.sh bc250-fixes)"
           bc250_ch7218_fw="$(./scripts/source-fingerprint.sh bc250-ch7218-fw)"
           bc250_vcn_fw="$(./scripts/source-fingerprint.sh bc250-vcn-fw)"
+          bc250_pytorch="$(./scripts/source-fingerprint.sh bc250-pytorch)"
           linux_cachyos_bc250_meta="$(./scripts/source-fingerprint.sh linux-cachyos-bc250-meta)"
           protonge_latest_bc250="$(./scripts/source-fingerprint.sh protonge-latest-bc250)"
           proton_cachyos_native_bc250="$(./scripts/source-fingerprint.sh proton-cachyos-native-bc250)"
@@ -215,6 +216,7 @@ jobs:
           echo "bc250_fixes=$bc250_fixes" >> "$GITHUB_OUTPUT"
           echo "bc250_ch7218_fw=$bc250_ch7218_fw" >> "$GITHUB_OUTPUT"
           echo "bc250_vcn_fw=$bc250_vcn_fw" >> "$GITHUB_OUTPUT"
+          echo "bc250_pytorch=$bc250_pytorch" >> "$GITHUB_OUTPUT"
           echo "linux_cachyos_bc250_meta=$linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
           echo "protonge_latest_bc250=$protonge_latest_bc250" >> "$GITHUB_OUTPUT"
           echo "proton_cachyos_native_bc250=$proton_cachyos_native_bc250" >> "$GITHUB_OUTPUT"
@@ -233,6 +235,7 @@ jobs:
           printf 'bc250-fixes fp: %s\n' "$bc250_fixes"
           printf 'bc250-ch7218-fw fp: %s\n' "$bc250_ch7218_fw"
           printf 'bc250-vcn-fw fp: %s\n' "$bc250_vcn_fw"
+          printf 'bc250-pytorch fp: %s\n' "$bc250_pytorch"
           printf 'linux-cachyos-bc250-meta fp: %s\n' "$linux_cachyos_bc250_meta"
           printf 'protonge-latest-bc250 fp:  %s\n' "$protonge_latest_bc250"
           printf 'proton-cachyos-native fp:  %s\n' "$proton_cachyos_native_bc250"
@@ -254,6 +257,7 @@ jobs:
           BC250_FIXES_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_fixes }}
           BC250_CH7218_FW_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_ch7218_fw }}
           BC250_VCN_FW_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_vcn_fw }}
+          BC250_PYTORCH_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_pytorch }}
           LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
           PROTONGE_LATEST_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.protonge_latest_bc250 }}
           PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_native_bc250 }}
@@ -361,6 +365,7 @@ jobs:
           build_bc250_fixes=false
           build_bc250_ch7218_fw=false
           build_bc250_vcn_fw=false
+          build_bc250_pytorch=false
           build_linux_cachyos_bc250_meta=false
           build_protonge_latest_bc250=false
           build_proton_cachyos_native_bc250=false
@@ -378,6 +383,7 @@ jobs:
           [[ "$(previous_value bc250-fixes-info.env BC250_FIXES_FINGERPRINT BC250_FIXES_FINGERPRINT)" == "$BC250_FIXES_FINGERPRINT" ]] || build_bc250_fixes=true
           [[ "$(previous_value bc250-ch7218-fw-info.env BC250_CH7218_FW_FINGERPRINT BC250_CH7218_FW_FINGERPRINT)" == "$BC250_CH7218_FW_FINGERPRINT" ]] || build_bc250_ch7218_fw=true
           [[ "$(previous_value bc250-vcn-fw-info.env BC250_VCN_FW_FINGERPRINT BC250_VCN_FW_FINGERPRINT)" == "$BC250_VCN_FW_FINGERPRINT" ]] || build_bc250_vcn_fw=true
+          [[ "$(previous_value bc250-pytorch-info.env BC250_PYTORCH_FINGERPRINT BC250_PYTORCH_FINGERPRINT)" == "$BC250_PYTORCH_FINGERPRINT" ]] || build_bc250_pytorch=true
           [[ "$(previous_value linux-cachyos-bc250-meta-info.env LINUX_CACHYOS_BC250_META_FINGERPRINT LINUX_CACHYOS_BC250_META_FINGERPRINT)" == "$LINUX_CACHYOS_BC250_META_FINGERPRINT" ]] || build_linux_cachyos_bc250_meta=true
           [[ "$(previous_value protonge-latest-bc250-info.env PROTONGE_LATEST_BC250_FINGERPRINT PROTONGE_LATEST_BC250_FINGERPRINT)" == "$PROTONGE_LATEST_BC250_FINGERPRINT" ]] || build_protonge_latest_bc250=true
           [[ "$(previous_value proton-cachyos-native-bc250-info.env PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT)" == "$PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT" ]] || build_proton_cachyos_native_bc250=true
@@ -396,6 +402,7 @@ jobs:
             build_bc250_fixes=true
             build_bc250_ch7218_fw=true
             build_bc250_vcn_fw=true
+            build_bc250_pytorch=true
             build_linux_cachyos_bc250_meta=true
             build_protonge_latest_bc250=true
             build_proton_cachyos_native_bc250=true
@@ -431,7 +438,7 @@ jobs:
           if [[ "$build_kernel_stable" == true || "$build_kernel_rc" == true || \
                 "$build_kernel_bore" == true || "$build_mesa" == true || \
                 "$build_lib32_mesa" == true || "$build_mesa_git" == true || \
-                "$build_bc250_dual_audio" == true || "$build_bc250_cec" == true || "$build_bc250_paccache_cleanup" == true || "$build_bc250_fixes" == true || "$build_bc250_ch7218_fw" == true || "$build_bc250_vcn_fw" == true || "$build_linux_cachyos_bc250_meta" == true || \
+                "$build_bc250_dual_audio" == true || "$build_bc250_cec" == true || "$build_bc250_paccache_cleanup" == true || "$build_bc250_fixes" == true || "$build_bc250_ch7218_fw" == true || "$build_bc250_vcn_fw" == true || "$build_bc250_pytorch" == true || "$build_linux_cachyos_bc250_meta" == true || \
                 "$build_protonge_latest_bc250" == true || \
                 "$build_proton_cachyos_native_bc250" == true || \
                 "$build_proton_cachyos_slr_bc250" == true ]]; then
@@ -450,6 +457,7 @@ jobs:
           echo "bc250_fixes=$build_bc250_fixes" >> "$GITHUB_OUTPUT"
           echo "bc250_ch7218_fw=$build_bc250_ch7218_fw" >> "$GITHUB_OUTPUT"
           echo "bc250_vcn_fw=$build_bc250_vcn_fw" >> "$GITHUB_OUTPUT"
+          echo "bc250_pytorch=$build_bc250_pytorch" >> "$GITHUB_OUTPUT"
           echo "linux_cachyos_bc250_meta=$build_linux_cachyos_bc250_meta" >> "$GITHUB_OUTPUT"
           echo "protonge_latest_bc250=$build_protonge_latest_bc250" >> "$GITHUB_OUTPUT"
           echo "proton_cachyos_native_bc250=$build_proton_cachyos_native_bc250" >> "$GITHUB_OUTPUT"
@@ -468,6 +476,7 @@ jobs:
           echo "Build bc250-fixes: $build_bc250_fixes"
           echo "Build bc250-ch7218-fw: $build_bc250_ch7218_fw"
           echo "Build bc250-vcn-fw: $build_bc250_vcn_fw"
+          echo "Build bc250-pytorch: $build_bc250_pytorch"
           echo "Build linux-cachyos-bc250-meta: $build_linux_cachyos_bc250_meta"
           echo "Build protonge-latest-bc250:    $build_protonge_latest_bc250"
           echo "Build proton-cachyos-native-bc250: $build_proton_cachyos_native_bc250"
@@ -589,6 +598,7 @@ jobs:
           BC250_FIXES_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_fixes }}
           BC250_CH7218_FW_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_ch7218_fw }}
           BC250_VCN_FW_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_vcn_fw }}
+          BC250_PYTORCH_FINGERPRINT: ${{ steps.fingerprints.outputs.bc250_pytorch }}
           LINUX_CACHYOS_BC250_META_FINGERPRINT: ${{ steps.fingerprints.outputs.linux_cachyos_bc250_meta }}
           PROTONGE_LATEST_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.protonge_latest_bc250 }}
           PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT: ${{ steps.fingerprints.outputs.proton_cachyos_native_bc250 }}
@@ -612,6 +622,7 @@ jobs:
           BUILD_BC250_FIXES: ${{ steps.build.outputs.bc250_fixes }}
           BUILD_BC250_CH7218_FW: ${{ steps.build.outputs.bc250_ch7218_fw }}
           BUILD_BC250_VCN_FW: ${{ steps.build.outputs.bc250_vcn_fw }}
+          BUILD_BC250_PYTORCH: ${{ steps.build.outputs.bc250_pytorch }}
           BUILD_LINUX_CACHYOS_BC250_META: ${{ steps.build.outputs.linux_cachyos_bc250_meta }}
           BUILD_PROTONGE_LATEST_BC250: ${{ steps.build.outputs.protonge_latest_bc250 }}
           BUILD_PROTON_CACHYOS_NATIVE_BC250: ${{ steps.build.outputs.proton_cachyos_native_bc250 }}
@@ -663,6 +674,7 @@ jobs:
             -e BUILD_BC250_FIXES \
             -e BUILD_BC250_CH7218_FW \
             -e BUILD_BC250_VCN_FW \
+            -e BUILD_BC250_PYTORCH \
             -e BUILD_LINUX_CACHYOS_BC250_META \
             -e BUILD_PROTONGE_LATEST_BC250 \
             -e BUILD_PROTON_CACHYOS_NATIVE_BC250 \
@@ -681,6 +693,7 @@ jobs:
             -e BC250_FIXES_FINGERPRINT \
             -e BC250_CH7218_FW_FINGERPRINT \
             -e BC250_VCN_FW_FINGERPRINT \
+            -e BC250_PYTORCH_FINGERPRINT \
             -e LINUX_CACHYOS_BC250_META_FINGERPRINT \
             -e PROTONGE_LATEST_BC250_FINGERPRINT \
             -e PROTON_CACHYOS_NATIVE_BC250_FINGERPRINT \
@@ -756,6 +769,7 @@ jobs:
             "bc250-fixes:$BUILD_BC250_FIXES"
             "bc250-ch7218-fw:$BUILD_BC250_CH7218_FW"
             "bc250-vcn-fw:$BUILD_BC250_VCN_FW"
+            "bc250-pytorch:$BUILD_BC250_PYTORCH"
             "kernel-stable:$BUILD_KERNEL_STABLE"
             "kernel-rc:$BUILD_KERNEL_RC"
             "kernel-bore:$BUILD_KERNEL_BORE"

@@ -1,0 +1,90 @@
+name: ROCm and PyTorch wheels
+
+# Builds the ROCm + PyTorch wheels the bc250-pytorch package installs
+# (rocm/build-rocm.sh) and uploads them to the rocm-pytorch release.
+#
+# Started by hand only, deliberately: the inputs are pinned in rocm/pins.env
+# and rocm/patches/, so a build is only due when those change -- a new PyTorch
+# or ROCm release, or a fix. CachyOS Python or ROCm updates never need one,
+# because the package brings its own Python and ROCm. A cold build takes most
+# of a night; with the work directory kept, a rebuild after a pin bump is much
+# quicker.
+#
+# Afterwards: rocm/update-pkgbuild.sh <build id> and commit; the nightly
+# workflow then packages bc250-pytorch from these wheels.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bc250-rocm-pytorch
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - bc250
+    # A cold build is ~8 hours at 8 CPUs; leave room.
+    timeout-minutes: 1440
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Build
+        env:
+          CONTAINER_CLI: docker
+          # Same caps as the package builds; more CPUs than 8 do not fit 20g.
+          BC250_BUILD_MEMORY: ${{ vars.BC250_BUILD_MEMORY || '20g' }}
+          BC250_BUILD_CPUS: ${{ vars.BC250_ROCM_BUILD_CPUS || '8' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Outside the checkout, so it survives between runs. The runner's own
+          # directory is mounted at the same path on the host, which the build
+          # container's bind mounts need.
+          export BC250_ROCM_WORK="$(dirname "$RUNNER_WORKSPACE")/bc250-rocm"
+          echo "BC250_ROCM_WORK=$BC250_ROCM_WORK" >> "$GITHUB_ENV"
+          echo "Build id: $(rocm/build-rocm.sh build-id)"
+          rocm/build-rocm.sh all
+
+      - name: Upload wheels to the rocm-pytorch release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          wh="$BC250_ROCM_WORK/out/wheelhouse"
+          id="$(cat "$wh/BUILD_ID")"
+          if ! gh release view rocm-pytorch >/dev/null 2>&1; then
+            # GITHUB_TOKEN may update a release but not create one here.
+            echo "::error title=No rocm-pytorch release::Create it once by hand, then re-run:"
+            echo "  gh api repos/${GITHUB_REPOSITORY}/releases -X POST -f tag_name=rocm-pytorch -f name='ROCm and PyTorch wheels for the BC-250' -f make_latest=false"
+            exit 1
+          fi
+          if gh release view rocm-pytorch --json assets -q '.assets[].name' | grep -qx "$id--SHA256SUMS"; then
+            echo "Build $id is already on the release."
+          else
+            stage="$RUNNER_TEMP/rocm-pytorch-assets"
+            rm -rf "$stage" && mkdir -p "$stage"
+            for f in "$wh"/*.whl "$wh/SHA256SUMS"; do
+              ln "$f" "$stage/$id--$(basename "$f")" 2>/dev/null || cp "$f" "$stage/$id--$(basename "$f")"
+            done
+            # SHA256SUMS last: its presence marks the build as complete.
+            gh release upload rocm-pytorch "$stage"/*.whl --clobber
+            gh release upload rocm-pytorch "$stage/$id--SHA256SUMS" --clobber
+          fi
+          {
+            echo "### Build $id"
+            echo
+            echo '```'
+            cat "$wh/SHA256SUMS"
+            echo '```'
+            echo
+            echo "Next: \`rocm/update-pkgbuild.sh $id\`, commit, and the nightly workflow packages bc250-pytorch."
+          } >> "$GITHUB_STEP_SUMMARY"

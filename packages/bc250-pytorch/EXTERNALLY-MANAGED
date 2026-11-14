@@ -1,0 +1,5 @@
+[externally-managed]
+Error=This Python belongs to the bc250-pytorch package; don't install into it.
+ Make a venv on top of it instead, which keeps torch from /opt:
+   /opt/bc250-pytorch/bin/python3 -m venv --system-site-packages ~/myapp/venv
+   ~/myapp/venv/bin/pip install <what your app needs>

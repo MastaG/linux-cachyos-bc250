@@ -79,6 +79,7 @@ bc250-paccache-cleanup
 bc250-fixes
 bc250-ch7218-fw
 bc250-vcn-fw
+bc250-pytorch                 (optional: see below)
 linux-cachyos-bc250-meta
 protonge-latest-bc250
 proton-cachyos-native-bc250
@@ -109,7 +110,18 @@ mesa-git
 ```
 
 After the changed components are added, `scripts/finalize-repository.sh` validates that every required component's `*-info.env` is present and rebuilds the complete pacman database.  
-`proton-cachyos-slr-bc250` is the optional component: a component that has never published has nothing to carry forward, so its first failed build must not block publishing everything else.
+`proton-cachyos-slr-bc250` is optional: a component that has never published has nothing to carry forward, so its first failed build must not block publishing everything else.
+`bc250-pytorch` is optional too: there is no package until `rocm/update-pkgbuild.sh` points its PKGBUILD at a wheel build; until then its build stages nothing and records only its fingerprint.
+
+## ROCm and PyTorch wheels
+
+`bc250-pytorch` packages wheels it does not build itself. They come from the separate workflow *ROCm and PyTorch wheels* (`.github/workflows/rocm-pytorch.yml`), which only runs when started by hand: ROCm and PyTorch are compiled from pinned sources (`rocm/pins.env`, `rocm/patches/`) by `rocm/build-rocm.sh`, in TheRock's own build image, and the result does not depend on the system Python or ROCm. So a CachyOS Python or ROCm update never needs a rebuild; a new PyTorch or ROCm release, or a fix, does. The nightly workflow does not watch `rocm/`.
+
+1. Change the pins or patches, then run the workflow (a cold build takes most of a night at 8 CPUs and 20 GB; its work directory, about 150 GB, is kept next to the runner's checkout so later builds are incremental).
+2. It uploads the wheels to the `rocm-pytorch` release, each asset prefixed with the build id, so builds never overwrite each other.
+3. `rocm/update-pkgbuild.sh <build id>` writes that build's wheels and checksums into `packages/bc250-pytorch/PKGBUILD`. Commit it: the nightly workflow then packages it like any other component.
+
+The same script builds locally: `rocm/build-rocm.sh` (state in `~/.cache/bc250-rocm`), then `rocm/update-pkgbuild.sh ~/.cache/bc250-rocm/out/wheelhouse`.
 
 The first run after migrating from the former single-kernel workflow intentionally rebuilds all three kernel families because the old release has no fingerprints for the new RC and BORE packages.  
 Existing unchanged Mesa packages can be preserved.
@@ -139,6 +151,7 @@ A complete fixed release contains at least:
 - `bc250-fixes` + its PKGBUILD, `.SRCINFO` and `bc250-fixes-info.env`;
 - `bc250-ch7218-fw` + its PKGBUILD, `.SRCINFO` and `bc250-ch7218-fw-info.env`;
 - `bc250-vcn-fw` + its PKGBUILD, `.SRCINFO` and `bc250-vcn-fw-info.env`;
+- `bc250-pytorch` + its PKGBUILD, `.SRCINFO` and `bc250-pytorch-info.env`, once a wheel build is selected;
 - `linux-cachyos-bc250-meta` + its PKGBUILD, `.SRCINFO` and `linux-cachyos-bc250-meta-info.env`;
 - `protonge-latest-bc250` + its PKGBUILD, `.SRCINFO` and `protonge-latest-bc250-info.env`;
 - `proton-cachyos-native-bc250` + its PKGBUILD, `.SRCINFO` and `proton-cachyos-native-bc250-info.env`;

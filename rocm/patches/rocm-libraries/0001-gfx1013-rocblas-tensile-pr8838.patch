@@ -1,0 +1,251 @@
+From 76cfe9d37b396133207b701ad0dbb1c3ed617e03 Mon Sep 17 00:00:00 2001
+From: Matt Thompson <matt@boondocklabs.io>
+Date: Sat, 14 Nov 2026 03:48:45 +0100
+Subject: [PATCH] Add gfx1013 to rocBLAS and Tensile (ROCm/rocm-libraries#8838,
+ without tests)
+
+
+ROCm/rocm-libraries#8838 by Matt Thompson (boondocklabs) and Estevan
+Vedovelli (AMD), still open on 2026-11-14. Taken as-is minus its
+Tensile test YAMLs and pytest.ini. Drop this patch once the PR is in the
+rocm-libraries commit TheRock pins.
+---
+ projects/rocblas/CMakeLists.txt               |  4 +-
+ projects/rocblas/library/src/handle.cpp       |  4 ++
+ .../rocblas/library/src/include/handle.hpp    |  1 +
+ projects/rocblas/library/src/tensile_host.cpp |  4 ++
+ shared/tensile/Tensile/AsmCaps.py             | 44 +++++++++++++++++++
+ shared/tensile/Tensile/Common.py              |  4 +-
+ .../cmake/TensileSupportedArchitectures.cmake |  1 +
+ .../Source/lib/include/Tensile/AMDGPU.hpp     |  7 +++
+ .../include/Tensile/PlaceholderLibrary.hpp    |  3 ++
+ .../Tensile/Serialization/Predicates.hpp      |  1 +
+ .../cmake/TensileSupportedArchitectures.cmake |  1 +
+ 11 files changed, 70 insertions(+), 4 deletions(-)
+
+diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
+index 1c3d13029ed..12985984eab 100644
+--- a/projects/rocblas/CMakeLists.txt
++++ b/projects/rocblas/CMakeLists.txt
+@@ -89,8 +89,8 @@ if (NOT BUILD_ADDRESS_SANITIZER)
+   set( TARGET_LIST_ROCM_6.3 "gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102;gfx1151;gfx1200;gfx1201")
+   set( TARGET_LIST_ROCM_7.0 "gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a;gfx942;gfx950;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102;gfx1150;gfx1151;gfx1200;gfx1201")
+   set( TARGET_LIST_ROCM_7.1 "gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a;gfx942;gfx950;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1200;gfx1201")
+-  set( TARGET_LIST_ROCM_7.13 "gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a;gfx942;gfx950;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1200;gfx1201;gfx1250")
+-  set( TARGET_LIST_ROCM_10.2 "gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a;gfx942;gfx950;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1170;gfx1171;gfx1200;gfx1201;gfx1250")
++  set( TARGET_LIST_ROCM_7.13 "gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a;gfx942;gfx950;gfx1010;gfx1012;gfx1013;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1200;gfx1201;gfx1250")
++  set( TARGET_LIST_ROCM_10.2 "gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a;gfx942;gfx950;gfx1010;gfx1012;gfx1013;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1170;gfx1171;gfx1200;gfx1201;gfx1250")
+   else()
+   set( TARGET_LIST_ROCM_5.6 "gfx908:xnack+;gfx90a:xnack+")
+   set( TARGET_LIST_ROCM_5.7 "gfx908:xnack+;gfx90a:xnack+;gfx942:xnack+")
+diff --git a/projects/rocblas/library/src/handle.cpp b/projects/rocblas/library/src/handle.cpp
+index 7dedd8b2289..a6f6ca165c1 100644
+--- a/projects/rocblas/library/src/handle.cpp
++++ b/projects/rocblas/library/src/handle.cpp
+@@ -415,6 +415,10 @@ Processor _rocblas_handle::getActiveArch()
+     {
+         return Processor::gfx1012;
+     }
++    else if(deviceString.find("gfx1013") != std::string::npos)
++    {
++        return Processor::gfx1013;
++    }
+     else if(deviceString.find("gfx1030") != std::string::npos)
+     {
+         return Processor::gfx1030;
+diff --git a/projects/rocblas/library/src/include/handle.hpp b/projects/rocblas/library/src/include/handle.hpp
+index 003841135f5..4a4d9115f74 100644
+--- a/projects/rocblas/library/src/include/handle.hpp
++++ b/projects/rocblas/library/src/include/handle.hpp
+@@ -82,6 +82,7 @@ enum class Processor : int
+     gfx1010 = 1010,
+     gfx1011 = 1011,
+     gfx1012 = 1012,
++    gfx1013 = 1013,
+     gfx1030 = 1030,
+     gfx1031 = 1031,
+     gfx1032 = 1032,
+diff --git a/projects/rocblas/library/src/tensile_host.cpp b/projects/rocblas/library/src/tensile_host.cpp
+index 26598c673c5..1316b4321cf 100644
+--- a/projects/rocblas/library/src/tensile_host.cpp
++++ b/projects/rocblas/library/src/tensile_host.cpp
+@@ -278,6 +278,10 @@ namespace
+         {
+             return Tensile::LazyLoadingInit::gfx1012;
+         }
++        else if(deviceString.find("gfx1013") != std::string::npos)
++        {
++            return Tensile::LazyLoadingInit::gfx1013;
++        }
+         else if(deviceString.find("gfx1030") != std::string::npos)
+         {
+             return Tensile::LazyLoadingInit::gfx1030;
+diff --git a/shared/tensile/Tensile/AsmCaps.py b/shared/tensile/Tensile/AsmCaps.py
+index 465466672b5..60cf6d00f75 100644
+--- a/shared/tensile/Tensile/AsmCaps.py
++++ b/shared/tensile/Tensile/AsmCaps.py
+@@ -565,6 +565,50 @@ def getCapabilitiesCache(rocmVersion: NamedTuple) -> dict:
+                   'v_mov_b64': False,
+                   'v_pk_fma_f16': True,
+                   'v_pk_fmac_f16': False},
++     (10, 1, 3): {'HasAddLshl': True,
++                  'HasAtomicAdd': False,
++                  'HasDirectToLdsDest': False,
++                  'HasDirectToLdsNoDest': True,
++                  'HasExplicitCO': True,
++                  'HasExplicitNC': True,
++                  'HasGLCModifier': True,
++                  'HasNTModifier': False,
++                  'HasLshlOr': True,
++                  'HasMFMA': False,
++                  'HasMFMA_b8': False,
++                  'HasMFMA_bf16_1k': False,
++                  'HasMFMA_bf16_original': False,
++                  'HasMFMA_constSrc': False,
++                  'HasMFMA_f64': False,
++                  'HasMFMA_f8': False,
++                  'HasMFMA_i8_908': False,
++                  'HasMFMA_i8_940': False,
++                  'HasMFMA_vgpr': False,
++                  'HasMFMA_xf32': False,
++                  'HasSMulHi': True,
++                  'HasWMMA': False,
++                  'KernargPreloading': False,
++                  'MaxLgkmcnt': 15,
++                  'MaxVmcnt': 63,
++                  'SupportedISA': True,
++                  'SupportedSource': True,
++                  'VOP3v_dot4_i32_i8': False,
++                  'v_dot2_f32_f16': False,
++                  'v_dot2c_f32_f16': False,
++                  'v_dot4_i32_i8': False,
++                  'v_dot4c_i32_i8': False,
++                  'v_fma_f16': True,
++                  'v_fma_f32': True,
++                  'v_fma_f64': True,
++                  'v_fma_mix_f32': True,
++                  'v_fmac_f16': False,
++                  'v_fmac_f32': True,
++                  'v_mac_f16': False,
++                  'v_mac_f32': True,
++                  'v_mad_mix_f32': False,
++                  'v_mov_b64': False,
++                  'v_pk_fma_f16': True,
++                  'v_pk_fmac_f16': False},
+      (10, 3, 0): {'HasAddLshl': True,
+                   'HasAtomicAdd': False,
+                   'HasDirectToLdsDest': False,
+diff --git a/shared/tensile/Tensile/Common.py b/shared/tensile/Tensile/Common.py
+index 5514b9ed197..0b92e07b4a1 100644
+--- a/shared/tensile/Tensile/Common.py
++++ b/shared/tensile/Tensile/Common.py
+@@ -333,7 +333,7 @@ globalParameters["MaxFileName"] = 64              # If a file name would be long
+ globalParameters["SupportedISA"] = [(8,0,3),
+                                     (9,0,0), (9,0,6), (9,0,8), (9,0,10), (9,0,12),
+                                     (9,4,2), (9,5,0),
+-                                    (10,1,0), (10,1,1), (10,1,2), (10,3,0), (10,3,1), (10,3,2), (10,3,3), (10,3,4), (10,3,5), (10,3,6),
++                                    (10,1,0), (10,1,1), (10,1,2), (10,1,3), (10,3,0), (10,3,1), (10,3,2), (10,3,3), (10,3,4), (10,3,5), (10,3,6),
+                                     (11,0,0), (11,0,1), (11,0,2), (11,0,3),
+                                     (11,5,0), (11,5,1), (11,5,2), (11,5,3), (11,7,0), (11,7,1),
+                                     (12,0,0), (12,0,1), (12,5,0)] # assembly kernels writer supports these architectures
+@@ -408,7 +408,7 @@ architectureMap = {
+   'gfx90a':'aldebaran', 'gfx90a:xnack+':'aldebaran', 'gfx90a:xnack-':'aldebaran',
+   'gfx942':'aquavanjaram942', 'gfx942:xnack+':'aquavanjaram942', 'gfx942:xnack-':'aquavanjaram942',
+   'gfx950':'gfx950', 'gfx950:xnack+':'gfx950', 'gfx950:xnack-':'gfx950',
+-  'gfx1010':'navi10', 'gfx1011':'navi12', 'gfx1012':'navi14',
++  'gfx1010':'navi10', 'gfx1011':'navi12', 'gfx1012':'navi14', 'gfx1013':'cyanskillfish',
+   'gfx1030':'navi21', 'gfx1031':'navi22', 'gfx1032':'navi23', 'gfx1033':'van gogh', 'gfx1034':'navi24', 'gfx1035':'rembrandt', 'gfx1036':'raphael',
+   'gfx1100':'navi31', 'gfx1101':'navi32', 'gfx1102':'navi33', 'gfx1103':'gfx1103',
+   'gfx1150':'strixpoint', 'gfx1151':'strixhalo', 'gfx1152':'gfx1152', 'gfx1153':'gfx1153',
+diff --git a/shared/tensile/Tensile/Source/cmake/TensileSupportedArchitectures.cmake b/shared/tensile/Tensile/Source/cmake/TensileSupportedArchitectures.cmake
+index 695e337005f..41e27f66a63 100644
+--- a/shared/tensile/Tensile/Source/cmake/TensileSupportedArchitectures.cmake
++++ b/shared/tensile/Tensile/Source/cmake/TensileSupportedArchitectures.cmake
+@@ -41,6 +41,7 @@ if(NOT BUILD_ADDRESS_SANITIZER)
+         "gfx1010"
+         "gfx1011"
+         "gfx1012"
++        "gfx1013"
+         "gfx1030"
+         "gfx1031"
+         "gfx1032"
+diff --git a/shared/tensile/Tensile/Source/lib/include/Tensile/AMDGPU.hpp b/shared/tensile/Tensile/Source/lib/include/Tensile/AMDGPU.hpp
+index 96afc82dc92..87f19fdd312 100644
+--- a/shared/tensile/Tensile/Source/lib/include/Tensile/AMDGPU.hpp
++++ b/shared/tensile/Tensile/Source/lib/include/Tensile/AMDGPU.hpp
+@@ -66,6 +66,7 @@ namespace Tensile
+             gfx1010 = 1010,
+             gfx1011 = 1011,
+             gfx1012 = 1012,
++            gfx1013 = 1013,
+             gfx1030 = 1030,
+             gfx1031 = 1031,
+             gfx1032 = 1032,
+@@ -114,6 +115,8 @@ namespace Tensile
+                 return "gfx1011";
+             case AMDGPU::Processor::gfx1012:
+                 return "gfx1012";
++            case AMDGPU::Processor::gfx1013:
++                return "gfx1013";
+             case AMDGPU::Processor::gfx1030:
+                 return "gfx1030";
+             case AMDGPU::Processor::gfx1031:
+@@ -204,6 +207,10 @@ namespace Tensile
+             {
+                 return AMDGPU::Processor::gfx1012;
+             }
++            else if(deviceString.find("gfx1013") != std::string::npos)
++            {
++                return AMDGPU::Processor::gfx1013;
++            }
+             else if(deviceString.find("gfx1030") != std::string::npos)
+             {
+                 return AMDGPU::Processor::gfx1030;
+diff --git a/shared/tensile/Tensile/Source/lib/include/Tensile/PlaceholderLibrary.hpp b/shared/tensile/Tensile/Source/lib/include/Tensile/PlaceholderLibrary.hpp
+index 19213f92217..d7eb9bfb73d 100644
+--- a/shared/tensile/Tensile/Source/lib/include/Tensile/PlaceholderLibrary.hpp
++++ b/shared/tensile/Tensile/Source/lib/include/Tensile/PlaceholderLibrary.hpp
+@@ -51,6 +51,7 @@ namespace Tensile
+         gfx1010,
+         gfx1011,
+         gfx1012,
++        gfx1013,
+         gfx1030,
+         gfx1031,
+         gfx1032,
+@@ -103,6 +104,8 @@ namespace Tensile
+             return "TensileLibrary_*_gfx1011";
+         case LazyLoadingInit::gfx1012:
+             return "TensileLibrary_*_gfx1012";
++        case LazyLoadingInit::gfx1013:
++            return "TensileLibrary_*_gfx1013";
+         case LazyLoadingInit::gfx1030:
+             return "TensileLibrary_*_gfx1030";
+         case LazyLoadingInit::gfx1031:
+diff --git a/shared/tensile/Tensile/Source/lib/include/Tensile/Serialization/Predicates.hpp b/shared/tensile/Tensile/Source/lib/include/Tensile/Serialization/Predicates.hpp
+index 1d4e14de23e..65857bd7dc9 100644
+--- a/shared/tensile/Tensile/Source/lib/include/Tensile/Serialization/Predicates.hpp
++++ b/shared/tensile/Tensile/Source/lib/include/Tensile/Serialization/Predicates.hpp
+@@ -226,6 +226,7 @@ namespace Tensile
+                 iot::enumCase(io, value, "gfx1010", AMDGPU::Processor::gfx1010);
+                 iot::enumCase(io, value, "gfx1011", AMDGPU::Processor::gfx1011);
+                 iot::enumCase(io, value, "gfx1012", AMDGPU::Processor::gfx1012);
++                iot::enumCase(io, value, "gfx1013", AMDGPU::Processor::gfx1013);
+                 iot::enumCase(io, value, "gfx1030", AMDGPU::Processor::gfx1030);
+                 iot::enumCase(io, value, "gfx1031", AMDGPU::Processor::gfx1031);
+                 iot::enumCase(io, value, "gfx1032", AMDGPU::Processor::gfx1032);
+diff --git a/shared/tensile/next-cmake/cmake/TensileSupportedArchitectures.cmake b/shared/tensile/next-cmake/cmake/TensileSupportedArchitectures.cmake
+index f1576939c61..206ada95c20 100644
+--- a/shared/tensile/next-cmake/cmake/TensileSupportedArchitectures.cmake
++++ b/shared/tensile/next-cmake/cmake/TensileSupportedArchitectures.cmake
+@@ -41,6 +41,7 @@ if(NOT BUILD_ADDRESS_SANITIZER)
+         "gfx1010"
+         "gfx1011"
+         "gfx1012"
++        "gfx1013"
+         "gfx1030"
+         "gfx1031"
+         "gfx1032"
+-- 
+2.56.0
+

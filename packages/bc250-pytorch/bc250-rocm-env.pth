@@ -1,0 +1,1 @@
+import os; [os.environ.setdefault(k, v) for k, v in (("HSA_ENABLE_SDMA", "0"), ("GPU_PINNED_MIN_XFER_SIZE", "16384"), ("TORCH_BLAS_PREFER_HIPBLASLT", "0"))]

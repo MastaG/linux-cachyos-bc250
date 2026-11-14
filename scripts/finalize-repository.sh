@@ -67,6 +67,7 @@ required_metadata=(
 # actually there; a run in this state publishes everything else.
 optional_metadata=(
     proton-cachyos-slr-bc250-info.env
+    bc250-pytorch-info.env
 )
 for file in "${required_metadata[@]}"; do
     [[ -f "$OUT_DIR/$file" ]] || {
@@ -180,6 +181,16 @@ else
     printf '::warning title=proton-cachyos-slr-bc250 missing::not in this repository yet; its release-notes section is omitted\n'
 fi
 
+# Opt-in and optional: there is no package until rocm/update-pkgbuild.sh has
+# pointed the PKGBUILD at a wheel build. Its info file then has no version.
+pytorch_info="$OUT_DIR/bc250-pytorch-info.env"
+pytorch_present=false
+if [[ -f "$pytorch_info" && -n "$(value "$pytorch_info" BC250_PYTORCH_PKGVER)" ]]; then
+    pytorch_present=true
+    pytorch_pkgver="$(value "$pytorch_info" BC250_PYTORCH_PKGVER)"
+    pytorch_pkgrel="$(value "$pytorch_info" BC250_PYTORCH_PKGREL)"
+fi
+
 for field in \
     stable_pkgbase stable_pkgver stable_pkgrel \
     rc_pkgbase rc_pkgver rc_pkgrel \
@@ -249,6 +260,7 @@ protonge_count="$(pkgbase_count protonge-latest-bc250)"
 proton_native_count="$(pkgbase_count proton-cachyos-native-bc250)"
 proton_slr_count="$(pkgbase_count proton-cachyos-slr-bc250)"
 [[ "$proton_slr_present" == true ]] || proton_slr_count=1
+pytorch_count="$(pkgbase_count bc250-pytorch)"
 
 (( stable_count >= 2 )) || { printf 'ERROR: expected stable kernel + headers; found %d package(s)\n' "$stable_count" >&2; exit 1; }
 (( rc_count >= 2 )) || { printf 'ERROR: expected RC kernel + headers; found %d package(s)\n' "$rc_count" >&2; exit 1; }
@@ -266,6 +278,9 @@ proton_slr_count="$(pkgbase_count proton-cachyos-slr-bc250)"
 (( protonge_count == 1 )) || { printf 'ERROR: expected exactly one protonge-latest-bc250 package; found %d\n' "$protonge_count" >&2; exit 1; }
 (( proton_native_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-native-bc250 package; found %d\n' "$proton_native_count" >&2; exit 1; }
 (( proton_slr_count == 1 )) || { printf 'ERROR: expected exactly one proton-cachyos-slr-bc250 package; found %d\n' "$proton_slr_count" >&2; exit 1; }
+if [[ "$pytorch_present" == true ]]; then
+    (( pytorch_count == 1 )) || { printf 'ERROR: expected exactly one bc250-pytorch package; found %d\n' "$pytorch_count" >&2; exit 1; }
+fi
 
 # The database is rebuilt after every component so the runner can publish each
 # one as it lands; do it once more here so the final release is built from the
@@ -399,6 +414,25 @@ EOF_INFO
 # Built before the notes rather than appended after them, so it sits with the
 # other Proton packages instead of trailing the file. Empty until this package
 # has published once: a section full of blank versions is worse than no section.
+pytorch_section=""
+if [[ "$pytorch_present" == true ]]; then
+    pytorch_section="$(cat <<EOF_PYTORCH_NOTES
+
+## bc250-pytorch (opt-in)
+
+- Package version: \`${pytorch_pkgver}-${pytorch_pkgrel}\`
+- PyTorch with torchvision and torchaudio, and ROCm built for the BC-250 GPU
+  (gfx1013), in its own Python under \`/opt/bc250-pytorch\`. It does not use the
+  system Python or system ROCm, so CachyOS updates do not affect it.
+- Use it through a venv: \`/opt/bc250-pytorch/bin/python3 -m venv
+  --system-site-packages ~/app/venv\`. \`bc250-pytorch-check\` tests the GPU.
+- Needs \`amdgpu.sched_policy=2\`, which also changes GPU scheduling for games;
+  see [ROCm](https://github.com/MastaG/linux-cachyos-bc250/blob/main/docs/ROCM.md).
+- Not part of \`linux-cachyos-bc250-meta\`: \`sudo pacman -S bc250-pytorch\`.
+EOF_PYTORCH_NOTES
+)"
+fi
+
 slr_section=""
 if [[ "$proton_slr_present" == true ]]; then
     slr_section="$(cat <<EOF_SLR_NOTES
@@ -608,6 +642,7 @@ systemctl --user restart pipewire pipewire-pulse wireplumber
   The package stays available for anyone who wants to continue that work.
   Read \`/usr/share/doc/bc250-vcn-fw/README.md\` for where the file comes from.
 - Not part of \`linux-cachyos-bc250-meta\`; you do not need it.
+${pytorch_section}
 
 ## aic8800d80-dkms -- removed
 
@@ -847,6 +882,7 @@ printf '    bc250-paccache-cleanup: %s-%s\n' "$bc250_paccache_cleanup_pkgver" "$
 printf '    bc250-fixes: %s-%s\n' "$bc250_fixes_pkgver" "$bc250_fixes_pkgrel"
 printf '    bc250-ch7218-fw: %s-%s\n' "$bc250_ch7218_fw_pkgver" "$bc250_ch7218_fw_pkgrel"
 printf '    bc250-vcn-fw: %s-%s\n' "$bc250_vcn_fw_pkgver" "$bc250_vcn_fw_pkgrel"
+[[ "$pytorch_present" != true ]] || printf '    bc250-pytorch: %s-%s\n' "$pytorch_pkgver" "$pytorch_pkgrel"
 printf '    linux-cachyos-bc250-meta: %s-%s\n' "$linux_cachyos_bc250_meta_pkgver" "$linux_cachyos_bc250_meta_pkgrel"
 printf '    protonge-latest-bc250: %s-%s (%s, OptiScaler %s)\n' \
     "$protonge_pkgver" "$protonge_pkgrel" "$protonge_ge_tag" "$protonge_optiscaler"

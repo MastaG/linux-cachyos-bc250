@@ -1,0 +1,33 @@
+From b4a095abc28ee8166711ac876e41bbbcfe108edd Mon Sep 17 00:00:00 2001
+From: MastaG <mastag@gmail.com>
+Date: Sat, 14 Nov 2026 00:20:23 +0100
+Subject: [PATCH 1/2] Add gfx1013 (BC-250) as a gfx101X target, family
+ gfx1013-bc250
+
+---
+ cmake/therock_amdgpu_targets.cmake | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/cmake/therock_amdgpu_targets.cmake b/cmake/therock_amdgpu_targets.cmake
+index ee147646c..fda5eeeb5 100644
+--- a/cmake/therock_amdgpu_targets.cmake
++++ b/cmake/therock_amdgpu_targets.cmake
+@@ -124,6 +124,15 @@ therock_add_amdgpu_target(gfx1012 "AMD RX 5500" FAMILY dgpu-all gfx101X-all gfx1
+     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+ )
++therock_add_amdgpu_target(gfx1013 "AMD BC-250 (Cyan Skillfish)" FAMILY gfx101X-all gfx1013-bc250
++  EXCLUDE_TARGET_PROJECTS
++    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
++    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
++    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
++    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
++    hipTensor # https://github.com/ROCm/TheRock/issues/2074
++    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
++)
+ 
+ # gfx103X family
+ therock_add_amdgpu_target(gfx1030 "AMD RX 6800 / XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
+-- 
+2.56.0
+

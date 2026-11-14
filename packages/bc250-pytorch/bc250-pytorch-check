@@ -1,0 +1,47 @@
+#!/opt/bc250-pytorch/bin/python3
+"""Is PyTorch on the BC-250 GPU usable? Checks the kernel side, then runs a small GPU job."""
+import os
+import sys
+
+
+def read(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+ok = True
+sched = read("/sys/module/amdgpu/parameters/sched_policy")
+print(f"amdgpu sched_policy: {sched}")
+if sched != "2":
+    ok = False
+    print("  ROCm compute is only stable with amdgpu.sched_policy=2 (kernel command line);"
+          " this also affects games, so it is your call.")
+if not os.access("/dev/kfd", os.R_OK | os.W_OK):
+    ok = False
+    print("  no access to /dev/kfd: add yourself to the 'render' group and log in again")
+
+import torch  # noqa: E402
+
+print(f"torch {torch.__version__}, HIP {torch.version.hip}")
+if not torch.cuda.is_available():
+    print("GPU: not available")
+    sys.exit(1)
+props = torch.cuda.get_device_properties(0)
+print(f"GPU: {props.name} ({getattr(props, 'gcnArchName', '?')}), "
+      f"{props.multi_processor_count} CUs, {props.total_memory / 2**30:.1f} GiB")
+
+a = torch.randn(1024, 1024, device="cuda")
+b = torch.randn(1024, 1024, device="cuda")
+c = (a @ b).cpu()
+ref = a.cpu() @ b.cpu()
+err = (c - ref).abs().max().item()
+print(f"matmul 1024x1024: max error vs CPU {err:.2e}")
+x = torch.randn(1, 3, 64, 64, device="cuda")
+conv = torch.nn.Conv2d(3, 8, 3).cuda()
+print(f"conv2d: {tuple(conv(x).shape)}")
+ok = ok and err < 1e-2
+print("OK" if ok else "problems found, see above")
+sys.exit(0 if ok else 1)

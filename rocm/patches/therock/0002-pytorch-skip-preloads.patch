@@ -1,0 +1,28 @@
+From 5fbfd2a055a9aec47a8f0a09afa2fd55b690f5e3 Mon Sep 17 00:00:00 2001
+From: MastaG <mastag@gmail.com>
+Date: Sat, 14 Nov 2026 05:24:07 +0100
+Subject: [PATCH] pytorch: allow skipping ROCm library preloads
+ (THEROCK_PYTORCH_SKIP_PRELOADS)
+
+---
+ external-builds/pytorch/build_prod_wheels.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/external-builds/pytorch/build_prod_wheels.py b/external-builds/pytorch/build_prod_wheels.py
+index 1523f26d7..2e1701c49 100755
+--- a/external-builds/pytorch/build_prod_wheels.py
++++ b/external-builds/pytorch/build_prod_wheels.py
+@@ -458,6 +458,10 @@ def get_rocm_init_contents(args: argparse.Namespace):
+     library_preloads = (
+         WINDOWS_LIBRARY_PRELOADS if is_windows else LINUX_LIBRARY_PRELOADS
+     )
++    # Narrow ROCm builds (e.g. one gfx target without hipDNN/RCCL/hipFile)
++    # don't ship every library; preloading a missing one makes `import torch` fail.
++    skip = {s for s in os.environ.get("THEROCK_PYTORCH_SKIP_PRELOADS", "").split(",") if s}
++    library_preloads = [s for s in library_preloads if s not in skip]
+     library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
+     return textwrap.dedent(
+         f"""
+-- 
+2.56.0
+

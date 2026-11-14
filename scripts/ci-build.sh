@@ -315,6 +315,7 @@ runuser -u builder -- env \
                 bc250-fixes)      /workspace/scripts/build-bc250-fixes-package.sh ;;
                 bc250-ch7218-fw)             /workspace/scripts/build-bc250-ch7218-fw-package.sh ;;
                 bc250-vcn-fw)             /workspace/scripts/build-bc250-vcn-fw-package.sh ;;
+                bc250-pytorch)            /workspace/scripts/build-bc250-pytorch-package.sh ;;
                 linux-cachyos-bc250-meta)    /workspace/scripts/build-linux-cachyos-bc250-meta-package.sh ;;
                 protonge-latest-bc250)       /workspace/scripts/build-protonge-latest-bc250-package.sh ;;
                 proton-cachyos-native-bc250) /workspace/scripts/build-proton-cachyos-native-bc250-package.sh ;;

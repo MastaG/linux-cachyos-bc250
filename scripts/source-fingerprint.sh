@@ -42,6 +42,7 @@ case "$COMPONENT" in
     bc250-fixes) ;;
     bc250-ch7218-fw) ;;
     bc250-vcn-fw) ;;
+    bc250-pytorch) ;;
     linux-cachyos-bc250-meta) ;;
     protonge-latest-bc250) ;;
     proton-cachyos-native-bc250) ;;
@@ -208,6 +209,24 @@ case "$COMPONENT" in
         {
             hash_files "$pkg_dir"/*
             hash_files "$ROOT_DIR/scripts/build-bc250-vcn-fw-package.sh" \
+                "$ROOT_DIR/scripts/repo-package-helpers.sh"
+        } | sha256sum | awk '{print $1}'
+        ;;
+
+    bc250-pytorch)
+        # Our PKGBUILD, which pins the standalone Python and every wheel by
+        # checksum, and the files next to it. Deliberately not rocm/: a new
+        # wheel build only matters once rocm/update-pkgbuild.sh writes it into
+        # the PKGBUILD. No system Python or ROCm version takes part, so their
+        # updates never rebuild this package.
+        pkg_dir="$ROOT_DIR/packages/bc250-pytorch"
+        [[ -d "$pkg_dir" ]] || {
+            printf 'ERROR: missing package directory: %s\n' "$pkg_dir" >&2
+            exit 1
+        }
+        {
+            hash_files "$pkg_dir"/*
+            hash_files "$ROOT_DIR/scripts/build-bc250-pytorch-package.sh" \
                 "$ROOT_DIR/scripts/repo-package-helpers.sh"
         } | sha256sum | awk '{print $1}'
         ;;
