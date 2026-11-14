@@ -1,4 +1,4 @@
-# BC-250 CachyOS kernels + Mesa repository
+# BC-250 CachyOS kernels + Mesa + AI repository
 
 [![Build and publish BC-250 CachyOS kernels and Mesa](https://github.com/MastaG/linux-cachyos-bc250/actions/workflows/build-release.yml/badge.svg)](https://github.com/MastaG/linux-cachyos-bc250/actions/workflows/build-release.yml)
 
