@@ -113,7 +113,48 @@ prompts in RAM, which the GPU needs here.
 
 Don't go above these sizes. A context that doesn't fit doesn't just fail to start: the
 kernel then runs out of memory and kills other services (network, SSH, audio)
-before llama-server.
+before llama-server. Sometimes the whole board hangs and needs a power cycle.
+
+### Even more context: trim the vocabulary
+
+Qwen3.8 knows about 248,000 tokens for all the world's scripts. If you only
+chat in English and other Latin-alphabet languages, you can remove the rest from
+the model file. That frees about 0.5–0.7 GB for context and makes replies about
+3% faster. With the [ASCII-Condensed prune tools](https://github.com/bsaleh03/ASCII-Condensed-prune-tools):
+
+```bash
+git clone https://github.com/bsaleh03/ASCII-Condensed-prune-tools ~/prune-tools
+python -m venv ~/prune-venv && ~/prune-venv/bin/pip install gguf numpy
+cd ~/models
+~/prune-venv/bin/python ~/prune-tools/prune_vocab.py \
+    Qwen3.8-27B-UD-IQ3_S.gguf Qwen3.8-27B-UD-IQ3_S-P2.gguf --policy P2
+```
+
+Use `--policy P2` (ASCII plus accented Latin letters). With the default (ASCII
+only) or `P1M`, words like "café" or "België" come out garbled. A trimmed model
+can't write emoji, Chinese, Cyrillic, Greek or math symbols, and may stumble over
+them in your input.
+
+| Trimmed model file | `--ctx-size` | Speed, full context |
+|---|---:|---:|
+| `Qwen3.8-27B-UD-IQ3_S-P2.gguf` (11.4 GB) | `81920` | 17 tokens/s |
+| `Qwen3.8-27B-UD-IQ4_XS-P2.gguf` (13.7 GB) | `24576` | 19 tokens/s |
+
+Same flags as in the table above (`--ctx-checkpoints 1 --cache-ram 0`, no MTP).
+These two were tested with the VRAM carve-out set to 256 MB
+([details](AI-BENCHMARKS.md#vram-carve-out-256-mb)), which leaves the system
+250 MB more RAM. With the default 512 MB, use one step less (`73728` and `16384`).
+
+### Heat: long prompts
+
+Reading a long prompt (tens of thousands of tokens, such as a long document
+or a big codebase) keeps the GPU at full power for minutes, and the GPU's
+voltage regulators (VRMs) get hot. With small VRM heatsinks we measured
+92 → 120 °C in 80 seconds. The board switches itself off at 140 °C. Normal chat is fine: short prompts don't load the GPU long
+enough, and the VRMs cool down within seconds between replies.
+
+Check with `sensors` (`GPU VRM Temp`). If it goes above about 110 °C, add
+airflow over the VRM heatsinks, or don't feed it very long prompts.
 
 ## Images: ComfyUI with SDXL-Lightning
 

@@ -89,13 +89,71 @@ then a 200-token reply:
   pipewire, the user's systemd, the sched-ext scheduler) before llama-server
   gives up. That happened even with llama-server at `oom_score_adj` 1000: its
   GPU memory is not freed fast enough when it is killed. Stay at tested sizes.
-- A Discord user reports IQ4_XS with more context on a minimal Alpine-based
-  system with the VRAM carve-out at 256 MB, plus trimming the vocabulary to
-  ASCII ([ASCII-Condensed prune tools](https://github.com/bsaleh03/ASCII-Condensed-prune-tools),
-  a few hundred MB). Not tested here.
-
 Qwen3.8 uses a hybrid architecture (`qwen35` in llama.cpp) in which only some
-layers keep a classic KV cache, which is why long contexts fit at all.
+layers keep a classic KV cache, which is why long contexts fit at all. One 8k
+step of q8_0 KV cache costs about 290 MB.
+
+### Trimmed vocabulary
+
+A Discord user's tip:
+[ASCII-Condensed prune tools](https://github.com/bsaleh03/ASCII-Condensed-prune-tools)
+remove tokens for scripts you don't use from the GGUF. Policy `P2` (ASCII plus
+U+00A0–U+024F, the accented Latin letters) keeps 141,141 of 248,320 tokens:
+
+| Model | File size | Starts, `-ub 512` | Starts, `-ub 64` | Filled run |
+|---|---:|---:|---:|---|
+| UD-IQ3_XXS-P2 | 10.9 → 10.4 GB | 120k (160 MB free) | – | 104k: not finished (VRM heat, see below) |
+| UD-IQ3_S-P2 | 12.0 → 11.4 GB | 96k | 104k | **80k: 113 / 17.2 t/s**, 365 MB free |
+| UD-IQ4_XS-P2 | 14.4 → 13.7 GB | 32k (305 MB free) | – | **24k: 157 / 19.2 t/s**, 343 MB free |
+
+Measured with the VRAM carve-out at 256 MB (next section) and otherwise the same
+setup as above. "120k" and "32k" are where the sweep stopped going up, not failures.
+
+- About 3–4% faster generation, because the output layer is smaller.
+- The default policy (`P1`, ASCII only) and `P1M` (ASCII plus math symbols)
+  garble accented words: "cafĕ", "Belgiĕ", "geĭnteresseerd". `P2` gave the same
+  answers as the untrimmed model in our checks.
+- Emoji, CJK, Cyrillic, Greek and math symbols are gone with `P2`.
+
+### VRAM carve-out 256 MB
+
+The BIOS reserves 512 MB of the 16 GB as "VRAM". With
+[bc250_memcfg](https://github.com/fanoush/bc250_memcfg) it can be set to 256 MB
+from Linux, no BIOS flash needed:
+
+```bash
+sudo ./bc250memcfg UMA_SIZE 256      # then reboot; UMA_SIZE 512 (or a CMOS clear) undoes it
+```
+
+It writes to the battery-backed CMOS. Results with `ttm.pages_limit=3670016`
+left as it is:
+
+- The system gets 252 MB more RAM.
+- The GPU doesn't get more room: its limit is VRAM plus GTT, and GTT stays at
+  14 GiB. Untrimmed UD-IQ3_S still starts at 80k and fails at 88k, the same
+  as with 512 MB.
+- The extra RAM is headroom for the rest of the system (130 vs 110 MB left in
+  the 80k start test). That's why the trimmed-model sizes above say "use one
+  step less at 512 MB" in the guide.
+
+### Heat during long prompts
+
+Prompt processing at full clock draws about 170 A on the GPU VRM (around 165 W
+GPU power). On our test board, whose VRMs only have small heatsinks,
+`GPU VRM Temp` went from 92 to 120 °C in 80 seconds and kept rising; the board
+switches off at 140 °C. With the case fans on full speed it still reached
+109 °C after 75 seconds from cold. The
+long filled runs above take 2–14 minutes of prompt processing each, so
+back-to-back runs heat-soak the VRMs. The IQ3_XXS-P2 104k run started right
+after two such runs and the board switched off a minute in; the rerun was
+stopped at 120 °C. How fast this happens depends on the cooling: a heatsink
+that also covers the VRMs helps a lot. Short prompts don't matter: the VRMs
+cool down in seconds.
+
+A separate hang, without heat: trying a 112k start of UD-IQ3_S-P2 (`-ub 64`)
+right after 104k had left only 287 MB free hung the board, instead of the OOM
+kill described above. zram was the swap at the time. Since then the sweep stops
+once less than 350 MB is left.
 
 ### At full clock, and the gfx1013 llama.cpp fork
 
