@@ -155,6 +155,33 @@ right after 104k had left only 287 MB free hung the board, instead of the OOM
 kill described above. zram was the swap at the time. Since then the sweep stops
 once less than 350 MB is left.
 
+### beellama.cpp and KVarN KV cache
+
+[beellama.cpp](https://github.com/Anbeeld/beellama.cpp) v0.4.9 (a llama.cpp
+fork, Vulkan build) adds KVarN, a KV cache quantization with separate K and V
+bit widths, and a full-precision "tail" for recent tokens. UD-IQ3_XXS, server
+mode, VRAM 256 MB:
+
+| | Prompt (pp512) | Generation (tg128) |
+|---|---:|---:|
+| llama.cpp, q8_0 | 190.8 t/s | 23.84 t/s |
+| beellama, q8_0 | 188.8 | 23.81 |
+| beellama, kvarn5/4 (also kvarn4/4, kvarn3/3) | 134.7 | 24.03 |
+
+With `-ctk kvarn5 -ctv kvarn4 --kv-tail-tokens 1024` UD-IQ3_XXS-P2 starts at
+184k context with 467 MB free (q8_0: 120k with 160 MB free); one 16k step costs
+~340 MB instead of ~580 MB. Reading a prompt barely needs extra memory. But with
+real text in the context it gets slow (136k context):
+
+| Prompt in context | Prompt | Generation |
+|---|---:|---:|
+| 8k tokens | 56 t/s | 6.1 t/s |
+| 16k tokens | 35 t/s | 4.4 t/s |
+
+The fast KVarN kernels are CUDA-only for now; on Vulkan the speed drops with
+every token in the context. Not usable here yet. Worth retesting when
+beellama's Vulkan path gets faster.
+
 ### At full clock, and the gfx1013 llama.cpp fork
 
 GPU fixed at 2100 MHz, `llama-bench -fa 1 -p 512 -n 128`:
