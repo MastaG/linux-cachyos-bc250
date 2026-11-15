@@ -95,6 +95,26 @@ your own scripts.
 - Want it faster rather than smarter? `Qwen3.5-9B-Q4_K_M.gguf` (5.7 GB, from
   `unsloth/Qwen3.5-9B-GGUF`) runs at about 60 tokens/s with the same service file.
 
+### More context or a better quant
+
+The setup above is the fastest. If you'd rather have a longer context or a
+better quant (more accurate answers), drop the MTP lines and use one of these
+instead. Each was tested with the context filled to 90%:
+
+| Model file (from `unsloth/Qwen3.8-27B-GGUF`) | `--ctx-size` | Speed, short / full context |
+|---|---:|---:|
+| `Qwen3.8-27B-UD-IQ3_XXS.gguf` (10.9 GB) | `98304` | 24 / 17 tokens/s |
+| `Qwen3.8-27B-UD-IQ3_S.gguf` (12.0 GB) | `65536` | 23 / 18 tokens/s |
+| `Qwen3.8-27B-UD-IQ4_XS.gguf` (14.4 GB) | `16384` | 21 / 20 tokens/s |
+
+Add `--ctx-checkpoints 1 --cache-ram 0` to the `ExecStart` line. By default
+llama-server keeps up to 32 snapshots of 150 MB each, and up to 8 GB of old
+prompts in RAM, which the GPU needs here.
+
+Don't go above these sizes. A context that doesn't fit doesn't just fail to start: the
+kernel then runs out of memory and kills other services (network, SSH, audio)
+before llama-server.
+
 ## Images: ComfyUI with SDXL-Lightning
 
 Needs `amdgpu.sched_policy=2` (see [Kernel parameters](#kernel-parameters)).

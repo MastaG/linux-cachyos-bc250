@@ -60,19 +60,39 @@ What else we tried (Vulkan, master):
 | 8k tokens already in context | prompt 110 t/s, generation 15.1 t/s |
 | KV cache q8_0 instead of f16 (8k context) | generation 14.9 instead of 15.1 t/s, half the KV memory |
 
-How much context fits (`--parallel 1`, q8_0 KV cache, game session stopped):
+### How much context fits
 
-| `--ctx-size` | GPU memory | RAM left over |
-|---:|---:|---:|
-| 32768 | 11.2 GB | 3.1 GB |
-| 65536 | 12.5 GB | 1.8 GB |
-| 98304 | 13.5 GB | 0.7 GB |
-| 131072 | fails: `Not enough memory for command submission` | |
+Server mode, q8_0 KV cache, `--parallel 1`, `ttm.pages_limit=3670016` (GTT 14 GiB),
+512 MB VRAM carve-out (BIOS default), with `--ctx-checkpoints 1 --cache-ram 0`.
+"Starts" = the largest `--ctx-size` that loads and answers a short request (8k
+steps); "filled" = context filled to 90% with real text (Python sources),
+then a 200-token reply:
 
-32k is the comfortable setting; 64k works if nothing else runs. Running out
-only fails that request (`vk::DeviceLostError` in llama.cpp); the GPU itself
-recovers without a reset. Leave `--parallel` at 1 for one user: the default of 4
-slots splits the context between them.
+| Model | Short context prompt / generation (`llama-bench`) | Starts, `-ub 512` | Starts, `-ub 64` | Filled run |
+|---|---:|---:|---:|---|
+| UD-IQ3_XXS (10.9 GB) | 191 / 23.9 t/s | 112k | 112k | 64k: 127 / 18.4 t/s, 1.0 GB RAM free; **96k: 105 / 16.7 t/s**, 90 MB free |
+| UD-IQ3_S (12.0 GB) | 186 / 22.8 t/s | 80k | 96k | **64k: 125 / 17.8 t/s**, 400 MB free; 80k with `-ub 64`: 95 / 17.0 t/s, 130 MB free |
+| UD-IQ4_XS (14.4 GB) | 184 / 21.4 t/s | 24k | 24k | **16k: 161 / 19.7 t/s**, 80 MB free |
+
+- The sizes in bold are the ones in the guide. Each step past the "starts"
+  column failed to start.
+- `--ctx-checkpoints 1`: Qwen3.8's recurrent layers are saved as context
+  checkpoints of 150 MB each, by default up to 32 per slot (one every 8192
+  tokens). In a single 64k request this saved ~150 MB (1015 vs 869 MB free);
+  over a long chat they add up.
+- `--cache-ram 0`: llama-server keeps up to 8 GB of old prompts in RAM by
+  default. On this board that is the GPU's memory too.
+- `-ub 64` (micro-batch) saves ~100–300 MB of compute buffers and costs ~25% prompt
+  speed. Only worth it to squeeze in IQ3_S above 80k.
+- **Going over the limit is not harmless.** A `--ctx-size` that does not fit makes
+  the kernel's OOM killer kill other processes (NetworkManager, sshd, dbus,
+  pipewire, the user's systemd, the sched-ext scheduler) before llama-server
+  gives up. That happened even with llama-server at `oom_score_adj` 1000: its
+  GPU memory is not freed fast enough when it is killed. Stay at tested sizes.
+- A Discord user reports IQ4_XS with more context on a minimal Alpine-based
+  system with the VRAM carve-out at 256 MB, plus trimming the vocabulary to
+  ASCII ([ASCII-Condensed prune tools](https://github.com/bsaleh03/ASCII-Condensed-prune-tools),
+  a few hundred MB). Not tested here.
 
 Qwen3.8 uses a hybrid architecture (`qwen35` in llama.cpp) in which only some
 layers keep a classic KV cache, which is why long contexts fit at all.
