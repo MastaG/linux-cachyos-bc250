@@ -8,6 +8,23 @@ Two setups, both the fastest we measured on the board
 
 Each needs most of the board's memory, so run one at a time.
 
+## Kernel parameters
+
+| Parameter | Why |
+|---|---|
+| `ttm.pages_limit=3670016` | Lets the GPU use up to 14 GB of the board's memory (the default is about half). Without it the 27B model does not fit. It helps the PS5 emulator too. |
+| `amdgpu.sched_policy=2` | Needed for ROCm (ComfyUI), see [ROCm](ROCM.md). Not needed for chat. |
+| `amdgpu.bc250_cc_write_mode=3` | Optional: unlocks all 40 CUs ([details](PATCHES.md#optional-40-cu-unlock)). All numbers here are measured with it. |
+
+On CachyOS with Limine, add them inside the quotes of the `KERNEL_CMDLINE[default]+="…"`
+line in `/etc/default/limine` (skip any you already have), then:
+
+```bash
+sudo limine-mkinitcpio
+sudo reboot
+cat /proc/cmdline                 # check they are there
+```
+
 ## Before you start: server mode
 
 The GPU shares the board's 16 GB with the system. Stop the game session while
@@ -80,7 +97,7 @@ your own scripts.
 
 ## Images: ComfyUI with SDXL-Lightning
 
-Needs `amdgpu.sched_policy=2` on the kernel command line (see [ROCm](ROCM.md)).
+Needs `amdgpu.sched_policy=2` (see [Kernel parameters](#kernel-parameters)).
 
 ```bash
 sudo pacman -S bc250-pytorch
