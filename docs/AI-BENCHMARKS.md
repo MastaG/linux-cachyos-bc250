@@ -112,8 +112,11 @@ setup as above. "120k" and "32k" are where the sweep stopped going up, not failu
 - About 3–4% faster generation, because the output layer is smaller.
 - The default policy (`P1`, ASCII only) and `P1M` (ASCII plus math symbols)
   garble accented words: "cafĕ", "Belgiĕ", "geĭnteresseerd". `P2` gave the same
-  answers as the untrimmed model in our checks.
-- Emoji, CJK, Cyrillic, Greek and math symbols are gone with `P2`.
+  answers as the untrimmed model in our checks. The tool keeps the 256 single-byte
+  tokens, so a removed character can still be written byte by byte, but the model
+  picked the wrong bytes ("é" became "ĕ").
+- With `P2`, emoji, CJK, Cyrillic, Greek and math symbols have only that
+  byte-by-byte route left.
 
 ### VRAM carve-out 256 MB
 

@@ -131,9 +131,10 @@ cd ~/models
 ```
 
 Use `--policy P2` (ASCII plus accented Latin letters). With the default (ASCII
-only) or `P1M`, words like "café" or "België" come out garbled. A trimmed model
-can't write emoji, Chinese, Cyrillic, Greek or math symbols, and may stumble over
-them in your input.
+only) or `P1M`, words like "café" or "België" came out garbled in our tests. The
+model can still spell a removed character byte by byte, but it often picks the
+wrong bytes. With `P2` the same goes for emoji, Chinese, Cyrillic, Greek and math
+symbols.
 
 | Trimmed model file | `--ctx-size` | Speed, full context |
 |---|---:|---:|
