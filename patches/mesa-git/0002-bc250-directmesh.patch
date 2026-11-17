@@ -340,7 +340,7 @@ upstream's change and re-applying DirectMesh's intent on top:
  .../vulkan/winsys/amdgpu/radv_amdgpu_winsys.c |    8 +
  .../vulkan/winsys/amdgpu/radv_amdgpu_winsys.h |    4 +
  src/compiler/nir/meson.build                  |    1 +
- src/compiler/nir/nir_divergence_analysis.c    |    2 +
+ src/compiler/nir/nir_divergence_analysis.c    |    1 +
  src/compiler/nir/nir_intrinsics.py            |    3 +
  src/compiler/nir/tests/opt_uub_tests.cpp      |   33 +
  src/compiler/shader_info.h                    |    2 +
@@ -30523,14 +30523,6 @@ index 95219d9..28ea6df 100644
     case nir_intrinsic_load_is_indexed_draw:
     case nir_intrinsic_load_viewport_scale:
     case nir_intrinsic_load_user_clip_plane:
-@@ -336,6 +337,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
-    case nir_intrinsic_load_ordered_id_amd:
-    case nir_intrinsic_load_gs_wave_id_amd:
-    case nir_intrinsic_load_provoking_vtx_in_prim_amd:
-+   case nir_intrinsic_load_provoking_last:
-    case nir_intrinsic_load_lds_ngg_gs_out_vertex_base_amd:
-    case nir_intrinsic_load_btd_shader_type_intel:
-    case nir_intrinsic_load_base_global_invocation_id:
 diff --git a/src/compiler/nir/nir_intrinsics.py b/src/compiler/nir/nir_intrinsics.py
 index 94b98cb..e1e1db6 100644
 --- a/src/compiler/nir/nir_intrinsics.py
