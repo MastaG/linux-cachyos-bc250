@@ -4596,9 +4596,9 @@ index d4d5ad3..9ddb1d4 100644
 +        'tests/radv_bc250_idx_cost_tests.cpp',
 +        'tests/radv_bc250_primitive_tests.cpp',
 +        'tests/radv_bc250_dispatch_tests.cpp',
+         'nir/radv_nir_lower_opt_fs_frag_pos.c',
          'tests/radv_nir_lower_hit_attrib_derefs_tests.cpp',
-         'tests/helpers.cpp',
-         'tests/helpers.h',
+         'tests/radv_nir_lower_opt_fs_frag_pos_tests.cpp',
 diff --git a/src/amd/vulkan/meta/radv_meta.h b/src/amd/vulkan/meta/radv_meta.h
 index 8062cd2..c557e58 100644
 --- a/src/amd/vulkan/meta/radv_meta.h
@@ -11716,7 +11716,7 @@ index 0000000..14ce714
 +      /* The Y dispatch dimension is exactly 1 for active chunks, 0 otherwise.
 +       * Use this Boolean, not the workgroup count: a constant predicate of
 +       * 4096 failed on BC250 while 1 passed the same full-range fixture. */
-+      ac_emit_cp_cond_exec(cs, pdev->info.gfx_level, constants->compute_args + (uint64_t)k * 16 + 4, 0);
++      ac_emit_cp_cond_exec(cs, pdev->info.gfx_level, constants->compute_args + (uint64_t)k * 16 + 4, 0, false);
 +   }
 +   if (k)
 +      cmd_buffer->state.flush_bits |= AC_BARRIER_PFP_SYNC_ME | AC_BARRIER_SYNC_VS | AC_BARRIER_SYNC_PS;
@@ -12122,7 +12122,7 @@ index 0000000..14ce714
 +         radv_emit_cache_flush(cmd_buffer, false);
 +         ac_emit_cp_pfp_sync_me(cs, false);
 +         radeon_check_space(device->ws, cs, 16);
-+         ac_emit_cp_cond_exec(cs, pdev->info.gfx_level, constants.compute_args + 16 + 4, 4);
++         ac_emit_cp_cond_exec(cs, pdev->info.gfx_level, constants.compute_args + 16 + 4, 4, false);
 +         ac_emit_cp_indirect_buffer(cs, cmd_buffer->bc250_dgc_tail_va, (*task_tail)->b->cdw,
 +                                    AC_CP_INDIRECT_BUFFER_CHAIN, false);
 +         cmd_buffer->bc250_dgc_tail = *task_tail;
@@ -12141,7 +12141,7 @@ index 0000000..14ce714
 +         radeon_check_space(device->ws, cs, 1024);
 +         uint32_t *conditional_buf = cs->buf;
 +         const unsigned conditional_start = cs->cdw;
-+         ac_emit_cp_cond_exec(cs, pdev->info.gfx_level, constants.compute_args + 16 + 4, 0);
++         ac_emit_cp_cond_exec(cs, pdev->info.gfx_level, constants.compute_args + 16 + 4, 0, false);
 +         device->ws->cs_execute_secondary(cs, (*task_tail)->b, true);
 +         if (conditional_buf != cs->buf || cs->cdw - conditional_start - 5 > 1000 ||
 +             cs->cdw == conditional_start + 5) {
@@ -14421,7 +14421,7 @@ index 0000000..14ce714
 +               region_buf = cs->buf;
 +            }
 +            region_start[regions++] = cs->cdw;
-+            ac_emit_cp_cond_exec(cs, pdev->info.gfx_level, count - 20 + 24, 0);
++            ac_emit_cp_cond_exec(cs, pdev->info.gfx_level, count - 20 + 24, 0, false);
 +         }
 +         /* Earlier draws read the pool and the table set this pass restarts. */
 +         cmd_buffer->state.flush_bits |= AC_BARRIER_PFP_SYNC_ME | AC_BARRIER_SYNC_VS | AC_BARRIER_SYNC_PS |
@@ -20565,7 +20565,7 @@ index b5ca80a..314e987 100644
  
 +   if (workaround_cond_va) {
 +      ac_emit_cp_cond_exec(ace_cs->b, pdev->info.gfx_level, info->count_va,
-+                           6 + 11 * num_views /* 1x COPY_DATA + Nx DISPATCH_TASKMESH_INDIRECT_MULTI_ACE */);
++                           6 + 11 * num_views /* 1x COPY_DATA + Nx DISPATCH_TASKMESH_INDIRECT_MULTI_ACE */, false);
 +
 +      ac_emit_cp_copy_data(ace_cs->b, COPY_DATA_IMM, COPY_DATA_DST_MEM, 0, workaround_cond_va,
 +                           AC_CP_COPY_DATA_WR_CONFIRM, false);
@@ -20576,7 +20576,7 @@ index b5ca80a..314e987 100644
                                                                 info->count, info->count_va, info->stride);
 +      if (gfx1013_skip_zero_pair)
 +         ac_emit_cp_cond_exec(cs->b, pdev->info.gfx_level, info->count_va,
-+                              4 /* DISPATCH_TASKMESH_GFX size */);
++                              4 /* DISPATCH_TASKMESH_GFX size */, false);
        radv_cs_emit_dispatch_taskmesh_gfx_packet(device, cmd_state, cs);
     } else {
        u_foreach_bit (view, view_mask) {
@@ -20586,14 +20586,14 @@ index b5ca80a..314e987 100644
                                                                    info->count, info->count_va, info->stride);
 +         if (gfx1013_skip_zero_pair)
 +            ac_emit_cp_cond_exec(cs->b, pdev->info.gfx_level, info->count_va,
-+                                 4 /* DISPATCH_TASKMESH_GFX size */);
++                                 4 /* DISPATCH_TASKMESH_GFX size */, false);
           radv_cs_emit_dispatch_taskmesh_gfx_packet(device, cmd_state, cs);
        }
     }
  
 +   if (workaround_cond_va && !gfx1013_skip_zero_pair) {
 +      ac_emit_cp_cond_exec(ace_cs->b, pdev->info.gfx_level, workaround_cond_va,
-+                           6 * num_views /* Nx DISPATCH_TASKMESH_DIRECT_ACE */);
++                           6 * num_views /* Nx DISPATCH_TASKMESH_DIRECT_ACE */, false);
 +
 +      for (unsigned v = 0; v < num_views; ++v) {
 +         radv_cs_emit_dispatch_taskmesh_direct_ace_packet(device, cmd_state, ace_cs, 0, 0, 0);
@@ -26457,11 +26457,11 @@ index 3566458..9ce5378 100644
        uint32_t emulate_ngg_gs_query_pipeline_stat : 1;
        uint32_t primitives_generated_query : 1;
        uint32_t mesh_shader_queries : 1;
-@@ -590,7 +712,33 @@ struct radv_compiler_info {
-       uint32_t gfx10_descriptor_alias_robust : 1;
+@@ -591,7 +713,33 @@ struct radv_compiler_info {
        uint32_t nir_debug_info : 1;
        uint32_t use_elf : 1;
--      uint32_t padding : 25;
+       uint32_t msrtss : 1;
+-      uint32_t padding : 24;
 +      uint32_t bc250_compute_cu_mode : 1;
 +      uint32_t bc250_cull_compact : 1;
 +      uint32_t bc250_pack_triangle_vertices : 1;
@@ -26485,10 +26485,10 @@ index 3566458..9ce5378 100644
 +      uint32_t bc250_mesh_compact_lds : 1; /* RADV_BC250_MESH_COMPACT_LDS: smaller LDS layout for expanded Mesh. */
 +      uint32_t bc250_split_prep_free : 1; /* RADV_BC250_SPLIT_PREP_FREE: direct split shaders carry the piece select. */
 +      uint32_t bc250_mesh_implicit_tris : 1; /* RADV_BC250_MESH_IMPLICIT_TRIS: derived expanded Mesh connectivity. */
-+      /* Upstream spent 2 of the 28 padding bits this word had in 26.2.1 (use_elf and
-+       * one more), so the BC-250 fields no longer fit in two words: fill the third one
-+       * explicitly, so the byte-hashed cache key never includes uninitialised bits. */
-+      uint32_t padding : 29;
++      /* Upstream spent 3 of the 28 padding bits this word had in 26.2.1 (use_elf,
++       * msrtss and one more), so the BC-250 fields no longer fit in two words: fill the
++       * third one explicitly, so the byte-hashed cache key never includes uninitialised bits. */
++      uint32_t padding : 28;
  
        int32_t force_aniso;
  

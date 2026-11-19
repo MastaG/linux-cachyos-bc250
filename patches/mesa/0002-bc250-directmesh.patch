@@ -21399,7 +21399,7 @@ index c27095e39c9..0158eec1cb6 100644
  #include <string.h>
  
  #ifdef __linux__
-@@ -18,12 +19,14 @@
+@@ -18,13 +19,15 @@
  #endif
  
  #include "layers/radv_app_workarounds.h"
@@ -21409,6 +21409,7 @@ index c27095e39c9..0158eec1cb6 100644
  #include "tools/radv_rmv.h"
  #include "tools/radv_spm.h"
  #include "tools/radv_sqtt.h"
+ #include "util/macros.h"
  #include "util/u_debug.h"
 +#include "radv_bc250.h"
  #include "radv_cs.h"

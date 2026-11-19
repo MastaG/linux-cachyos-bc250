@@ -52,8 +52,7 @@ mkdir -p -- "$MESA_BUILD_DIR"
 
 printf '==> Downloading CachyOS Mesa PKGBUILD at %s\n' "$CACHYOS_MESA_COMMIT"
 curl -fL --retry 5 --retry-all-errors -o "$MESA_BUILD_DIR/PKGBUILD" "${UPSTREAM_BASE}/PKGBUILD"
-curl -fL --retry 5 --retry-all-errors -o "$MESA_BUILD_DIR/gamescope-fps-limiter.patch" \
-    "${UPSTREAM_BASE}/gamescope-fps-limiter.patch"
+"$ROOT_DIR/scripts/fetch-pkgbuild-local-sources.sh" "$MESA_BUILD_DIR" "$UPSTREAM_BASE"
 
 patch_args=()
 patch_names=()

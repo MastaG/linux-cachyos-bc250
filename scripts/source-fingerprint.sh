@@ -426,7 +426,7 @@ case "$COMPONENT" in
         if [[ "$COMPONENT" == mesa ]]; then
             base="https://raw.githubusercontent.com/CachyOS/CachyOS-PKGBUILDS/${CACHYOS_MESA_COMMIT}/mesa/mesa"
             curl -fsSL --retry 5 --retry-all-errors -o "$TMP/PKGBUILD" "$base/PKGBUILD"
-            curl -fsSL --retry 5 --retry-all-errors -o "$TMP/gamescope.patch" "$base/gamescope-fps-limiter.patch"
+            "$ROOT_DIR"/scripts/fetch-pkgbuild-local-sources.sh "$TMP" "$base" >&2
             {
                 (cd "$TMP" && sha256sum *)
                 hash_files "$ROOT_DIR"/patches/mesa/*.patch
@@ -435,6 +435,7 @@ case "$COMPONENT" in
                 # component just like the PKGBUILD preparation is.
                 hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
                     "$ROOT_DIR"/scripts/prepare-mesa-pkgbuild.sh \
+                    "$ROOT_DIR"/scripts/fetch-pkgbuild-local-sources.sh \
                     "$ROOT_DIR"/scripts/fetch-mesa-tarball.sh \
                     "$ROOT_DIR"/scripts/check-mesa-source-sums.py \
                     "$ROOT_DIR"/scripts/pin-llvm-depends.py \
@@ -446,13 +447,14 @@ case "$COMPONENT" in
         elif [[ "$COMPONENT" == lib32-mesa ]]; then
             base="https://raw.githubusercontent.com/CachyOS/CachyOS-PKGBUILDS/${CACHYOS_MESA_COMMIT}/mesa/lib32-mesa"
             curl -fsSL --retry 5 --retry-all-errors -o "$TMP/PKGBUILD" "$base/PKGBUILD"
-            curl -fsSL --retry 5 --retry-all-errors -o "$TMP/gamescope.patch" "$base/gamescope-fps-limiter.patch"
+            "$ROOT_DIR"/scripts/fetch-pkgbuild-local-sources.sh "$TMP" "$base" >&2
             {
                 (cd "$TMP" && sha256sum *)
                 hash_files "$ROOT_DIR"/patches/mesa/*.patch
                 # Same reason as the 64-bit branch above.
                 hash_files "$ROOT_DIR"/scripts/resolve-cachyos-mesa.sh \
                     "$ROOT_DIR"/scripts/prepare-lib32-mesa-pkgbuild.sh \
+                    "$ROOT_DIR"/scripts/fetch-pkgbuild-local-sources.sh \
                     "$ROOT_DIR"/scripts/fetch-mesa-tarball.sh \
                     "$ROOT_DIR"/scripts/check-mesa-source-sums.py \
                     "$ROOT_DIR"/scripts/pin-llvm-depends.py \
