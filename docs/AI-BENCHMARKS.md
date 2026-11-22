@@ -230,6 +230,50 @@ temperatures averaged):
   server mode while it runs.
 - A q8_0 KV cache for the draft (`-ctkd q8_0 -ctvd q8_0`) made no difference.
 
+## LLM: Inkling-2-Mini
+
+Inkling-2-Mini (Thinking Machines, 26B mixture-of-experts, about 3.4B active per token) as Unsloth's
+`Inkling-2-Mini-UD-IQ3_XXS.gguf` (10.85 GiB), all on the GPU. llama.cpp 1.0.0 (the CachyOS package) has no
+`inkling2` support; this is [llama-inkling2-vulkan](https://github.com/Trecto34/llama-inkling2-vulkan) v0.2
+(`e734ca0`, llama.cpp with fused Vulkan shaders for this model), built from source. 2026-11-22, game session
+stopped, `llama-bench -ngl 99 -fa 1 -p 512 -n 128`:
+
+| Machine | Prompt (512 tokens) | Generation |
+|---|---:|---:|
+| BC-250, 40 CUs, governor running | 444.9 t/s | 47.2 t/s |
+| PS5 Pro (PS5-CachyOS, `7.3.5-pc8fe-bc1`) | 686.2 t/s | 59.2 t/s |
+| the fork's release notes (BC-250) | 432.7 t/s | 47.1 t/s |
+
+About 2.3x the prompt speed and 2x the generation of Qwen3.8-27B IQ3_XXS on the same board (192 / 24 t/s).
+A short test question with `--temp 0` got a correct answer.
+
+### Micro-batch and context
+
+The KV cache is small: 8 global-attention layers keep the full context (136 MB at 8k, q8_0), the other 40 a
+1024-token sliding window. What grows is the GPU compute buffer, with context *times* micro-batch (`-ub`):
+1.4 GB at 8k with `-ub 512`. A smaller micro-batch keeps it down, at the cost of prompt speed:
+
+| `-ub` | 32 | 64 | 128 | 256 | 512 |
+|---|---:|---:|---:|---:|---:|
+| BC-250, prompt t/s | 164 | 170 | 258 | 355 | 445 |
+| PS5 Pro, prompt t/s | 228 | 242 | 374 | 514 | 676 |
+
+Server mode (`llama-server -fa on -ctk q8_0 -ctv q8_0 --parallel 1 --ctx-checkpoints 1 --cache-ram 0`),
+started, one short request, then `MemAvailable`:
+
+| Context | `-ub` | Compute buffer | BC-250 | PS5 Pro |
+|---:|---:|---:|---:|---:|
+| 8k | 512 | 1400 MB | 1.5 GB left | 1.5 GB left |
+| 16k | 512 | | 0.3 GB left | did not fit (OOM kill) |
+| 16k | 256 | 973 MB | 2.0 GB left | 1.6 GB left |
+| 32k | 512 | | did not fit (OOM kill) | |
+| 32k | 128 | 890 MB | 1.6 GB left | 1.5 GB left |
+| 64k | 64 | 847 MB | 1.1 GB left | 1.4 GB left |
+| 96k | 64 | 1291 MB | 0.1 GB left | |
+
+Generation is the same at every micro-batch (about 45 t/s on the BC-250 in these server runs). Not measured
+yet: a filled context, and the vision part (`mmproj`).
+
 ## Images: SDXL in ComfyUI
 
 SDXL base 1.0, 1024×1024, one image, after the first, GPU at 1200 MHz (at a
