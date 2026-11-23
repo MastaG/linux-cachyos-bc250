@@ -526,8 +526,6 @@ class KernelPatchSetTests(unittest.TestCase):
     # Patches in both sets that do something different on purpose, because the
     # two series differ underneath (stable 7.3.1, RC 7.4-rc1), with the reason.
     DIFFERENT_BY_SERIES = {
-        "gfx1013-compute-gfxoff-guard.patch":
-            "7.4 dropped GFX 12 from the condition the patch extends",
         "pcon-vrr-hf-vsdb.patch":
             "7.4 parses the AMD VSDB in software and has its own HF-VSDB fallback; "
             "the RC patch only adds the PCON's SDP and VCP-rule part",

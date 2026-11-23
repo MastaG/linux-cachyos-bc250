@@ -32,10 +32,10 @@ Based on KytyPS5-Native's bc250-amdgpu patch (faf53a5).
  4 files changed, 129 insertions(+), 3 deletions(-)
 
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
-index e3c44e5ed8fa..45d51dfd45b2 100644
+index c487649aade2..491bd17a1dbe 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_chardev.c
-@@ -937,6 +937,23 @@ static int kfd_ioctl_destroy_event(struct file *filp, struct kfd_process *p,
+@@ -935,6 +935,23 @@ static int kfd_ioctl_destroy_event(struct file *filp, struct kfd_process *p,
  	return kfd_event_destroy(p, args->event_id);
  }
  
@@ -59,7 +59,7 @@ index e3c44e5ed8fa..45d51dfd45b2 100644
  static int kfd_ioctl_set_event(struct file *filp, struct kfd_process *p,
  				void *data)
  {
-@@ -3611,6 +3628,9 @@ static const struct amdkfd_ioctl_desc amdkfd_ioctls[] = {
+@@ -3623,6 +3640,9 @@ static const struct amdkfd_ioctl_desc amdkfd_ioctls[] = {
  
  	AMDKFD_IOCTL_DEF(AMDKFD_IOC_PROFILER,
  			kfd_ioctl_profiler, 0),
@@ -69,7 +69,7 @@ index e3c44e5ed8fa..45d51dfd45b2 100644
  };
  
  #define AMDKFD_CORE_IOCTL_COUNT	ARRAY_SIZE(amdkfd_ioctls)
-@@ -3632,7 +3652,8 @@ static long kfd_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
+@@ -3644,7 +3664,8 @@ static long kfd_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
  		goto err_i1;
  	}
  
@@ -221,10 +221,10 @@ index 19406ab92c5b..10d0f3fcdfe8 100644
  			encoding = REG_GET_FIELD(context_id1,
  						SQ_INTERRUPT_WORD_WAVE_CTXID1, ENCODING);
 diff --git a/drivers/gpu/drm/amd/amdkfd/kfd_priv.h b/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
-index 435bf2692968..25225fef0084 100644
+index 288731acc928..eed7b2aeea86 100644
 --- a/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
 +++ b/drivers/gpu/drm/amd/amdkfd/kfd_priv.h
-@@ -981,6 +981,8 @@ struct kfd_process {
+@@ -982,6 +982,8 @@ struct kfd_process {
  	size_t signal_mapped_size;
  	size_t signal_event_count;
  	bool signal_event_limit_reached;
@@ -233,7 +233,7 @@ index 435bf2692968..25225fef0084 100644
  
  	/**
  	 * @kfd_sigbus_delay_ms: Per-process KFD SIGBUS delivery option for
-@@ -1568,6 +1570,8 @@ int kfd_wait_on_events(struct kfd_process *p,
+@@ -1570,6 +1572,8 @@ int kfd_wait_on_events(struct kfd_process *p,
  		       uint32_t num_events, void __user *data,
  		       bool all, uint32_t *user_timeout_ms,
  		       uint32_t *wait_result);

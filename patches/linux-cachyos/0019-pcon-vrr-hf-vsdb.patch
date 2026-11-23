@@ -35,7 +35,7 @@ the existing "VRR:" lines, so drm.debug=0x2 shows the decision.
 ---
 
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-index e0be6c51eb8b..f1c4b0e069b7 100644
+index 8383177da712..aeacfc246695 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
 @@ -4050,6 +4050,57 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
@@ -95,4 +95,4 @@ index e0be6c51eb8b..f1c4b0e069b7 100644
 +		}
  	}
  
- 	/* Handle MCCS */
+ 	/*
