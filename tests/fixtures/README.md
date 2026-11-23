@@ -1,8 +1,8 @@
 # Protonfixes regression inputs
 
-`ge-proton11-12-upscalers.py` is the complete unmodified upscaler module from
-[GE-Proton11-12](https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12).
-Its SHA256 is `fb321dc266b305020476f6e4c57b9922b8cc3fb29c2ab9c21dcebffcca055ec6`.
+`ge-proton11-14-upscalers.py` is the complete unmodified upscaler module from
+[GE-Proton11-14](https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-14) (GE-Proton11-13 ships the same file).
+Its SHA256 is `9d27f3b6e8c0632a7e450cb6440e76699d3bf6a87179151482ff176057d35d98`.
 
 `cachyos-native-upscalers.py` is the complete unmodified `upscalers.py` of
 CachyOS's protonfixes submodule at `8dadc914d8f1` (umu-protonfixes by

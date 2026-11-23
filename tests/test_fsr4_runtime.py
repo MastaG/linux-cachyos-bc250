@@ -22,7 +22,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = ROOT / "packages/bc250-fsr4-common"
 BASES = {
-    "ge-proton": "fb321dc266b305020476f6e4c57b9922b8cc3fb29c2ab9c21dcebffcca055ec6",
+    "ge-proton": "9d27f3b6e8c0632a7e450cb6440e76699d3bf6a87179151482ff176057d35d98",
     "proton-cachyos": "c73c4827035f3db58088f66fb17b89f7b775616da8fb643d3b06474daa7ca911",
 }
 
@@ -64,7 +64,7 @@ class RuntimeTests(unittest.TestCase):
     def setUpClass(cls):
         cls.sources = {}
         fixtures = {
-            "ge-proton": ROOT / "tests/fixtures/ge-proton11-12-upscalers.py",
+            "ge-proton": ROOT / "tests/fixtures/ge-proton11-14-upscalers.py",
             "proton-cachyos": ROOT / "tests/fixtures/cachyos-native-upscalers.py",
         }
         for base, expected_hash in BASES.items():

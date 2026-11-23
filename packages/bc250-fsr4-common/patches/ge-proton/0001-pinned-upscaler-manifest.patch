@@ -1,8 +1,8 @@
 From: BC250 FSR4 maintainers
 Subject: [PATCH] upscalers: opt-in pinned local manifest with strict integrity
 
-Base: GE-Proton11-12 protonfixes/upscalers.py
-Base-SHA256: fb321dc266b305020476f6e4c57b9922b8cc3fb29c2ab9c21dcebffcca055ec6
+Base: GE-Proton11-14 protonfixes/upscalers.py
+Base-SHA256: 9d27f3b6e8c0632a7e450cb6440e76699d3bf6a87179151482ff176057d35d98
 
 PROTON_UPSCALER_MANIFEST selects an absolute local JSON manifest using the
 existing schema plus mandatory archive and critical-file SHA256 checksums.
@@ -251,9 +251,9 @@ otherwise.
 +        path, item = __get_opti_files(version)
 +        __expose_proxy(prefix_dir, path, item, env.get('PROTON_OPTISCALER_NAME', 'dxgi.dll'))
  
-     if enabled and env.get('PROTON_OPTISCALER_STREAMLINE', '0') != '0':
-         streamline_version = get_version(env, 'PROTON_OPTISCALER_STREAMLINE', 'default')
-@@ -690,11 +819,15 @@ def setup_optiscaler(
+     if enabled and (env_config := env.get('PROTON_OPTISCALER_CONFIG', '')):
+         path, _ = __get_opti_files(version)
+@@ -683,11 +812,15 @@ def setup_optiscaler(
              except Exception as e:
                  log.crit(f'Malformed config "{part}"')
                  log.debug(str(e))
@@ -269,7 +269,7 @@ otherwise.
  
          with open(ini, 'w') as ini_fd:
              parser.write(ini_fd)
-@@ -750,6 +883,25 @@ def setup_upscalers(
+@@ -743,6 +876,25 @@ def setup_upscalers(
  
      usage: setup_upscalers(g_session.compat_config, g_session.env, g_compatdata.base_dir, g_compatdata.prefix_dir)
      """
@@ -293,9 +293,9 @@ otherwise.
 +        for name in ('fsr_40_fg_dx12', 'fsr_40_ldr_dx12', 'fsr_40_up_dx12')
 +    )
      dlss_version: str = get_version(env, 'PROTON_DLSS_UPGRADE', 'default')
-     xess_version: str = get_version(env, 'PROTON_XESS_UPGRADE', 'default')
+     slne_version: str = get_version(env, 'PROTON_STREAMLINE_UPGRADE', 'default')
  
-@@ -767,14 +919,28 @@ def setup_upscalers(
+@@ -760,34 +912,51 @@ def setup_upscalers(
  
      upscaler_replace = set()
      upscalers = (
@@ -328,7 +328,23 @@ otherwise.
      for upscaler in upscalers:
          name, version, enabled = upscaler
          if enabled and setup_upscaler(name, compat_dir, prefix_dir, version):
-@@ -794,8 +960,8 @@ def setup_upscalers(
+             log.info(f'Automatic {name} upgrade enabled.')
+             upscaler_replace.add(name)
+ 
+-    if  {'dlss', 'streamline'}.issubset(compat_config) or 'optiscaler' in compat_config:
++    # Streamline is not part of a pinned manifest, and nothing unpinned is fetched.
++    if __manifest_path is None and (
++        {'dlss', 'streamline'}.issubset(compat_config) or 'optiscaler' in compat_config
++    ):
+         log.info(f'Setting up streamline version "{slne_version}".')
+         download_component('streamline', compat_dir, prefix_dir, slne_version)
+         if check_component('streamline', compat_dir, prefix_dir, slne_version, ignore_version=True):
+             log.info('Automatic streamline upgrade enabled.')
+             upscaler_replace.add('streamline')
+-    else:
++    elif __manifest_path is None:
+         clean_tracked_files('streamline', compat_dir, prefix_dir)
+ 
      if 'optiscaler' in compat_config:
          if setup_optiscaler(env, compat_dir, prefix_dir, optiscaler_version):
              log.info('OptiScaler enabled.')
