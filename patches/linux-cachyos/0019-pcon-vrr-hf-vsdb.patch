@@ -32,13 +32,31 @@ no AMD VSDB at all -- an LG G5 has only the HDMI and HF-VSDB blocks.
 Logs "VRR: PCON HF-VSDB fallback: ..." at drm_dbg_driver level next to
 the existing "VRR:" lines, so drm.debug=0x2 shows the decision.
 
+
+7.3.6 (stable backport of upstream e4dca268eea6, "Restore FreeSync VCP code
+check for HDMI/PCON sinks") turns FreeSync off again for an allowlisted
+PCON whose sink has no EDID FreeSync VCP code -- which only an AMD VSDB
+gives, so every TV that this fallback is for. Measured on the test board
+(CH7218, LG G5): "PCON HF-VSDB fallback: ... fs_capable=1" followed by
+"caps result: freesync_capable=0", vrr_capable 0, no VRR in KDE. So the
+fallback marks its result (pcon_hf_vrr) and the VCP rule leaves it alone,
+as the RC patch does on 7.4.
+
 ---
 
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-index 8383177da712..aeacfc246695 100644
+index 8383177..3c6fa43 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-@@ -4050,6 +4050,57 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
+@@ -3892,6 +3892,7 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
+ 	struct amdgpu_hdmi_vsdb_info vsdb_info = {0};
+ 	const struct edid *edid;
+ 	bool freesync_capable = false;
++	bool pcon_hf_vrr = false;
+ 	enum adaptive_sync_type as_type = ADAPTIVE_SYNC_TYPE_NONE;
+ 
+ 	if (!connector->state) {
+@@ -4050,6 +4051,58 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
  				connector->display_info.monitor_range.max_vfreq = vsdb_info.max_refresh_rate_hz;
  			}
  		}
@@ -77,6 +95,7 @@ index 8383177da712..aeacfc246695 100644
 +				if (amdgpu_dm_connector->max_vfreq -
 +				    amdgpu_dm_connector->min_vfreq > 10) {
 +					freesync_capable = true;
++					pcon_hf_vrr = true;
 +					amdgpu_dm_connector->pack_sdp_v1_3 = true;
 +					amdgpu_dm_connector->as_type = as_type;
 +
@@ -96,3 +115,12 @@ index 8383177da712..aeacfc246695 100644
  	}
  
  	/*
+@@ -4067,7 +4120,7 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
+ 	/* HDMI/PCON without an EDID FreeSync VCP code is not FreeSync-capable. */
+ 	if ((sink->sink_signal == SIGNAL_TYPE_HDMI_TYPE_A ||
+ 	     as_type == FREESYNC_TYPE_PCON_IN_WHITELIST) &&
+-	    !sink->edid_caps.freesync_vcp_code)
++	    !sink->edid_caps.freesync_vcp_code && !pcon_hf_vrr)
+ 		freesync_capable = false;
+ 
+ 	/* Handle MCCS */
