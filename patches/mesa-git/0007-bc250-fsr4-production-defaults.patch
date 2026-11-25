@@ -41,7 +41,7 @@ unchanged, so existing BC-250 shader caches stay valid.
  2 files changed, 29 insertions(+), 29 deletions(-)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index a462d6e0228..d4623d6eff5 100644
+index c88dc1cc24d..a83c539c10f 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -376,30 +376,30 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -100,10 +100,10 @@ index a462d6e0228..d4623d6eff5 100644
     _mesa_blake3_final(&ctx, blake3);
  
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 4965df02d6a..c7037caa149 100644
+index 8822475839a..0b91c2b6325 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
-@@ -8559,11 +8559,11 @@ bc250_fsr4_profile(const void *bytes, size_t size)
+@@ -8561,11 +8561,11 @@ bc250_fsr4_profile(const void *bytes, size_t size)
        if (profiles[i].size == size && profiles[i].hash == hash) {
           unsigned flags = profiles[i].flags;
           if (flags & 0x40000000u) {
@@ -117,7 +117,7 @@ index 4965df02d6a..c7037caa149 100644
              flags |= 524304; /* Existing pointwise schedule, eight outputs. */
           return flags;
        }
-@@ -15033,7 +15033,7 @@ bc250_imageprep_spirv(const struct radv_compiler_info *compiler_info,
+@@ -15035,7 +15035,7 @@ bc250_imageprep_spirv(const struct radv_compiler_info *compiler_info,
         strcmp(stage->entrypoint, "main") ||
         (stage->spec_info && stage->spec_info->mapEntryCount) ||
         debug_get_bool_option("BC250_FSR4_DISABLE", false) ||
@@ -126,7 +126,7 @@ index 4965df02d6a..c7037caa149 100644
         *size != sizeof(bc250_imageprep_original) ||
         memcmp(original, bc250_imageprep_original, sizeof(bc250_imageprep_original)))
        return original;
-@@ -15059,8 +15059,8 @@ bc250_resolution_guard_spirv(const struct radv_compiler_info *compiler_info,
+@@ -15061,8 +15061,8 @@ bc250_resolution_guard_spirv(const struct radv_compiler_info *compiler_info,
         strcmp(stage->entrypoint, "main") ||
         (stage->spec_info && stage->spec_info->mapEntryCount) ||
         spirv != (const uint32_t *)stage->spirv.data ||
@@ -138,4 +138,5 @@ index 4965df02d6a..c7037caa149 100644
     static const struct { size_t size; uint64_t hash; unsigned word; } guards[] = {
        {108840, 0xfdf595207adeaa9bull, 3993u}, /* pass 1 */
 -- 
-2.55.0
+2.56.0
+

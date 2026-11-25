@@ -40,7 +40,7 @@ upgrade-from-previous/0003-resolution-over-composed.patch
  2 files changed, 96 insertions(+)
 
 diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
-index a59d7ad40e4..a462d6e0228 100644
+index 5e46cf181c8..c88dc1cc24d 100644
 --- a/src/amd/vulkan/radv_physical_device.c
 +++ b/src/amd/vulkan/radv_physical_device.c
 @@ -388,7 +388,19 @@ radv_device_get_cache_uuid(struct radv_physical_device *pdev, void *uuid)
@@ -64,10 +64,10 @@ index a59d7ad40e4..a462d6e0228 100644
  
     memcpy(uuid, blake3, VK_UUID_SIZE);
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 987681dc58e..4965df02d6a 100644
+index 3eedf43dab6..8822475839a 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
-@@ -8525,6 +8525,30 @@ bc250_fsr4_profile(const void *bytes, size_t size)
+@@ -8527,6 +8527,30 @@ bc250_fsr4_profile(const void *bytes, size_t size)
        {61308, 0x8debe292dfad97f5ull, 1025}, /* f768eb37222b4fbd */
        {109064, 0xf89485f5751695fbull, 25}, /* 76367260ae8284e1 */
        {125784, 0x60169c44f557ae55ull, 1}, /* 88fc1786caa6ae3c */
@@ -98,7 +98,7 @@ index 987681dc58e..4965df02d6a 100644
     };
     bool candidate = false;
     for (unsigned i = 0; i < ARRAY_SIZE(profiles); i++) candidate |= profiles[i].size == size;
-@@ -8534,6 +8558,10 @@ bc250_fsr4_profile(const void *bytes, size_t size)
+@@ -8536,6 +8560,10 @@ bc250_fsr4_profile(const void *bytes, size_t size)
     for (unsigned i = 0; i < ARRAY_SIZE(profiles); i++)
        if (profiles[i].size == size && profiles[i].hash == hash) {
           unsigned flags = profiles[i].flags;
@@ -109,7 +109,7 @@ index 987681dc58e..4965df02d6a 100644
           if (size == 125784 && hash == 0x60169c44f557ae55ull &&
               debug_get_num_option("BC250_FSR4_TEXTURE", 0) == 1)
              flags |= 524304; /* Existing pointwise schedule, eight outputs. */
-@@ -15013,6 +15041,57 @@ bc250_imageprep_spirv(const struct radv_compiler_info *compiler_info,
+@@ -15015,6 +15043,57 @@ bc250_imageprep_spirv(const struct radv_compiler_info *compiler_info,
     return bc250_imageprep_candidate;
  }
  
@@ -167,7 +167,7 @@ index 987681dc58e..4965df02d6a 100644
  nir_shader *
  radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct radv_shader_stage *stage,
                           const struct radv_spirv_to_nir_options *options, bool is_internal)
-@@ -15036,6 +15115,10 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -15038,6 +15117,10 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
     } else {
        size_t spirv_size;
        const uint32_t *spirv = bc250_imageprep_spirv(compiler_info, stage, is_internal, &spirv_size);
@@ -178,7 +178,7 @@ index 987681dc58e..4965df02d6a 100644
        assert(stage->spirv.size % 4 == 0);
  
        const bool dump_spirv = compiler_info->debug.dump_spirv &&
-@@ -15211,6 +15294,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -15213,6 +15296,7 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        NIR_PASS(_, nir, nir_lower_doubles, NULL, nir->options->lower_doubles_options);
  
        NIR_PASS(_, nir, nir_normalize_sin_cos);
@@ -187,4 +187,5 @@ index 987681dc58e..4965df02d6a 100644
  
     if (nir->info.uses_abort) {
 -- 
-2.55.0
+2.56.0
+

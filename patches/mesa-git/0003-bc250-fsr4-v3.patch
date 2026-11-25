@@ -99,10 +99,10 @@ index c46781fc887..fcb294419da 100644
        if (dst.regClass() == s1) {
           Operand op1(get_alu_src(ctx, instr->src[0]));
 diff --git a/src/amd/vulkan/radv_shader.c b/src/amd/vulkan/radv_shader.c
-index 41b554fc5c7..4458b2a16c0 100644
+index 0e492d96d8d..bebc6afe45f 100644
 --- a/src/amd/vulkan/radv_shader.c
 +++ b/src/amd/vulkan/radv_shader.c
-@@ -62,6 +62,8 @@ get_nir_options_for_stage(struct radv_compiler_info *compiler_info, mesa_shader_
+@@ -64,6 +64,8 @@ get_nir_options_for_stage(struct radv_compiler_info *compiler_info, mesa_shader_
     const bool split_fma = (stage <= MESA_SHADER_GEOMETRY || stage == MESA_SHADER_MESH) && compiler_info->key.split_fma;
  
     ac_nir_set_options(compiler_info->ac, compiler_info->key.use_llvm, options);
@@ -111,8 +111,8 @@ index 41b554fc5c7..4458b2a16c0 100644
  
     if (split_fma) {
        if (options->float_mul_add16 & nir_float_muladd_support_has_ffma)
-@@ -173,6 +175,121 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
-    return compiler_info->debug.dump_shader_stats && !is_meta_shader(nir);
+@@ -175,6 +177,121 @@ radv_can_dump_shader_stats(const struct radv_compiler_info *compiler_info, nir_s
+    return compiler_info->debug.dump_shader_stats && !radv_is_meta_shader(nir);
  }
  
 +
@@ -233,7 +233,7 @@ index 41b554fc5c7..4458b2a16c0 100644
  void
  radv_optimize_nir(struct nir_shader *shader, bool optimize_conservatively)
  {
-@@ -808,7 +925,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
+@@ -810,7 +927,23 @@ radv_shader_spirv_to_nir(const struct radv_compiler_info *compiler_info, struct
        NIR_PASS(_, nir, nir_opt_find_array_copies);
        NIR_PASS(_, nir, nir_lower_vars_to_ssa);
  
@@ -259,10 +259,10 @@ index 41b554fc5c7..4458b2a16c0 100644
        NIR_PASS(_, nir, nir_opt_scalar_array_vars_to_vec, nir_var_function_temp | nir_var_mem_shared);
  
 diff --git a/src/compiler/nir/nir_opt_algebraic.py b/src/compiler/nir/nir_opt_algebraic.py
-index 6d00c6ddf7b..f5294262d9b 100644
+index b3313a75c91..5241417a1d8 100644
 --- a/src/compiler/nir/nir_opt_algebraic.py
 +++ b/src/compiler/nir/nir_opt_algebraic.py
-@@ -449,10 +449,47 @@ for sz in (16, 32, 64):
+@@ -462,10 +462,47 @@ for sz in (16, 32, 64):
  
  # Shorthand for the expansion of just the dot product part of the [iu]dp4a
  # instructions.
@@ -314,7 +314,7 @@ index 6d00c6ddf7b..f5294262d9b 100644
  udot_4x8_a_b = ('iadd', ('iadd', ('umul24_relaxed', ('extract_u8', a, 0), ('extract_u8', b, 0)),
                                   ('umul24_relaxed', ('extract_u8', a, 1), ('extract_u8', b, 1))),
                          ('iadd', ('umul24_relaxed', ('extract_u8', a, 2), ('extract_u8', b, 2)),
-@@ -467,7 +504,17 @@ udot_2x16_a_b = ('iadd', ('umul24_relaxed', ('extract_u16', a, 0), ('extract_u16
+@@ -480,7 +517,17 @@ udot_2x16_a_b = ('iadd', ('umul24_relaxed', ('extract_u16', a, 0), ('extract_u16
                           ('umul24_relaxed', ('extract_u16', a, 1), ('extract_u16', b, 1)))
  
  optimizations.extend([
@@ -334,7 +334,7 @@ index 6d00c6ddf7b..f5294262d9b 100644
     (('sudot_4x8_iadd', a, b, c), ('iadd', sudot_4x8_a_b, c), '!options->has_sudot_4x8'),
     (('sdot_2x16_iadd', a, b, c), ('iadd', sdot_2x16_a_b, c), '!options->has_dot_2x16'),
 diff --git a/src/compiler/nir/nir_shader_compiler_options.h b/src/compiler/nir/nir_shader_compiler_options.h
-index 5bc04386de7..118fd681b27 100644
+index 944f3793493..b6c3770e4d9 100644
 --- a/src/compiler/nir/nir_shader_compiler_options.h
 +++ b/src/compiler/nir/nir_shader_compiler_options.h
 @@ -668,6 +668,10 @@ typedef struct nir_shader_compiler_options {
@@ -349,4 +349,5 @@ index 5bc04386de7..118fd681b27 100644
     bool has_udot_4x8;
  
 -- 
-2.55.0
+2.56.0
+
