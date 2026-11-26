@@ -652,7 +652,12 @@ jobs:
           cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
           trap cleanup EXIT INT TERM
 
+          # --oom-score-adj: under rootless Podman 6.2's Docker API, `docker exec`
+          # fails (crun: write to /proc/self/oom_score_adj: Permission denied)
+          # unless the container states its OOM score; the runner's own value is
+          # one an unprivileged process may set.
           docker run -d --name "$container" \
+            --oom-score-adj "$(cat /proc/self/oom_score_adj)" \
             --memory "$BC250_BUILD_MEMORY" --memory-swap "$BC250_BUILD_MEMORY" \
             --security-opt label=disable \
             -v "$GITHUB_WORKSPACE:/workspace" \
