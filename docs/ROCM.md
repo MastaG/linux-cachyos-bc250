@@ -22,6 +22,39 @@ Limits of this mode: queues are mapped statically, so there is no oversubscripti
 
 `sched_policy=2` applies to the whole board, games included; see [Optional AMDGPU scheduler tuning](../README.md#optional-amdgpu-scheduler-tuning) for what it does there.
 
+## Long compute jobs with the desktop running
+
+amdgpu gives every graphics job **2 seconds** (`amdgpu.lockup_timeout`, the kernel default since 7.3). During sustained ROCm compute the compute work can occupy the GPU long enough that a frame from the desktop compositor (kwin, gamescope) waits longer than that. The kernel then declares the gfx ring hung even though nothing is stuck, tries a ring reset, and falls back to a full GPU reset, which **does not recover on the BC-250**: the board stops answering and needs a power cycle ([issue #15](https://github.com/MastaG/linux-cachyos-bc250/issues/15)). The log names the compositor, not the compute process:
+
+```text
+amdgpu 0000:01:00.0: ring gfx_0.0.0 timeout, signaled seq=..., emitted seq=...
+amdgpu 0000:01:00.0:  Process kwin_wayland pid ...
+amdgpu 0000:01:00.0: Ring gfx_0.0.0 reset failed
+...
+amdgpu 0000:01:00.0: PSP is resuming...
+```
+
+KFD compute queues themselves have no such timer, so the training job is never the one that times out. Two ways around it:
+
+- **Stop the graphical session while training** (the most reliable):
+
+  ```bash
+  sudo systemctl stop display-manager      # stop the desktop / Steam
+  sudo systemctl start display-manager     # back afterwards (or reboot)
+  ```
+
+  Don't use `systemctl isolate multi-user.target` for this: it also stops the GPU clock governor, and compute runs about 35% slower.
+
+- **Keep the desktop, but don't reset the GPU:** add `amdgpu.gpu_recovery=0`, optionally with a longer timeout:
+
+  ```text
+  amdgpu.gpu_recovery=0 amdgpu.lockup_timeout=10000
+  ```
+
+  With recovery off a timeout is only logged and the kernel keeps waiting, so the compositor's frame completes as soon as the compute work gives it room. Since a full reset never recovers on this board, nothing is lost: a genuinely stuck kernel leaves a frozen screen with SSH still working, instead of a dead board. Add them inside the quotes of `KERNEL_CMDLINE[default]+="…"` in `/etc/default/limine` and run `sudo limine-mkinitcpio`.
+
+  This follows from the kernel's timeout handler and the logs in #15; it is not yet confirmed by a long training run with the desktop up.
+
 ## PyTorch (`bc250-pytorch`)
 
 > **New, tested on one board so far** (2026-11-14, 40 CU unlock, `sched_policy=2`): fp32/fp16/bf16 matrix multiplies against float64 on the CPU over several shapes, layer/RMS norm and softmax forward and backward, convolution forward and backward, 200 allocate/free cycles, and 50 training steps matching the CPU all passed; ComfyUI starts on the GPU. Matrix multiplies reach about 4.4 TFLOPS (fp32 and fp16 alike). No image generation or long training run yet.
