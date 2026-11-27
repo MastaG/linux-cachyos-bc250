@@ -45,18 +45,18 @@ as the RC patch does on 7.4.
 ---
 
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-index 8383177..3c6fa43 100644
+index 321d749..2321f73 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-@@ -3892,6 +3892,7 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
- 	struct amdgpu_hdmi_vsdb_info vsdb_info = {0};
+@@ -3893,6 +3893,7 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
  	const struct edid *edid;
  	bool freesync_capable = false;
+ 	bool hf_vsdb_vrr = false;
 +	bool pcon_hf_vrr = false;
  	enum adaptive_sync_type as_type = ADAPTIVE_SYNC_TYPE_NONE;
  
  	if (!connector->state) {
-@@ -4050,6 +4051,58 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
+@@ -4053,6 +4054,58 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
  				connector->display_info.monitor_range.max_vfreq = vsdb_info.max_refresh_rate_hz;
  			}
  		}
@@ -115,9 +115,9 @@ index 8383177..3c6fa43 100644
  	}
  
  	/*
-@@ -4067,7 +4120,7 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
- 	/* HDMI/PCON without an EDID FreeSync VCP code is not FreeSync-capable. */
- 	if ((sink->sink_signal == SIGNAL_TYPE_HDMI_TYPE_A ||
+@@ -4075,7 +4128,7 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
+ 	 */
+ 	if (((sink->sink_signal == SIGNAL_TYPE_HDMI_TYPE_A && !hf_vsdb_vrr) ||
  	     as_type == FREESYNC_TYPE_PCON_IN_WHITELIST) &&
 -	    !sink->edid_caps.freesync_vcp_code)
 +	    !sink->edid_caps.freesync_vcp_code && !pcon_hf_vrr)
