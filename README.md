@@ -90,6 +90,13 @@ sudo pacman -Sy
 ```
 
 Which emulators it has and how to set them up is in that repository's README.
+Its Steam sync tools can also check their "Sync … games" shortcut at every
+login; that is opt-in, per user:
+
+```bash
+systemctl --user enable kytyps5-native-syncer   # KytyPS5-Native: "Sync PS5 games"
+systemctl --user enable lichii-syncer           # Lichii: "Sync Switch 2 games"
+```
 
 ### 2. Enable the BC-250 fan/sensor driver at boot
 
