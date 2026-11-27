@@ -45,17 +45,17 @@ as the RC patch does on 7.4.
 ---
 
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-index 321d749..2321f73 100644
+index 321d749..fc3dfca 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-@@ -3893,6 +3893,7 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
- 	const struct edid *edid;
- 	bool freesync_capable = false;
- 	bool hf_vsdb_vrr = false;
+@@ -3884,6 +3884,7 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
+ 				    const struct drm_edid *drm_edid, bool do_mccs)
+ {
+ 	int i = 0;
 +	bool pcon_hf_vrr = false;
- 	enum adaptive_sync_type as_type = ADAPTIVE_SYNC_TYPE_NONE;
- 
- 	if (!connector->state) {
+ 	struct amdgpu_dm_connector *amdgpu_dm_connector =
+ 			to_amdgpu_dm_connector(connector);
+ 	struct dm_connector_state *dm_con_state = NULL;
 @@ -4053,6 +4054,58 @@ void amdgpu_dm_update_freesync_caps(struct drm_connector *connector,
  				connector->display_info.monitor_range.max_vfreq = vsdb_info.max_refresh_rate_hz;
  			}
