@@ -1,0 +1,1420 @@
+From 3ad7ac2866e517aa1045e70a510a5815a9746152 Mon Sep 17 00:00:00 2001
+From: Natalie Vock <nat@pixelcluster.dev>
+Date: Wed, 12 Aug 2026 13:25:05 +0200
+Subject: [PATCH 1/2] [FROM-ML] drm/amdgpu: Add and use vm_update_ctx struct
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This adds a "context" struct to the functions responsible for mapping
+page tables (and committing the maps to the GPU page-tables).
+
+The core idea here is to record the changes associated with specific VM
+mapping operations (most importantly, which mappings were freed by each
+map change). We need this to properly implement explicit sync for unmap
+operations, which can only be performed for unmaps of either
+always-valid or PRT mappings.
+
+Before this patch, amdgpu_vm_clear_freed gets a list of pending unmap
+operations with no insight where they come from - it's very much
+possible that the list also contains unmap operations for which the sync
+dependencies are unknown, and implicit sync semantics have to be
+assumed.
+
+By keeping a separate free-list in the context of each unmap operation
+and only falling back to the global per-VM freelist if
+amdgpu_vm_clear_freed can't be executed right now, we sidestep these
+issues. We can also record information about sync dependencies (and
+more, in subsequent patches) inside the context struct as well.
+
+Signed-off-by: Natalie Vock <natalie.vock@gmx.de>
+Link: https://lore.kernel.org/amd-gfx/20260529-prt-explicit-sync-v1-1-9f1c60955cab@gmx.de/T
+[nfraprado: fixed many conflicts]
+Signed-off-by: Nícolas F. R. A. Prado <nfraprado@collabora.com>
+(cherry picked from commit 4f0244c8eb14a3801ad27da25187794ed62d6957)
+---
+Backport note (linux-cachyos-bc250): Valve's linux-neptune 7.2 carry
+(4f0244c8eb14), ported to 7.3. On top of Valve's version: converts the
+callers newer kernels added (amdgpu_userq.c), and releases the
+update context when amdgpu_gem_add_input_fence() fails in the VA ioctl.
+
+ .../gpu/drm/amd/amdgpu/amdgpu_amdkfd_gpuvm.c  |  42 +++-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c        |  35 ++-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_csa.c       |  22 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_dma_buf.c   |   2 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c       |  57 +++--
+ drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c       |   5 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_seq64.c     |  21 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c     |  10 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c        | 229 +++++++++++-------
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h        |  88 ++++++-
+ 10 files changed, 349 insertions(+), 162 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd_gpuvm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd_gpuvm.c
+index 6c657d6060d6..3ff46bb08f19 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd_gpuvm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd_gpuvm.c
+@@ -887,6 +887,7 @@ static int kfd_mem_attach(struct amdgpu_device *adev, struct kgd_mem *mem,
+ 	uint64_t va = mem->va;
+ 	struct kfd_mem_attachment *attachment[2] = {NULL, NULL};
+ 	struct amdgpu_bo *bo[2] = {NULL, NULL};
++	struct amdgpu_vm_update_ctx ctx;
+ 	struct amdgpu_bo_va *bo_va;
+ 	bool same_hive = false;
+ 	struct drm_exec exec;
+@@ -1013,8 +1014,11 @@ static int kfd_mem_attach(struct amdgpu_device *adev, struct kgd_mem *mem,
+ 			continue;
+ 		if (attachment[i]->bo_va) {
+ 			(void)amdgpu_bo_reserve(bo[i], true);
++			amdgpu_vm_update_ctx_init(
++				&ctx, adev, attachment[i]->bo_va->base.vm);
+ 			if (--attachment[i]->bo_va->ref_count == 0)
+-				amdgpu_vm_bo_del(adev, attachment[i]->bo_va);
++				amdgpu_vm_bo_del(&ctx, attachment[i]->bo_va);
++			amdgpu_vm_update_ctx_fini(&ctx);
+ 			amdgpu_bo_unreserve(bo[i]);
+ 			list_del(&attachment[i]->list);
+ 		}
+@@ -1027,12 +1031,16 @@ static int kfd_mem_attach(struct amdgpu_device *adev, struct kgd_mem *mem,
+ 
+ static void kfd_mem_detach(struct kfd_mem_attachment *attachment)
+ {
++	struct amdgpu_vm_update_ctx ctx;
+ 	struct amdgpu_bo *bo = attachment->bo_va->base.bo;
+ 
+ 	pr_debug("\t remove VA 0x%llx in entry %p\n",
+ 			attachment->va, attachment);
++	amdgpu_vm_update_ctx_init(&ctx, attachment->adev,
++				  attachment->bo_va->base.vm);
+ 	if (--attachment->bo_va->ref_count == 0)
+-		amdgpu_vm_bo_del(attachment->adev, attachment->bo_va);
++		amdgpu_vm_bo_del(&ctx, attachment->bo_va);
++	amdgpu_vm_update_ctx_fini(&ctx);
+ 	drm_gem_object_put(&bo->tbo.base);
+ 	list_del(&attachment->list);
+ 	kfree(attachment);
+@@ -1286,22 +1294,27 @@ static int unmap_bo_from_gpuvm(struct kgd_mem *mem,
+ 	struct amdgpu_bo_va *bo_va = entry->bo_va;
+ 	struct amdgpu_device *adev = entry->adev;
+ 	struct amdgpu_vm *vm = bo_va->base.vm;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 
+ 	if (bo_va->queue_refcount) {
+ 		pr_debug("bo_va->queue_refcount %d\n", bo_va->queue_refcount);
+ 		return -EBUSY;
+ 	}
+ 
+-	(void)amdgpu_vm_bo_unmap(adev, bo_va, entry->va);
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
++
++	(void)amdgpu_vm_bo_unmap(&update_ctx, bo_va, entry->va);
+ 
+ 	/* VM entity stopped if process killed, don't clear freed pt bo */
+ 	if (!amdgpu_vm_ready(vm))
+-		return 0;
++		goto out;
+ 
+-	(void)amdgpu_vm_clear_freed(adev, vm, &bo_va->last_pt_update);
++	(void)amdgpu_vm_clear_freed(&update_ctx, &bo_va->last_pt_update);
+ 
+ 	(void)amdgpu_sync_fence(sync, bo_va->last_pt_update, GFP_KERNEL);
+ 
++out:
++	amdgpu_vm_update_ctx_fini(&update_ctx);
+ 	return 0;
+ }
+ 
+@@ -1311,6 +1324,7 @@ static int update_gpuvm_pte(struct kgd_mem *mem,
+ {
+ 	struct amdgpu_bo_va *bo_va = entry->bo_va;
+ 	struct amdgpu_device *adev = entry->adev;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	int ret;
+ 
+ 	ret = kfd_mem_dmamap_attachment(mem, entry);
+@@ -1318,7 +1332,10 @@ static int update_gpuvm_pte(struct kgd_mem *mem,
+ 		return ret;
+ 
+ 	/* Update the page tables  */
+-	ret = amdgpu_vm_bo_update(adev, bo_va, false);
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, bo_va->base.vm);
++	ret = amdgpu_vm_bo_update(&update_ctx, bo_va, false);
++	amdgpu_vm_update_ctx_fini(&update_ctx);
++
+ 	if (ret) {
+ 		pr_err("amdgpu_vm_bo_update failed\n");
+ 		return ret;
+@@ -1332,12 +1349,17 @@ static int map_bo_to_gpuvm(struct kgd_mem *mem,
+ 			   struct amdgpu_sync *sync,
+ 			   bool no_update_pte)
+ {
++	struct amdgpu_bo_va *bo_va = entry->bo_va;
++	struct amdgpu_device *adev = entry->adev;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	int ret;
+ 
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, bo_va->base.vm);
+ 	/* Set virtual address for the allocation */
+-	ret = amdgpu_vm_bo_map(entry->adev, entry->bo_va, entry->va, 0,
++	ret = amdgpu_vm_bo_map(&update_ctx, bo_va, entry->va, 0,
+ 			       amdgpu_bo_size(entry->bo_va->base.bo),
+ 			       entry->pte_flags);
++	amdgpu_vm_update_ctx_fini(&update_ctx);
+ 	if (ret) {
+ 		pr_err("Failed to map VA 0x%llx in vm. ret %d\n",
+ 				entry->va, ret);
+@@ -2982,6 +3004,7 @@ int amdgpu_amdkfd_gpuvm_restore_process_bos(void *info, struct dma_fence __rcu *
+ 	struct amdgpu_sync sync_obj;
+ 	unsigned long failed_size = 0;
+ 	unsigned long total_size = 0;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	struct drm_exec exec;
+ 	int ret;
+ 
+@@ -3091,7 +3114,10 @@ int amdgpu_amdkfd_gpuvm_restore_process_bos(void *info, struct dma_fence __rcu *
+ 		struct amdgpu_fpriv *fpriv =
+ 			container_of(peer_vm, struct amdgpu_fpriv, vm);
+ 
+-		ret = amdgpu_vm_bo_update(adev, fpriv->prt_va, false);
++		amdgpu_vm_update_ctx_init(&update_ctx, adev, peer_vm);
++		ret = amdgpu_vm_bo_update(&update_ctx, fpriv->prt_va, false);
++		amdgpu_vm_update_ctx_fini(&update_ctx);
++
+ 		if (ret) {
+ 			dev_dbg(adev->dev,
+ 				"Memory eviction: handle PRT moved failed, pid %8d. Try again.\n",
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
+index a03a15cfca96..a2c953d8ab55 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_cs.c
+@@ -1125,6 +1125,7 @@ static int amdgpu_cs_vm_handling(struct amdgpu_cs_parser *p)
+ 	struct amdgpu_vm *vm = &fpriv->vm;
+ 	struct amdgpu_bo_list_entry *e;
+ 	struct amdgpu_bo_va *bo_va;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	unsigned int i;
+ 	int r;
+ 
+@@ -1146,31 +1147,35 @@ static int amdgpu_cs_vm_handling(struct amdgpu_cs_parser *p)
+ 	if (!amdgpu_vm_ready(vm))
+ 		return -EINVAL;
+ 
+-	r = amdgpu_vm_clear_freed(adev, vm, NULL);
++	r = amdgpu_vm_delayed_free(adev, vm);
+ 	if (r)
+ 		return r;
+ 
+-	r = amdgpu_vm_bo_update(adev, fpriv->prt_va, false);
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
++
++	r = amdgpu_vm_bo_update(&update_ctx, fpriv->prt_va, false);
+ 	if (r)
+-		return r;
++		goto err_fini_ctx;
+ 
+ 	r = amdgpu_sync_fence(&p->sync, fpriv->prt_va->last_pt_update,
+ 			      GFP_KERNEL);
+ 	if (r)
+-		return r;
++		goto err_fini_ctx;
+ 
+ 	if (fpriv->csa_va) {
+ 		bo_va = fpriv->csa_va;
+-		if (!bo_va)
+-			return -ENOMEM;
+-		r = amdgpu_vm_bo_update(adev, bo_va, false);
++		if (!bo_va) {
++			r = -ENOMEM;
++			goto err_fini_ctx;
++		}
++		r = amdgpu_vm_bo_update(&update_ctx, bo_va, false);
+ 		if (r)
+-			return r;
++			goto err_fini_ctx;
+ 
+ 		r = amdgpu_sync_fence(&p->sync, bo_va->last_pt_update,
+ 				      GFP_KERNEL);
+ 		if (r)
+-			return r;
++			goto err_fini_ctx;
+ 	}
+ 
+ 	/* FIXME: In theory this loop shouldn't be needed any more when
+@@ -1183,16 +1188,18 @@ static int amdgpu_cs_vm_handling(struct amdgpu_cs_parser *p)
+ 		if (bo_va == NULL)
+ 			continue;
+ 
+-		r = amdgpu_vm_bo_update(adev, bo_va, false);
++		r = amdgpu_vm_bo_update(&update_ctx, bo_va, false);
+ 		if (r)
+-			return r;
++			goto err_fini_ctx;
+ 
+ 		r = amdgpu_sync_fence(&p->sync, bo_va->last_pt_update,
+ 				      GFP_KERNEL);
+ 		if (r)
+-			return r;
++			goto err_fini_ctx;
+ 	}
+ 
++	amdgpu_vm_update_ctx_fini(&update_ctx);
++
+ 	r = amdgpu_vm_handle_moved(adev, vm, drm_exec_ticket(&p->exec));
+ 	if (r)
+ 		return r;
+@@ -1215,6 +1222,10 @@ static int amdgpu_cs_vm_handling(struct amdgpu_cs_parser *p)
+ 	}
+ 
+ 	return 0;
++
++err_fini_ctx:
++	amdgpu_vm_update_ctx_fini(&update_ctx);
++	return r;
+ }
+ 
+ static int amdgpu_cs_sync_rings(struct amdgpu_cs_parser *p)
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_csa.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_csa.c
+index 11d70fe4f75a..e1c85e3b211b 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_csa.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_csa.c
+@@ -66,6 +66,7 @@ int amdgpu_map_static_csa(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 			  struct amdgpu_bo *bo, struct amdgpu_bo_va **bo_va,
+ 			  uint64_t csa_addr, uint32_t size)
+ {
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	struct drm_exec exec;
+ 	int r;
+ 
+@@ -88,17 +89,21 @@ int amdgpu_map_static_csa(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 		goto error;
+ 	}
+ 
+-	r = amdgpu_vm_bo_map(adev, *bo_va, csa_addr, 0, size,
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
++
++	r = amdgpu_vm_bo_map(&update_ctx, *bo_va, csa_addr, 0, size,
+ 			     AMDGPU_PTE_READABLE | AMDGPU_PTE_WRITEABLE |
+ 			     AMDGPU_PTE_EXECUTABLE);
+ 
+ 	if (r) {
+ 		drm_err(adev_to_drm(adev),
+ 			"failed to do bo_map on static CSA, err=%d\n", r);
+-		amdgpu_vm_bo_del(adev, *bo_va);
+-		goto error;
++		amdgpu_vm_bo_del(&update_ctx, *bo_va);
++		goto error_ctx;
+ 	}
+ 
++error_ctx:
++	amdgpu_vm_update_ctx_fini(&update_ctx);
+ error:
+ 	drm_exec_fini(&exec);
+ 	return r;
+@@ -108,6 +113,7 @@ int amdgpu_unmap_static_csa(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 			    struct amdgpu_bo *bo, struct amdgpu_bo_va *bo_va,
+ 			    uint64_t csa_addr)
+ {
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	struct drm_exec exec;
+ 	int r;
+ 
+@@ -124,15 +130,19 @@ int amdgpu_unmap_static_csa(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 		}
+ 	}
+ 
+-	r = amdgpu_vm_bo_unmap(adev, bo_va, csa_addr);
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
++
++	r = amdgpu_vm_bo_unmap(&update_ctx, bo_va, csa_addr);
+ 	if (r) {
+ 		drm_err(adev_to_drm(adev),
+ 			"failed to do bo_unmap on static CSA, err=%d\n", r);
+-		goto error;
++		goto error_ctx;
+ 	}
+ 
+-	amdgpu_vm_bo_del(adev, bo_va);
++	amdgpu_vm_bo_del(&update_ctx, bo_va);
+ 
++error_ctx:
++	amdgpu_vm_update_ctx_fini(&update_ctx);
+ error:
+ 	drm_exec_fini(&exec);
+ 	return r;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_dma_buf.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_dma_buf.c
+index ccadbcf38d3f..707e6fe60352 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_dma_buf.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_dma_buf.c
+@@ -555,7 +555,7 @@ amdgpu_dma_buf_move_notify(struct dma_buf_attachment *attach)
+ 		/* Reserve fences for two SDMA page table updates */
+ 		r = dma_resv_reserve_fences(resv, 2);
+ 		if (!r)
+-			r = amdgpu_vm_clear_freed(adev, vm, NULL);
++			r = amdgpu_vm_delayed_free(adev, vm);
+ 
+ 		/* Don't pass 'ticket' to amdgpu_vm_handle_moved: we want the clear=true
+ 		 * path to be used otherwise we might update the PT of another process
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c
+index cd05921aede5..67bcbcf8cf37 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c
+@@ -50,6 +50,7 @@
+ 
+ static int
+ amdgpu_gem_add_input_fence(struct drm_file *filp,
++			   struct amdgpu_vm_update_ctx *update_ctx,
+ 			   uint64_t syncobj_handles_array,
+ 			   uint32_t num_syncobj_handles)
+ {
+@@ -76,9 +77,10 @@ amdgpu_gem_add_input_fence(struct drm_file *filp,
+ 		if (ret)
+ 			goto free_memdup;
+ 
+-		dma_fence_wait(fence, false);
++		ret = amdgpu_sync_fence(&update_ctx->sync, fence, GFP_KERNEL);
++		if (ret)
++			goto free_memdup;
+ 
+-		/* TODO: optimize async handling */
+ 		dma_fence_put(fence);
+ 	}
+ 
+@@ -318,12 +320,15 @@ static void amdgpu_gem_object_close(struct drm_gem_object *obj,
+ 	struct amdgpu_device *adev = amdgpu_ttm_adev(bo->tbo.bdev);
+ 	struct amdgpu_fpriv *fpriv = file_priv->driver_priv;
+ 	struct amdgpu_vm *vm = &fpriv->vm;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 
+ 	struct dma_fence *fence = NULL;
+ 	struct amdgpu_bo_va *bo_va;
+ 	struct drm_exec exec;
+ 	long r;
+ 
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
++
+ 	drm_exec_init(&exec, DRM_EXEC_IGNORE_DUPLICATES, 0);
+ 	drm_exec_until_all_locked(&exec) {
+ 		r = drm_exec_prepare_obj(&exec, &bo->tbo.base, 1);
+@@ -347,12 +352,12 @@ static void amdgpu_gem_object_close(struct drm_gem_object *obj,
+ 	if (!bo_va)
+ 		goto out_unlock;
+ 
+-	amdgpu_vm_bo_del(adev, bo_va);
++	amdgpu_vm_bo_del(&update_ctx, bo_va);
+ 	amdgpu_vm_bo_update_shared(bo);
+ 	if (!amdgpu_vm_ready(vm))
+ 		goto out_unlock;
+ 
+-	r = amdgpu_vm_clear_freed(adev, vm, &fence);
++	r = amdgpu_vm_clear_freed(&update_ctx, &fence);
+ 	if (unlikely(r < 0) && !drm_dev_is_unplugged(adev_to_drm(adev)))
+ 		dev_err(adev->dev, "failed to clear page "
+ 			"tables on GEM object close (%ld)\n", r);
+@@ -363,6 +368,7 @@ static void amdgpu_gem_object_close(struct drm_gem_object *obj,
+ 	dma_fence_put(fence);
+ 
+ out_unlock:
++	amdgpu_vm_update_ctx_fini(&update_ctx);
+ 	if (r && !drm_dev_is_unplugged(adev_to_drm(adev)))
+ 		dev_err(adev->dev, "leaking bo va (%ld)\n", r);
+ 	drm_exec_fini(&exec);
+@@ -767,8 +773,7 @@ int amdgpu_gem_metadata_ioctl(struct drm_device *dev, void *data,
+  * otherwise stub fence in case of error.
+  */
+ static struct dma_fence *
+-amdgpu_gem_va_update_vm(struct amdgpu_device *adev,
+-			struct amdgpu_vm *vm,
++amdgpu_gem_va_update_vm(struct amdgpu_vm_update_ctx *ctx,
+ 			struct amdgpu_bo_va *bo_va,
+ 			uint32_t operation)
+ {
+@@ -776,7 +781,7 @@ amdgpu_gem_va_update_vm(struct amdgpu_device *adev,
+ 	int r = 0;
+ 
+ 	/* If the VM is not ready return only a stub. */
+-	if (!amdgpu_vm_ready(vm))
++	if (!amdgpu_vm_ready(ctx->vm))
+ 		return dma_fence_get_stub();
+ 
+ 
+@@ -787,42 +792,42 @@ amdgpu_gem_va_update_vm(struct amdgpu_device *adev,
+ 	 * schedules GPU work. If nothing needs clearing, @fence can remain as
+ 	 * the original vm->last_update.
+ 	 */
+-	r = amdgpu_vm_clear_freed(adev, vm, &vm->last_update);
++	r = amdgpu_vm_clear_freed(ctx, &ctx->vm->last_update);
+ 	if (r)
+ 		goto error;
+ 
+ 	/* For MAP/REPLACE we also need to update the BO mappings. */
+ 	if (operation == AMDGPU_VA_OP_MAP ||
+ 	    operation == AMDGPU_VA_OP_REPLACE) {
+-		r = amdgpu_vm_bo_update(adev, bo_va, false);
++		r = amdgpu_vm_bo_update(ctx, bo_va, false);
+ 		if (r)
+ 			goto error;
+ 	}
+ 
+ 	/* Always update PDEs after we touched the mappings. */
+-	r = amdgpu_vm_update_pdes(adev, vm, false);
++	r = amdgpu_vm_update_pdes(ctx->adev, ctx->vm, false);
+ 	if (r)
+ 		goto error;
+ 
+ 	if ((operation == AMDGPU_VA_OP_MAP ||
+ 	     operation == AMDGPU_VA_OP_REPLACE) &&
+-	    !amdgpu_vm_is_bo_always_valid(vm, bo_va->base.bo)) {
++	    !amdgpu_vm_is_bo_always_valid(ctx->vm, bo_va->base.bo)) {
+ 
+ 		/*
+ 		 * For MAP/REPLACE of non per-VM BOs we need to sync to both the
+ 		 * bo_va->last_pt_update and vm->last_update or otherwise we
+ 		 * potentially miss the PDE updates.
+ 		 */
+-		fence = dma_fence_unwrap_merge(vm->last_update,
++		fence = dma_fence_unwrap_merge(ctx->vm->last_update,
+ 					       bo_va->last_pt_update);
+ 		if (!fence) {
+ 			/* As fallback in OOM situations */
+-			dma_fence_wait(vm->last_update, false);
++			dma_fence_wait(ctx->vm->last_update, false);
+ 			dma_fence_wait(bo_va->last_pt_update, false);
+ 			fence = dma_fence_get_stub();
+ 		}
+ 	} else {
+-		fence = dma_fence_get(vm->last_update);
++		fence = dma_fence_get(ctx->vm->last_update);
+ 	}
+ 
+ 	return fence;
+@@ -831,7 +836,7 @@ amdgpu_gem_va_update_vm(struct amdgpu_device *adev,
+ 	if (r && r != -ERESTARTSYS)
+ 		DRM_ERROR("Couldn't update BO_VA (%d)\n", r);
+ 
+-	return dma_fence_get(vm->last_update);
++	return dma_fence_get(ctx->vm->last_update);
+ }
+ 
+ int amdgpu_gem_va_ioctl(struct drm_device *dev, void *data,
+@@ -852,6 +857,7 @@ int amdgpu_gem_va_ioctl(struct drm_device *dev, void *data,
+ 	struct amdgpu_bo_va *bo_va;
+ 	struct drm_syncobj *timeline_syncobj = NULL;
+ 	struct dma_fence_chain *timeline_chain = NULL;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	struct drm_exec exec;
+ 	uint64_t vm_size, tmp;
+ 	int r = 0;
+@@ -918,12 +924,16 @@ int amdgpu_gem_va_ioctl(struct drm_device *dev, void *data,
+ 		abo = NULL;
+ 	}
+ 
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, &fpriv->vm);
++
+ 	/* Add input syncobj fences (if any) for synchronization. */
+-	r = amdgpu_gem_add_input_fence(filp,
++	r = amdgpu_gem_add_input_fence(filp, &update_ctx,
+ 				       args->input_fence_syncobj_handles,
+ 				       args->num_syncobj_handles);
+-	if (r)
++	if (r) {
++		amdgpu_vm_update_ctx_fini(&update_ctx);
+ 		goto error_put_gobj;
++	}
+ 
+ 	drm_exec_init(&exec, DRM_EXEC_INTERRUPTIBLE_WAIT |
+ 		      DRM_EXEC_IGNORE_DUPLICATES, 0);
+@@ -969,21 +979,21 @@ int amdgpu_gem_va_ioctl(struct drm_device *dev, void *data,
+ 
+ 	switch (args->operation) {
+ 	case AMDGPU_VA_OP_MAP:
+-		r = amdgpu_vm_bo_map(adev, bo_va, args->va_address,
++		r = amdgpu_vm_bo_map(&update_ctx, bo_va, args->va_address,
+ 				     args->offset_in_bo, args->map_size,
+ 				     args->flags);
+ 		break;
+ 	case AMDGPU_VA_OP_UNMAP:
+-		r = amdgpu_vm_bo_unmap(adev, bo_va, args->va_address);
++		r = amdgpu_vm_bo_unmap(&update_ctx, bo_va, args->va_address);
+ 		break;
+ 
+ 	case AMDGPU_VA_OP_CLEAR:
+-		r = amdgpu_vm_bo_clear_mappings(adev, &fpriv->vm,
+-						args->va_address,
++		r = amdgpu_vm_bo_clear_mappings(&update_ctx, args->va_address,
+ 						args->map_size);
+ 		break;
+ 	case AMDGPU_VA_OP_REPLACE:
+-		r = amdgpu_vm_bo_replace_map(adev, bo_va, args->va_address,
++		r = amdgpu_vm_bo_replace_map(&update_ctx, bo_va,
++					     args->va_address,
+ 					     args->offset_in_bo, args->map_size,
+ 					     args->flags);
+ 		break;
+@@ -1000,7 +1010,7 @@ int amdgpu_gem_va_ioctl(struct drm_device *dev, void *data,
+ 	    (!adev->debug_vm || timeline_syncobj)) {
+ 		struct dma_fence *fence;
+ 
+-		fence = amdgpu_gem_va_update_vm(adev, &fpriv->vm, bo_va,
++		fence = amdgpu_gem_va_update_vm(&update_ctx, bo_va,
+ 						args->operation);
+ 		if (timeline_syncobj) {
+ 			if (!args->vm_timeline_point) {
+@@ -1024,6 +1034,7 @@ int amdgpu_gem_va_ioctl(struct drm_device *dev, void *data,
+ 	dma_fence_chain_free(timeline_chain);
+ 	if (timeline_syncobj)
+ 		drm_syncobj_put(timeline_syncobj);
++	amdgpu_vm_update_ctx_fini(&update_ctx);
+ 	drm_exec_fini(&exec);
+ error_put_gobj:
+ 	drm_gem_object_put(gobj);
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c
+index 7c081b338fe2..6456f767a3e1 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_kms.c
+@@ -1579,6 +1579,7 @@ void amdgpu_driver_postclose_kms(struct drm_device *dev,
+ {
+ 	struct amdgpu_device *adev = drm_to_adev(dev);
+ 	struct amdgpu_fpriv *fpriv = file_priv->driver_priv;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	struct amdgpu_bo_list *list;
+ 	struct amdgpu_bo *pd;
+ 	unsigned long handle;
+@@ -1607,7 +1608,9 @@ void amdgpu_driver_postclose_kms(struct drm_device *dev,
+ 	pasid = fpriv->vm.pasid;
+ 	pd = amdgpu_bo_ref(fpriv->vm.root.bo);
+ 	if (!WARN_ON(amdgpu_bo_reserve(pd, true))) {
+-		amdgpu_vm_bo_del(adev, fpriv->prt_va);
++		amdgpu_vm_update_ctx_init(&update_ctx, adev, &fpriv->vm);
++		amdgpu_vm_bo_del(&update_ctx, fpriv->prt_va);
++		amdgpu_vm_update_ctx_fini(&update_ctx);
+ 		amdgpu_bo_unreserve(pd);
+ 	}
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_seq64.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_seq64.c
+index 21a225b0116a..910c187a34e0 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_seq64.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_seq64.c
+@@ -67,6 +67,7 @@ static inline u64 amdgpu_seq64_get_va_base(struct amdgpu_device *adev)
+ int amdgpu_seq64_map(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 		     struct amdgpu_bo_va **bo_va)
+ {
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	struct amdgpu_bo *bo;
+ 	struct drm_exec exec;
+ 	u64 seq64_addr;
+@@ -94,22 +95,25 @@ int amdgpu_seq64_map(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 
+ 	seq64_addr = amdgpu_seq64_get_va_base(adev) & AMDGPU_GMC_HOLE_MASK;
+ 
+-	r = amdgpu_vm_bo_map(adev, *bo_va, seq64_addr, 0,
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
++	r = amdgpu_vm_bo_map(&update_ctx, *bo_va, seq64_addr, 0,
+ 			     AMDGPU_VA_RESERVED_SEQ64_SIZE,
+ 			     AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_MTYPE_UC);
+ 	if (r) {
+ 		DRM_ERROR("failed to do bo_map on userq sem, err=%d\n", r);
+-		amdgpu_vm_bo_del(adev, *bo_va);
+-		goto error;
++		amdgpu_vm_bo_del(&update_ctx, *bo_va);
++		goto err_ctx;
+ 	}
+ 
+-	r = amdgpu_vm_bo_update(adev, *bo_va, false);
++	r = amdgpu_vm_bo_update(&update_ctx, *bo_va, false);
+ 	if (r) {
+ 		DRM_ERROR("failed to do vm_bo_update on userq sem\n");
+-		amdgpu_vm_bo_del(adev, *bo_va);
+-		goto error;
++		amdgpu_vm_bo_del(&update_ctx, *bo_va);
++		goto err_ctx;
+ 	}
+ 
++err_ctx:
++	amdgpu_vm_update_ctx_fini(&update_ctx);
+ error:
+ 	drm_exec_fini(&exec);
+ 	return r;
+@@ -125,6 +129,7 @@ int amdgpu_seq64_map(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+  */
+ void amdgpu_seq64_unmap(struct amdgpu_device *adev, struct amdgpu_fpriv *fpriv)
+ {
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	struct amdgpu_vm *vm;
+ 	struct amdgpu_bo *bo;
+ 	struct drm_exec exec;
+@@ -149,7 +154,9 @@ void amdgpu_seq64_unmap(struct amdgpu_device *adev, struct amdgpu_fpriv *fpriv)
+ 			goto error;
+ 	}
+ 
+-	amdgpu_vm_bo_del(adev, fpriv->seq64_va);
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
++	amdgpu_vm_bo_del(&update_ctx, fpriv->seq64_va);
++	amdgpu_vm_update_ctx_fini(&update_ctx);
+ 
+ 	fpriv->seq64_va = NULL;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
+index 053ead0d690f..93e5206c954a 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_userq.c
+@@ -982,6 +982,7 @@ amdgpu_userq_bo_validate(struct amdgpu_device *adev, struct drm_exec *exec,
+ 			 struct amdgpu_vm *vm)
+ {
+ 	struct ttm_operation_ctx ctx = { false, false };
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	struct amdgpu_bo_va *bo_va;
+ 	struct amdgpu_bo *bo, *tmp;
+ 	int ret;
+@@ -1006,8 +1007,10 @@ amdgpu_userq_bo_validate(struct amdgpu_device *adev, struct drm_exec *exec,
+ 		if (ret)
+ 			return ret;
+ 
++		amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
+ 		/* This moves the bo_va to the idle list */
+-		ret = amdgpu_vm_bo_update(adev, bo_va, false);
++		ret = amdgpu_vm_bo_update(&update_ctx, bo_va, false);
++		amdgpu_vm_update_ctx_fini(&update_ctx);
+ 		if (ret)
+ 			return ret;
+ 
+@@ -1028,6 +1031,7 @@ amdgpu_userq_vm_validate_and_restore_queue(struct amdgpu_userq_mgr *uq_mgr)
+ 	struct amdgpu_device *adev = uq_mgr->adev;
+ 	struct amdgpu_hmm_range *range;
+ 	struct amdgpu_vm *vm = &fpriv->vm;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	unsigned long key, tmp_key;
+ 	struct amdgpu_bo_va *bo_va;
+ 	struct amdgpu_usermode_queue *queue;
+@@ -1117,7 +1121,9 @@ amdgpu_userq_vm_validate_and_restore_queue(struct amdgpu_userq_mgr *uq_mgr)
+ 	 * explicitly here (as the CS path does) so sparse mappings survive a
+ 	 * VRAM-lost reset.
+ 	 */
+-	ret = amdgpu_vm_bo_update(adev, fpriv->prt_va, false);
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
++	ret = amdgpu_vm_bo_update(&update_ctx, fpriv->prt_va, false);
++	amdgpu_vm_update_ctx_fini(&update_ctx);
+ 	if (ret)
+ 		goto unlock_all;
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+index c07f1115f654..1c3c8b2e3a2a 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+@@ -400,6 +400,35 @@ void amdgpu_vm_update_stats(struct amdgpu_vm_bo_base *base,
+ 	spin_unlock(&vm->stats_lock);
+ }
+ 
++/**
++ * amdgpu_vm_update_ctx_ensure_unmap_synced - VM update sync helper
++ * @ctx: context for updating the VM
++ *
++ * Ensures that ctx->sync will synchronize to everything that's necessary
++ * to unmap freed pages associated with the context.
++ */
++int amdgpu_vm_update_ctx_ensure_unmap_synced(struct amdgpu_vm_update_ctx *ctx)
++{
++	int r;
++
++	if (ctx->unmap_synced)
++		return 0;
++
++	/*
++	 * Implicitly sync to command submissions in the same VM before
++	 * unmapping.
++	 */
++	r = amdgpu_sync_resv(ctx->adev, &ctx->sync,
++			     ctx->vm->root.bo->tbo.base.resv,
++			     AMDGPU_SYNC_EQ_OWNER, ctx->vm);
++	if (r)
++		return r;
++
++	ctx->unmap_synced = true;
++
++	return 0;
++}
++
+ /**
+  * amdgpu_vm_bo_base_init - Adds bo to the list of bos associated with the vm
+  *
+@@ -1289,37 +1318,31 @@ void amdgpu_vm_get_memory(struct amdgpu_vm *vm,
+  * Returns:
+  * 0 for success, -EINVAL for failure.
+  */
+-int amdgpu_vm_bo_update(struct amdgpu_device *adev, struct amdgpu_bo_va *bo_va,
+-			bool clear)
++int amdgpu_vm_bo_update(struct amdgpu_vm_update_ctx *ctx,
++			struct amdgpu_bo_va *bo_va, bool clear)
+ {
+ 	struct amdgpu_bo *bo = bo_va->base.bo;
+-	struct amdgpu_vm *vm = bo_va->base.vm;
++	struct amdgpu_vm *vm = ctx->vm;
+ 	struct amdgpu_bo_va_mapping *mapping;
+ 	struct dma_fence **last_update;
+ 	dma_addr_t *pages_addr = NULL;
+ 	struct ttm_resource *mem;
+-	struct amdgpu_sync sync;
+ 	bool flush_tlb = clear;
+ 	uint64_t vram_base;
+ 	uint64_t flags;
+ 	bool uncached;
+-	int r;
++	int r = 0;
+ 
+-	amdgpu_sync_create(&sync);
+ 	if (clear) {
+ 		mem = NULL;
+ 
+-		/* Implicitly sync to command submissions in the same VM before
+-		 * unmapping.
+-		 */
+-		r = amdgpu_sync_resv(adev, &sync, vm->root.bo->tbo.base.resv,
+-				     AMDGPU_SYNC_EQ_OWNER, vm);
++		r = amdgpu_vm_update_ctx_ensure_unmap_synced(ctx);
+ 		if (r)
+-			goto error_free;
++			goto error;
+ 		if (bo) {
+-			r = amdgpu_sync_kfd(&sync, bo->tbo.base.resv);
++			r = amdgpu_sync_kfd(&ctx->sync, bo->tbo.base.resv);
+ 			if (r)
+-				goto error_free;
++				goto error;
+ 		}
+ 	} else if (!bo) {
+ 		mem = NULL;
+@@ -1344,16 +1367,16 @@ int amdgpu_vm_bo_update(struct amdgpu_device *adev, struct amdgpu_bo_va *bo_va,
+ 			pages_addr = bo->tbo.ttm->dma_address;
+ 
+ 		/* Implicitly sync to moving fences before mapping anything */
+-		r = amdgpu_sync_resv(adev, &sync, bo->tbo.base.resv,
++		r = amdgpu_sync_resv(ctx->adev, &ctx->sync, bo->tbo.base.resv,
+ 				     AMDGPU_SYNC_EXPLICIT, vm);
+ 		if (r)
+-			goto error_free;
++			goto error;
+ 	}
+ 
+ 	if (bo) {
+ 		struct amdgpu_device *bo_adev;
+ 
+-		flags = amdgpu_ttm_tt_pte_flags(adev, bo->tbo.ttm, mem);
++		flags = amdgpu_ttm_tt_pte_flags(ctx->adev, bo->tbo.ttm, mem);
+ 
+ 		if (amdgpu_bo_encrypted(bo))
+ 			flags |= AMDGPU_PTE_TMZ;
+@@ -1392,18 +1415,19 @@ int amdgpu_vm_bo_update(struct amdgpu_device *adev, struct amdgpu_bo_va *bo_va,
+ 			update_flags &= ~AMDGPU_PTE_WRITEABLE;
+ 
+ 		/* Apply ASIC specific mapping flags */
+-		amdgpu_gmc_get_vm_pte(adev, vm, bo, mapping->flags,
++		amdgpu_gmc_get_vm_pte(ctx->adev, vm, bo, mapping->flags,
+ 				      &update_flags);
+ 
+ 		trace_amdgpu_vm_bo_update(mapping);
+ 
+-		r = amdgpu_vm_update_range(adev, vm, false, false, flush_tlb,
+-					   !uncached, &sync, mapping->start,
+-					   mapping->last, update_flags,
+-					   mapping->offset, vram_base, mem,
+-					   pages_addr, last_update);
++		r = amdgpu_vm_update_range(ctx->adev, vm, false, false,
++					   flush_tlb, !uncached, &ctx->sync,
++					   mapping->start, mapping->last,
++					   update_flags, mapping->offset,
++					   vram_base, mem, pages_addr,
++					   last_update);
+ 		if (r)
+-			goto error_free;
++			goto error;
+ 	}
+ 
+ 	/* If the BO is not in its preferred location add it back to
+@@ -1436,8 +1460,7 @@ int amdgpu_vm_bo_update(struct amdgpu_device *adev, struct amdgpu_bo_va *bo_va,
+ 			trace_amdgpu_vm_bo_mapping(mapping);
+ 	}
+ 
+-error_free:
+-	amdgpu_sync_free(&sync);
++error:
+ 	return r;
+ }
+ 
+@@ -1569,52 +1592,44 @@ static void amdgpu_vm_prt_fini(struct amdgpu_device *adev, struct amdgpu_vm *vm)
+ /**
+  * amdgpu_vm_clear_freed - clear freed BOs in the PT
+  *
+- * @adev: amdgpu_device pointer
+- * @vm: requested vm
++ * @ctx: Context for VM updates
+  * @fence: optional resulting fence (unchanged if no work needed to be done
+  * or if an error occurred)
+  *
+- * Make sure all freed BOs are cleared in the PT.
++ * Make sure all BOs freed by VM updates in the context are cleared in the PT.
+  * PTs have to be reserved and mutex must be locked!
+  *
+  * Returns:
+  * 0 for success.
+  *
+  */
+-int amdgpu_vm_clear_freed(struct amdgpu_device *adev,
+-			  struct amdgpu_vm *vm,
++int amdgpu_vm_clear_freed(struct amdgpu_vm_update_ctx *ctx,
+ 			  struct dma_fence **fence)
+ {
+ 	struct amdgpu_bo_va_mapping *mapping;
+ 	struct dma_fence *f = NULL;
+-	struct amdgpu_sync sync;
+ 	int r;
+ 
+-	if (list_empty(&vm->freed))
++	if (list_empty(&ctx->freed))
+ 		return 0;
+ 
+-	/*
+-	 * Implicitly sync to command submissions in the same VM before
+-	 * unmapping.
+-	 */
+-	amdgpu_sync_create(&sync);
+-	r = amdgpu_sync_resv(adev, &sync, vm->root.bo->tbo.base.resv,
+-			     AMDGPU_SYNC_EQ_OWNER, vm);
++	r = amdgpu_vm_update_ctx_ensure_unmap_synced(ctx);
+ 	if (r)
+-		goto error_free;
++		return r;
+ 
+-	while (!list_empty(&vm->freed)) {
+-		mapping = list_first_entry(&vm->freed,
+-			struct amdgpu_bo_va_mapping, list);
++	while (!list_empty(&ctx->freed)) {
++		mapping = list_first_entry(&ctx->freed,
++					   struct amdgpu_bo_va_mapping, list);
+ 		list_del(&mapping->list);
+ 
+-		r = amdgpu_vm_update_range(adev, vm, false, false, true, false,
+-					   &sync, mapping->start, mapping->last,
+-					   0, 0, 0, NULL, NULL, &f);
+-		amdgpu_vm_free_mapping(adev, vm, mapping, f);
++		r = amdgpu_vm_update_range(ctx->adev, ctx->vm, false, false,
++					   true, false, &ctx->sync,
++					   mapping->start, mapping->last, 0, 0,
++					   0, NULL, NULL, &f);
++		amdgpu_vm_free_mapping(ctx->adev, ctx->vm, mapping, f);
+ 		if (r) {
+ 			dma_fence_put(f);
+-			goto error_free;
++			return r;
+ 		}
+ 	}
+ 
+@@ -1625,12 +1640,37 @@ int amdgpu_vm_clear_freed(struct amdgpu_device *adev,
+ 		dma_fence_put(f);
+ 	}
+ 
+-error_free:
+-	amdgpu_sync_free(&sync);
+ 	return r;
+ 
+ }
+ 
++/**
++ * amdgpu_vm_delayed_free - execute delayed PT clearing
++ *
++ * @adev: Device to use for freeing
++ * @vm: VM whose BOs should be freed
++ *
++ * Go over the list of BOs whose PT clearing was delayed and clear all of them.
++ * PTs have to be reserved and mutex must be locked!
++ *
++ * Returns:
++ * 0 for success.
++ *
++ */
++int amdgpu_vm_delayed_free(struct amdgpu_device *adev, struct amdgpu_vm *vm)
++{
++	struct amdgpu_vm_update_ctx ctx;
++	int r;
++
++	amdgpu_vm_update_ctx_init(&ctx, adev, vm);
++
++	list_splice_init(&vm->delayed_freed, &ctx.freed);
++	r = amdgpu_vm_clear_freed(&ctx, NULL);
++
++	amdgpu_vm_update_ctx_fini(&ctx);
++	return r;
++}
++
+ /**
+  * amdgpu_vm_handle_moved - handle moved BOs in the PT
+  *
+@@ -1650,17 +1690,20 @@ int amdgpu_vm_handle_moved(struct amdgpu_device *adev,
+ 			   struct ww_acquire_ctx *ticket)
+ {
+ 	struct amdgpu_bo_va *bo_va, *tmp;
++	struct amdgpu_vm_update_ctx update_ctx;
+ 	struct dma_resv *resv;
+ 	struct amdgpu_bo *bo;
+ 	bool clear, unlock;
+ 	int r;
+ 
++	amdgpu_vm_update_ctx_init(&update_ctx, adev, vm);
+ 	list_for_each_entry_safe(bo_va, tmp, &vm->always_valid.needs_update,
+ 				 base.vm_status) {
+ 		/* Per VM BOs never need to bo cleared in the page tables */
+-		r = amdgpu_vm_bo_update(adev, bo_va, false);
++		r = amdgpu_vm_bo_update(&update_ctx, bo_va, false);
++
+ 		if (r)
+-			return r;
++			goto error;
+ 	}
+ 
+ 	spin_lock(&vm->individual_lock);
+@@ -1686,7 +1729,7 @@ int amdgpu_vm_handle_moved(struct amdgpu_device *adev,
+ 			unlock = false;
+ 		}
+ 
+-		r = amdgpu_vm_bo_update(adev, bo_va, clear);
++		r = amdgpu_vm_bo_update(&update_ctx, bo_va, clear);
+ 
+ 		if (unlock)
+ 			dma_resv_unlock(resv);
+@@ -1706,7 +1749,10 @@ int amdgpu_vm_handle_moved(struct amdgpu_device *adev,
+ 	}
+ 	spin_unlock(&vm->individual_lock);
+ 
+-	return 0;
++error:
++	amdgpu_vm_update_ctx_fini(&update_ctx);
++
++	return r;
+ }
+ 
+ /**
+@@ -1865,7 +1911,7 @@ static int amdgpu_vm_verify_parameters(struct amdgpu_device *adev,
+ /**
+  * amdgpu_vm_bo_map - map bo inside a vm
+  *
+- * @adev: amdgpu_device pointer
++ * @ctx: VM update context
+  * @bo_va: bo_va to store the address
+  * @saddr: where to map the BO
+  * @offset: requested offset in the BO
+@@ -1879,7 +1925,7 @@ static int amdgpu_vm_verify_parameters(struct amdgpu_device *adev,
+  *
+  * Object has to be reserved and unreserved outside!
+  */
+-int amdgpu_vm_bo_map(struct amdgpu_device *adev,
++int amdgpu_vm_bo_map(struct amdgpu_vm_update_ctx *ctx,
+ 		     struct amdgpu_bo_va *bo_va,
+ 		     uint64_t saddr, uint64_t offset,
+ 		     uint64_t size, uint32_t flags)
+@@ -1890,7 +1936,7 @@ int amdgpu_vm_bo_map(struct amdgpu_device *adev,
+ 	uint64_t eaddr;
+ 	int r;
+ 
+-	r = amdgpu_vm_verify_parameters(adev, bo, saddr, offset, size);
++	r = amdgpu_vm_verify_parameters(ctx->adev, bo, saddr, offset, size);
+ 	if (r)
+ 		return r;
+ 
+@@ -1900,7 +1946,8 @@ int amdgpu_vm_bo_map(struct amdgpu_device *adev,
+ 	tmp = amdgpu_vm_it_iter_first(&vm->va, saddr, eaddr);
+ 	if (tmp) {
+ 		/* bo and tmp overlap, invalid addr */
+-		dev_err(adev->dev, "bo %p va 0x%010Lx-0x%010Lx conflict with "
++		dev_err(ctx->adev->dev,
++			"bo %p va 0x%010Lx-0x%010Lx conflict with "
+ 			"0x%010Lx-0x%010Lx\n", bo, saddr, eaddr,
+ 			tmp->start, tmp->last + 1);
+ 		return -EINVAL;
+@@ -1915,7 +1962,7 @@ int amdgpu_vm_bo_map(struct amdgpu_device *adev,
+ 	mapping->offset = offset;
+ 	mapping->flags = flags;
+ 
+-	amdgpu_vm_bo_insert_map(adev, bo_va, mapping);
++	amdgpu_vm_bo_insert_map(ctx->adev, bo_va, mapping);
+ 
+ 	return 0;
+ }
+@@ -1923,7 +1970,7 @@ int amdgpu_vm_bo_map(struct amdgpu_device *adev,
+ /**
+  * amdgpu_vm_bo_replace_map - map bo inside a vm, replacing existing mappings
+  *
+- * @adev: amdgpu_device pointer
++ * @ctx: VM update context
+  * @bo_va: bo_va to store the address
+  * @saddr: where to map the BO
+  * @offset: requested offset in the BO
+@@ -1938,7 +1985,7 @@ int amdgpu_vm_bo_map(struct amdgpu_device *adev,
+  *
+  * Object has to be reserved and unreserved outside!
+  */
+-int amdgpu_vm_bo_replace_map(struct amdgpu_device *adev,
++int amdgpu_vm_bo_replace_map(struct amdgpu_vm_update_ctx *ctx,
+ 			     struct amdgpu_bo_va *bo_va,
+ 			     uint64_t saddr, uint64_t offset,
+ 			     uint64_t size, uint32_t flags)
+@@ -1948,7 +1995,7 @@ int amdgpu_vm_bo_replace_map(struct amdgpu_device *adev,
+ 	uint64_t eaddr;
+ 	int r;
+ 
+-	r = amdgpu_vm_verify_parameters(adev, bo, saddr, offset, size);
++	r = amdgpu_vm_verify_parameters(ctx->adev, bo, saddr, offset, size);
+ 	if (r)
+ 		return r;
+ 
+@@ -1957,7 +2004,7 @@ int amdgpu_vm_bo_replace_map(struct amdgpu_device *adev,
+ 	if (!mapping)
+ 		return -ENOMEM;
+ 
+-	r = amdgpu_vm_bo_clear_mappings(adev, bo_va->base.vm, saddr, size);
++	r = amdgpu_vm_bo_clear_mappings(ctx, saddr, size);
+ 	if (r) {
+ 		kfree(mapping);
+ 		return r;
+@@ -1971,7 +2018,7 @@ int amdgpu_vm_bo_replace_map(struct amdgpu_device *adev,
+ 	mapping->offset = offset;
+ 	mapping->flags = flags;
+ 
+-	amdgpu_vm_bo_insert_map(adev, bo_va, mapping);
++	amdgpu_vm_bo_insert_map(ctx->adev, bo_va, mapping);
+ 
+ 	return 0;
+ }
+@@ -1979,7 +2026,7 @@ int amdgpu_vm_bo_replace_map(struct amdgpu_device *adev,
+ /**
+  * amdgpu_vm_bo_unmap - remove bo mapping from vm
+  *
+- * @adev: amdgpu_device pointer
++ * @ctx: VM update context
+  * @bo_va: bo_va to remove the address from
+  * @saddr: where to the BO is mapped
+  *
+@@ -1990,12 +2037,12 @@ int amdgpu_vm_bo_replace_map(struct amdgpu_device *adev,
+  *
+  * Object has to be reserved and unreserved outside!
+  */
+-int amdgpu_vm_bo_unmap(struct amdgpu_device *adev,
++int amdgpu_vm_bo_unmap(struct amdgpu_vm_update_ctx *ctx,
+ 		       struct amdgpu_bo_va *bo_va,
+ 		       uint64_t saddr)
+ {
+ 	struct amdgpu_bo_va_mapping *mapping;
+-	struct amdgpu_vm *vm = bo_va->base.vm;
++	struct amdgpu_vm *vm = ctx->vm;
+ 	bool valid = true;
+ 
+ 	saddr /= AMDGPU_GPU_PAGE_SIZE;
+@@ -2022,7 +2069,7 @@ int amdgpu_vm_bo_unmap(struct amdgpu_device *adev,
+ 	 * from user space.
+ 	 */
+ 	if (unlikely(bo_va->userq_va_mapped))
+-		amdgpu_userq_gem_va_unmap_validate(adev, mapping);
++		amdgpu_userq_gem_va_unmap_validate(ctx->adev, mapping);
+ 
+ 	list_del(&mapping->list);
+ 	amdgpu_vm_it_remove(mapping, &vm->va);
+@@ -2030,9 +2077,9 @@ int amdgpu_vm_bo_unmap(struct amdgpu_device *adev,
+ 	trace_amdgpu_vm_bo_unmap(bo_va, mapping);
+ 
+ 	if (valid)
+-		list_add(&mapping->list, &vm->freed);
++		list_add(&mapping->list, &ctx->freed);
+ 	else
+-		amdgpu_vm_free_mapping(adev, vm, mapping,
++		amdgpu_vm_free_mapping(ctx->adev, vm, mapping,
+ 				       bo_va->last_pt_update);
+ 
+ 	return 0;
+@@ -2041,8 +2088,7 @@ int amdgpu_vm_bo_unmap(struct amdgpu_device *adev,
+ /**
+  * amdgpu_vm_bo_clear_mappings - remove all mappings in a specific range
+  *
+- * @adev: amdgpu_device pointer
+- * @vm: VM structure to use
++ * @ctx: VM update context
+  * @saddr: start of the range
+  * @size: size of the range
+  *
+@@ -2051,8 +2097,7 @@ int amdgpu_vm_bo_unmap(struct amdgpu_device *adev,
+  * Returns:
+  * 0 for success, error for failure.
+  */
+-int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+-				struct amdgpu_vm *vm,
++int amdgpu_vm_bo_clear_mappings(struct amdgpu_vm_update_ctx *ctx,
+ 				uint64_t saddr, uint64_t size)
+ {
+ 	struct amdgpu_bo_va_mapping *before, *after, *tmp, *next;
+@@ -2060,7 +2105,7 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+ 	uint64_t eaddr;
+ 	int r;
+ 
+-	r = amdgpu_vm_verify_parameters(adev, NULL, saddr, 0, size);
++	r = amdgpu_vm_verify_parameters(ctx->adev, NULL, saddr, 0, size);
+ 	if (r)
+ 		return r;
+ 
+@@ -2081,7 +2126,7 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+ 	INIT_LIST_HEAD(&after->list);
+ 
+ 	/* Now gather all removed mappings */
+-	tmp = amdgpu_vm_it_iter_first(&vm->va, saddr, eaddr);
++	tmp = amdgpu_vm_it_iter_first(&ctx->vm->va, saddr, eaddr);
+ 	while (tmp) {
+ 		/* Remember mapping split at the start */
+ 		if (tmp->start < saddr) {
+@@ -2112,7 +2157,7 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+ 
+ 	/* And free them up */
+ 	list_for_each_entry_safe(tmp, next, &removed, list) {
+-		amdgpu_vm_it_remove(tmp, &vm->va);
++		amdgpu_vm_it_remove(tmp, &ctx->vm->va);
+ 		list_del(&tmp->list);
+ 
+ 		if (tmp->start < saddr)
+@@ -2121,7 +2166,7 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+ 		    tmp->last = eaddr;
+ 
+ 		tmp->bo_va = NULL;
+-		list_add(&tmp->list, &vm->freed);
++		list_add(&tmp->list, &ctx->freed);
+ 		trace_amdgpu_vm_bo_unmap(NULL, tmp);
+ 	}
+ 
+@@ -2129,11 +2174,11 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+ 	if (!list_empty(&before->list)) {
+ 		struct amdgpu_bo *bo = before->bo_va->base.bo;
+ 
+-		amdgpu_vm_it_insert(before, &vm->va);
++		amdgpu_vm_it_insert(before, &ctx->vm->va);
+ 		if (before->flags & AMDGPU_VM_PAGE_PRT)
+-			amdgpu_vm_prt_get(adev);
++			amdgpu_vm_prt_get(ctx->adev);
+ 
+-		if (amdgpu_vm_is_bo_always_valid(vm, bo) &&
++		if (amdgpu_vm_is_bo_always_valid(ctx->vm, bo) &&
+ 		    !before->bo_va->base.moved)
+ 			amdgpu_vm_bo_needs_update(&before->bo_va->base);
+ 	} else {
+@@ -2144,11 +2189,11 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+ 	if (!list_empty(&after->list)) {
+ 		struct amdgpu_bo *bo = after->bo_va->base.bo;
+ 
+-		amdgpu_vm_it_insert(after, &vm->va);
++		amdgpu_vm_it_insert(after, &ctx->vm->va);
+ 		if (after->flags & AMDGPU_VM_PAGE_PRT)
+-			amdgpu_vm_prt_get(adev);
++			amdgpu_vm_prt_get(ctx->adev);
+ 
+-		if (amdgpu_vm_is_bo_always_valid(vm, bo) &&
++		if (amdgpu_vm_is_bo_always_valid(ctx->vm, bo) &&
+ 		    !after->bo_va->base.moved)
+ 			amdgpu_vm_bo_needs_update(&after->bo_va->base);
+ 	} else {
+@@ -2209,14 +2254,14 @@ void amdgpu_vm_bo_trace_cs(struct amdgpu_vm *vm, struct ww_acquire_ctx *ticket)
+ /**
+  * amdgpu_vm_bo_del - remove a bo from a specific vm
+  *
+- * @adev: amdgpu_device pointer
++ * @ctx: VM update context
+  * @bo_va: requested bo_va
+  *
+  * Remove @bo_va->bo from the requested vm.
+  *
+  * Object have to be reserved!
+  */
+-void amdgpu_vm_bo_del(struct amdgpu_device *adev,
++void amdgpu_vm_bo_del(struct amdgpu_vm_update_ctx *ctx,
+ 		      struct amdgpu_bo_va *bo_va)
+ {
+ 	struct amdgpu_bo_va_mapping *mapping, *next;
+@@ -2251,19 +2296,19 @@ void amdgpu_vm_bo_del(struct amdgpu_device *adev,
+ 		amdgpu_vm_it_remove(mapping, &vm->va);
+ 		mapping->bo_va = NULL;
+ 		trace_amdgpu_vm_bo_unmap(bo_va, mapping);
+-		list_add(&mapping->list, &vm->freed);
++		list_add(&mapping->list, &ctx->freed);
+ 	}
+ 	list_for_each_entry_safe(mapping, next, &bo_va->invalids, list) {
+ 		list_del(&mapping->list);
+ 		amdgpu_vm_it_remove(mapping, &vm->va);
+-		amdgpu_vm_free_mapping(adev, vm, mapping,
++		amdgpu_vm_free_mapping(ctx->adev, vm, mapping,
+ 				       bo_va->last_pt_update);
+ 	}
+ 
+ 	dma_fence_put(bo_va->last_pt_update);
+ 
+ 	if (bo && bo_va->is_xgmi)
+-		amdgpu_xgmi_set_pstate(adev, AMDGPU_XGMI_PSTATE_MIN);
++		amdgpu_xgmi_set_pstate(ctx->adev, AMDGPU_XGMI_PSTATE_MIN);
+ 
+ 	kfree(bo_va);
+ }
+@@ -2614,7 +2659,7 @@ int amdgpu_vm_init(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 	amdgpu_vm_bo_status_init(&vm->always_valid);
+ 	spin_lock_init(&vm->individual_lock);
+ 	amdgpu_vm_bo_status_init(&vm->individual);
+-	INIT_LIST_HEAD(&vm->freed);
++	INIT_LIST_HEAD(&vm->delayed_freed);
+ 	INIT_KFIFO(vm->faults);
+ 	spin_lock_init(&vm->stats_lock);
+ 
+@@ -2793,7 +2838,7 @@ void amdgpu_vm_fini(struct amdgpu_device *adev, struct amdgpu_vm *vm)
+ 	dma_fence_unlock_irqrestore(vm->last_tlb_flush, flags);
+ 	dma_fence_put(vm->last_tlb_flush);
+ 
+-	list_for_each_entry_safe(mapping, tmp, &vm->freed, list) {
++	list_for_each_entry_safe(mapping, tmp, &vm->delayed_freed, list) {
+ 		if (mapping->flags & AMDGPU_VM_PAGE_PRT && prt_fini_needed) {
+ 			amdgpu_vm_prt_fini(adev, vm);
+ 			prt_fini_needed = false;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+index d32183cd9e0f..6c4caf6bfa0f 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+@@ -262,6 +262,39 @@ struct amdgpu_task_info {
+ 	struct kref	refcount;
+ };
+ 
++/**
++ * struct amdgpu_vm_update_ctx
++ *
++ * Encapsulates various state that is carried around during VM updates.
++ */
++struct amdgpu_vm_update_ctx {
++	/**
++	 * @adev: amdgpu device the update is done on
++	 */
++	struct amdgpu_device *adev;
++	/**
++	 * @vm: target VM of the update
++	 */
++	struct amdgpu_vm *vm;
++
++	/**
++	 * @freed: A list of mappings that are freed and pending PT/PD updates during
++	 * this update operation.
++	 */
++	struct list_head freed;
++
++	/**
++	 * @sync: Container for everything to sync to before committing PT/PD updates.
++	 */
++	struct amdgpu_sync sync;
++
++	/**
++	 * @unmap_synced: Whether the sync is strong enough to guarantee a safe unmap,
++	 * i.e. all previous submissions in the VM are waited on.
++	 */
++	bool unmap_synced;
++};
++
+ /**
+  * struct amdgpu_vm_update_params
+  *
+@@ -391,7 +424,7 @@ struct amdgpu_vm {
+ 	 * This list contains amdgpu_bo_va_mapping objects which have been freed
+ 	 * but not updated in the PTs
+ 	 */
+-	struct list_head	freed;
++	struct list_head	delayed_freed;
+ 
+ 	/* contains the page directory */
+ 	struct amdgpu_vm_bo_base     root;
+@@ -516,9 +549,9 @@ void amdgpu_vm_flush(struct amdgpu_ring *ring, struct amdgpu_job *job,
+ 		     bool *emit_gds_needed);
+ int amdgpu_vm_update_pdes(struct amdgpu_device *adev,
+ 			  struct amdgpu_vm *vm, bool immediate);
+-int amdgpu_vm_clear_freed(struct amdgpu_device *adev,
+-			  struct amdgpu_vm *vm,
++int amdgpu_vm_clear_freed(struct amdgpu_vm_update_ctx *ctx,
+ 			  struct dma_fence **fence);
++int amdgpu_vm_delayed_free(struct amdgpu_device *adev, struct amdgpu_vm *vm);
+ int amdgpu_vm_handle_moved(struct amdgpu_device *adev,
+ 			   struct amdgpu_vm *vm,
+ 			   struct ww_acquire_ctx *ticket);
+@@ -535,7 +568,7 @@ int amdgpu_vm_update_range(struct amdgpu_device *adev, struct amdgpu_vm *vm,
+ 			   uint64_t offset, uint64_t vram_base,
+ 			   struct ttm_resource *res, dma_addr_t *pages_addr,
+ 			   struct dma_fence **fence);
+-int amdgpu_vm_bo_update(struct amdgpu_device *adev,
++int amdgpu_vm_bo_update(struct amdgpu_vm_update_ctx *ctx,
+ 			struct amdgpu_bo_va *bo_va,
+ 			bool clear);
+ bool amdgpu_vm_evictable(struct amdgpu_bo *bo);
+@@ -551,24 +584,25 @@ struct amdgpu_bo_va *amdgpu_vm_bo_find(struct amdgpu_vm *vm,
+ struct amdgpu_bo_va *amdgpu_vm_bo_add(struct amdgpu_device *adev,
+ 				      struct amdgpu_vm *vm,
+ 				      struct amdgpu_bo *bo);
+-int amdgpu_vm_bo_map(struct amdgpu_device *adev,
++
++int amdgpu_vm_bo_map(struct amdgpu_vm_update_ctx *ctx,
+ 		     struct amdgpu_bo_va *bo_va,
+ 		     uint64_t addr, uint64_t offset,
+ 		     uint64_t size, uint32_t flags);
+-int amdgpu_vm_bo_replace_map(struct amdgpu_device *adev,
++int amdgpu_vm_bo_replace_map(struct amdgpu_vm_update_ctx *ctx,
+ 			     struct amdgpu_bo_va *bo_va,
+ 			     uint64_t addr, uint64_t offset,
+ 			     uint64_t size, uint32_t flags);
+-int amdgpu_vm_bo_unmap(struct amdgpu_device *adev,
++int amdgpu_vm_bo_unmap(struct amdgpu_vm_update_ctx *ctx,
+ 		       struct amdgpu_bo_va *bo_va,
+ 		       uint64_t addr);
+-int amdgpu_vm_bo_clear_mappings(struct amdgpu_device *adev,
+-				struct amdgpu_vm *vm,
++int amdgpu_vm_bo_clear_mappings(struct amdgpu_vm_update_ctx *ctx,
+ 				uint64_t saddr, uint64_t size);
++
+ struct amdgpu_bo_va_mapping *amdgpu_vm_bo_lookup_mapping(struct amdgpu_vm *vm,
+ 							 uint64_t addr);
+ void amdgpu_vm_bo_trace_cs(struct amdgpu_vm *vm, struct ww_acquire_ctx *ticket);
+-void amdgpu_vm_bo_del(struct amdgpu_device *adev,
++void amdgpu_vm_bo_del(struct amdgpu_vm_update_ctx *ctx,
+ 		      struct amdgpu_bo_va *bo_va);
+ void amdgpu_vm_adjust_size(struct amdgpu_device *adev, uint32_t min_vm_size,
+ 			   uint32_t fragment_size_default, unsigned max_level,
+@@ -624,6 +658,40 @@ int amdgpu_vm_pt_map_tables(struct amdgpu_device *adev, struct amdgpu_vm *vm);
+ 
+ bool amdgpu_vm_is_bo_always_valid(struct amdgpu_vm *vm, struct amdgpu_bo *bo);
+ 
++int amdgpu_vm_update_ctx_ensure_unmap_synced(struct amdgpu_vm_update_ctx *ctx);
++
++/**
++ * amdgpu_vm_update_ctx_init - create a context for VM update operations
++ * @ctx: The new context to create
++ * @adev: The device associated with the VM update
++ * @vm: The VM being updated
++ *
++ * Initializes the context to an empty state.
++ */
++static inline void amdgpu_vm_update_ctx_init(struct amdgpu_vm_update_ctx *ctx,
++					     struct amdgpu_device *adev,
++					     struct amdgpu_vm *vm)
++{
++	memset(ctx, 0, sizeof(*ctx));
++	ctx->adev = adev;
++	ctx->vm = vm;
++	INIT_LIST_HEAD(&ctx->freed);
++	amdgpu_sync_create(&ctx->sync);
++}
++
++/**
++ * amdgpu_vm_update_ctx_fini - finish a VM update operation
++ * @ctx: The context of the update
++ *
++ * Adds any leftover mappings needing to be cleared to the VM's delayed free list,
++ * then frees up resources used by the context.
++ */
++static inline void amdgpu_vm_update_ctx_fini(struct amdgpu_vm_update_ctx *ctx)
++{
++	list_splice(&ctx->freed, &ctx->vm->delayed_freed);
++	amdgpu_sync_free(&ctx->sync);
++}
++
+ /**
+  * amdgpu_vm_tlb_seq - return tlb flush sequence number
+  * @vm: the amdgpu_vm structure to query

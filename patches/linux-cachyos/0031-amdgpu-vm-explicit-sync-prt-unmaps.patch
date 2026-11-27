@@ -1,0 +1,196 @@
+From e613ce4507f8fab80b61246d08b4b0c90f82ccbf Mon Sep 17 00:00:00 2001
+From: Natalie Vock <nat@pixelcluster.dev>
+Date: Wed, 12 Aug 2026 13:25:59 +0200
+Subject: [PATCH 2/2] [FROM-ML] drm/amdgpu: Implement explicit sync for PRT
+ unmaps
+
+In certain cases, it is possible to skip syncing with every submission
+in the whole VM before unmapping pagetables. The important condition is
+that no memory must be released to the system while the GPU still has a
+chance to access it.
+
+This is true for VM-always-valid buffers since the resv is shared with
+the VM's root PD and thus there will always be synchronization before
+unmapping, but also for PRT pages which do not point to any real memory
+location at all. Bypass implicit sync for unmapping for these buffers if
+userspace requests it. Userspace can request this via a new VM ioctl
+flag.
+
+Signed-off-by: Natalie Vock <natalie.vock@gmx.de>
+Link: https://lore.kernel.org/amd-gfx/20260529-prt-explicit-sync-v1-2-9f1c60955cab@gmx.de/T
+(cherry picked from commit d050859eb3b4990a56f69f2473d42a21ac585b99)
+---
+Backport note (linux-cachyos-bc250): Valve's linux-neptune 7.2 carry
+(d050859eb3b4), unchanged apart from context; ported to 7.3. Patch 3/3
+of the series (KMS minor bump to 3.65) is left out: KytyPS5-Native probes
+the flag with an AMDGPU_VA_OP_CLEAR, and the minor number is upstream's.
+
+ drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c |  8 +++--
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c  | 46 ++++++++++++++++++++++---
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h  |  5 +++
+ include/uapi/drm/amdgpu_drm.h           |  2 ++
+ 4 files changed, 53 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c
+index 67bcbcf8cf37..9fcdaba1908c 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_gem.c
+@@ -842,12 +842,13 @@ amdgpu_gem_va_update_vm(struct amdgpu_vm_update_ctx *ctx,
+ int amdgpu_gem_va_ioctl(struct drm_device *dev, void *data,
+ 			  struct drm_file *filp)
+ {
+-	const uint32_t valid_flags = AMDGPU_VM_DELAY_UPDATE |
++	const uint32_t valid_flags =
++		AMDGPU_VM_EXPLICIT_SYNC | AMDGPU_VM_DELAY_UPDATE |
+ 		AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_PAGE_WRITEABLE |
+ 		AMDGPU_VM_PAGE_EXECUTABLE | AMDGPU_VM_MTYPE_MASK |
+ 		AMDGPU_VM_PAGE_NOALLOC;
+-	const uint32_t prt_flags = AMDGPU_VM_DELAY_UPDATE |
+-		AMDGPU_VM_PAGE_PRT;
++	const uint32_t prt_flags = AMDGPU_VM_EXPLICIT_SYNC |
++				   AMDGPU_VM_DELAY_UPDATE | AMDGPU_VM_PAGE_PRT;
+ 
+ 	struct drm_amdgpu_gem_va *args = data;
+ 	struct drm_gem_object *gobj;
+@@ -925,6 +926,7 @@ int amdgpu_gem_va_ioctl(struct drm_device *dev, void *data,
+ 	}
+ 
+ 	amdgpu_vm_update_ctx_init(&update_ctx, adev, &fpriv->vm);
++	update_ctx.explicit_sync_unmap = args->flags & AMDGPU_VM_EXPLICIT_SYNC;
+ 
+ 	/* Add input syncobj fences (if any) for synchronization. */
+ 	r = amdgpu_gem_add_input_fence(filp, &update_ctx,
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+index 1c3c8b2e3a2a..7aefd7e3ed8a 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
+@@ -400,6 +400,37 @@ void amdgpu_vm_update_stats(struct amdgpu_vm_bo_base *base,
+ 	spin_unlock(&vm->stats_lock);
+ }
+ 
++/**
++ * amdgpu_vm_update_ctx_add_freed_mapping - mark a mapping as freed
++ * @ctx: context for updating the VM
++ * @bo_va: BO/VA pair the mapping corresponds to
++ * @mapping: The mapping to free
++ *
++ * Adds the mapping to the context's freed list, as well as doing some bookkeeping
++ * about the mappings being freed.
++ */
++void amdgpu_vm_update_ctx_add_freed_mapping(struct amdgpu_vm_update_ctx *ctx,
++					    struct amdgpu_bo_va *bo_va,
++					    struct amdgpu_bo_va_mapping *mapping)
++{
++	struct amdgpu_bo *bo = bo_va->base.bo;
++
++	/* When unmapping buffers, we must make sure there is no way to free the
++	 * buffer's underlying memory before the GPU is absolutely guaranteed to
++	 * be done accessing it.
++	 *
++	 * With explicit syncing, userspace indicates when unmapping can be performed,
++	 * but if userspace is either malicious or sufficiently incompetent, the
++	 * GPU may access the buffer even after userspace indicated it is safe to free.
++	 * Therefore, only allow explicit sync on unmapping if the BO is
++	 * always valid in the VM (in which case freeing syncs to all submissions already)
++	 * or if it's a PRT page (in which case there is no memory being accessed in any case).
++	 */
++	ctx->explicit_sync_unmap &= amdgpu_vm_is_bo_always_valid(ctx->vm, bo) ||
++				    mapping->flags & AMDGPU_VM_PAGE_PRT;
++	list_add(&mapping->list, &ctx->freed);
++}
++
+ /**
+  * amdgpu_vm_update_ctx_ensure_unmap_synced - VM update sync helper
+  * @ctx: context for updating the VM
+@@ -416,11 +447,13 @@ int amdgpu_vm_update_ctx_ensure_unmap_synced(struct amdgpu_vm_update_ctx *ctx)
+ 
+ 	/*
+ 	 * Implicitly sync to command submissions in the same VM before
+-	 * unmapping.
++	 * unmapping, unless we unmap with explicit sync.
+ 	 */
+ 	r = amdgpu_sync_resv(ctx->adev, &ctx->sync,
+ 			     ctx->vm->root.bo->tbo.base.resv,
+-			     AMDGPU_SYNC_EQ_OWNER, ctx->vm);
++			     ctx->explicit_sync_unmap ? AMDGPU_SYNC_EXPLICIT :
++							AMDGPU_SYNC_EQ_OWNER,
++			     ctx->vm);
+ 	if (r)
+ 		return r;
+ 
+@@ -2077,7 +2110,7 @@ int amdgpu_vm_bo_unmap(struct amdgpu_vm_update_ctx *ctx,
+ 	trace_amdgpu_vm_bo_unmap(bo_va, mapping);
+ 
+ 	if (valid)
+-		list_add(&mapping->list, &ctx->freed);
++		amdgpu_vm_update_ctx_add_freed_mapping(ctx, bo_va, mapping);
+ 	else
+ 		amdgpu_vm_free_mapping(ctx->adev, vm, mapping,
+ 				       bo_va->last_pt_update);
+@@ -2101,6 +2134,7 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_vm_update_ctx *ctx,
+ 				uint64_t saddr, uint64_t size)
+ {
+ 	struct amdgpu_bo_va_mapping *before, *after, *tmp, *next;
++	struct amdgpu_bo_va *bo_va;
+ 	LIST_HEAD(removed);
+ 	uint64_t eaddr;
+ 	int r;
+@@ -2165,8 +2199,9 @@ int amdgpu_vm_bo_clear_mappings(struct amdgpu_vm_update_ctx *ctx,
+ 		if (tmp->last > eaddr)
+ 		    tmp->last = eaddr;
+ 
++		bo_va = tmp->bo_va;
+ 		tmp->bo_va = NULL;
+-		list_add(&tmp->list, &ctx->freed);
++		amdgpu_vm_update_ctx_add_freed_mapping(ctx, bo_va, tmp);
+ 		trace_amdgpu_vm_bo_unmap(NULL, tmp);
+ 	}
+ 
+@@ -2294,9 +2329,10 @@ void amdgpu_vm_bo_del(struct amdgpu_vm_update_ctx *ctx,
+ 	list_for_each_entry_safe(mapping, next, &bo_va->valids, list) {
+ 		list_del(&mapping->list);
+ 		amdgpu_vm_it_remove(mapping, &vm->va);
++
+ 		mapping->bo_va = NULL;
+ 		trace_amdgpu_vm_bo_unmap(bo_va, mapping);
+-		list_add(&mapping->list, &ctx->freed);
++		amdgpu_vm_update_ctx_add_freed_mapping(ctx, bo_va, mapping);
+ 	}
+ 	list_for_each_entry_safe(mapping, next, &bo_va->invalids, list) {
+ 		list_del(&mapping->list);
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+index 6c4caf6bfa0f..09bae6254a17 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.h
+@@ -293,6 +293,8 @@ struct amdgpu_vm_update_ctx {
+ 	 * i.e. all previous submissions in the VM are waited on.
+ 	 */
+ 	bool unmap_synced;
++
++	bool explicit_sync_unmap;
+ };
+ 
+ /**
+@@ -658,6 +660,9 @@ int amdgpu_vm_pt_map_tables(struct amdgpu_device *adev, struct amdgpu_vm *vm);
+ 
+ bool amdgpu_vm_is_bo_always_valid(struct amdgpu_vm *vm, struct amdgpu_bo *bo);
+ 
++void amdgpu_vm_update_ctx_add_freed_mapping(
++	struct amdgpu_vm_update_ctx *ctx, struct amdgpu_bo_va *bo_va,
++	struct amdgpu_bo_va_mapping *mapping);
+ int amdgpu_vm_update_ctx_ensure_unmap_synced(struct amdgpu_vm_update_ctx *ctx);
+ 
+ /**
+diff --git a/include/uapi/drm/amdgpu_drm.h b/include/uapi/drm/amdgpu_drm.h
+index 42a5fa8ad6b0..e6819e61539f 100644
+--- a/include/uapi/drm/amdgpu_drm.h
++++ b/include/uapi/drm/amdgpu_drm.h
+@@ -902,6 +902,8 @@ struct drm_amdgpu_gem_list_handles_entry {
+ #define AMDGPU_VM_MTYPE_RW		(5 << 5)
+ /* don't allocate MALL */
+ #define AMDGPU_VM_PAGE_NOALLOC		(1 << 9)
++/* Bypass implicit synchronization for VM updates*/
++#define AMDGPU_VM_EXPLICIT_SYNC		(1 << 10)
+ 
+ struct drm_amdgpu_gem_va {
+ 	/** GEM object handle */

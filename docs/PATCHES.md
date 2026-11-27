@@ -51,13 +51,13 @@ compares the two directories by patch *content name* (ignoring the `NNNN-`
 number) and asserts the shared ones are byte-identical in substance — the
 files touched and the lines changed — and that any patch existing in only one
 set is on an explicit, reasoned allow-list (empty since the 7.3 bump). A patch that does
-something different on purpose in the two series (`0007` and `0019` since 7.4-rc1) is on a
+something different on purpose in the two series (`0007` and `0019` since 7.4-rc1, `0030` because 7.4 has callers 7.3 lacks) is on a
 second allow-list with the reason. A patch added to one set and forgotten in the other
 fails before CI ever builds it.
 
 ### Kernel patch set
 
-The stable and BORE kernels carry these twenty-nine BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3.1). The RC kernel carries the same twenty-nine patches, regenerated for 7.4-rc1:
+The stable and BORE kernels carry these thirty-one BC-250 patches in `patches/linux-cachyos` — used by `linux-cachyos-bc250` and `linux-cachyos-bore-bc250` (Linux 7.3.1). The RC kernel carries the same thirty-one patches, regenerated for 7.4-rc1:
 
 ```text
 0001-bc250-8core-metrics.patch
@@ -89,6 +89,8 @@ The stable and BORE kernels carry these twenty-nine BC-250 patches in `patches/l
 0027-bc250-mtype-rw-c-rw-s.patch
 0028-bc250-gmc-kfd-vmid-mmio-flush.patch
 0029-bc250-cc-wgp-mask.patch
+0030-amdgpu-vm-update-ctx.patch
+0031-amdgpu-vm-explicit-sync-prt-unmaps.patch
 ```
 
 `patches/linux-cachyos-rc` is the same list, spelled out here as well because the
@@ -125,7 +127,20 @@ freezes the BC-250 and is parked in `disabled/bc250-vcn.patch` in both sets):
 0027-bc250-mtype-rw-c-rw-s.patch
 0028-bc250-gmc-kfd-vmid-mmio-flush.patch
 0029-bc250-cc-wgp-mask.patch
+0030-amdgpu-vm-update-ctx.patch
+0031-amdgpu-vm-explicit-sync-prt-unmaps.patch
 ```
+
+`amdgpu-vm-update-ctx.patch` and `amdgpu-vm-explicit-sync-prt-unmaps.patch`
+add `AMDGPU_VM_EXPLICIT_SYNC` (bit 10) to `DRM_IOCTL_AMDGPU_GEM_VA`, from Natalie
+Vock's ["Explicit sync for PRT unmaps"](https://lore.kernel.org/amd-gfx/20260529-prt-explicit-sync-v1-2-9f1c60955cab@gmx.de/T)
+series, as Valve carries it in the SteamOS 7.2 kernel. Not upstream. With the
+flag, unmapping a PRT range or an always-valid buffer no longer waits for every
+command submission in the VM. KytyPS5-Native probes for it at start ("page-table
+updates with explicit sync" in a game's log): without it a remap waits for all
+of the title's GPU work and the page-table updates behind it queue up, which
+shows as stutter while a title streams. Nothing changes for programs that don't
+pass the flag. The series' third patch, a KMS minor bump to 3.65, is left out.
 
 `dcn201-hdmi21-pcon.patch` and `dcn201-enable-dsc.patch` are the DCN201 display patches described in [4K120 4:4:4 through an HDMI 2.1 PCON](#4k120-444-through-an-hdmi-21-pcon) below. **On by default**; `amdgpu.bc250_hdmi21=0` gives an unpatched kernel back.
 

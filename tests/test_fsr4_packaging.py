@@ -529,6 +529,10 @@ class KernelPatchSetTests(unittest.TestCase):
         "pcon-vrr-hf-vsdb.patch":
             "7.4 parses the AMD VSDB in software and has its own HF-VSDB fallback; "
             "the RC patch only adds the PCON's SDP and VCP-rule part",
+        "amdgpu-vm-update-ctx.patch":
+            "7.4 adds update-context callers 7.3 does not have (amdgpu_ualink.c, "
+            "the amdgpu_gem.c evf error path) and a TLB invalidation fence in "
+            "amdgpu_gem_va_update_vm",
     }
 
     @staticmethod
